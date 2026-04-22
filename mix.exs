@@ -8,6 +8,7 @@ defmodule Jidoka.MixProject do
       elixir: "~> 1.19",
       start_permanent: Mix.env() == :prod,
       dialyzer: [plt_add_apps: [:mix], ignore_warnings: ".dialyzer_ignore.exs"],
+      escript: escript(),
       elixirc_paths: elixirc_paths(Mix.env()),
       aliases: aliases(),
       deps: deps()
@@ -32,9 +33,15 @@ defmodule Jidoka.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:jido, "~> 2.2"},
+      {:jido_ai, "~> 2.1"},
       {:jido_signal, "~> 2.1.0"},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false}
     ]
+  end
+
+  defp escript do
+    [main_module: Jidoka.CLI, name: "jidoka", app: nil]
   end
 
   defp aliases do

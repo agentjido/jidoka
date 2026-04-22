@@ -16,7 +16,7 @@ defmodule Jidoka.TuiServer do
   @default_poll_interval 150
   @event_history_limit 24
   @attempt_progress_history_limit 8
-  @artifact_focus_types [:diff, :command_log, :verifier_report]
+  @artifact_focus_types [:diff, :command_log, :verifier_report, :prompt_report]
   @remembered_session_key {__MODULE__, :last_session_ref}
   @all_control_commands [
     :interrupt,
@@ -627,7 +627,7 @@ defmodule Jidoka.TuiServer do
   defp mark_command_error(state, reason), do: %{state | last_error: reason}
 
   defp default_artifact_focus do
-    %{diff: [], command_log: [], verifier_report: []}
+    %{diff: [], command_log: [], verifier_report: [], prompt_report: []}
   end
 
   defp summarize_focus_artifacts(_artifacts, nil, _active_attempt), do: default_artifact_focus()

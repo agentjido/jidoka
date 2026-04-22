@@ -30,7 +30,7 @@ defmodule Jidoka.SessionServer do
   @default_adapter InMemory
   @default_execution_adapter AttemptExecution.NoopAdapter
   @default_verification_adapter Verifier.NoopAdapter
-  @core_artifact_types [:diff, :transcript, :command_log, :verifier_report]
+  @core_artifact_types [:diff, :transcript, :command_log, :verifier_report, :prompt_report]
   @server __MODULE__
 
   defstruct storage_adapter: @default_adapter,

@@ -550,7 +550,7 @@ defmodule Jidoka.TuiServerTest do
 
   test "artifact inspection renders empty artifact categories safely" do
     state = %TuiServer.State{
-      focused_artifacts: %{diff: [], command_log: [], verifier_report: []},
+      focused_artifacts: %{diff: [], command_log: [], verifier_report: [], prompt_report: []},
       active_verification_result: nil,
       activity_lines: [],
       focused_progress_lines: [],
@@ -565,6 +565,8 @@ defmodule Jidoka.TuiServerTest do
              "log:",
              "  <none>",
              "verifier report:",
+             "  <none>",
+             "prompt report:",
              "  <none>"
            ]
   end

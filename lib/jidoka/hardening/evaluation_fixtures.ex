@@ -5,11 +5,12 @@ defmodule Jidoka.Hardening.EvaluationFixtures do
                   Path.expand("../../..", __DIR__),
                   "priv/fixtures/mvp_012_fixtures.exs"
                 )
+  @external_resource @fixture_path
+  @fixtures @fixture_path |> Code.eval_file() |> elem(0)
 
   @spec load!() :: [map()]
   def load! do
-    {fixtures, _} = Code.eval_file(@fixture_path)
-    normalize_fixtures(fixtures)
+    normalize_fixtures(@fixtures)
   end
 
   defp normalize_fixtures(fixtures) when is_list(fixtures) do
@@ -17,8 +18,6 @@ defmodule Jidoka.Hardening.EvaluationFixtures do
     |> Enum.map(&normalize_fixture/1)
     |> Enum.filter(&is_map/1)
   end
-
-  defp normalize_fixtures(_), do: []
 
   defp normalize_fixture(fixture) when is_map(fixture) do
     fixture

@@ -44,3 +44,71 @@ defmodule Jidoka.TestAttemptExecutionAdapters.Failure do
     {:error, %{reason: :stubbed_execution_failure}}
   end
 end
+
+defmodule Jidoka.TestAttemptExecutionAdapters.PromptSuccess do
+  @moduledoc "Stub adapter that simulates a prompt-capable execution path."
+
+  @behaviour Jidoka.AttemptExecution
+
+  alias Jidoka.AttemptExecution
+  alias Jidoka.AttemptExecution.{AttemptOutput, AttemptSpec}
+
+  @impl true
+  def execute(%AttemptSpec{} = spec) do
+    response_text = "stub response for: #{spec.task}"
+    prompt_report_path = Path.join(spec.environment_lease.workspace_path, "prompt_report.md")
+
+    :ok =
+      AttemptExecution.report_progress(
+        spec,
+        :runtime_ready,
+        "configured fake runtime",
+        %{adapter: :stub_prompt}
+      )
+
+    :ok =
+      AttemptExecution.report_progress(
+        spec,
+        :prompt_dispatch,
+        "submitted prompt to fake agent",
+        %{prompt_length: byte_size(spec.task)}
+      )
+
+    File.mkdir_p!(spec.environment_lease.workspace_path)
+
+    File.write!(
+      prompt_report_path,
+      """
+      # Prompt
+
+      #{spec.task}
+
+      # Response
+
+      #{response_text}
+      """
+    )
+
+    :ok =
+      AttemptExecution.report_progress(
+        spec,
+        :prompt_report_written,
+        "persisted fake prompt report",
+        %{location: prompt_report_path}
+      )
+
+    {:ok,
+     %AttemptOutput{
+       status: :succeeded,
+       metadata: %{adapter: :stub_prompt, response_text: response_text},
+       artifacts: [
+         %{
+           id: "artifact-prompt-success-" <> spec.attempt_id,
+           type: :prompt_report,
+           status: :ready,
+           location: prompt_report_path
+         }
+       ]
+     }}
+  end
+end

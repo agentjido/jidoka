@@ -8,7 +8,8 @@ defmodule Jidoka.TuiRenderer do
   @artifact_type_labels %{
     diff: "diff",
     command_log: "log",
-    verifier_report: "verifier report"
+    verifier_report: "verifier report",
+    prompt_report: "prompt report"
   }
 
   @event_fallback [
@@ -136,7 +137,8 @@ defmodule Jidoka.TuiRenderer do
     [
       artifact_section(:diff, state),
       artifact_section(:command_log, state),
-      artifact_section(:verifier_report, state)
+      artifact_section(:verifier_report, state),
+      artifact_section(:prompt_report, state)
     ]
     |> List.flatten()
   end

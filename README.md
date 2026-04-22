@@ -43,15 +43,45 @@ Run the fixture corpus for ST-MVP-012 with:
 mix eval_mvp
 ```
 
-The task loads `test/fixtures/mvp_012_fixtures.exs`, runs each scenario through
+Or build the escript and run the same command through `jidoka`:
+
+```sh
+mix escript.build
+./jidoka eval-mvp
+```
+
+You can also send a direct prompt through the CLI:
+
+```sh
+export OPENAI_API_KEY="..."
+./jidoka prompt "summarize the current repo state"
+```
+
+If you want to pick the exact model explicitly, set `JIDOKA_MODEL` instead:
+
+```sh
+export JIDOKA_MODEL="openai:gpt-4.1-mini"
+./jidoka prompt "explain the last failing test"
+```
+
+The prompt command boots a minimal `Jido.AI.Agent`, streams runtime activity to
+the terminal, auto-approves the passed verification step, and prints the final
+response. Prompt reports are written into the temporary CLI workspace under
+`$TMPDIR/jidoka-cli`.
+
+The command loads `priv/fixtures/mvp_012_fixtures.exs`, runs each scenario through
 the public `Jidoka` facade, and prints a compact outcome line per scenario.
 
 Each line includes:
 
-- run status and final outcome
-- attempt count
-- final verification status
-- artifact references
+- `scenario`: fixture id
+- `status`: final run status
+- `outcome`: final run outcome
+- `attempts`: number of attempts recorded for the run
+- `verification`: latest verification status
+- `artifact_refs`: artifact ids attached to the run
+- `artifacts`: number of artifact records in the snapshot
+- `steps`: operator actions the fixture executed, in order
 
 Output example:
 

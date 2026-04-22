@@ -7,6 +7,7 @@ defmodule Jidoka.AttemptExecution do
   """
 
   alias Jidoka.EnvironmentLease
+  alias Jidoka.SessionServer
 
   defmodule AttemptSpec do
     @moduledoc """
@@ -75,12 +76,31 @@ defmodule Jidoka.AttemptExecution do
             status: status(),
             progress: [ProgressEvent.t()],
             metadata: map(),
-            artifacts: [String.t()],
+            artifacts: [String.t() | map()],
             error: term()
           }
   end
 
   @callback execute(AttemptSpec.t()) :: {:ok, AttemptOutput.t()} | {:error, term()}
+
+  @doc """
+  Emit a live progress event for an in-flight attempt.
+  """
+  @spec report_progress(AttemptSpec.t(), ProgressEvent.t()) :: :ok | {:error, term()}
+  def report_progress(%AttemptSpec{attempt_id: attempt_id}, %ProgressEvent{} = progress) do
+    SessionServer.mark_attempt_progress(attempt_id, %{
+      label: progress.label,
+      message: progress.message,
+      metadata: progress.metadata
+    })
+  end
+
+  @spec report_progress(AttemptSpec.t(), atom(), String.t() | nil, map()) ::
+          :ok | {:error, term()}
+  def report_progress(%AttemptSpec{} = spec, label, message \\ nil, metadata \\ %{})
+      when is_atom(label) and is_map(metadata) do
+    report_progress(spec, %ProgressEvent{label: label, message: message, metadata: metadata})
+  end
 
   @doc """
   Execute the typed attempt spec using the configured adapter.
