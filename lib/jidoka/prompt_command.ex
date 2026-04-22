@@ -210,7 +210,11 @@ defmodule Jidoka.PromptCommand do
   defp prompt_attempt_metadata(opts) do
     %{
       model: Keyword.get(opts, :model),
-      timeout_ms: Keyword.get(opts, :timeout_ms)
+      timeout_ms: Keyword.get(opts, :timeout_ms),
+      workspace_path: File.cwd!(),
+      permission_mode:
+        Keyword.get(opts, :permission_mode) || System.get_env("JIDOKA_PERMISSION_MODE") ||
+          :read_only
     }
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()

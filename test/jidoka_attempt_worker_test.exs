@@ -3,7 +3,7 @@ defmodule JidokaAttemptWorkerTest do
 
   alias Jidoka.Bus
   alias Jidoka.SessionServer
-  alias Jidoka.TestAttemptExecutionAdapters.{Failure, Success}
+  alias Jidoka.TestAttemptExecutionAdapters.{Failure, Success, ToolProgress}
   alias Jidoka.TestVerificationAdapters.{RetryableFailed, TerminalFailed}
 
   test "attempt worker streams progress, completion, and verifier pass updates run state" do
@@ -21,6 +21,7 @@ defmodule JidokaAttemptWorkerTest do
              )
 
     assert :ok = await_attempt_status(session_id, run.id, :succeeded)
+    assert :ok = await_run_status(session_id, run.id, :awaiting_approval)
 
     {:ok, run_snapshot} = SessionServer.run_snapshot(session_id, run.id)
     assert run_snapshot.run.id == run.id
@@ -67,6 +68,42 @@ defmodule JidokaAttemptWorkerTest do
     assert verification
     assert verification.status == :passed
     assert verification.outcome_summary == %{checks: :noop}
+  end
+
+  test "attempt worker records tool progress emitted by Jidoka tools" do
+    session_id = unique_id("attempt-worker-tool-progress")
+    on_exit(fn -> SessionServer.close(session_id) end)
+
+    assert {:ok, ^session_id} =
+             SessionServer.open(id: session_id, cwd: "/tmp/attempt-worker-tool-progress")
+
+    assert {:ok, %{run: run}} =
+             SessionServer.submit(
+               session_id,
+               "read a fixture file",
+               execution_adapter: ToolProgress
+             )
+
+    assert :ok = await_attempt_status(session_id, run.id, :succeeded)
+
+    {:ok, run_snapshot} = SessionServer.run_snapshot(session_id, run.id)
+    latest_attempt = latest_attempt(run_snapshot)
+
+    {:ok, log} = Bus.get_log(path: event_path(session_id))
+
+    tool_events =
+      Enum.filter(log, fn entry ->
+        entry.signal.type == :attempt_progress &&
+          entry.signal.payload[:attempt_id] == latest_attempt.id &&
+          entry.signal.payload[:metadata][:tool] == "read_file"
+      end)
+
+    assert Enum.map(tool_events, & &1.signal.payload[:label]) == [
+             :tool_requested,
+             :tool_permission_granted,
+             :tool_started,
+             :tool_completed
+           ]
   end
 
   test "attempt worker emits failure event when adapter returns error" do

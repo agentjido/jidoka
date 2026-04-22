@@ -112,3 +112,40 @@ defmodule Jidoka.TestAttemptExecutionAdapters.PromptSuccess do
      }}
   end
 end
+
+defmodule Jidoka.TestAttemptExecutionAdapters.ToolProgress do
+  @moduledoc "Stub adapter that executes a Jidoka tool and relies on live tool progress."
+
+  @behaviour Jidoka.AttemptExecution
+
+  alias Jidoka.AttemptExecution.{AttemptOutput, AttemptSpec}
+
+  @impl true
+  def execute(%AttemptSpec{} = spec) do
+    File.mkdir_p!(spec.environment_lease.workspace_path)
+    File.write!(Path.join(spec.environment_lease.workspace_path, "note.txt"), "tool progress\n")
+
+    context = %{
+      jidoka_attempt_spec: spec,
+      workspace_path: spec.environment_lease.workspace_path,
+      permission_mode: :read_only
+    }
+
+    case Jidoka.Tools.ReadFile.run(%{path: "note.txt"}, context) do
+      {:ok, result} ->
+        {:ok,
+         %AttemptOutput{
+           status: :succeeded,
+           metadata: %{adapter: :tool_progress, contents: result.contents}
+         }}
+
+      {:error, reason} ->
+        {:ok,
+         %AttemptOutput{
+           status: :terminal_failed,
+           metadata: %{adapter: :tool_progress},
+           error: reason
+         }}
+    end
+  end
+end

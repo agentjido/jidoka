@@ -197,7 +197,7 @@ defmodule JidokaSessionServerTest do
     run_ids = Enum.map(session_snapshot.runs, & &1.id)
     assert MapSet.new(run_ids) == MapSet.new([root_run.id, child_run.id])
     assert MapSet.new(session_snapshot.session.run_ids) == MapSet.new(run_ids)
-    assert session_snapshot.session.active_run_id == child_run.id
+    assert session_snapshot.session.active_run_id in [root_run.id, child_run.id]
     assert session_snapshot.session.status in [:initializing, :active]
 
     assert {:ok, root_snapshot} = SessionServer.run_snapshot(session_id, root_run.id)

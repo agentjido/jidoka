@@ -90,7 +90,11 @@ defmodule Jidoka.AttemptExecution.JidoAIAgentAdapter do
       %{prompt_length: byte_size(spec.task), model: runtime.model}
     )
 
-    CodingAgent.ask(agent_pid, spec.task, timeout: runtime.timeout_ms)
+    CodingAgent.ask(agent_pid, spec.task,
+      timeout: runtime.timeout_ms,
+      stream_timeout_ms: runtime.timeout_ms,
+      tool_context: tool_context(spec)
+    )
   end
 
   defp await_result(spec, runtime, request) do
@@ -157,6 +161,31 @@ defmodule Jidoka.AttemptExecution.JidoAIAgentAdapter do
   end
 
   defp spec_options(_spec), do: []
+
+  defp tool_context(%AttemptSpec{} = spec) do
+    metadata = spec.metadata
+
+    %{
+      jidoka_attempt_spec: spec,
+      workspace_path:
+        Map.get(metadata, :workspace_path) ||
+          Map.get(metadata, "workspace_path") ||
+          Map.get(metadata, :requested_cwd) ||
+          Map.get(metadata, "requested_cwd") ||
+          lease_source_workspace_path(spec) ||
+          spec.environment_lease.workspace_path,
+      permission_mode:
+        Map.get(metadata, :permission_mode) ||
+          Map.get(metadata, "permission_mode") ||
+          System.get_env("JIDOKA_PERMISSION_MODE") ||
+          :read_only
+    }
+  end
+
+  defp lease_source_workspace_path(%AttemptSpec{environment_lease: %{metadata: metadata}})
+       when is_map(metadata) do
+    Map.get(metadata, :source_workspace_path) || Map.get(metadata, "source_workspace_path")
+  end
 
   defp prompt_report_path(%AttemptSpec{} = spec) do
     Path.join(spec.environment_lease.workspace_path, "prompt_report.md")

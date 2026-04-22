@@ -69,6 +69,11 @@ the terminal, auto-approves the passed verification step, and prints the final
 response. Prompt reports are written into the temporary CLI workspace under
 `$TMPDIR/jidoka-cli`.
 
+By default, `jidoka prompt` runs with read-only workspace tools enabled:
+`list_files`, `read_file`, `grep`, and `git_status`. The active workspace is the
+directory where you invoke the command. Permission mode defaults to `read_only`
+and can be set with `JIDOKA_PERMISSION_MODE`.
+
 The command loads `priv/fixtures/mvp_012_fixtures.exs`, runs each scenario through
 the public `Jidoka` facade, and prints a compact outcome line per scenario.
 
