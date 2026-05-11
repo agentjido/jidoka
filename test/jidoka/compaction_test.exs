@@ -4,7 +4,21 @@ defmodule JidokaTest.CompactionTest do
   alias Jido.Thread
   alias Jido.Thread.Agent, as: ThreadAgent
   alias Jidoka.Compaction
-  alias JidokaTest.{ChatAgent, CompactionAgent, CompactionPrompt, CompactionPromptCallbacks, ManualCompactionAgent}
+  alias Jidoka.Compaction.Prompt
+
+  alias JidokaTest.{
+    ChatAgent,
+    CompactionAgent,
+    CompactionPrompt,
+    CompactionPromptCallbacks,
+    CompactionSummarizer,
+    EmptyCompactionPrompt,
+    ErrorCompactionPrompt,
+    InvalidCompactionPrompt,
+    ManualCompactionAgent,
+    MoreCompactionPromptCallbacks,
+    RaisingCompactionPrompt
+  }
 
   setup do
     previous = Application.get_env(:jidoka, :compaction_summarizer)
@@ -33,6 +47,42 @@ defmodule JidokaTest.CompactionTest do
     assert ChatAgent.compaction() == nil
   end
 
+  test "public compaction helpers expose defaults, enablement, prompt text, and message windows" do
+    assert %{mode: :auto, strategy: :summary, keep_last: 12} = Compaction.default_config()
+    refute Compaction.enabled?(nil)
+    refute Compaction.enabled?(%{mode: :off})
+    assert Compaction.enabled?(%{mode: :manual})
+
+    compaction = %Compaction{status: :summarized, summary: "Earlier context.", retained_message_count: 1}
+
+    assert Compaction.prompt_text(%{Compaction.context_key() => compaction}) ==
+             "Compacted conversation summary:\nEarlier context."
+
+    assert Compaction.prompt_text(%{
+             Atom.to_string(Compaction.context_key()) => %{summary: "From strings.", keep_last: 1}
+           }) ==
+             "Compacted conversation summary:\nFrom strings."
+
+    assert Compaction.prompt_text(%{Compaction.context_key() => %{summary: "", keep_last: 1}}) == nil
+    assert Compaction.prompt_text(:not_a_context) == nil
+
+    messages = [
+      %{role: :system, content: "system"},
+      %{"role" => "user", "content" => "old"},
+      %{role: :assistant, content: "recent"},
+      %{role: :alien, content: "unknown"}
+    ]
+
+    assert [
+             %{role: :assistant, content: "recent"},
+             %{role: :alien, content: "unknown"}
+           ] =
+             Compaction.apply_to_messages(messages, %{Compaction.context_key() => %{summary: "summary", keep_last: 2}})
+
+    assert Compaction.apply_to_messages(messages, %{Compaction.context_key() => %{summary: "summary"}}) == messages
+    assert Compaction.apply_to_messages(messages, :not_a_context) == messages
+  end
+
   test "normalizes prompt overrides and rejects invalid compaction config" do
     assert {:ok, %{prompt: CompactionPrompt}} =
              Compaction.normalize_dsl([%Jidoka.Agent.Dsl.CompactionPrompt{value: CompactionPrompt}])
@@ -49,6 +99,60 @@ defmodule JidokaTest.CompactionTest do
              ])
 
     assert reason =~ "keep_last must be less than max_messages"
+  end
+
+  test "compaction prompt validation rejects ambiguous runtime-only prompt specs" do
+    assert Prompt.default_prompt() =~ "Compress the conversation for the next agent turn."
+
+    assert {:error, reason} = Prompt.normalize(nil, " ")
+    assert reason =~ "must not be empty"
+
+    assert {:error, reason} = Prompt.normalize(nil, fn _input -> "compact" end)
+    assert reason =~ "does not support anonymous functions"
+
+    assert {:error, reason} = Prompt.normalize(nil, String)
+    assert reason =~ "must implement build_compaction_prompt/1"
+
+    assert {:error, reason} = Prompt.normalize(nil, {MoreCompactionPromptCallbacks, :missing, []})
+    assert reason =~ "must export missing/1"
+
+    assert {:error, reason} = Prompt.normalize(nil, %{prompt: "compact"})
+    assert reason =~ "must be a string"
+  end
+
+  test "compaction prompt resolution handles default, module, and MFA prompt sources" do
+    input = %{source_message_count: 3, retained_message_count: 2}
+
+    assert {:ok, default_prompt} = Prompt.resolve(nil, input)
+    assert default_prompt =~ "Preserve only durable context:"
+
+    assert Prompt.resolve("Use a static prompt.", input) == {:ok, "Use a static prompt."}
+    assert Prompt.resolve(CompactionPrompt, input) == {:ok, "Custom compact 3 messages."}
+
+    assert Prompt.resolve(EmptyCompactionPrompt, input) ==
+             {:error, "dynamic compaction prompt must not resolve to an empty string"}
+
+    assert Prompt.resolve(ErrorCompactionPrompt, input) == {:error, :prompt_failed}
+
+    assert {:error, reason} = Prompt.resolve(InvalidCompactionPrompt, input)
+    assert reason =~ "must return a string"
+
+    assert {:error, reason} = Prompt.resolve(RaisingCompactionPrompt, input)
+    assert reason =~ "prompt boom"
+
+    assert Prompt.resolve({MoreCompactionPromptCallbacks, :ok, ["prefix"]}, input) ==
+             {:ok, "prefix: 3 source."}
+
+    assert Prompt.resolve({MoreCompactionPromptCallbacks, :error, []}, input) == {:error, :mfa_failed}
+
+    assert Prompt.resolve({MoreCompactionPromptCallbacks, :empty, []}, input) ==
+             {:error, "dynamic compaction prompt must not resolve to an empty string"}
+
+    assert {:error, reason} = Prompt.resolve({MoreCompactionPromptCallbacks, :invalid, []}, input)
+    assert reason =~ "must return a string"
+
+    assert {:error, reason} = Prompt.resolve({MoreCompactionPromptCallbacks, :raise_error, []}, input)
+    assert reason =~ "mfa boom"
   end
 
   test "auto compaction summarizes old thread messages and attaches runtime context" do
@@ -95,6 +199,98 @@ defmodule JidokaTest.CompactionTest do
              :summarized
   end
 
+  test "automatic compaction skips below-threshold and manual modes without summarizing" do
+    runtime = CompactionAgent.runtime_module()
+
+    agent =
+      runtime
+      |> new_runtime_agent()
+      |> put_thread([
+        ai_message(:user, "short 1", request_id: "req-1"),
+        ai_message(:assistant, "short 2", request_id: "req-1")
+      ])
+
+    config = %{CompactionAgent.compaction() | max_messages: 10}
+
+    assert {:ok, updated_agent, {:ai_react_start, params}} =
+             Compaction.on_before_cmd(
+               agent,
+               {:ai_react_start, %{query: "next", request_id: "req-skip", tool_context: %{}}},
+               config,
+               %{session: "test-session"}
+             )
+
+    assert get_in(updated_agent.state, [:requests, "req-skip", :meta, :jidoka_compaction, :status]) == :skipped
+
+    assert get_in(updated_agent.state, [:requests, "req-skip", :meta, :jidoka_compaction, :metadata, :reason]) ==
+             :below_threshold
+
+    assert params.tool_context.session == "test-session"
+
+    assert {:ok, manual_agent, {:ai_react_start, manual_params}} =
+             Compaction.on_before_cmd(
+               agent,
+               {:ai_react_start, %{query: "next", request_id: "req-manual", tool_context: %{conversation: "conv"}}},
+               %{config | mode: :manual},
+               %{}
+             )
+
+    assert get_in(manual_agent.state, [:requests, "req-manual", :meta, :jidoka_compaction]) ==
+             %{status: :manual, enabled?: true}
+
+    refute Map.has_key?(manual_params.tool_context, Compaction.context_key())
+
+    assert {:ok, ^agent, :noop} = Compaction.on_before_cmd(agent, :noop, config, %{})
+
+    assert {:ok, ^agent, {:ai_react_start, %{}}} =
+             Compaction.on_before_cmd(agent, {:ai_react_start, %{}}, %{mode: :off}, %{})
+
+    assert {:ok, ^agent, {:ai_react_start, %{}}} = Compaction.on_before_cmd(agent, {:ai_react_start, %{}}, nil, %{})
+  end
+
+  test "automatic compaction fails open when summarization fails" do
+    test_pid = self()
+
+    Application.put_env(:jidoka, :compaction_summarizer, fn input ->
+      send(test_pid, {:compaction_attempted, input.source_message_count})
+      {:unexpected, :summary}
+    end)
+
+    runtime = CompactionAgent.runtime_module()
+
+    agent =
+      runtime
+      |> new_runtime_agent()
+      |> put_thread([
+        ai_message(:user, "old 1", request_id: "req-1"),
+        ai_message(:assistant, "old 2", request_id: "req-1"),
+        ai_message(:user, "old 3", request_id: "req-2"),
+        ai_message(:assistant, "old 4", request_id: "req-2"),
+        ai_message(:user, "recent 1", request_id: "req-3"),
+        ai_message(:assistant, "recent 2", request_id: "req-3")
+      ])
+
+    result =
+      capture_log(fn ->
+        send(
+          test_pid,
+          {:compaction_result,
+           Compaction.on_before_cmd(
+             agent,
+             {:ai_react_start, %{query: "next", request_id: "req-error", tool_context: %{}}},
+             CompactionAgent.compaction(),
+             %{}
+           )}
+        )
+      end)
+
+    assert result =~ "Jidoka compaction failed"
+
+    assert_receive {:compaction_attempted, 4}
+    assert_receive {:compaction_result, {:ok, updated_agent, {:ai_react_start, _params}}}
+    assert get_in(updated_agent.state, [:requests, "req-error", :meta, :jidoka_compaction, :status]) == :error
+  end
+
   test "manual compaction updates a running agent snapshot" do
     {:ok, pid} = ManualCompactionAgent.start_link(id: "manual-compaction-test")
 
@@ -118,6 +314,49 @@ defmodule JidokaTest.CompactionTest do
     assert {:ok, %Compaction{summary: "manual summary"}} = Jidoka.inspect_compaction(pid)
 
     :ok = Jidoka.stop_agent(pid)
+  end
+
+  test "manual compaction validates sessions, config overrides, and summarizer results" do
+    session = Jidoka.Session.new!(agent: ManualCompactionAgent, id: "compaction-not-running")
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} = Jidoka.compact(session)
+    assert error.field == :session
+    assert error.details.reason == :session_agent_not_running
+
+    agent =
+      ChatAgent.runtime_module()
+      |> new_runtime_agent()
+      |> put_thread([
+        ai_message(:user, "source 1", request_id: "req-1"),
+        ai_message(:assistant, "source 2", request_id: "req-1"),
+        ai_message(:user, "tail 1", request_id: "req-2"),
+        ai_message(:assistant, "tail 2", request_id: "req-2")
+      ])
+
+    config = %{
+      "mode" => "manual",
+      "strategy" => "summary",
+      "max_messages" => 3,
+      "keep_last" => 2,
+      "max_summary_chars" => 20
+    }
+
+    Code.ensure_loaded!(CompactionSummarizer)
+
+    assert {:ok, %Compaction{status: :summarized, summary: "module summary for 2"}} =
+             Jidoka.compact(agent, config: config, summarizer: CompactionSummarizer)
+
+    assert {:error, {:invalid_compaction_summary, %{bad: :summary}}} =
+             Jidoka.compact(agent, config: config, summarizer: fn _input -> %{bad: :summary} end)
+
+    assert {:error, :missing_compaction_model} =
+             agent
+             |> Map.update!(:state, &Map.drop(&1, [:model, :__strategy__]))
+             |> Jidoka.compact(config: config)
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} = Jidoka.compact(agent)
+    assert error.field == :compaction
+    assert error.details.reason == :compaction_not_configured
   end
 
   test "request transformer injects compaction summary and trims old messages" do

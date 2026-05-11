@@ -32,6 +32,46 @@ defmodule JidokaTest.CompactionPromptCallbacks do
   def build(input, prefix), do: "#{prefix}: #{input.retained_message_count} retained."
 end
 
+defmodule JidokaTest.EmptyCompactionPrompt do
+  @moduledoc false
+
+  def build_compaction_prompt(_input), do: " "
+end
+
+defmodule JidokaTest.ErrorCompactionPrompt do
+  @moduledoc false
+
+  def build_compaction_prompt(_input), do: {:error, :prompt_failed}
+end
+
+defmodule JidokaTest.InvalidCompactionPrompt do
+  @moduledoc false
+
+  def build_compaction_prompt(_input), do: {:unexpected, :prompt}
+end
+
+defmodule JidokaTest.RaisingCompactionPrompt do
+  @moduledoc false
+
+  def build_compaction_prompt(_input), do: raise("prompt boom")
+end
+
+defmodule JidokaTest.MoreCompactionPromptCallbacks do
+  @moduledoc false
+
+  def ok(input, prefix), do: {:ok, "#{prefix}: #{input.source_message_count} source."}
+  def error(_input), do: {:error, :mfa_failed}
+  def empty(_input), do: {:ok, " "}
+  def invalid(_input), do: {:unexpected, :mfa}
+  def raise_error(_input), do: raise("mfa boom")
+end
+
+defmodule JidokaTest.CompactionSummarizer do
+  @moduledoc false
+
+  def summarize(input), do: {:ok, "module summary for #{input.source_message_count} messages"}
+end
+
 defmodule JidokaTest.ScheduledAgent do
   use Jidoka.Agent
 

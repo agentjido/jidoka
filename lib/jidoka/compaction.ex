@@ -269,7 +269,6 @@ defmodule Jidoka.Compaction do
 
   defp auto_compact(agent, config, params, context, request_id) do
     opts = [
-      force: false,
       trigger: :auto,
       request_id: request_id,
       conversation_id: conversation_id(context, params),
@@ -418,7 +417,7 @@ defmodule Jidoka.Compaction do
   end
 
   defp default_summarizer(agent, _config, opts, input) do
-    model = Map.get(agent.state || %{}, :model) || get_in(agent.state || %{}, [:__strategy__, :config, :model])
+    model = Map.get(agent.state, :model) || get_in(agent.state, [:__strategy__, :config, :model])
 
     if is_nil(model) do
       {:error, :missing_compaction_model}
@@ -615,7 +614,7 @@ defmodule Jidoka.Compaction do
   end
 
   defp put_latest(%Jido.Agent{} = agent, %__MODULE__{} = compaction) do
-    %{agent | state: Map.put(agent.state || %{}, @state_key, compaction)}
+    %{agent | state: Map.put(agent.state, @state_key, compaction)}
   end
 
   defp attach_latest_compaction(context, %__MODULE__{status: :summarized, summary: summary} = compaction, config)
@@ -630,7 +629,7 @@ defmodule Jidoka.Compaction do
   defp attach_latest_compaction(context, _compaction, _config), do: context
 
   defp put_request_compaction_meta(agent, request_id, compaction_meta) when is_binary(request_id) do
-    state = agent.state || %{}
+    state = agent.state
 
     update_in(state, [:requests, request_id], fn
       nil ->
@@ -715,8 +714,8 @@ defmodule Jidoka.Compaction do
 
   defp context_ref(agent, context) do
     get_value(context, :context_ref) ||
-      Map.get(agent.state || %{}, :active_context_ref) ||
-      get_in(agent.state || %{}, [:__strategy__, :active_context_ref]) ||
+      Map.get(agent.state, :active_context_ref) ||
+      get_in(agent.state, [:__strategy__, :active_context_ref]) ||
       "default"
   end
 
@@ -725,7 +724,7 @@ defmodule Jidoka.Compaction do
       Keyword.get(opts, :config) ->
         Config.normalize_imported(Keyword.fetch!(opts, :config))
 
-      is_atom(agent_module) and function_exported?(agent_module, :__jidoka_definition__, 0) ->
+      function_exported?(agent_module, :__jidoka_definition__, 0) ->
         agent_module.__jidoka_definition__()
         |> Map.get(:compaction)
         |> case do
@@ -781,10 +780,11 @@ defmodule Jidoka.Compaction do
     "compaction-" <> Integer.to_string(System.unique_integer([:positive, :monotonic]))
   end
 
-  defp get_value(map, key, default \\ nil) when is_map(map) do
-    Map.get(map, key, Map.get(map, normalize_lookup_key(key), default))
+  defp get_value(map, key, default \\ nil)
+
+  defp get_value(map, key, default) when is_map(map) and is_atom(key) do
+    Map.get(map, key, Map.get(map, Atom.to_string(key), default))
   end
 
-  defp normalize_lookup_key(key) when is_atom(key), do: Atom.to_string(key)
-  defp normalize_lookup_key(key), do: key
+  defp get_value(map, key, default) when is_map(map), do: Map.get(map, key, default)
 end
