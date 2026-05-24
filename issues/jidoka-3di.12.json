@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.3"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:42Z",
   "description": "Purpose: finalize first-class scheduled agent/workflow runs.\n\nDone when:\n- schedules are clearly first-class Jidoka features\n- tests cover agent targets, session targets, and workflow targets\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E11: Schedules",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:42Z"
+  "updated_at": "2026-05-24T20:35:47Z"
 }
