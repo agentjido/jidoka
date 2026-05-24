@@ -4,14 +4,15 @@
   "blocks": [
     "jidoka-3di.2"
   ],
+  "closed_at": "2026-05-24T20:46:45Z",
   "created": "2026-05-24T20:35:38Z",
   "description": "Purpose: establish the state of `main` before V3 work starts.\n\nDone when:\n- there is a baseline report attached to the beadwork epic\n- the V3 epic DAG is represented in beadwork dependencies\n- the feature-to-test matrix exists\n- no implementation work starts without a baseline\n",
   "id": "jidoka-3di.1",
   "labels": [],
   "parent": "jidoka-3di",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "V3 E0: Baseline and scope",
   "type": "epic",
-  "updated_at": "2026-05-24T20:42:53Z"
+  "updated_at": "2026-05-24T20:46:45Z"
 }
