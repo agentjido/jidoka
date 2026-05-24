@@ -34,6 +34,36 @@ defmodule JidokaTest.AgentBasicsTest do
     assert ChatAgent.runtime_module() == JidokaTest.ChatAgent.Runtime
   end
 
+  test "exposes the canonical V3 generated helper surface" do
+    definition = ChatAgent.__jidoka__()
+
+    assert definition.kind == :agent_definition
+    assert definition.id == "chat_agent"
+    assert definition.runtime_module == ChatAgent.runtime_module()
+    assert Map.has_key?(definition, :result)
+    refute Map.has_key?(definition, :output)
+
+    assert function_exported?(ChatAgent, :chat, 3)
+    assert function_exported?(ChatAgent, :start_link, 1)
+    assert function_exported?(ChatAgent, :result, 0)
+    assert function_exported?(ChatAgent, :result_schema, 0)
+    assert function_exported?(ChatAgent, :controls, 0)
+    assert function_exported?(ChatAgent, :input_controls, 0)
+    assert function_exported?(ChatAgent, :operation_controls, 0)
+    assert function_exported?(ChatAgent, :result_controls, 0)
+
+    refute function_exported?(ChatAgent, :output, 0)
+    refute function_exported?(ChatAgent, :output_schema, 0)
+    refute function_exported?(ChatAgent, :guardrails, 0)
+    refute function_exported?(ChatAgent, :input_guardrails, 0)
+    refute function_exported?(ChatAgent, :tool_guardrails, 0)
+    refute function_exported?(ChatAgent, :output_guardrails, 0)
+
+    assert ChatAgent.result() == nil
+    assert ChatAgent.result_schema() == nil
+    assert ChatAgent.controls() == %{input: [], output: [], tool: []}
+  end
+
   test "exposes the configured instructions" do
     assert ChatAgent.instructions() == "You are a concise assistant."
     assert ChatAgent.character() == nil
