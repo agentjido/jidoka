@@ -122,6 +122,33 @@ defmodule JidokaTest.ContextMemoryTest do
     assert :ok = Jidoka.stop_agent(pid)
   end
 
+  test "Jidoka.chat passes schema-normalized context into controls" do
+    assert {:ok, pid} = ContextAgent.start_link(id: "context-schema-normalized-chat")
+    test_pid = self()
+
+    guardrail = fn input ->
+      send(test_pid, {:schema_context, Jidoka.Context.strip_internal(input.context)})
+      {:interrupt, %{kind: :approval, message: "stop before provider", data: %{}}}
+    end
+
+    try do
+      assert {:interrupt, %Jidoka.Interrupt{kind: :approval}} =
+               Jidoka.chat(pid, "hello",
+                 context: %{tenant: "acme", session: "runtime"},
+                 guardrails: [input: guardrail]
+               )
+
+      assert_receive {:schema_context,
+                      %{
+                        tenant: "acme",
+                        channel: "test",
+                        session: "runtime"
+                      }}
+    after
+      :ok = Jidoka.stop_agent(pid)
+    end
+  end
+
   test "merges default agent context into runtime requests" do
     runtime = ContextAgent.runtime_module()
     agent = new_runtime_agent(runtime)
