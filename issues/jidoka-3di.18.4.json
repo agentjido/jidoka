@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:45Z",
+  "description": "Parent epic: V3 E17: Testing, examples, and docs\n\nSource task 4/7 from MILESTONE_V3.md:\n\n- Keep every example minimal and feature-focused; avoid restoring a large demo\n  tree until the final DSL proves itself.\n\nEpic closure criteria:\n- docs, examples, and Livebooks teach the same progression\n- every shipped example has an automated smoke test\n",
+  "id": "jidoka-3di.18.4",
+  "labels": [],
+  "parent": "jidoka-3di.18",
+  "priority": 2,
+  "status": "open",
+  "title": "E17: Keep every example minimal and feature-focused; avoid restoring a large demo tr...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:45Z"
+}
