@@ -49,6 +49,34 @@ defmodule JidokaTest.SessionTest do
     assert error.field == :context
   end
 
+  test "session is a plain descriptor, not a process or transcript store" do
+    session = session!("plain-descriptor", context: %{tenant: "acme"})
+
+    refute is_pid(session)
+    assert Session.whereis(session) == nil
+
+    assert Map.take(Map.from_struct(session), [
+             :id,
+             :agent,
+             :agent_id,
+             :conversation_id,
+             :context_ref,
+             :context,
+             :runtime,
+             :start_opts,
+             :metadata
+           ]) == Map.from_struct(session)
+
+    refute Map.has_key?(session, :pid)
+    refute Map.has_key?(session, :messages)
+    refute Map.has_key?(session, :thread)
+    refute Map.has_key?(session, :transcript)
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} = Session.snapshot(session)
+    assert error.details.reason == :session_agent_not_running
+    assert error.details.agent_id == session.agent_id
+  end
+
   test "starts and reuses the session runtime agent" do
     session = session!("start-reuse")
 
