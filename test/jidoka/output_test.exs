@@ -396,6 +396,29 @@ defmodule JidokaTest.OutputTest do
     assert get_in(agent.state, [:requests, request_id, :meta, :jidoka_output, :attempt]) == 1
   end
 
+  test "invalid repaired output fails with normalized validation metadata" do
+    output = StructuredOutputAgent.result()
+    request_id = "req-output-invalid-repair"
+
+    agent =
+      StructuredOutputAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request(request_id, "Classify this")
+      |> Request.complete_request(request_id, "not structured")
+
+    repair_fun = fn _output, _agent, _context, _raw, _reason ->
+      {:ok, %{"category" => "billing", "summary" => "Missing confidence"}}
+    end
+
+    agent = Output.finalize(agent, request_id, output, repair_fun: repair_fun)
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} = Request.get_result(agent, request_id)
+    assert error.field == :output
+    assert error.details.reason == {:schema, %{confidence: ["is required"]}}
+    assert get_in(agent.state, [:requests, request_id, :meta, :jidoka_output, :status]) == :error
+    assert get_in(agent.state, [:requests, request_id, :meta, :jidoka_output, :attempt]) == 1
+  end
+
   test "output repair exceptions are normalized" do
     output = StructuredOutputAgent.result()
     request_id = "req-output-repair-exception"

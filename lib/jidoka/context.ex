@@ -192,7 +192,7 @@ defmodule Jidoka.Context do
   end
 
   defp parse_schema(schema, context) do
-    case Zoi.parse(schema, context) do
+    case Zoi.parse(schema, coerce_schema_keys(schema, context)) do
       {:ok, parsed} when is_map(parsed) ->
         {:ok, parsed}
 
@@ -206,6 +206,19 @@ defmodule Jidoka.Context do
 
   defp zoi_schema?(schema) do
     is_struct(schema) and not is_nil(Zoi.Type.impl_for(schema))
+  end
+
+  defp coerce_schema_keys(%Zoi.Types.Map{fields: fields}, context)
+       when is_list(fields) and is_map(context) do
+    Map.new(context, fn {key, value} -> {schema_field_key(fields, key), value} end)
+  end
+
+  defp coerce_schema_keys(_schema, context), do: context
+
+  defp schema_field_key(fields, key) do
+    Enum.find_value(fields, key, fn {field, _schema} ->
+      if equivalent_keys?(field, key), do: field
+    end)
   end
 
   defp internal_key?(key) when is_atom(key) do

@@ -91,6 +91,25 @@ defmodule JidokaTest.ContextMemoryTest do
     assert inspect(error.details.errors) =~ "tenant"
   end
 
+  test "coerces string keys that match atom fields in context schemas" do
+    config = %{
+      context: ContextAgent.context(),
+      context_schema: ContextAgent.context_schema()
+    }
+
+    assert {:ok, opts} =
+             Jidoka.Agent.prepare_chat_opts(
+               [context: %{"tenant" => "acme", "session" => "runtime"}],
+               config
+             )
+
+    assert Keyword.get(opts, :tool_context) == %{
+             tenant: "acme",
+             channel: "test",
+             session: "runtime"
+           }
+  end
+
   test "keeps schema defaults when other context fields are required" do
     assert RequiredContextAgent.context() == %{tenant: "demo"}
   end
