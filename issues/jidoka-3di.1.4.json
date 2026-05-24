@@ -2,6 +2,7 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T20:46:44Z",
   "created": "2026-05-24T20:35:38Z",
   "description": "Parent epic: V3 E0: Baseline and scope\n\nSource task 4/10 from MILESTONE_V3.md:\n\n- Record xref cycles, largest modules, and confusing naming hotspots.\n\nEpic closure criteria:\n- there is a baseline report attached to the beadwork epic\n- the V3 epic DAG is represented in beadwork dependencies\n- the feature-to-test matrix exists\n- no implementation work starts without a baseline\n",
   "id": "jidoka-3di.1.4",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "E0: Record xref cycles, largest modules, and confusing naming hotspots",
   "type": "task",
   "updated_at": "2026-05-24T20:46:44Z"
