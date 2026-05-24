@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.10",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Added compile-time coverage for every supported V3 DSL section, plus explicit compaction and schedule validation failures. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:36:15Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Add compile-time validation tests for every supported DSL section",
   "type": "task",
-  "updated_at": "2026-05-24T21:33:52Z"
+  "updated_at": "2026-05-24T21:36:15Z"
 }
