@@ -120,6 +120,14 @@ defmodule JidokaTest.SessionTest do
       assert is_binary(request_id)
       assert {:ok, trace} = Jidoka.inspect_trace(session)
       assert trace.agent_id == session.agent_id
+
+      assert {:ok, snapshot} = Session.snapshot(session)
+      assert snapshot.kind == :agent_view
+      assert snapshot.agent_id == session.agent_id
+      assert snapshot.context_ref == session.context_ref
+
+      assert {:ok, direct_trace} = Session.trace(session)
+      assert direct_trace.agent_id == session.agent_id
     after
       stop_session_agent(session)
     end
