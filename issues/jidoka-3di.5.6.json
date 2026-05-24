@@ -7,9 +7,15 @@
   "id": "jidoka-3di.5.6",
   "labels": [],
   "parent": "jidoka-3di.5",
+  "comments": [
+    {
+      "text": "Added focused coverage for duplicate direct action names, invalid action output schemas, inspection/provider metadata rendering, and direct action execution failures. Aligned duplicate direct action validation with the shared duplicate-operation error wording.",
+      "timestamp": "2026-05-24T22:56:09Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E4: Add tests for duplicate names, invalid schemas, metadata rendering, and tool ex...",
   "type": "task",
-  "updated_at": "2026-05-24T22:52:48Z"
+  "updated_at": "2026-05-24T22:56:09Z"
 }
