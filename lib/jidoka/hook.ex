@@ -1,10 +1,11 @@
 defmodule Jidoka.Hook do
   @moduledoc """
-  Thin wrapper for reusable Jidoka turn hooks.
+  Defines reusable lifecycle callbacks for Jidoka agents.
 
-  Jidoka hooks are published by name and expose a single `call/1` callback.
-  They can be referenced from the Jidoka DSL, imported JSON/YAML specs, or
-  request-scoped `chat/3` overrides.
+  Hooks are for lifecycle integration points such as preparing a turn, observing
+  a completed turn, or reacting to an interrupt. They are intentionally separate
+  from policy controls: use `Jidoka.Control` for input, operation, result, and
+  human-in-the-loop decisions.
   """
 
   @required_functions [

@@ -1,11 +1,5 @@
 defmodule Jidoka.Guardrail do
-  @moduledoc """
-  Thin wrapper for reusable Jidoka guardrails.
-
-  Jidoka guardrails are published by name and expose a single `call/1` callback.
-  They can be referenced from the Jidoka DSL, imported JSON/YAML specs, or
-  request-scoped `chat/3` overrides.
-  """
+  @moduledoc false
 
   @required_functions [
     {:name, 0},

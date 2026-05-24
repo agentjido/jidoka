@@ -21,7 +21,8 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 - Use `capabilities do` for Ash resources, MCP sync, web access, skills,
   plugins, subagents, workflow capabilities, and handoffs.
 - Use `controls do` for input, operation, and result policy.
-- Use `lifecycle do` for runtime behavior such as memory and compaction.
+- Use `lifecycle do` for runtime behavior such as memory, compaction, and
+  lifecycle hooks. Do not put policy decisions there; use controls.
 - Use `web :search` for search-only agents and `web :read_only` for search plus
   public page reading. Do not expose raw browser automation for low-risk agents.
 - Use `subagent` for manager-pattern delegation inside an agent turn. Do not
@@ -71,7 +72,7 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 - Public runtime APIs should return `{:ok, value}`, `{:interrupt, interrupt}`,
   `{:handoff, handoff}`, or `{:error, %Jidoka.Error.*{}}`.
 - Do not expose raw internal error tuples from chat, workflow, subagent,
-  handoff, MCP, memory, hook, or guardrail runtime boundaries.
+  handoff, MCP, memory, hook, or control runtime boundaries.
 - Use `Jidoka.format_error/1` when printing errors in docs, demos, and CLIs.
 - Preserve low-level causes in `error.details.cause`; do not require users to
   pattern-match on those causes.
