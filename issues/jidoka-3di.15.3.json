@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:44Z",
+  "description": "Parent epic: V3 E14: Tool integrations\n\nSource task 3/6 from MILESTONE_V3.md:\n\n- Verify each integration can be tested without live external services.\n\nEpic closure criteria:\n- core integrations are tested and safe by default\n- large catalog support has a clear extension boundary\n- anything that should move to a companion package has an issue or explicit\n  contract\n",
+  "id": "jidoka-3di.15.3",
+  "labels": [],
+  "parent": "jidoka-3di.15",
+  "priority": 2,
+  "status": "open",
+  "title": "E14: Verify each integration can be tested without live external services",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:44Z"
+}
