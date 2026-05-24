@@ -11,6 +11,11 @@ defmodule Jidoka.Control do
   - `{:block, reason}` to stop intentionally with a policy failure
   - `{:interrupt, interrupt}` to pause for approval or outside input
   - `{:error, reason}` for an unexpected control failure
+
+  Controls run in declaration order within their stage. The first `:cont` or
+  `:ok` result allows the next control to run. The first `{:block, reason}`,
+  `{:interrupt, interrupt}`, or `{:error, reason}` result short-circuits the
+  stage and prevents later controls in that stage from running.
   """
 
   @type name :: String.t()

@@ -43,6 +43,35 @@ defmodule JidokaTest.GuardrailsTest do
              Jidoka.Guardrails.Runner.run_guardrails([BlockOperationControl], input)
   end
 
+  test "runs controls in declaration order while they allow" do
+    parent = self()
+
+    first = fn _input ->
+      send(parent, :first_control)
+      :cont
+    end
+
+    second = fn _input ->
+      send(parent, :second_control)
+      :ok
+    end
+
+    assert :ok = Jidoka.Guardrails.Runner.run_guardrails([first, second], control_input())
+    assert_received :first_control
+    assert_received :second_control
+  end
+
+  test "short-circuits later controls on block, interrupt, and error" do
+    assert_control_short_circuits({:block, :blocked}, {:error, "anonymous_guardrail", :blocked})
+
+    assert_control_short_circuits(
+      {:interrupt, %{kind: :approval, message: "Pause"}},
+      {:interrupt, "anonymous_guardrail", :approval}
+    )
+
+    assert_control_short_circuits({:error, :failed}, {:error, "anonymous_guardrail", :failed})
+  end
+
   test "runs operation controls only when their condition matches" do
     runtime = ConditionalControlAgent.runtime_module()
     agent = new_runtime_agent(runtime)
@@ -257,5 +286,44 @@ defmodule JidokaTest.GuardrailsTest do
     after
       :ok = Jidoka.stop_agent(pid)
     end
+  end
+
+  defp assert_control_short_circuits(first_result, expected) do
+    parent = self()
+
+    first = fn _input ->
+      send(parent, {:control_ran, first_result})
+      first_result
+    end
+
+    second = fn _input ->
+      send(parent, :second_control_should_not_run)
+      :ok
+    end
+
+    result = Jidoka.Guardrails.Runner.run_guardrails([first, second], control_input())
+    assert_control_result(result, expected)
+    assert_received {:control_ran, ^first_result}
+    refute_received :second_control_should_not_run
+  end
+
+  defp assert_control_result({:interrupt, label, %Jidoka.Interrupt{} = interrupt}, {:interrupt, label, expected_kind}) do
+    assert interrupt.kind == expected_kind
+  end
+
+  defp assert_control_result(result, expected), do: assert(result == expected)
+
+  defp control_input do
+    %Jidoka.Guardrails.Input{
+      agent: nil,
+      server: self(),
+      request_id: "req-control-order",
+      message: "hello",
+      context: %{},
+      allowed_tools: nil,
+      llm_opts: [],
+      metadata: %{},
+      request_opts: %{}
+    }
   end
 end
