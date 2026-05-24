@@ -163,7 +163,7 @@ defmodule Jidoka.Plugin do
   def plugin_actions(module) when is_atom(module) do
     with :ok <- ensure_compiled_plugin(module),
          actions when is_list(actions) <- module.actions(),
-         {:ok, _action_names} <- Jidoka.Tool.action_names(actions) do
+         {:ok, _action_names} <- Jidoka.Action.Adapter.action_names(actions) do
       {:ok, actions}
     else
       {:error, reason} ->

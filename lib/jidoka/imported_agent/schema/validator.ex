@@ -172,7 +172,7 @@ defmodule Jidoka.ImportedAgent.Spec.Validator do
         {:error, "tools require an available_tools registry when importing Jidoka agents"}
 
       true ->
-        case Jidoka.Tool.resolve_tool_names(spec.tools, available_tools) do
+        case Jidoka.Action.Adapter.resolve_tool_names(spec.tools, available_tools) do
           {:ok, _tool_modules} -> {:ok, spec}
           {:error, reason} -> {:error, reason}
         end

@@ -101,7 +101,7 @@ defmodule Jidoka.Web do
   def tool_names(web_capabilities) when is_list(web_capabilities) do
     web_capabilities
     |> tool_modules()
-    |> Jidoka.Tool.tool_names()
+    |> Jidoka.Action.Adapter.tool_names()
   end
 
   @doc false

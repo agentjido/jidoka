@@ -2,7 +2,7 @@ defmodule Jidoka.ImportedAgent.Registries do
   @moduledoc false
 
   @type t :: %{
-          tools: Jidoka.Tool.registry(),
+          tools: Jidoka.Action.Adapter.registry(),
           characters: Jidoka.Character.registry(),
           skills: Jidoka.Skill.registry(),
           subagents: Jidoka.Subagent.registry(),
@@ -165,7 +165,7 @@ defmodule Jidoka.ImportedAgent.Registries do
   defp available_tool_registry(opts) do
     opts
     |> Keyword.get(:available_tools, [])
-    |> Jidoka.Tool.normalize_available_tools()
+    |> Jidoka.Action.Adapter.normalize_available_tools()
   end
 
   defp available_character_registry(opts) do

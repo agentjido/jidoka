@@ -30,7 +30,7 @@ defmodule Jidoka.Action do
   @spec __using__(keyword()) :: Macro.t()
   defmacro __using__(opts \\ []) do
     quote location: :keep do
-      use Jidoka.Tool, unquote(opts)
+      use Jidoka.Action.Adapter, unquote(opts)
     end
   end
 
@@ -38,36 +38,36 @@ defmodule Jidoka.Action do
   Validates that a module behaves like an action-backed module.
   """
   @spec validate_module(module()) :: :ok | {:error, String.t()}
-  defdelegate validate_module(module), to: Jidoka.Tool, as: :validate_tool_module
+  defdelegate validate_module(module), to: Jidoka.Action.Adapter, as: :validate_tool_module
 
   @doc """
   Validates that a module behaves like a generic Jido action.
   """
   @spec validate_action_module(module()) :: :ok | {:error, String.t()}
-  defdelegate validate_action_module(module), to: Jidoka.Tool
+  defdelegate validate_action_module(module), to: Jidoka.Action.Adapter
 
   @doc """
   Returns the published action name for a validated action module.
   """
   @spec name(module()) :: {:ok, name()} | {:error, String.t()}
-  defdelegate name(module), to: Jidoka.Tool, as: :tool_name
+  defdelegate name(module), to: Jidoka.Action.Adapter, as: :tool_name
 
   @doc """
   Returns the published action names for validated action modules.
   """
   @spec names([module()]) :: {:ok, [name()]} | {:error, String.t()}
-  defdelegate names(modules), to: Jidoka.Tool, as: :tool_names
+  defdelegate names(modules), to: Jidoka.Action.Adapter, as: :tool_names
 
   @doc """
   Normalizes an available action registry for imported agent specs.
   """
   @spec normalize_registry([module()] | %{required(name()) => module()}) ::
           {:ok, registry()} | {:error, String.t()}
-  defdelegate normalize_registry(actions), to: Jidoka.Tool, as: :normalize_available_tools
+  defdelegate normalize_registry(actions), to: Jidoka.Action.Adapter, as: :normalize_available_tools
 
   @doc """
   Resolves published action names against a normalized action registry.
   """
   @spec resolve_names([name()], registry()) :: {:ok, [module()]} | {:error, String.t()}
-  defdelegate resolve_names(names, registry), to: Jidoka.Tool, as: :resolve_tool_names
+  defdelegate resolve_names(names, registry), to: Jidoka.Action.Adapter, as: :resolve_tool_names
 end

@@ -180,7 +180,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
 
   @spec resolve_tool_names!(module(), [module()], [atom()]) :: [String.t()]
   def resolve_tool_names!(owner_module, tool_modules, path) do
-    case Jidoka.Tool.tool_names(tool_modules) do
+    case Jidoka.Action.Adapter.tool_names(tool_modules) do
       {:ok, tool_names} ->
         tool_names
 
@@ -225,7 +225,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       end
 
     plugin_tool_names =
-      case Jidoka.Tool.action_names(plugin_tool_modules) do
+      case Jidoka.Action.Adapter.action_names(plugin_tool_modules) do
         {:ok, plugin_tool_names} ->
           plugin_tool_names
 
@@ -263,7 +263,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
   def resolve_skill_tools!(owner_module, configured_skills) do
     skill_tool_modules = Jidoka.Skill.action_modules(configured_skills)
 
-    case Jidoka.Tool.action_names(skill_tool_modules) do
+    case Jidoka.Action.Adapter.action_names(skill_tool_modules) do
       {:ok, skill_tool_names} ->
         {Jidoka.Skill.skill_names(configured_skills), skill_tool_modules, skill_tool_names}
 

@@ -11,7 +11,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
       %Jidoka.Agent.Dsl.Tool{} = tool_ref, {:ok, seen_names} ->
         module = tool_ref.module
 
-        case Jidoka.Tool.tool_name(module) do
+        case Jidoka.Action.Adapter.tool_name(module) do
           {:ok, name} ->
             if MapSet.member?(seen_names, name) do
               {:halt, {:error, duplicate_tool_error(dsl_state, tool_ref, name)}}

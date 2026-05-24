@@ -145,7 +145,7 @@ defmodule Jidoka.ImportedAgent do
          hook_registry,
          guardrail_registry
        ) do
-    with {:ok, direct_tool_modules} <- Jidoka.Tool.resolve_tool_names(spec.tools, tool_registry),
+    with {:ok, direct_tool_modules} <- Jidoka.Action.Adapter.resolve_tool_names(spec.tools, tool_registry),
          {:ok, character_spec} <- resolve_character(spec.character, character_registry),
          {:ok, skill_refs} <- Registries.resolve_skills(spec.skills, skill_registry),
          {:ok, resolved_subagents} <-
@@ -161,7 +161,7 @@ defmodule Jidoka.ImportedAgent do
          skill_tool_modules =
            Jidoka.Skill.action_modules(%{refs: skill_refs, load_paths: spec.skill_paths}),
          {:ok, direct_tool_names} <-
-           Jidoka.Tool.action_names(
+           Jidoka.Action.Adapter.action_names(
              direct_tool_modules ++ skill_tool_modules ++ plugin_tool_modules ++ web_tool_modules
            ),
          tool_module_base =

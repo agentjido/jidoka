@@ -21,7 +21,7 @@ defmodule Jidoka.Agent.AshResources do
       true ->
         with {:ok, _domain} <- domain(resource),
              {:ok, actions} <- actions(resource),
-             {:ok, _names} <- Jidoka.Tool.action_names(actions) do
+             {:ok, _names} <- Jidoka.Action.Adapter.action_names(actions) do
           :ok
         end
     end
@@ -39,7 +39,7 @@ defmodule Jidoka.Agent.AshResources do
       with :ok <- validate_resource(resource),
            {:ok, resource_domain} <- domain(resource),
            {:ok, resource_actions} <- actions(resource),
-           {:ok, resource_tool_names} <- Jidoka.Tool.action_names(resource_actions),
+           {:ok, resource_tool_names} <- Jidoka.Action.Adapter.action_names(resource_actions),
            :ok <- ensure_same_domain(acc.domain, resource_domain),
            :ok <- ensure_no_duplicate_tool_names(acc.tool_names, resource_tool_names) do
         {:cont,

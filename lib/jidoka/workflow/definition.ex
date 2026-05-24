@@ -216,7 +216,7 @@ defmodule Jidoka.Workflow.Definition do
   end
 
   defp validate_tool_target!(owner_module, step) do
-    case Jidoka.Tool.validate_action_module(step.module) do
+    case Jidoka.Action.Adapter.validate_action_module(step.module) do
       :ok ->
         :ok
 

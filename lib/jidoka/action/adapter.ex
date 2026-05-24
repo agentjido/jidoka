@@ -1,4 +1,4 @@
-defmodule Jidoka.Tool do
+defmodule Jidoka.Action.Adapter do
   @moduledoc false
 
   @required_functions [
@@ -10,17 +10,17 @@ defmodule Jidoka.Tool do
   ]
 
   @typedoc """
-  A published Jidoka tool name.
+  A published provider-visible operation name.
   """
   @type name :: String.t()
 
   @typedoc """
-  A registry of published tool names to tool modules.
+  A registry of published operation names to action modules.
   """
   @type registry :: %{required(name()) => module()}
 
   @doc """
-  Defines a Jidoka tool module backed by `Jido.Action`.
+  Defines a Jidoka action module backed by `Jido.Action`.
   """
   @spec __using__(keyword()) :: Macro.t()
   defmacro __using__(opts \\ []) do
@@ -37,7 +37,7 @@ defmodule Jidoka.Tool do
 
     quote location: :keep do
       use Jido.Action, unquote(Keyword.merge(defaults, opts))
-      @after_compile Jidoka.Tool
+      @after_compile Jidoka.Action.Adapter
     end
   end
 
@@ -56,7 +56,7 @@ defmodule Jidoka.Tool do
   end
 
   @doc """
-  Validates that a module behaves like a generic Jido action-backed tool.
+  Validates that a module behaves like a generic Jido action-backed module.
   """
   @spec validate_action_module(module()) :: :ok | {:error, String.t()}
   def validate_action_module(module) when is_atom(module) do
@@ -76,7 +76,7 @@ defmodule Jidoka.Tool do
     do: {:error, "action entries must be modules, got: #{inspect(other)}"}
 
   @doc """
-  Validates that a module behaves like a Jidoka tool.
+  Validates that a module behaves like a provider-compatible Jidoka action.
   """
   @spec validate_tool_module(module()) :: :ok | {:error, String.t()}
   def validate_tool_module(module) when is_atom(module) do
@@ -98,7 +98,7 @@ defmodule Jidoka.Tool do
     do: {:error, "action entries must be modules, got: #{inspect(other)}"}
 
   @doc """
-  Returns the published name for a validated action-backed tool module.
+  Returns the published name for a validated action-backed module.
   """
   @spec action_name(module()) :: {:ok, name()} | {:error, String.t()}
   def action_name(module) do
@@ -117,7 +117,7 @@ defmodule Jidoka.Tool do
   end
 
   @doc """
-  Returns the published names for a list of validated action-backed tool modules.
+  Returns the published names for a list of validated action-backed modules.
   """
   @spec action_names([module()]) :: {:ok, [name()]} | {:error, String.t()}
   def action_names(modules) when is_list(modules) do
@@ -142,7 +142,7 @@ defmodule Jidoka.Tool do
   end
 
   @doc """
-  Returns the published tool name for a validated tool module.
+  Returns the published operation name for a validated action module.
   """
   @spec tool_name(module()) :: {:ok, name()} | {:error, String.t()}
   def tool_name(module) do
@@ -161,7 +161,7 @@ defmodule Jidoka.Tool do
   end
 
   @doc """
-  Returns the published names for a list of validated tool modules.
+  Returns the published operation names for a list of validated action modules.
   """
   @spec tool_names([module()]) :: {:ok, [name()]} | {:error, String.t()}
   def tool_names(modules) when is_list(modules) do
@@ -186,12 +186,12 @@ defmodule Jidoka.Tool do
   end
 
   @doc """
-  Normalizes an available-tools registry for imported agent specs.
+  Normalizes an available-actions registry for imported agent specs.
 
   Accepts either:
 
-  - a list of action-backed tool modules
-  - a map of published tool name to action-backed tool module
+  - a list of action-backed modules
+  - a map of published operation name to action-backed module
   """
   @spec normalize_available_tools([module()] | %{required(name()) => module()}) ::
           {:ok, registry()} | {:error, String.t()}
@@ -232,7 +232,7 @@ defmodule Jidoka.Tool do
        "available_tools must be a list of action-backed tool modules or a map of name => module, got: #{inspect(other)}"}
 
   @doc """
-  Resolves a list of published tool names against a normalized tool registry.
+  Resolves a list of published operation names against a normalized action registry.
   """
   @spec resolve_tool_names([name()], registry()) :: {:ok, [module()]} | {:error, String.t()}
   def resolve_tool_names(names, registry) when is_list(names) and is_map(registry) do
