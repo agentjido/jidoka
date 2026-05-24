@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:46Z",
+  "description": "Parent epic: V3 E18: Final hardening\n\nSource task 6/9 from MILESTONE_V3.md:\n\n- Run a package build dry run if Hex/package metadata is in scope.\n\nEpic closure criteria:\n- all verification passes\n- remaining known gaps are documented as post-V3 work\n- the package has one coherent V3 story from README to tests\n",
+  "id": "jidoka-3di.19.6",
+  "labels": [],
+  "parent": "jidoka-3di.19",
+  "priority": 2,
+  "status": "open",
+  "title": "E18: Run a package build dry run if Hex/package metadata is in scope",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:46Z"
+}
