@@ -236,14 +236,14 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
     end
   end
 
-  test "guardrail blocks return structured execution errors" do
+  test "control blocks return structured execution errors" do
     assert {:ok, pid} = GuardrailedAgent.start_link(id: "runtime-guardrail-error-normalization")
 
     try do
       assert {:error, %Jidoka.Error.ExecutionError{} = error} =
-               Jidoka.chat(pid, "hello", guardrails: [input: fn _input -> {:error, :blocked_for_test} end])
+               Jidoka.chat(pid, "hello", controls: [input: fn _input -> {:error, :blocked_for_test} end])
 
-      assert error.details.operation == :guardrail
+      assert error.details.operation == :control
       assert error.details.stage == :input
       assert error.details.label == "anonymous_guardrail"
       assert error.details.cause == :blocked_for_test
@@ -252,19 +252,19 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
     end
   end
 
-  test "guardrail exceptions are normalized without crashing the agent" do
+  test "control exceptions are normalized without crashing the agent" do
     assert {:ok, pid} = GuardrailedAgent.start_link(id: "runtime-guardrail-exception-normalization")
 
     try do
-      raising_guardrail = fn _input -> raise "guardrail boom" end
+      raising_control = fn _input -> raise "control boom" end
 
       assert {:error, %Jidoka.Error.ExecutionError{} = error} =
-               Jidoka.chat(pid, "hello", guardrails: [input: raising_guardrail])
+               Jidoka.chat(pid, "hello", controls: [input: raising_control])
 
-      assert error.details.operation == :guardrail
+      assert error.details.operation == :control
       assert error.details.stage == :input
       assert error.details.label == "anonymous_guardrail"
-      assert error.details.cause =~ "guardrail boom"
+      assert error.details.cause =~ "control boom"
       assert Process.alive?(pid)
     after
       :ok = Jidoka.stop_agent(pid)

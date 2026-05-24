@@ -431,7 +431,7 @@ defmodule Jidoka.Error.Normalize do
     else
       Error.execution_error("Control #{label} blocked #{stage}.",
         phase: :guardrail,
-        details: details(context, %{operation: :guardrail, stage: stage, label: label, cause: error})
+        details: details(context, %{operation: :control, stage: stage, label: label, cause: error})
       )
     end
   end
@@ -439,7 +439,7 @@ defmodule Jidoka.Error.Normalize do
   def guardrail_error(stage, label, reason, context) do
     Error.execution_error("Control #{label} blocked #{stage}.",
       phase: :guardrail,
-      details: details(context, %{operation: :guardrail, stage: stage, label: label, cause: reason})
+      details: details(context, %{operation: :control, stage: stage, label: label, cause: reason})
     )
   end
 

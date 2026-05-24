@@ -119,6 +119,22 @@ defmodule JidokaTest.GuardrailsTest do
     assert GuardrailedAgent.operation_controls() == [ApproveLargeMathToolGuardrail]
   end
 
+  test "normalizes public control stages to the internal execution stages" do
+    assert Jidoka.Controls.default_stage_map() == %{input: [], result: [], operation: []}
+
+    assert {:ok,
+            %{
+              input: [SafePromptGuardrail],
+              output: [SafeReplyGuardrail],
+              tool: [BlockOperationControl]
+            }} =
+             Jidoka.Controls.normalize_request_controls(
+               input: SafePromptGuardrail,
+               result: SafeReplyGuardrail,
+               operation: BlockOperationControl
+             )
+  end
+
   test "accepts request-scoped module, MFA, and function controls" do
     runtime_fun = fn %Jidoka.Guardrails.Input{} = input ->
       {:error, {:runtime_input, input.message}}
