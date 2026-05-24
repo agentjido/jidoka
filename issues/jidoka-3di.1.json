@@ -1,7 +1,9 @@
 {
   "assignee": "",
   "blocked_by": [],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.2"
+  ],
   "created": "2026-05-24T20:35:38Z",
   "description": "Purpose: establish the state of `main` before V3 work starts.\n\nDone when:\n- there is a baseline report attached to the beadwork epic\n- the V3 epic DAG is represented in beadwork dependencies\n- the feature-to-test matrix exists\n- no implementation work starts without a baseline\n",
   "id": "jidoka-3di.1",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E0: Baseline and scope",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:38Z"
+  "updated_at": "2026-05-24T20:35:47Z"
 }
