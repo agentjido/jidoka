@@ -182,7 +182,38 @@ defmodule Jidoka.Chat do
     end
   end
 
+  defp resolve_server(module, opts)
+       when is_atom(module) do
+    if jidoka_agent_module?(module) do
+      start_or_reuse_module_agent(module, opts)
+    else
+      {:ok, module}
+    end
+  end
+
   defp resolve_server(server, _opts), do: {:ok, server}
+
+  defp jidoka_agent_module?(module) do
+    Code.ensure_loaded?(module) and function_exported?(module, :runtime_module, 0) and
+      function_exported?(module, :id, 0)
+  end
+
+  defp start_or_reuse_module_agent(module, opts) do
+    agent_id = module.id()
+
+    case Jidoka.Runtime.whereis(agent_id, opts) do
+      pid when is_pid(pid) ->
+        {:ok, pid}
+
+      nil ->
+        start_opts =
+          opts
+          |> Keyword.get(:start_opts, [])
+          |> Keyword.put_new(:id, agent_id)
+
+        Jidoka.Runtime.start_agent(module.runtime_module(), start_opts)
+    end
+  end
 
   defp validate_conversation_opt(opts) do
     case Keyword.fetch(opts, :conversation) do

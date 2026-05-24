@@ -121,7 +121,9 @@ defmodule Jidoka do
   @doc """
   Sends a chat request to a running Jidoka agent and waits for the result.
 
-  Accepts a PID, server reference, or Jidoka agent ID string.
+  Accepts a Jidoka agent module, `%Jidoka.Session{}`, PID, server reference,
+  or running Jidoka agent ID string. Module targets start or reuse the generated
+  runtime agent under the module's public `id/0`.
 
   Pass `stream: true` to return a `Jidoka.Chat.Stream` enumerable immediately
   instead of waiting for the final result.

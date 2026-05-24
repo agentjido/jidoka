@@ -114,7 +114,7 @@ defmodule Jidoka.Agent.Chat do
 
   defp finalize_chat_opts(opts, context) do
     opts
-    |> Keyword.drop([:context, :character, :conversation, :hooks, :guardrails, :output])
+    |> Keyword.drop([:context, :character, :conversation, :hooks, :guardrails, :output, :start_opts])
     |> Keyword.put(:tool_context, context)
   end
 
