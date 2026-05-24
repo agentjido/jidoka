@@ -115,8 +115,6 @@ defmodule Jidoka.MixProject do
       name: "jidoka",
       files: [
         "lib",
-        "examples",
-        "guides",
         "mix.exs",
         "README.md",
         "CHANGELOG.md",
@@ -140,72 +138,14 @@ defmodule Jidoka.MixProject do
     [
       main: "readme",
       source_ref: "v#{@version}",
-      extras:
-        [
-          "README.md"
-        ] ++
-          guide_extras() ++
-          [
-            "CHANGELOG.md",
-            "CONTRIBUTING.md",
-            "LICENSE",
-            "usage-rules.md"
-          ],
+      extras: [
+        "README.md",
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "LICENSE",
+        "usage-rules.md"
+      ],
       groups_for_extras: [
-        Orientation: [
-          "guides/overview.md",
-          "guides/getting-started.md"
-        ],
-        "Agent Fundamentals": [
-          "guides/agents.md",
-          "guides/models.md",
-          "guides/instructions.md",
-          "guides/context.md",
-          "guides/structured-output.md",
-          "guides/chat-turn.md"
-        ],
-        "Runtime Integration": [
-          "guides/running-agents.md",
-          "guides/sessions.md",
-          "guides/schedules.md",
-          "guides/agent-view.md",
-          "guides/phoenix-liveview.md",
-          "guides/graduating-to-jido.md"
-        ],
-        Capabilities: [
-          "guides/tools.md",
-          "guides/ash-resources.md",
-          "guides/mcp-tools.md",
-          "guides/web-access.md",
-          "guides/skills.md",
-          "guides/plugins.md"
-        ],
-        Orchestration: [
-          "guides/subagents.md",
-          "guides/workflows.md",
-          "guides/handoffs.md"
-        ],
-        Lifecycle: [
-          "guides/memory.md",
-          "guides/compaction.md",
-          "guides/characters.md",
-          "guides/hooks.md",
-          "guides/guardrails.md"
-        ],
-        Imports: [
-          "guides/imported-agents.md"
-        ],
-        Operations: [
-          "guides/errors.md",
-          "guides/inspection.md",
-          "guides/tracing.md",
-          "guides/testing-agents.md",
-          "guides/evals.md",
-          "guides/mix-tasks.md",
-          "guides/livebooks.md",
-          "guides/examples.md",
-          "guides/production.md"
-        ],
         Reference: [
           "usage-rules.md",
           "CHANGELOG.md",
@@ -254,57 +194,6 @@ defmodule Jidoka.MixProject do
           Jidoka.Error
         ]
       ]
-    ]
-  end
-
-  defp guide_extras do
-    [
-      # Orientation
-      "guides/overview.md",
-      "guides/getting-started.md",
-      # Agent fundamentals
-      "guides/agents.md",
-      "guides/models.md",
-      "guides/instructions.md",
-      "guides/context.md",
-      "guides/structured-output.md",
-      "guides/chat-turn.md",
-      # Runtime integration
-      "guides/running-agents.md",
-      "guides/sessions.md",
-      "guides/schedules.md",
-      "guides/agent-view.md",
-      "guides/phoenix-liveview.md",
-      "guides/graduating-to-jido.md",
-      # Capabilities
-      "guides/tools.md",
-      "guides/ash-resources.md",
-      "guides/mcp-tools.md",
-      "guides/web-access.md",
-      "guides/skills.md",
-      "guides/plugins.md",
-      # Orchestration
-      "guides/subagents.md",
-      "guides/workflows.md",
-      "guides/handoffs.md",
-      # Lifecycle
-      "guides/memory.md",
-      "guides/compaction.md",
-      "guides/characters.md",
-      "guides/hooks.md",
-      "guides/guardrails.md",
-      # Imports
-      "guides/imported-agents.md",
-      # Operations
-      "guides/errors.md",
-      "guides/inspection.md",
-      "guides/tracing.md",
-      "guides/testing-agents.md",
-      "guides/evals.md",
-      "guides/mix-tasks.md",
-      "guides/livebooks.md",
-      "guides/examples.md",
-      "guides/production.md"
     ]
   end
 end

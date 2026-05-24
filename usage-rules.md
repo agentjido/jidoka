@@ -60,9 +60,9 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 - Use `Jidoka.ImportedAgent.Subagent` when an Elixir manager agent delegates to a
   JSON/YAML-authored specialist.
 
-## Examples
+## Support Code
 
-- Put runnable examples under `examples/`.
+- Keep runnable examples outside the core `lib/` surface.
 - Keep demo-only wiring out of `lib/`.
 - Prefer simple examples first, then kitchen-sink coverage.
 

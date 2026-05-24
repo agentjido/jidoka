@@ -38,6 +38,8 @@ jidoka-*.tar
 /RELEASE.md
 /ROADMAP.md
 /DOCS_TODO.md
+/DSL_REFINEMENT_IDEAS.md
+/DSL_V2_TARGET.md
 
 # Editor/IDE and OS files.
 .elixir_ls/
