@@ -7,9 +7,15 @@
   "id": "jidoka-3di.4.2",
   "labels": [],
   "parent": "jidoka-3di.4",
+  "comments": [
+    {
+      "text": "Added end-to-end schema normalization coverage. The test verifies a running schema-backed agent applies defaults and caller overrides before controls receive runtime context.",
+      "timestamp": "2026-05-24T22:16:27Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E3: Verify context schemas validate and normalize caller-provided context",
   "type": "task",
-  "updated_at": "2026-05-24T22:15:21Z"
+  "updated_at": "2026-05-24T22:16:27Z"
 }
