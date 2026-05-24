@@ -7,6 +7,12 @@
   "id": "jidoka-3di.2.2",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Completed with commit 4213ba4: model, instructions, character, context, and output now live on the primary agent contract entity; the compiler no longer reads defaults or agent.schema for generated agents, and tests/fixtures were migrated to the agent :id do ... end shape.",
+      "timestamp": "2026-05-24T21:00:41Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Move agent-owned configuration inside agent do where it belongs",
