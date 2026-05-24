@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.6",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Documented the control interaction contract: input controls run before memory/compaction/provider calls, operation controls guard actions/workflows/subagents/handoffs, result controls run after typed result parsing, schedules use the normal chat path, and blocked/interrupted controls are not retried.",
+      "timestamp": "2026-05-24T23:19:02Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E5: Define how controls interact with typed results, retries, schedules, subagents,...",
   "type": "task",
-  "updated_at": "2026-05-24T23:17:42Z"
+  "updated_at": "2026-05-24T23:19:02Z"
 }
