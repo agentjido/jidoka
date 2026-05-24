@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.4"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:41Z",
   "description": "Purpose: keep state helpers distinct and understandable.\n\nDone when:\n- memory and compaction have separate, crisp docs and tests\n- compaction does not mutate the canonical transcript\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E9: Memory and compaction",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:41Z"
+  "updated_at": "2026-05-24T20:35:47Z"
 }
