@@ -7,9 +7,15 @@
   "id": "jidoka-3di.7.5",
   "labels": [],
   "parent": "jidoka-3di.7",
+  "comments": [
+    {
+      "text": "Added credential trace events at operation preflight and sanitized credential reference metadata, including audit metadata redaction tests.",
+      "timestamp": "2026-05-24T23:59:21Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E6: Add tracing that records credential references without secret values",
   "type": "task",
-  "updated_at": "2026-05-24T23:57:17Z"
+  "updated_at": "2026-05-24T23:59:21Z"
 }
