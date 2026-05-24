@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.6",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Defined the V3 control return contract in Jidoka.Control and taught the existing guardrail runner to accept :cont and {:block, reason} while preserving legacy :ok/{:error, reason}/{:interrupt, interrupt}. Added operation-control tests for allow/block decisions. Verification: mix format --check-formatted, mix compile --warnings-as-errors, focused guardrail/DSL tests, mix test.",
+      "timestamp": "2026-05-24T21:18:09Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Define the operation return contract for controls",
   "type": "task",
-  "updated_at": "2026-05-24T21:14:49Z"
+  "updated_at": "2026-05-24T21:18:09Z"
 }
