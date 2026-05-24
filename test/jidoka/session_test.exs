@@ -33,6 +33,19 @@ defmodule JidokaTest.SessionTest do
            }
   end
 
+  test "Jidoka.session builds a pipe-friendly session descriptor" do
+    assert %Session{} =
+             session =
+             ChatAgent
+             |> Jidoka.session(" Support Case 42 ", context: %{tenant: "acme"})
+
+    assert session.agent == ChatAgent
+    assert session.id == "support_case_42"
+    assert session.conversation_id == "support_case_42"
+    assert session.agent_id == "chat_agent-support_case_42"
+    assert session.context == %{session: "support_case_42", tenant: "acme"}
+  end
+
   test "validates required session options" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} = Session.new(agent: ChatAgent)
     assert error.field == :id

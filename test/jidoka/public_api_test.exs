@@ -9,6 +9,7 @@ defmodule JidokaTest.PublicAPITest do
     assert %{fast: _model} = Jidoka.model_aliases()
 
     assert function_exported?(Jidoka, :chat, 3)
+    assert function_exported?(Jidoka, :session, 3)
     assert function_exported?(Jidoka, :start_agent, 2)
     assert function_exported?(Jidoka, :stop_agent, 1)
     assert function_exported?(Jidoka, :whereis, 2)

@@ -111,8 +111,18 @@ From there, add only what the agent actually needs:
 
 ## Runtime Model
 
-Jidoka fits into OTP: agents run as supervised processes your application can
-own like any other runtime component.
+Jidoka agents are normal supervised processes. The DSL defines the agent; your
+application still decides how long the process lives and who owns it.
+
+For demos, tests, and small apps, a compiled agent module can be the chat target.
+Jidoka starts or reuses one shared runtime process under the agent's public id:
+
+```elixir
+{:ok, reply} = Jidoka.chat(MyApp.AssistantAgent, "Summarize this ticket.")
+```
+
+That module-target form is intentionally convenient. When process lifetime
+matters, make ownership explicit.
 
 For application-owned agents, put them directly in your supervision tree:
 
@@ -123,20 +133,22 @@ children = [
 ]
 ```
 
-For session-scoped agents, start or reuse the process when a turn arrives:
+For session-scoped agents, let the session name the process and conversation.
+`Jidoka.chat/3` starts or reuses the session runtime agent when a turn arrives:
 
 ```elixir
 session = Jidoka.session(MyApp.AssistantAgent, "user-123")
 {:ok, reply} = Jidoka.chat(session, "What should we do next?")
 ```
 
-For lower-level OTP ownership, run agents under an application-owned runtime.
-The Jidoka APIs stay the same; your app still decides process lifetime,
-persistence, auth, deployment, and supervision boundaries.
+Sessions are conversation addresses, not durable storage. They carry `agent_id`,
+`conversation_id`, `context`, and startup options so controllers, LiveViews,
+jobs, schedules, and tests can all point at the same runtime boundary without a
+second chat API.
 
-Jidoka sessions are conversation addresses, not durable storage. When you need
-durable agents, graduate the runtime boundary while keeping the same
-Jidoka-authored agent:
+For lower-level OTP ownership, run generated agents under an app-owned runtime.
+The Jidoka-authored module stays the same; your app takes over registry,
+storage, supervision, deployment, auth, and persistence boundaries:
 
 ```elixir
 defmodule MyApp.Jido do
@@ -150,6 +162,8 @@ children = [
   MyAppWeb.Endpoint
 ]
 ```
+
+Start the generated runtime module from that owner:
 
 ```elixir
 {:ok, pid} =

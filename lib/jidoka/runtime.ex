@@ -3,7 +3,16 @@ defmodule Jidoka.Runtime do
   Default Jido runtime instance for Jidoka agents.
 
   Generated Jidoka agents use this shared runtime when you call their
-  `start_link/1` helper or `Jidoka.start_agent/2`.
+  `start_link/1` helper, `Jidoka.start_agent/2`, or `Jidoka.chat/3` with a
+  compiled agent module target.
+
+  There are three common ownership shapes:
+
+  - supervise the generated agent directly when it is an application service
+  - use `Jidoka.Session` when a conversation should start or reuse a
+    session-scoped runtime agent
+  - define an app-owned Jido instance when you need runtime-scoped registries,
+    storage, persistence, worker pools, or deployment boundaries
 
   If your application needs an OTP instance scoped runtime, define your own Jido
   instance in the host app and start the generated Jidoka runtime module there:

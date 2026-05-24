@@ -113,6 +113,10 @@ defmodule Jidoka.Agent.Codegen do
       @doc """
       Starts this agent under the shared `Jidoka.Runtime` instance.
 
+      This helper is suitable for direct supervision:
+
+          children = [{__MODULE__, id: "support-router"}]
+
       For an application-owned Jido instance, pass `runtime_module/0` to that
       instance's `start_agent/2` instead.
       """
@@ -122,7 +126,10 @@ defmodule Jidoka.Agent.Codegen do
       end
 
       @doc """
-      Convenience alias for `ask_sync/3`.
+      Sends a turn to a running process for this agent.
+
+      This helper expects a PID. For module-target startup, sessions, running
+      agent ids, or streaming, prefer the top-level `Jidoka.chat/3`.
       """
       @spec chat(pid(), String.t(), keyword()) ::
               {:ok, term()}

@@ -119,11 +119,31 @@ defmodule Jidoka do
   end
 
   @doc """
+  Builds a pipe-friendly session descriptor for an agent and conversation id.
+
+  This is a convenience wrapper around `Jidoka.Session.new!/1` for the common
+  shape:
+
+      MyApp.AssistantAgent
+      |> Jidoka.session("user-123", context: %{actor: current_user})
+      |> Jidoka.chat("Summarize this ticket.")
+  """
+  @spec session(Session.agent(), String.t() | atom(), keyword()) :: Session.t()
+  def session(agent, id, opts \\ []) when is_list(opts) do
+    opts
+    |> Keyword.put(:agent, agent)
+    |> Keyword.put(:id, id)
+    |> Session.new!()
+  end
+
+  @doc """
   Sends a chat request to a running Jidoka agent and waits for the result.
 
   Accepts a Jidoka agent module, `%Jidoka.Session{}`, PID, server reference,
   or running Jidoka agent ID string. Module targets start or reuse the generated
-  runtime agent under the module's public `id/0`.
+  runtime agent under the module's public `id/0`. Use a PID or registered ID
+  when your application owns the process explicitly; use a session when the turn
+  belongs to a named conversation.
 
   Pass `stream: true` to return a `Jidoka.Chat.Stream` enumerable immediately
   instead of waiting for the final result.
