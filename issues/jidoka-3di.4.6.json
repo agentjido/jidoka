@@ -7,9 +7,15 @@
   "id": "jidoka-3di.4.6",
   "labels": [],
   "parent": "jidoka-3di.4",
+  "comments": [
+    {
+      "text": "Verified typed result validation, repair metadata, raw bypass behavior, and result-control ordering. Fixed full-runtime raw mode so it bypasses result controls as well as structured finalization.",
+      "timestamp": "2026-05-24T22:27:20Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E3: Verify output validation, repair, bypass, metadata, and guardrail ordering",
   "type": "task",
-  "updated_at": "2026-05-24T22:24:57Z"
+  "updated_at": "2026-05-24T22:27:20Z"
 }
