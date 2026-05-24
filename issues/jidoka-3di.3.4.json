@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.4",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Added an explicit boundary test proving Session.new!/1 creates only a plain descriptor: no process starts, no transcript fields are present, and snapshot fails with session_agent_not_running until the runtime agent exists. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:55:23Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Verify Jidoka.Session is a plain descriptor, not a process or store",
   "type": "task",
-  "updated_at": "2026-05-24T21:54:20Z"
+  "updated_at": "2026-05-24T21:55:23Z"
 }
