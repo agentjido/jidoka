@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:39Z",
+  "description": "Purpose: finalize the core turn model.\n\nDone when:\n- `chat/3` is the one public turn primitive\n- sessions are clearly addressing, not durability\n- session and chat tests cover happy paths and edge cases\n",
+  "id": "jidoka-3di.3",
+  "labels": [],
+  "parent": "jidoka-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "V3 E2: Agents, chat turns, and sessions",
+  "type": "epic",
+  "updated_at": "2026-05-24T20:35:39Z"
+}
