@@ -7,9 +7,15 @@
   "id": "jidoka-3di.5.7",
   "labels": [],
   "parent": "jidoka-3di.5",
+  "comments": [
+    {
+      "text": "Moved the internal provider/tool adapter out of the top-level Jidoka.Tool module and into Jidoka.Action.Adapter. Jidoka.Action remains the public authoring facade while internal operation surfaces call the adapter explicitly.",
+      "timestamp": "2026-05-24T22:58:57Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E4: Review file layout for action/tool adapters",
   "type": "task",
-  "updated_at": "2026-05-24T22:56:27Z"
+  "updated_at": "2026-05-24T22:58:57Z"
 }
