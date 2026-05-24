@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:45Z",
+  "description": "Parent epic: V3 E16: Durability and graduation\n\nSource task 2/6 from MILESTONE_V3.md:\n\n- Document what durable runtime storage owns: process restore, journals,\n  checkpoints, hibernate/thaw, and storage adapters.\n\nEpic closure criteria:\n- users understand when sessions stop being enough\n- the graduation path is tested or explicitly documented as a runtime concern\n- no public API implies session persistence unless it exists\n",
+  "id": "jidoka-3di.17.2",
+  "labels": [],
+  "parent": "jidoka-3di.17",
+  "priority": 2,
+  "status": "open",
+  "title": "E16: Document what durable runtime storage owns: process restore, journals, checkpoi...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:45Z"
+}
