@@ -23,6 +23,8 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 - Use `controls do` for input, operation, and result policy.
 - Use `lifecycle do` for runtime behavior such as memory, compaction, and
   lifecycle hooks. Do not put policy decisions there; use controls.
+- Expect controls to run through every normal chat path, including sessions,
+  schedules, workflows-as-operations, subagents, and handoffs.
 - Use `web :search` for search-only agents and `web :read_only` for search plus
   public page reading. Do not expose raw browser automation for low-risk agents.
 - Use `subagent` for manager-pattern delegation inside an agent turn. Do not

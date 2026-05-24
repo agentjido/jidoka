@@ -16,6 +16,18 @@ defmodule Jidoka.Control do
   `:ok` result allows the next control to run. The first `{:block, reason}`,
   `{:interrupt, interrupt}`, or `{:error, reason}` result short-circuits the
   stage and prevents later controls in that stage from running.
+
+  Placement in the agent loop:
+
+  - input controls run before memory retrieval, compaction injection, and the
+    provider call
+  - operation controls run immediately before an action, workflow, subagent, or
+    handoff operation executes
+  - result controls run after typed result parsing/repair and before the caller
+    receives the final value
+  - scheduled turns call the normal chat path, so they run the same controls
+  - provider/tool retries do not retry blocked or interrupted controls; a
+    control block, interrupt, or error ends the current turn
   """
 
   @type name :: String.t()
