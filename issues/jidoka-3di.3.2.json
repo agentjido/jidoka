@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T21:50:25Z",
   "created": "2026-05-24T20:35:39Z",
   "description": "Parent epic: V3 E2: Agents, chat turns, and sessions\n\nSource task 2/10 from MILESTONE_V3.md:\n\n- Verify instructions and characters use one coherent \"agent voice\" story.\n\nEpic closure criteria:\n- `chat/3` is the one public turn primitive\n- sessions are clearly addressing, not durability\n- session and chat tests cover happy paths and edge cases\n",
   "id": "jidoka-3di.3.2",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E2: Verify instructions and characters use one coherent \"agent voice\" story",
   "type": "task",
   "updated_at": "2026-05-24T21:50:25Z"
