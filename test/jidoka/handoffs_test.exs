@@ -242,8 +242,11 @@ defmodule JidokaTest.HandoffsTest do
           instructions "This should fail."
         end
 
+        tools do
+          action JidokaTest.AddNumbers
+        end
+
         capabilities do
-          tool JidokaTest.AddNumbers
           handoff JidokaTest.BillingHandoffSpecialist, as: :add_numbers
         end
       end

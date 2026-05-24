@@ -28,8 +28,8 @@ defmodule JidokaTest.ToolAgent do
     instructions "You can use math tools."
   end
 
-  capabilities do
-    tool JidokaTest.AddNumbers
+  tools do
+    action(JidokaTest.AddNumbers)
   end
 end
 

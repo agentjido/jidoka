@@ -203,20 +203,23 @@ defmodule JidokaTest.DslValidationTest do
     """)
   end
 
-  test "rejects duplicate capability names across sources" do
+  test "rejects duplicate action names across tool-like sources" do
     assert_dsl_error(~r/duplicate tool names.*multiply_numbers/s, """
     agent :duplicate_capability_agent do
       instructions "This should fail."
     end
 
+    tools do
+      action JidokaTest.MultiplyNumbers
+    end
+
     capabilities do
-      tool JidokaTest.MultiplyNumbers
       plugin JidokaTest.MathPlugin
     end
     """)
   end
 
-  test "rejects duplicate lifecycle refs within stages" do
+  test "rejects duplicate lifecycle and control refs within stages" do
     assert_dsl_error(~r/hook .*defined more than once/, """
     agent :duplicate_hook_agent do
       instructions "This should fail."
@@ -233,21 +236,21 @@ defmodule JidokaTest.DslValidationTest do
       instructions "This should fail."
     end
 
-    lifecycle do
-      input_guardrail JidokaTest.SafePromptGuardrail
-      input_guardrail JidokaTest.SafePromptGuardrail
+    controls do
+      input JidokaTest.SafePromptGuardrail
+      input JidokaTest.SafePromptGuardrail
     end
     """)
   end
 
-  test "rejects invalid capability modules" do
+  test "rejects invalid action modules" do
     assert_dsl_error(~r/not a valid Jidoka tool/, """
     agent :invalid_tool_agent do
       instructions "This should fail."
     end
 
-    capabilities do
-      tool String
+    tools do
+      action String
     end
     """)
   end

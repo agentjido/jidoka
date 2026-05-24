@@ -191,8 +191,8 @@ defmodule JidokaTest.StructuredOutputAgent do
     end
   end
 
-  lifecycle do
-    output_guardrail JidokaTest.StructuredOutputGuardrail
+  controls do
+    result(JidokaTest.StructuredOutputGuardrail)
   end
 end
 

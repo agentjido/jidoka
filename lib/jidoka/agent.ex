@@ -13,8 +13,11 @@ defmodule Jidoka.Agent do
           context Zoi.object(%{tenant: Zoi.string() |> Zoi.optional()})
         end
 
+        tools do
+          action MyApp.Tools.AddNumbers
+        end
+
         capabilities do
-          tool MyApp.Tools.AddNumbers
           ash_resource MyApp.Accounts.User
         end
       end
@@ -26,13 +29,16 @@ defmodule Jidoka.Agent do
   - `agent.model`
   - `agent.instructions` as a string, module callback, or MFA tuple
   - `agent.character` as an optional prompt/persona source
-  - `capabilities` for tools, Ash resources, MCP tools, skills, plugins, subagents, and workflows
-  - `lifecycle` for memory, hooks, and guardrails
+  - `tools` for deterministic action modules
+  - `capabilities` for Ash resources, MCP tools, skills, plugins, subagents, and workflows
+  - `controls` for input, operation, and result policy
+  - `lifecycle` for runtime behavior such as memory, hooks, and compaction
   - `schedules` for first-class recurring agent turns registered by the application
 
   A nested runtime module is generated automatically and uses `Jido.AI.Agent`
-  with the configured tool modules. The `capabilities` block currently supports
-  explicit `Jidoka.Tool` modules and `ash_resource` expansion via `AshJido`.
+  with the configured tool modules. The `tools` block supports explicit
+  `Jidoka.Tool` modules, while `capabilities` handles integrations such as
+  `ash_resource` expansion via `AshJido`.
   Subagent entries compile specialist agents into tool-like delegation
   capabilities while keeping the parent agent in control. Subagent entries can
   tune child `timeout`, public `forward_context`, and parent-visible `result`

@@ -129,8 +129,11 @@ defmodule JidokaTest.WebCapabilityTest do
           instructions "This should fail."
         end
 
+        tools do
+          action JidokaTest.DuplicateSearchWebTool
+        end
+
         capabilities do
-          tool JidokaTest.DuplicateSearchWebTool
           web :search
         end
       end

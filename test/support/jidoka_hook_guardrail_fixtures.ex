@@ -219,16 +219,18 @@ defmodule JidokaTest.GuardrailedAgent do
     instructions "You enforce guardrails."
   end
 
-  capabilities do
-    tool JidokaTest.AddNumbers
+  tools do
+    action(JidokaTest.AddNumbers)
   end
 
   lifecycle do
     on_interrupt JidokaTest.NotifyOpsHook
+  end
 
-    input_guardrail JidokaTest.SafePromptGuardrail
-    output_guardrail JidokaTest.SafeReplyGuardrail
-    tool_guardrail JidokaTest.ApproveLargeMathToolGuardrail
+  controls do
+    input JidokaTest.SafePromptGuardrail
+    result(JidokaTest.SafeReplyGuardrail)
+    operation(JidokaTest.ApproveLargeMathToolGuardrail)
   end
 end
 

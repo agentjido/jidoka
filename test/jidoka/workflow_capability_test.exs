@@ -130,8 +130,11 @@ defmodule JidokaTest.WorkflowCapabilityTest do
           instructions "This should fail."
         end
 
+        tools do
+          action JidokaTest.WorkflowCapability.DuplicateNameTool
+        end
+
         capabilities do
-          tool JidokaTest.WorkflowCapability.DuplicateNameTool
           workflow JidokaTest.WorkflowCapability.MathWorkflow
         end
       end
