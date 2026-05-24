@@ -7,9 +7,15 @@
   "id": "jidoka-3di.5.5",
   "labels": [],
   "parent": "jidoka-3di.5",
+  "comments": [
+    {
+      "text": "Removed low-level provider tool wording from beginner-facing docs and usage rules, keeping tool terminology only where it names the existing DSL block or integration boundary.",
+      "timestamp": "2026-05-24T22:52:33Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E4: Remove or hide low-level tool machinery from beginner docs",
   "type": "task",
-  "updated_at": "2026-05-24T22:49:24Z"
+  "updated_at": "2026-05-24T22:52:33Z"
 }
