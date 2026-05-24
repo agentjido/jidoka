@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.18"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:46Z",
   "description": "Purpose: close the milestone with a full-package review.\n\nDone when:\n- all verification passes\n- remaining known gaps are documented as post-V3 work\n- the package has one coherent V3 story from README to tests\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E18: Final hardening",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:46Z"
+  "updated_at": "2026-05-24T20:35:49Z"
 }

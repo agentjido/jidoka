@@ -12,7 +12,9 @@
     "jidoka-3di.7",
     "jidoka-3di.9"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.19"
+  ],
   "created": "2026-05-24T20:35:45Z",
   "description": "Purpose: rebuild the teaching surface after the implementation settles.\n\nDone when:\n- docs, examples, and Livebooks teach the same progression\n- every shipped example has an automated smoke test\n",
   "id": "jidoka-3di.18",
