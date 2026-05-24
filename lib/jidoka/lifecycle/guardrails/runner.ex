@@ -26,12 +26,16 @@ defmodule Jidoka.Guardrails.Runner do
       trace_guardrail(input, label, :start)
 
       case invoke_guardrail(guardrail, input) do
-        :ok ->
+        result when result in [:ok, :cont] ->
           trace_guardrail(input, label, :allow, %{outcome: :allow})
           {:cont, :ok}
 
-        {:error, reason} ->
+        {:block, reason} ->
           trace_guardrail(input, label, :block, %{outcome: :block, error: Jidoka.Error.format(reason)})
+          {:halt, {:error, label, reason}}
+
+        {:error, reason} ->
+          trace_guardrail(input, label, :error, %{outcome: :error, error: Jidoka.Error.format(reason)})
           {:halt, {:error, label, reason}}
 
         {:interrupt, interrupt} ->
@@ -54,7 +58,7 @@ defmodule Jidoka.Guardrails.Runner do
   end
 
   defp invalid_result_message(other) do
-    "guardrails must return :ok, {:error, reason}, or {:interrupt, interrupt}; got: #{inspect(other)}"
+    "controls must return :cont, :ok, {:block, reason}, {:error, reason}, or {:interrupt, interrupt}; got: #{inspect(other)}"
   end
 
   defp guardrail_label(module) when is_atom(module) do

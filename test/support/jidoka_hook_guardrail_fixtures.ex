@@ -164,6 +164,20 @@ defmodule JidokaTest.ApproveLargeMathToolGuardrail do
   def call(%Jidoka.Guardrails.Tool{}), do: :ok
 end
 
+defmodule JidokaTest.AllowOperationControl do
+  use Jidoka.Control, name: "allow_operation"
+
+  @impl true
+  def call(%Jidoka.Guardrails.Tool{}), do: :cont
+end
+
+defmodule JidokaTest.BlockOperationControl do
+  use Jidoka.Control, name: "block_operation"
+
+  @impl true
+  def call(%Jidoka.Guardrails.Tool{}), do: {:block, :operation_blocked}
+end
+
 defmodule JidokaTest.GuardrailCallbacks do
   def input(%Jidoka.Guardrails.Input{} = input, label) do
     sequence = Map.get(input.metadata, :sequence, [])

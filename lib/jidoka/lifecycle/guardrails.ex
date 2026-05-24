@@ -11,7 +11,7 @@ defmodule Jidoka.Guardrails do
   @type guardrail_ref ::
           module()
           | {module(), atom(), [term()]}
-          | (term() -> :ok | {:error, term()} | {:interrupt, term()})
+          | (term() -> Jidoka.Control.decision())
   @type stage_map :: %{
           input: [guardrail_ref()],
           output: [guardrail_ref()],

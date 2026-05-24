@@ -3,7 +3,9 @@ defmodule JidokaTest.GuardrailsTest do
 
   alias JidokaTest.{
     ChatAgent,
+    AllowOperationControl,
     ApproveLargeMathToolGuardrail,
+    BlockOperationControl,
     GuardrailCallbacks,
     GuardrailedAgent,
     SafePromptGuardrail,
@@ -16,6 +18,28 @@ defmodule JidokaTest.GuardrailsTest do
 
     assert {:ok, ["safe_prompt", "safe_reply"]} =
              Jidoka.Guardrail.guardrail_names([SafePromptGuardrail, SafeReplyGuardrail])
+  end
+
+  test "defines operation control return values" do
+    assert Jidoka.Control.validate_control_module(AllowOperationControl) == :ok
+    assert {:ok, "allow_operation"} = Jidoka.Control.control_name(AllowOperationControl)
+
+    input = %Jidoka.Guardrails.Tool{
+      agent: nil,
+      server: self(),
+      request_id: "req-control-contract",
+      tool_name: "add_numbers",
+      tool_call_id: "tc-control",
+      arguments: %{a: 1, b: 2},
+      context: %{},
+      metadata: %{},
+      request_opts: %{}
+    }
+
+    assert :ok = Jidoka.Guardrails.Runner.run_guardrails([AllowOperationControl], input)
+
+    assert {:error, "block_operation", :operation_blocked} =
+             Jidoka.Guardrails.Runner.run_guardrails([BlockOperationControl], input)
   end
 
   test "exposes configured guardrails by stage" do
