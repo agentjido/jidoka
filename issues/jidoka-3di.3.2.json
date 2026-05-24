@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.2",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Added coverage for the coherent agent voice story: runtime character overrides replace compile-time persona text while preserving the agent instructions layer. Existing tests cover static, module, and MFA instructions plus compile-time characters. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:50:25Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Verify instructions and characters use one coherent \"agent voice\" story",
   "type": "task",
-  "updated_at": "2026-05-24T21:49:04Z"
+  "updated_at": "2026-05-24T21:50:25Z"
 }
