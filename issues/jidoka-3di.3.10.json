@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-24T20:35:39Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "jidoka-3di.3",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E2: Review process ownership docs for direct supervision, session-scoped runtime, a...",
   "type": "task",
-  "updated_at": "2026-05-24T20:35:39Z"
+  "updated_at": "2026-05-24T22:09:24Z"
 }
