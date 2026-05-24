@@ -4,6 +4,7 @@
     "jidoka-3di.4"
   ],
   "blocks": [
+    "jidoka-3di.13",
     "jidoka-3di.6"
   ],
   "created": "2026-05-24T20:35:39Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "V3 E4: Actions and tools",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:47Z"
+  "updated_at": "2026-05-24T20:35:48Z"
 }
