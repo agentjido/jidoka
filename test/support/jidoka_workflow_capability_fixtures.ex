@@ -114,11 +114,7 @@ defmodule JidokaTest.WorkflowCapability.MathAgent do
 
   use Jidoka.Agent
 
-  agent do
-    id :workflow_capability_agent
-  end
-
-  defaults do
+  agent :workflow_capability_agent do
     instructions "Use deterministic workflows for known tasks."
   end
 
@@ -135,11 +131,7 @@ defmodule JidokaTest.WorkflowCapability.ContextAgent do
 
   use Jidoka.Agent
 
-  agent do
-    id :workflow_context_capability_agent
-  end
-
-  defaults do
+  agent :workflow_context_capability_agent do
     instructions "Use deterministic workflows with forwarded context."
   end
 
@@ -156,11 +148,7 @@ defmodule JidokaTest.WorkflowCapability.FailingAgent do
 
   use Jidoka.Agent
 
-  agent do
-    id :workflow_failure_capability_agent
-  end
-
-  defaults do
+  agent :workflow_failure_capability_agent do
     instructions "Expose a failing workflow for tests."
   end
 

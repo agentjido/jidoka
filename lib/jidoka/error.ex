@@ -174,7 +174,7 @@ defmodule Jidoka.Error do
   def invalid_context_schema(reason, opts \\ %{})
 
   def invalid_context_schema(:expected_zoi_schema, opts) do
-    config_error("agent schema must be a Zoi map/object schema",
+    config_error("agent context must be a Zoi map/object schema",
       field: :schema,
       value: get_detail(opts, :value),
       details: %{reason: :expected_zoi_schema}
@@ -182,7 +182,7 @@ defmodule Jidoka.Error do
   end
 
   def invalid_context_schema(:expected_zoi_map_schema, opts) do
-    config_error("agent schema must be a Zoi map/object schema",
+    config_error("agent context must be a Zoi map/object schema",
       field: :schema,
       value: get_detail(opts, :value),
       details: %{reason: :expected_zoi_map_schema}
@@ -190,7 +190,7 @@ defmodule Jidoka.Error do
   end
 
   def invalid_context_schema({:expected_map_result, value}, opts) do
-    config_error("agent schema must parse context to a map, got: #{inspect(value)}",
+    config_error("agent context must parse context to a map, got: #{inspect(value)}",
       field: :schema,
       value: get_detail(opts, :value),
       details: %{reason: :expected_map_result, schema_result: value}
@@ -281,7 +281,7 @@ defmodule Jidoka.Error do
 
   defp schema_error_message(errors) do
     case format_schema_errors(errors) do
-      "" -> "Invalid context: context did not match the agent schema."
+      "" -> "Invalid context: context did not match the agent context contract."
       formatted -> "Invalid context:\n" <> formatted
     end
   end

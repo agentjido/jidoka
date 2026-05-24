@@ -45,7 +45,9 @@ defmodule Jidoka.Agent.Definition.ScheduleConfig do
   defp normalize_agent_id(agent_id, _schedule_id), do: agent_id
 
   defp agent_id(owner_module) do
-    configured_id = Spark.Dsl.Extension.get_opt(owner_module, [:agent], :id)
-    Jidoka.Agent.Definition.Basics.resolve_agent_id!(owner_module, configured_id)
+    owner_module
+    |> Jidoka.Agent.Definition.agent_contract!()
+    |> Map.fetch!(:id)
+    |> then(&Jidoka.Agent.Definition.Basics.resolve_agent_id!(owner_module, &1))
   end
 end

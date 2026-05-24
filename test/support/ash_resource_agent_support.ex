@@ -1,11 +1,7 @@
 defmodule JidokaTest.Support.AshResourceAgent do
   use Jidoka.Agent
 
-  agent do
-    id :ash_resource_agent
-  end
-
-  defaults do
+  agent :ash_resource_agent do
     model :fast
     instructions "You can use Ash resource tools."
   end

@@ -15,11 +15,7 @@ end
 defmodule JidokaTest.SkillAgent do
   use Jidoka.Agent
 
-  agent do
-    id :skill_agent
-  end
-
-  defaults do
+  agent :skill_agent do
     model :fast
     instructions "You can use skills."
   end
@@ -32,11 +28,7 @@ end
 defmodule JidokaTest.RuntimeSkillAgent do
   use Jidoka.Agent
 
-  agent do
-    id :runtime_skill_agent
-  end
-
-  defaults do
+  agent :runtime_skill_agent do
     model :fast
     instructions "You can use runtime skills."
   end
@@ -50,11 +42,7 @@ end
 defmodule JidokaTest.MCPAgent do
   use Jidoka.Agent
 
-  agent do
-    id :mcp_agent
-  end
-
-  defaults do
+  agent :mcp_agent do
     model :fast
     instructions "You can use MCP-synced tools."
   end
@@ -67,11 +55,7 @@ end
 defmodule JidokaTest.LocalFSMCPAgent do
   use Jidoka.Agent
 
-  agent do
-    id :local_fsmcp_agent
-  end
-
-  defaults do
+  agent :local_fsmcp_agent do
     model :fast
     instructions "You can use filesystem MCP tools."
   end
@@ -84,11 +68,7 @@ end
 defmodule JidokaTest.InlineMCPAgent do
   use Jidoka.Agent
 
-  agent do
-    id :inline_mcp_agent
-  end
-
-  defaults do
+  agent :inline_mcp_agent do
     model :fast
     instructions "You can use an inline MCP endpoint."
   end

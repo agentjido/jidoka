@@ -3,8 +3,7 @@ defmodule Jidoka.Agent.Dsl do
 
   alias Jidoka.Agent.Dsl.Sections.{Capabilities, Contract, Legacy, Lifecycle, Memory, Schedules}
 
-  @agent_section Contract.agent_section()
-  @defaults_section Contract.defaults_section()
+  @contract_section Contract.section()
   @capabilities_section Capabilities.section()
   @lifecycle_section Lifecycle.section()
   @schedules_section Schedules.section()
@@ -18,8 +17,7 @@ defmodule Jidoka.Agent.Dsl do
 
   use Spark.Dsl.Extension,
     sections: [
-      @agent_section,
-      @defaults_section,
+      @contract_section,
       @capabilities_section,
       @lifecycle_section,
       @schedules_section,

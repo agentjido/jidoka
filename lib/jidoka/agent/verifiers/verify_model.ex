@@ -5,7 +5,13 @@ defmodule Jidoka.Agent.Verifiers.VerifyModel do
 
   @impl true
   def verify(dsl_state) do
-    model = Spark.Dsl.Verifier.get_option(dsl_state, [:defaults], :model, :fast)
+    model =
+      dsl_state
+      |> Spark.Dsl.Verifier.get_entities([:jidoka])
+      |> Enum.find_value(:fast, fn
+        %Jidoka.Agent.Dsl.Agent{model: model} when not is_nil(model) -> model
+        _ -> nil
+      end)
 
     case validate_model(model) do
       :ok ->
@@ -15,7 +21,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyModel do
         {:error,
          Spark.Error.DslError.exception(
            message: message,
-           path: [:defaults, :model],
+           path: [:agent, :model],
            module: Spark.Dsl.Verifier.get_persisted(dsl_state, :module)
          )}
     end

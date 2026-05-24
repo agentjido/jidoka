@@ -14,30 +14,20 @@ defmodule JidokaTest.DslValidationTest do
     end
   end
 
-  test "rejects legacy agent.model placement" do
-    assert_dsl_error(~r/agent.model.*defaults/s, """
-    agent do
-      id :legacy_model_agent
-      model :fast
-    end
+  test "supports agent :id as the primary entrypoint" do
+    module =
+      compile_agent("""
+      agent :primary_agent do
+        model :fast
+        instructions "Answer clearly."
+        context Zoi.object(%{tenant: Zoi.string() |> Zoi.optional()})
+      end
+      """)
 
-    defaults do
-      instructions "This should fail."
-    end
-    """)
-  end
-
-  test "rejects legacy agent.system_prompt placement" do
-    assert_dsl_error(~r/agent.system_prompt.*instructions/s, """
-    agent do
-      id :legacy_prompt_agent
-      system_prompt "This should fail."
-    end
-
-    defaults do
-      instructions "This should fail."
-    end
-    """)
+    assert module.id() == "primary_agent"
+    assert module.configured_model() == :fast
+    assert module.instructions() == "Answer clearly."
+    assert module.context_schema() != nil
   end
 
   test "rejects legacy top-level sections" do
@@ -51,11 +41,7 @@ defmodule JidokaTest.DslValidationTest do
           {"guardrails", "input JidokaTest.SafePromptGuardrail"}
         ] do
       assert_dsl_error(~r/Top-level `#{section} do .*` is not valid/s, """
-      agent do
-        id :legacy_#{section}_agent
-      end
-
-      defaults do
+      agent :legacy_#{section}_agent do
         instructions "This should fail."
       end
 
@@ -67,44 +53,31 @@ defmodule JidokaTest.DslValidationTest do
   end
 
   test "requires lower snake case agent ids" do
-    assert_dsl_error(~r/agent.id.*lower snake case/s, """
-    agent do
-      id "Bad-ID"
-    end
-
-    defaults do
+    assert_dsl_error(~r/agent.*id.*lower snake case/s, """
+    agent "Bad-ID" do
       instructions "This should fail."
     end
     """)
   end
 
   test "requires agent ids" do
-    assert_dsl_error(~r/agent.id.*required/s, """
-    agent do
-      description "Missing id"
-    end
-
-    defaults do
+    assert_dsl_error(~r/agent.*id.*required/s, """
+    agent nil do
       instructions "This should fail."
     end
     """)
   end
 
-  test "requires defaults.instructions" do
-    assert_dsl_error(~r/defaults.instructions.*required/s, """
-    agent do
-      id :missing_instructions_agent
+  test "requires agent.instructions" do
+    assert_dsl_error(~r/agent.instructions.*required/s, """
+    agent :missing_instructions_agent do
     end
     """)
   end
 
   test "rejects invalid instructions resolvers" do
     assert_dsl_error(~r/instructions does not support anonymous functions/, """
-    agent do
-      id :invalid_instructions_agent
-    end
-
-    defaults do
+    agent :invalid_instructions_agent do
       instructions fn _input -> "This should fail." end
     end
     """)
@@ -112,82 +85,59 @@ defmodule JidokaTest.DslValidationTest do
 
   test "rejects invalid model configuration" do
     assert_dsl_error(~r/invalid model input 123/, """
-    agent do
-      id :invalid_model_agent
-    end
-
-    defaults do
+    agent :invalid_model_agent do
       model 123
       instructions "This should fail."
     end
     """)
   end
 
-  test "rejects non-map agent schemas" do
-    assert_dsl_error(~r/agent schema must be a Zoi map\/object schema/, """
-    agent do
-      id :invalid_context_schema_agent
-      schema Zoi.string()
-    end
-
-    defaults do
+  test "rejects non-map agent contexts" do
+    assert_dsl_error(~r/agent context must be a Zoi map\/object schema/, """
+    agent :invalid_context_schema_agent do
       instructions "This should fail."
+
+      context Zoi.string()
     end
     """)
   end
 
   test "validates structured output contracts" do
     assert_dsl_error(~r/output schema must be a Zoi object\/map schema/, """
-    agent do
-      id :invalid_output_schema_agent
+    agent :invalid_output_schema_agent do
+      instructions "This should fail."
 
       output do
         schema Zoi.string()
       end
     end
-
-    defaults do
-      instructions "This should fail."
-    end
     """)
 
     assert_dsl_error(~r/output retries must be a non-negative integer/, """
-    agent do
-      id :invalid_output_retries_agent
+    agent :invalid_output_retries_agent do
+      instructions "This should fail."
 
       output do
         schema Zoi.object(%{summary: Zoi.string()})
         retries -1
       end
     end
-
-    defaults do
-      instructions "This should fail."
-    end
     """)
 
     assert_dsl_error(~r/Zoi object\/map schema in the Elixir DSL/, """
-    agent do
-      id :json_schema_output_agent
+    agent :json_schema_output_agent do
+      instructions "This should fail."
 
       output do
         schema %{"type" => "object", "properties" => %{"summary" => %{"type" => "string"}}}
       end
-    end
-
-    defaults do
-      instructions "This should fail."
     end
     """)
   end
 
   test "validates memory lifecycle configuration" do
     assert_dsl_error(~r/memory namespace must be :per_agent, :shared with shared_namespace/, """
-    agent do
-      id :invalid_memory_namespace_agent
-    end
-
-    defaults do
+    agent :invalid_memory_namespace_agent do
       instructions "This should fail."
     end
 
@@ -199,11 +149,7 @@ defmodule JidokaTest.DslValidationTest do
     """)
 
     assert_dsl_error(~r/shared_namespace is only valid when namespace is :shared/, """
-    agent do
-      id :invalid_shared_namespace_agent
-    end
-
-    defaults do
+    agent :invalid_shared_namespace_agent do
       instructions "This should fail."
     end
 
@@ -216,13 +162,10 @@ defmodule JidokaTest.DslValidationTest do
     """)
 
     assert_dsl_error(~r/memory context namespace key is not declared/, """
-    agent do
-      id :invalid_memory_context_key_agent
-      schema Zoi.object(%{tenant: Zoi.string() |> Zoi.optional()})
-    end
-
-    defaults do
+    agent :invalid_memory_context_key_agent do
       instructions "This should fail."
+
+      context Zoi.object(%{tenant: Zoi.string() |> Zoi.optional()})
     end
 
     lifecycle do
@@ -235,11 +178,7 @@ defmodule JidokaTest.DslValidationTest do
 
   test "rejects duplicate capability names across sources" do
     assert_dsl_error(~r/duplicate tool names.*multiply_numbers/s, """
-    agent do
-      id :duplicate_capability_agent
-    end
-
-    defaults do
+    agent :duplicate_capability_agent do
       instructions "This should fail."
     end
 
@@ -252,11 +191,7 @@ defmodule JidokaTest.DslValidationTest do
 
   test "rejects duplicate lifecycle refs within stages" do
     assert_dsl_error(~r/hook .*defined more than once/, """
-    agent do
-      id :duplicate_hook_agent
-    end
-
-    defaults do
+    agent :duplicate_hook_agent do
       instructions "This should fail."
     end
 
@@ -267,11 +202,7 @@ defmodule JidokaTest.DslValidationTest do
     """)
 
     assert_dsl_error(~r/guardrail .*defined more than once/, """
-    agent do
-      id :duplicate_guardrail_agent
-    end
-
-    defaults do
+    agent :duplicate_guardrail_agent do
       instructions "This should fail."
     end
 
@@ -284,11 +215,7 @@ defmodule JidokaTest.DslValidationTest do
 
   test "rejects invalid capability modules" do
     assert_dsl_error(~r/not a valid Jidoka tool/, """
-    agent do
-      id :invalid_tool_agent
-    end
-
-    defaults do
+    agent :invalid_tool_agent do
       instructions "This should fail."
     end
 
@@ -378,6 +305,21 @@ defmodule JidokaTest.DslValidationTest do
     assert_raise Spark.Error.DslError, pattern, fn ->
       compile_source(source)
     end
+  end
+
+  defp compile_agent(body) do
+    module = Module.concat(JidokaTest.DynamicDsl, "Agent#{System.unique_integer([:positive])}")
+
+    source = """
+    defmodule #{inspect(module)} do
+      use Jidoka.Agent
+
+      #{body}
+    end
+    """
+
+    compile_source(source)
+    module
   end
 
   defp compile_source(source), do: Code.compile_string(source)

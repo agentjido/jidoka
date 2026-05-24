@@ -1,11 +1,7 @@
 defmodule JidokaTest.WebSearchAgent do
   use Jidoka.Agent
 
-  agent do
-    id :web_search_agent
-  end
-
-  defaults do
+  agent :web_search_agent do
     instructions "You can search the public web."
   end
 
@@ -17,11 +13,7 @@ end
 defmodule JidokaTest.WebReadOnlyAgent do
   use Jidoka.Agent
 
-  agent do
-    id :web_read_only_agent
-  end
-
-  defaults do
+  agent :web_read_only_agent do
     instructions "You can search and read public web pages."
   end
 

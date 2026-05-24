@@ -1,11 +1,7 @@
 defmodule JidokaTest.ChatAgent do
   use Jidoka.Agent
 
-  agent do
-    id :chat_agent
-  end
-
-  defaults do
+  agent :chat_agent do
     model :fast
     instructions "You are a concise assistant."
   end
@@ -75,11 +71,7 @@ end
 defmodule JidokaTest.ScheduledAgent do
   use Jidoka.Agent
 
-  agent do
-    id :scheduled_agent
-  end
-
-  defaults do
+  agent :scheduled_agent do
     model :fast
     instructions "You are a concise scheduled assistant."
   end
@@ -105,15 +97,11 @@ defmodule JidokaTest.ContextAgent do
     session: Zoi.string() |> Zoi.optional()
   }
 
-  agent do
-    id :context_agent
-
-    schema Zoi.object(@context_fields)
-  end
-
-  defaults do
+  agent :context_agent do
     model :fast
     instructions "You are a context-aware assistant."
+
+    context(Zoi.object(@context_fields))
   end
 end
 
@@ -125,26 +113,18 @@ defmodule JidokaTest.RequiredContextAgent do
     tenant: Zoi.string() |> Zoi.default("demo")
   }
 
-  agent do
-    id :required_context_agent
-
-    schema Zoi.object(@context_fields)
-  end
-
-  defaults do
+  agent :required_context_agent do
     model :fast
     instructions "You require account context."
+
+    context(Zoi.object(@context_fields))
   end
 end
 
 defmodule JidokaTest.CompactionAgent do
   use Jidoka.Agent
 
-  agent do
-    id :compaction_agent
-  end
-
-  defaults do
+  agent :compaction_agent do
     model :fast
     instructions "You have compaction."
   end
@@ -162,11 +142,7 @@ end
 defmodule JidokaTest.ManualCompactionAgent do
   use Jidoka.Agent
 
-  agent do
-    id :manual_compaction_agent
-  end
-
-  defaults do
+  agent :manual_compaction_agent do
     model :fast
     instructions "You have manual compaction."
   end
@@ -205,19 +181,15 @@ defmodule JidokaTest.StructuredOutputAgent do
                    summary: Zoi.string()
                  })
 
-  agent do
-    id :structured_output_agent
+  agent :structured_output_agent do
+    model :fast
+    instructions "Classify the ticket and return the configured object."
 
     output do
       schema @output_schema
       retries(1)
       on_validation_error(:repair)
     end
-  end
-
-  defaults do
-    model :fast
-    instructions "Classify the ticket and return the configured object."
   end
 
   lifecycle do
@@ -234,8 +206,9 @@ defmodule JidokaTest.StructuredOutputPlainAgent do
                    summary: Zoi.string()
                  })
 
-  agent do
-    id :structured_output_plain_agent
+  agent :structured_output_plain_agent do
+    model :fast
+    instructions "Classify the ticket and return the configured object."
 
     output do
       schema @output_schema
@@ -243,21 +216,12 @@ defmodule JidokaTest.StructuredOutputPlainAgent do
       on_validation_error(:repair)
     end
   end
-
-  defaults do
-    model :fast
-    instructions "Classify the ticket and return the configured object."
-  end
 end
 
 defmodule JidokaTest.StringModelAgent do
   use Jidoka.Agent
 
-  agent do
-    id :string_model_agent
-  end
-
-  defaults do
+  agent :string_model_agent do
     model "openai:gpt-4.1"
     instructions "You are a concise assistant."
   end
@@ -293,11 +257,7 @@ end
 defmodule JidokaTest.ModulePromptAgent do
   use Jidoka.Agent
 
-  agent do
-    id :module_prompt_agent
-  end
-
-  defaults do
+  agent :module_prompt_agent do
     model :fast
     instructions JidokaTest.TenantPrompt
   end
@@ -306,11 +266,7 @@ end
 defmodule JidokaTest.MfaPromptAgent do
   use Jidoka.Agent
 
-  agent do
-    id :mfa_prompt_agent
-  end
-
-  defaults do
+  agent :mfa_prompt_agent do
     model :fast
     instructions {JidokaTest.PromptCallbacks, :build, ["Serve tenant"]}
   end
@@ -319,11 +275,7 @@ end
 defmodule JidokaTest.CharacterAgent do
   use Jidoka.Agent
 
-  agent do
-    id :character_agent
-  end
-
-  defaults do
+  agent :character_agent do
     model :fast
 
     character(%{
@@ -340,11 +292,7 @@ end
 defmodule JidokaTest.ModuleCharacterAgent do
   use Jidoka.Agent
 
-  agent do
-    id :module_character_agent
-  end
-
-  defaults do
+  agent :module_character_agent do
     model :fast
     character(JidokaTest.SupportCharacter)
     instructions "Adapt the response to the account tier."
@@ -354,11 +302,7 @@ end
 defmodule JidokaTest.InlineMapModelAgent do
   use Jidoka.Agent
 
-  agent do
-    id :inline_map_model_agent
-  end
-
-  defaults do
+  agent :inline_map_model_agent do
     model %{provider: :openai, id: "gpt-4.1", base_url: "http://localhost:4000/v1"}
     instructions "You are a concise assistant."
   end
@@ -367,11 +311,7 @@ end
 defmodule JidokaTest.StructModelAgent do
   use Jidoka.Agent
 
-  agent do
-    id :struct_model_agent
-  end
-
-  defaults do
+  agent :struct_model_agent do
     model %LLMDB.Model{provider: :openai, id: "gpt-4.1"}
     instructions "You are a concise assistant."
   end

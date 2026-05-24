@@ -126,11 +126,7 @@ defmodule JidokaTest.WorkflowCapabilityTest do
       defmodule JidokaTest.WorkflowCapability.DuplicateWorkflowToolAgent do
         use Jidoka.Agent
 
-        agent do
-          id :duplicate_workflow_tool_agent
-        end
-
-        defaults do
+        agent :duplicate_workflow_tool_agent do
           instructions "This should fail."
         end
 

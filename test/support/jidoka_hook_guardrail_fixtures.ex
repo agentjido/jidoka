@@ -182,11 +182,7 @@ end
 defmodule JidokaTest.HookedAgent do
   use Jidoka.Agent
 
-  agent do
-    id :hooked_agent
-  end
-
-  defaults do
+  agent :hooked_agent do
     model :fast
     instructions "You have hooks."
   end
@@ -204,11 +200,7 @@ end
 defmodule JidokaTest.GuardrailedAgent do
   use Jidoka.Agent
 
-  agent do
-    id :guardrailed_agent
-  end
-
-  defaults do
+  agent :guardrailed_agent do
     model :fast
     instructions "You enforce guardrails."
   end
@@ -229,11 +221,7 @@ end
 defmodule JidokaTest.InterruptingAgent do
   use Jidoka.Agent
 
-  agent do
-    id :interrupting_agent
-  end
-
-  defaults do
+  agent :interrupting_agent do
     model :fast
     instructions "You may interrupt."
   end

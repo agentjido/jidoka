@@ -1,6 +1,6 @@
 defmodule Jidoka.Agent.SystemPrompt do
   @moduledoc """
-  Callback contract for dynamic `defaults.instructions` resolvers.
+  Callback contract for dynamic `agent.instructions` resolvers.
 
   Implement this behaviour when compiled agents need to derive their system
   prompt from the current request, state, config, or parsed runtime context.

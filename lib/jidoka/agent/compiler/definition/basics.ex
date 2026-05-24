@@ -13,10 +13,10 @@ defmodule Jidoka.Agent.Definition.Basics do
 
         true ->
           raise Jidoka.Agent.Dsl.Error.exception(
-                  message: "`agent.id` is required.",
-                  path: [:agent, :id],
+                  message: "`agent` id is required.",
+                  path: [:agent],
                   value: id,
-                  hint: "Declare `agent do id :my_agent end` using lower snake case.",
+                  hint: "Declare `agent :my_agent do ... end` using lower snake case.",
                   module: owner_module
                 )
       end
@@ -25,8 +25,8 @@ defmodule Jidoka.Agent.Definition.Basics do
       normalized_id
     else
       raise Jidoka.Agent.Dsl.Error.exception(
-              message: "`agent.id` must be lower snake case.",
-              path: [:agent, :id],
+              message: "`agent` id must be lower snake case.",
+              path: [:agent],
               value: id,
               hint: "Use a value like `support_agent` with lowercase letters, numbers, and underscores.",
               module: owner_module
@@ -37,10 +37,10 @@ defmodule Jidoka.Agent.Definition.Basics do
   @spec require_instructions!(module(), term()) :: :ok
   def require_instructions!(owner_module, nil) do
     raise Jidoka.Agent.Dsl.Error.exception(
-            message: "`defaults.instructions` is required.",
-            path: [:defaults, :instructions],
+            message: "`agent.instructions` is required.",
+            path: [:agent, :instructions],
             value: nil,
-            hint: "Declare `defaults do instructions \"...\" end` or provide a resolver module/MFA.",
+            hint: "Declare `agent :my_agent do instructions \"...\" end` or provide a resolver module/MFA.",
             module: owner_module
           )
   end
@@ -54,7 +54,7 @@ defmodule Jidoka.Agent.Definition.Basics do
     error in [ArgumentError] ->
       raise Jidoka.Agent.Dsl.Error.exception(
               message: Exception.message(error),
-              path: [:defaults, :model],
+              path: [:agent, :model],
               value: model,
               hint: "Use a configured Jidoka model alias such as `:fast` or a Jido.AI-compatible model spec.",
               module: owner_module
@@ -70,7 +70,7 @@ defmodule Jidoka.Agent.Definition.Basics do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:defaults, :instructions],
+                path: [:agent, :instructions],
                 value: instructions,
                 hint: "Use a non-empty string, a module implementing `resolve_system_prompt/1`, or an MFA tuple.",
                 module: owner_module
@@ -89,7 +89,7 @@ defmodule Jidoka.Agent.Definition.Basics do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:defaults, :character],
+                path: [:agent, :character],
                 value: character,
                 hint: "Use an inline `Jido.Character` map or a `use Jido.Character` module.",
                 module: owner_module

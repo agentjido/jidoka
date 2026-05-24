@@ -12,9 +12,9 @@ defmodule Jidoka.Agent.Definition.ContextConfig do
       {:error, reason} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: context_schema_error(reason),
-                path: [:agent, :schema],
+                path: [:agent, :context],
                 value: schema,
-                hint: "Use a compiled Zoi map/object schema owned by the agent DSL.",
+                hint: "Use `context Zoi.object(%{...})` inside the agent block.",
                 module: owner_module
               )
     end
@@ -29,8 +29,8 @@ defmodule Jidoka.Agent.Definition.ContextConfig do
       {:error, reason} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: context_schema_error(reason),
-                path: [:agent, :schema],
-                hint: "Ensure the Zoi schema parses an empty input to map defaults.",
+                path: [:agent, :context],
+                hint: "Ensure the context Zoi schema parses an empty input to map defaults.",
                 module: owner_module
               )
     end

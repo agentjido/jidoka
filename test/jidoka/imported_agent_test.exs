@@ -23,11 +23,7 @@ defmodule JidokaTest.ImportedAgentTest do
   defmodule ImportedCollisionA do
     use Jidoka.Agent
 
-    agent do
-      id :collision_child
-    end
-
-    defaults do
+    agent :collision_child do
       instructions "First imported collision child."
     end
   end
@@ -35,11 +31,7 @@ defmodule JidokaTest.ImportedAgentTest do
   defmodule ImportedCollisionB do
     use Jidoka.Agent
 
-    agent do
-      id :collision_child
-    end
-
-    defaults do
+    agent :collision_child do
       instructions "Second imported collision child."
     end
   end

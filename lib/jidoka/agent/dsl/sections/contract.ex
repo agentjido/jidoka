@@ -1,10 +1,11 @@
 defmodule Jidoka.Agent.Dsl.Sections.Contract do
   @moduledoc false
 
-  @spec output_section() :: Spark.Dsl.Section.t()
-  def output_section do
-    %Spark.Dsl.Section{
+  @spec output_entity() :: Spark.Dsl.Entity.t()
+  def output_entity do
+    %Spark.Dsl.Entity{
       name: :output,
+      target: Jidoka.Agent.Dsl.Output,
       describe: """
       Configure the final structured output contract for this agent.
       """,
@@ -30,35 +31,52 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
     }
   end
 
-  @spec agent_section() :: Spark.Dsl.Section.t()
-  def agent_section do
-    %Spark.Dsl.Section{
+  @spec agent_entity() :: Spark.Dsl.Entity.t()
+  def agent_entity do
+    %Spark.Dsl.Entity{
       name: :agent,
+      target: Jidoka.Agent.Dsl.Agent,
+      args: [:id],
+      singleton_entity_keys: [:output],
       describe: """
       Configure the immutable Jidoka agent contract.
       """,
       schema: [
         id: [
           type: :any,
-          required: false,
+          required: true,
           doc: "The stable public agent id. Must be lower snake case."
         ],
         model: [
           type: :any,
           required: false,
-          doc: "Legacy placement. Use `defaults do model ... end` instead."
+          default: :fast,
+          doc: "The default model to use for this agent."
         ],
-        system_prompt: [
+        instructions: [
           type: :any,
           required: false,
-          doc: "Legacy placement. Use `defaults do instructions ... end` instead."
+          doc: """
+          Default instructions used for this agent.
+
+          Supports a static string, a module implementing `resolve_system_prompt/1`,
+          or an MFA tuple like `{MyApp.Prompts.Support, :build, ["prefix"]}`.
+          """
+        ],
+        character: [
+          type: :any,
+          required: false,
+          doc: """
+          Optional structured character/persona source rendered before
+          `instructions` in the effective system prompt.
+          """
         ],
         description: [
           type: :string,
           required: false,
           doc: "Optional human-readable description for inspection and imported specs."
         ],
-        schema: [
+        context: [
           type: :any,
           required: false,
           doc: """
@@ -68,53 +86,22 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
           """
         ]
       ],
-      sections: [output_section()]
+      entities: [
+        output: [output_entity()]
+      ]
     }
   end
 
-  @spec defaults_section() :: Spark.Dsl.Section.t()
-  def defaults_section do
+  @spec section() :: Spark.Dsl.Section.t()
+  def section do
     %Spark.Dsl.Section{
-      name: :defaults,
+      name: :jidoka,
+      top_level?: true,
+      singleton_entity_keys: [:agent],
       describe: """
-      Configure runtime defaults for this agent.
+      Configure a Jidoka agent.
       """,
-      schema: [
-        model: [
-          type: :any,
-          required: false,
-          doc: """
-          The default model to use for this agent.
-
-          Supports the same shapes Jido.AI accepts, including alias atoms, direct
-          model strings, inline model maps, and `%LLMDB.Model{}` structs.
-          """
-        ],
-        instructions: [
-          type: :any,
-          required: false,
-          doc: """
-          Default instructions used for this agent.
-
-          Supports:
-
-          - a static string
-          - a module implementing `resolve_system_prompt/1`
-          - an MFA tuple like `{MyApp.Prompts.Support, :build, ["prefix"]}`
-          """
-        ],
-        character: [
-          type: :any,
-          required: false,
-          doc: """
-          Optional structured character/persona source rendered before
-          `instructions` in the effective system prompt.
-
-          Supports inline `Jido.Character` maps or modules generated with
-          `use Jido.Character`.
-          """
-        ]
-      ]
+      entities: [agent_entity()]
     }
   end
 end

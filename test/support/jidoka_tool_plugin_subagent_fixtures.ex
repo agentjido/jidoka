@@ -23,11 +23,7 @@ end
 defmodule JidokaTest.ToolAgent do
   use Jidoka.Agent
 
-  agent do
-    id :tool_agent
-  end
-
-  defaults do
+  agent :tool_agent do
     model :fast
     instructions "You can use math tools."
   end
@@ -46,11 +42,7 @@ end
 defmodule JidokaTest.PluginAgent do
   use Jidoka.Agent
 
-  agent do
-    id :plugin_agent
-  end
-
-  defaults do
+  agent :plugin_agent do
     model :fast
     instructions "You can use plugin-provided tools."
   end
@@ -101,11 +93,7 @@ end
 defmodule JidokaTest.OrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :orchestrator_agent
-  end
-
-  defaults do
+  agent :orchestrator_agent do
     model :fast
     instructions "You can delegate to subagents."
   end
@@ -122,11 +110,7 @@ end
 defmodule JidokaTest.PeerOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :peer_orchestrator_agent
-  end
-
-  defaults do
+  agent :peer_orchestrator_agent do
     model :fast
     instructions "You can delegate to a peer specialist."
   end
@@ -139,11 +123,7 @@ end
 defmodule JidokaTest.ContextPeerOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :context_peer_orchestrator_agent
-  end
-
-  defaults do
+  agent :context_peer_orchestrator_agent do
     model :fast
     instructions "You can delegate to a context-derived peer specialist."
   end
@@ -156,11 +136,7 @@ end
 defmodule JidokaTest.ContextPeerNoForwardOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :context_peer_no_forward_orchestrator_agent
-  end
-
-  defaults do
+  agent :context_peer_no_forward_orchestrator_agent do
     model :fast
     instructions "You can delegate to a context-derived peer without forwarding context."
   end
@@ -175,11 +151,7 @@ end
 defmodule JidokaTest.WrongPeerOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :wrong_peer_orchestrator_agent
-  end
-
-  defaults do
+  agent :wrong_peer_orchestrator_agent do
     model :fast
     instructions "You expect a research specialist peer."
   end
@@ -192,11 +164,7 @@ end
 defmodule JidokaTest.ForwardNoneOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :forward_none_orchestrator_agent
-  end
-
-  defaults do
+  agent :forward_none_orchestrator_agent do
     model :fast
     instructions "You can delegate without public context."
   end
@@ -209,11 +177,7 @@ end
 defmodule JidokaTest.ForwardOnlyOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :forward_only_orchestrator_agent
-  end
-
-  defaults do
+  agent :forward_only_orchestrator_agent do
     model :fast
     instructions "You can delegate with selected context."
   end
@@ -226,11 +190,7 @@ end
 defmodule JidokaTest.ForwardExceptOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :forward_except_orchestrator_agent
-  end
-
-  defaults do
+  agent :forward_except_orchestrator_agent do
     model :fast
     instructions "You can delegate with excluded context."
   end
@@ -243,11 +203,7 @@ end
 defmodule JidokaTest.StructuredOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :structured_orchestrator_agent
-  end
-
-  defaults do
+  agent :structured_orchestrator_agent do
     model :fast
     instructions "You can delegate with structured metadata."
   end
@@ -260,11 +216,7 @@ end
 defmodule JidokaTest.MissingPeerOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :missing_peer_orchestrator_agent
-  end
-
-  defaults do
+  agent :missing_peer_orchestrator_agent do
     model :fast
     instructions "You expect an existing peer."
   end
@@ -294,11 +246,7 @@ end
 defmodule JidokaTest.TimeoutOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :timeout_orchestrator_agent
-  end
-
-  defaults do
+  agent :timeout_orchestrator_agent do
     model :fast
     instructions "You can delegate to a slow specialist."
   end
@@ -324,11 +272,7 @@ end
 defmodule JidokaTest.InvalidResultOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :invalid_result_orchestrator_agent
-  end
-
-  defaults do
+  agent :invalid_result_orchestrator_agent do
     model :fast
     instructions "You can delegate to an invalid specialist."
   end
@@ -354,11 +298,7 @@ end
 defmodule JidokaTest.RaisingOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :raising_orchestrator_agent
-  end
-
-  defaults do
+  agent :raising_orchestrator_agent do
     model :fast
     instructions "You can delegate to a raising specialist."
   end
@@ -387,11 +327,7 @@ end
 defmodule JidokaTest.InterruptOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :interrupt_orchestrator_agent
-  end
-
-  defaults do
+  agent :interrupt_orchestrator_agent do
     model :fast
     instructions "You can delegate to an interrupting specialist."
   end
@@ -417,11 +353,7 @@ end
 defmodule JidokaTest.InvalidInterruptOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :invalid_interrupt_orchestrator_agent
-  end
-
-  defaults do
+  agent :invalid_interrupt_orchestrator_agent do
     model :fast
     instructions "You can delegate to an invalid interrupt specialist."
   end
@@ -447,11 +379,7 @@ end
 defmodule JidokaTest.StartFailureOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :start_failure_orchestrator_agent
-  end
-
-  defaults do
+  agent :start_failure_orchestrator_agent do
     model :fast
     instructions "You can delegate to a failing specialist."
   end
@@ -477,11 +405,7 @@ end
 defmodule JidokaTest.StartIgnoreOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :start_ignore_orchestrator_agent
-  end
-
-  defaults do
+  agent :start_ignore_orchestrator_agent do
     model :fast
     instructions "You can delegate to an ignored specialist."
   end
@@ -513,11 +437,7 @@ end
 defmodule JidokaTest.StartTripleOrchestratorAgent do
   use Jidoka.Agent
 
-  agent do
-    id :start_triple_orchestrator_agent
-  end
-
-  defaults do
+  agent :start_triple_orchestrator_agent do
     model :fast
     instructions "You can delegate to a triple-start specialist."
   end
@@ -556,14 +476,11 @@ end
 defmodule JidokaTest.HandoffRouterAgent do
   use Jidoka.Agent
 
-  agent do
-    id :handoff_router_agent
-    description "Routes owned support conversations."
-  end
-
-  defaults do
+  agent :handoff_router_agent do
     model :fast
     instructions "Transfer ownership when a specialist should continue the conversation."
+
+    description "Routes owned support conversations."
   end
 
   capabilities do
@@ -577,11 +494,7 @@ end
 defmodule JidokaTest.HandoffForwardNoneAgent do
   use Jidoka.Agent
 
-  agent do
-    id :handoff_forward_none_agent
-  end
-
-  defaults do
+  agent :handoff_forward_none_agent do
     model :fast
     instructions "Transfer without public context."
   end
@@ -597,11 +510,7 @@ end
 defmodule JidokaTest.HandoffForwardOnlyAgent do
   use Jidoka.Agent
 
-  agent do
-    id :handoff_forward_only_agent
-  end
-
-  defaults do
+  agent :handoff_forward_only_agent do
     model :fast
     instructions "Transfer selected context."
   end
@@ -617,11 +526,7 @@ end
 defmodule JidokaTest.HandoffForwardExceptAgent do
   use Jidoka.Agent
 
-  agent do
-    id :handoff_forward_except_agent
-  end
-
-  defaults do
+  agent :handoff_forward_except_agent do
     model :fast
     instructions "Transfer public context except secrets."
   end
@@ -637,11 +542,7 @@ end
 defmodule JidokaTest.PeerHandoffAgent do
   use Jidoka.Agent
 
-  agent do
-    id :peer_handoff_agent
-  end
-
-  defaults do
+  agent :peer_handoff_agent do
     model :fast
     instructions "Transfer ownership to an existing peer."
   end
@@ -657,11 +558,7 @@ end
 defmodule JidokaTest.ContextPeerHandoffAgent do
   use Jidoka.Agent
 
-  agent do
-    id :context_peer_handoff_agent
-  end
-
-  defaults do
+  agent :context_peer_handoff_agent do
     model :fast
     instructions "Transfer ownership to a context-selected peer."
   end
@@ -677,11 +574,7 @@ end
 defmodule JidokaTest.MissingPeerHandoffAgent do
   use Jidoka.Agent
 
-  agent do
-    id :missing_peer_handoff_agent
-  end
-
-  defaults do
+  agent :missing_peer_handoff_agent do
     model :fast
     instructions "Transfer ownership to a peer that must exist."
   end
@@ -697,11 +590,7 @@ end
 defmodule JidokaTest.WrongPeerHandoffAgent do
   use Jidoka.Agent
 
-  agent do
-    id :wrong_peer_handoff_agent
-  end
-
-  defaults do
+  agent :wrong_peer_handoff_agent do
     model :fast
     instructions "Transfer ownership to a peer with the expected runtime."
   end

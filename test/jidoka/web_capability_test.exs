@@ -125,11 +125,7 @@ defmodule JidokaTest.WebCapabilityTest do
       defmodule JidokaTest.WebDuplicateToolAgent do
         use Jidoka.Agent
 
-        agent do
-          id :web_duplicate_tool_agent
-        end
-
-        defaults do
+        agent :web_duplicate_tool_agent do
           instructions "This should fail."
         end
 
@@ -148,11 +144,7 @@ defmodule JidokaTest.WebCapabilityTest do
       defmodule JidokaTest.WebBadModeAgent do
         use Jidoka.Agent
 
-        agent do
-          id :web_bad_mode_agent
-        end
-
-        defaults do
+        agent :web_bad_mode_agent do
           instructions "This should fail."
         end
 
@@ -170,11 +162,7 @@ defmodule JidokaTest.WebCapabilityTest do
       defmodule JidokaTest.WebDuplicateDeclarationAgent do
         use Jidoka.Agent
 
-        agent do
-          id :web_duplicate_declaration_agent
-        end
-
-        defaults do
+        agent :web_duplicate_declaration_agent do
           instructions "This should fail."
         end
 

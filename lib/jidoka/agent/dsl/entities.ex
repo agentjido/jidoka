@@ -1,3 +1,24 @@
+defmodule Jidoka.Agent.Dsl.Agent do
+  @moduledoc false
+
+  defstruct [
+    :id,
+    :model,
+    :instructions,
+    :character,
+    :description,
+    :context,
+    :output,
+    :__spark_metadata__
+  ]
+end
+
+defmodule Jidoka.Agent.Dsl.Output do
+  @moduledoc false
+
+  defstruct [:schema, :retries, :on_validation_error, :__spark_metadata__]
+end
+
 defmodule Jidoka.Agent.Dsl.Tool do
   @moduledoc false
 

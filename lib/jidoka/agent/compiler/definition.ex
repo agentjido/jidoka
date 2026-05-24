@@ -21,14 +21,15 @@ defmodule Jidoka.Agent.Definition do
 
     Legacy.reject_legacy_placements!(owner_module)
 
-    configured_id = Spark.Dsl.Extension.get_opt(owner_module, [:agent], :id)
-    id = Basics.resolve_agent_id!(owner_module, configured_id)
-    description = Spark.Dsl.Extension.get_opt(owner_module, [:agent], :description)
+    agent = agent_contract!(owner_module)
 
-    configured_model = Spark.Dsl.Extension.get_opt(owner_module, [:defaults], :model, :fast)
+    id = Basics.resolve_agent_id!(owner_module, agent.id)
+    description = agent.description
+
+    configured_model = agent.model || :fast
     resolved_model = Basics.resolve_model!(owner_module, configured_model)
-    configured_instructions = Spark.Dsl.Extension.get_opt(owner_module, [:defaults], :instructions)
-    configured_character = Spark.Dsl.Extension.get_opt(owner_module, [:defaults], :character)
+    configured_instructions = agent.instructions
+    configured_character = agent.character
 
     Basics.require_instructions!(owner_module, configured_instructions)
     character_spec = Basics.resolve_character!(owner_module, configured_character)
@@ -42,13 +43,10 @@ defmodule Jidoka.Agent.Definition do
           {nil, spec}
       end
 
-    configured_context_schema =
-      owner_module
-      |> Spark.Dsl.Extension.get_opt([:agent], :schema)
-      |> ContextConfig.resolve_schema!(owner_module)
+    configured_context_schema = ContextConfig.resolve_schema!(agent.context, owner_module)
 
     configured_context = ContextConfig.resolve_defaults!(owner_module, configured_context_schema)
-    configured_output = OutputConfig.resolve!(owner_module)
+    configured_output = OutputConfig.resolve!(owner_module, agent.output)
     configured_schedules = ScheduleConfig.resolve!(owner_module)
     configured_compaction = CompactionConfig.resolve!(owner_module)
 
@@ -290,6 +288,31 @@ defmodule Jidoka.Agent.Definition do
       ash_tool_config: ash_tool_config,
       public_definition: public_definition
     }
+  end
+
+  @spec agent_contract!(module()) :: Jidoka.Agent.Dsl.Agent.t()
+  def agent_contract!(owner_module) do
+    case Spark.Dsl.Extension.get_entities(owner_module, [:jidoka]) do
+      [%Jidoka.Agent.Dsl.Agent{} = agent] ->
+        agent
+
+      [] ->
+        raise Jidoka.Agent.Dsl.Error.exception(
+                message: "`agent :id do ... end` is required.",
+                path: [:agent],
+                hint: "Declare `agent :my_agent do instructions \"...\" end`.",
+                module: owner_module
+              )
+
+      agents ->
+        raise Jidoka.Agent.Dsl.Error.exception(
+                message: "Only one `agent :id do ... end` block is allowed.",
+                path: [:agent],
+                value: Enum.map(agents, & &1.id),
+                hint: "Merge the configuration into a single agent block.",
+                module: owner_module
+              )
+    end
   end
 
   defp section_entities(owner_module, path, predicate) when is_function(predicate, 1) do

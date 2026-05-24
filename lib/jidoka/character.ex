@@ -5,7 +5,7 @@ defmodule Jidoka.Character do
   Characters are structured persona inputs rendered by `jido_character` into
   the effective system prompt. Jidoka keeps them separate from tools, memory,
   workflows, and handoffs: a character shapes voice and persona, while
-  `defaults.instructions` remains the explicit task and policy layer.
+  `agent.instructions` remains the explicit task and policy layer.
   """
 
   @context_key :__jidoka_character__

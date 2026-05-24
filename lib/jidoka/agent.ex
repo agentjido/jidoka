@@ -7,14 +7,10 @@ defmodule Jidoka.Agent do
       defmodule MyApp.ChatAgent do
         use Jidoka.Agent
 
-        agent do
-          id :chat_agent
-          schema Zoi.object(%{tenant: Zoi.string() |> Zoi.optional()})
-        end
-
-        defaults do
+        agent :chat_agent do
           model :fast
           instructions "You are a concise assistant."
+          context Zoi.object(%{tenant: Zoi.string() |> Zoi.optional()})
         end
 
         capabilities do
@@ -25,11 +21,11 @@ defmodule Jidoka.Agent do
 
   Supported fields are intentionally limited:
 
-  - `agent.id`
-  - `agent.schema` as an optional Zoi map/object schema for runtime context
-  - `defaults.model`
-  - `defaults.instructions` as a string, module callback, or MFA tuple
-  - `defaults.character` as an optional prompt/persona source
+  - `agent :id`
+  - `agent.context` as an optional Zoi map/object schema for runtime context
+  - `agent.model`
+  - `agent.instructions` as a string, module callback, or MFA tuple
+  - `agent.character` as an optional prompt/persona source
   - `capabilities` for tools, Ash resources, MCP tools, skills, plugins, subagents, and workflows
   - `lifecycle` for memory, hooks, and guardrails
   - `schedules` for first-class recurring agent turns registered by the application
@@ -65,7 +61,7 @@ defmodule Jidoka.Agent do
         file: __CALLER__.file,
         line: __CALLER__.line,
         description:
-          "Jidoka.Agent now uses a Spark DSL. Use `use Jidoka.Agent` and configure it inside `agent do ... end`."
+          "Jidoka.Agent now uses a Spark DSL. Use `use Jidoka.Agent` and configure it inside `agent :id do ... end`."
     end
 
     quote location: :keep do

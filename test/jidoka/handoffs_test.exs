@@ -238,11 +238,7 @@ defmodule JidokaTest.HandoffsTest do
       defmodule JidokaTest.DuplicateHandoffToolAgent do
         use Jidoka.Agent
 
-        agent do
-          id :duplicate_handoff_tool_agent
-        end
-
-        defaults do
+        agent :duplicate_handoff_tool_agent do
           instructions "This should fail."
         end
 
