@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T22:20:45Z",
   "created": "2026-05-24T20:35:39Z",
   "description": "Parent epic: V3 E3: Context and typed results\n\nSource task 4/8 from MILESTONE_V3.md:\n\n- Verify typed result DSL and runtime finalization.\n\nEpic closure criteria:\n- new users can pass a naked map first and add schema later\n- typed results are stable enough for app code\n- context/result docs avoid conflating state, memory, and output\n",
   "id": "jidoka-3di.4.4",
@@ -14,8 +15,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E3: Verify typed result DSL and runtime finalization",
   "type": "task",
-  "updated_at": "2026-05-24T22:20:37Z"
+  "updated_at": "2026-05-24T22:20:45Z"
 }
