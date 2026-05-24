@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.11",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Removed  from the V3 parser and added negative tests for ambiguous forms: missing agent id, , lifecycle guardrails, controls tool, and old output blocks. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:41:09Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Add negative tests for ambiguous syntax that might confuse users",
   "type": "task",
-  "updated_at": "2026-05-24T21:36:33Z"
+  "updated_at": "2026-05-24T21:41:09Z"
 }
