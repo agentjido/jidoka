@@ -111,9 +111,74 @@ defmodule Jidoka.Credential do
   @spec risks() :: [risk()]
   def risks, do: @risks
 
+  @doc """
+  Rejects maps or lists that contain raw credential-looking keys.
+
+  Credential references are safe to pass through the agent boundary, but raw
+  secret values such as `api_key`, `token`, `password`, or `client_secret` are
+  not. This check is intentionally key-based and conservative; callers should
+  pass a `%Jidoka.Credential{}` or an external credential reference instead.
+  """
+  @spec reject_raw_secrets(term(), keyword()) :: :ok | {:error, Exception.t()}
+  def reject_raw_secrets(value, opts \\ []) do
+    case raw_secret_paths(value) do
+      [] ->
+        :ok
+
+      paths ->
+        field = Keyword.get(opts, :field, :credential)
+
+        {:error,
+         Jidoka.Error.validation_error("Raw credential values are not allowed across the Jidoka agent boundary.",
+           field: field,
+           value: "[REDACTED]",
+           details: %{reason: :raw_credential_value, paths: paths}
+         )}
+    end
+  end
+
+  @doc """
+  Returns paths where a value contains raw credential-looking keys.
+  """
+  @spec raw_secret_paths(term()) :: [String.t()]
+  def raw_secret_paths(value), do: raw_secret_paths(value, [])
+
   defp value(attrs, key, default \\ nil) do
     Map.get(attrs, key, Map.get(attrs, Atom.to_string(key), default))
   end
+
+  defp raw_secret_paths(%__MODULE__{}, _path), do: []
+
+  defp raw_secret_paths(%{} = map, path) do
+    Enum.flat_map(map, fn {key, value} ->
+      key_path = path ++ [key_to_string(key)]
+
+      if Jidoka.Sanitize.sensitive_key?(key) and raw_secret_value?(value) do
+        [Enum.join(key_path, ".")]
+      else
+        raw_secret_paths(value, key_path)
+      end
+    end)
+  end
+
+  defp raw_secret_paths(values, path) when is_list(values) do
+    values
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {value, index} -> raw_secret_paths(value, path ++ [Integer.to_string(index)]) end)
+  end
+
+  defp raw_secret_paths(_value, _path), do: []
+
+  defp raw_secret_value?(%__MODULE__{}), do: false
+  defp raw_secret_value?(nil), do: false
+  defp raw_secret_value?(""), do: false
+  defp raw_secret_value?("[REDACTED]"), do: false
+  defp raw_secret_value?("[OMITTED]"), do: false
+  defp raw_secret_value?(_value), do: true
+
+  defp key_to_string(key) when is_atom(key), do: Atom.to_string(key)
+  defp key_to_string(key) when is_binary(key), do: key
+  defp key_to_string(key), do: inspect(key)
 
   defp required_string(attrs, key) do
     case optional_string(attrs, key) do

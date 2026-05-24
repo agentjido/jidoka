@@ -411,7 +411,10 @@ defmodule Jidoka.Debug do
   defp preview_context_entry(key, value)
        when is_binary(value) or is_integer(value) or is_float(value) or is_boolean(value) or
               is_atom(value) do
-    "#{normalize_context_key(key)}=#{inspect(value)}"
+    key = normalize_context_key(key)
+    value = if Jidoka.Sanitize.sensitive_key?(key), do: "[REDACTED]", else: value
+
+    "#{key}=#{inspect(value)}"
   end
 
   defp preview_context_entry(_key, _value), do: nil

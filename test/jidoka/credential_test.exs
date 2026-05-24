@@ -64,4 +64,62 @@ defmodule JidokaTest.CredentialTest do
       Credential.new!(provider: "")
     end
   end
+
+  test "detects raw credential-looking keys while allowing credential references" do
+    assert Credential.raw_secret_paths(%{
+             credentials: [
+               Credential.new!(provider: "github", lease_id: "lease_123"),
+               %{api_key: "raw-secret"}
+             ]
+           }) == ["credentials.1.api_key"]
+
+    assert :ok =
+             Credential.reject_raw_secrets(%{
+               credential: Credential.new!(provider: "github", lease_id: "lease_123")
+             })
+  end
+
+  test "public chat context rejects raw secrets before provider prompts or tools" do
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             Jidoka.Agent.prepare_chat_opts([context: %{tenant: "acme", api_key: "raw-secret"}], nil)
+
+    assert error.field == :context
+    assert error.details.reason == :raw_credential_value
+    assert error.details.paths == ["api_key"]
+    assert error.value == "[REDACTED]"
+  end
+
+  test "session context rejects raw secrets before runtime use" do
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             Jidoka.Session.new(agent: JidokaTest.ChatAgent, id: "credential-session", context: %{token: "raw"})
+
+    assert error.field == :context
+    assert error.details.paths == ["token"]
+  end
+
+  test "operation preflight rejects raw secrets in tool arguments" do
+    runtime = JidokaTest.GuardrailedAgent.runtime_module()
+    agent = new_runtime_agent(runtime)
+
+    assert {:ok, _agent, {:ai_react_start, params}} =
+             Jidoka.Guardrails.on_before_cmd(
+               agent,
+               {:ai_react_start, %{query: "call a tool", request_id: "req-credential-tool", tool_context: %{}}},
+               %{input: [], output: [], tool: []}
+             )
+
+    callback = Map.fetch!(params.tool_context, :__tool_guardrail_callback__)
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             callback.(%{
+               tool_name: "github_create_issue",
+               tool_call_id: "tc-secret",
+               arguments: %{title: "Hello", access_token: "raw-secret"},
+               context: params.tool_context
+             })
+
+    assert error.field == :arguments
+    assert error.details.reason == :raw_credential_value
+    assert error.details.paths == ["access_token"]
+  end
 end

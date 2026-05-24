@@ -117,8 +117,6 @@ defmodule Jidoka.Guardrails do
     Config.combine(defaults, request_guardrails)
   end
 
-  defp maybe_attach_tool_guardrail_callback(context, [], _agent, _request_id), do: context
-
   defp maybe_attach_tool_guardrail_callback(context, tool_guardrails, agent, request_id)
        when is_map(context) and is_binary(request_id) do
     callback = fn %{
@@ -139,16 +137,18 @@ defmodule Jidoka.Guardrails do
         request_opts: %{}
       }
 
-      case Runner.run_guardrails(tool_guardrails, input) do
-        :ok ->
-          :ok
+      with :ok <- Jidoka.Credential.reject_raw_secrets(arguments, field: :arguments) do
+        case Runner.run_guardrails(tool_guardrails, input) do
+          :ok ->
+            :ok
 
-        {:error, label, reason} ->
-          {:error, Runner.normalize_guardrail_error(:tool, label, reason, agent, request_id)}
+          {:error, label, reason} ->
+            {:error, Runner.normalize_guardrail_error(:tool, label, reason, agent, request_id)}
 
-        {:interrupt, _label, %Interrupt{} = interrupt} ->
-          Jidoka.Hooks.notify_interrupt(agent, request_id, interrupt)
-          {:interrupt, interrupt}
+          {:interrupt, _label, %Interrupt{} = interrupt} ->
+            Jidoka.Hooks.notify_interrupt(agent, request_id, interrupt)
+            {:interrupt, interrupt}
+        end
       end
     end
 

@@ -39,13 +39,18 @@ defmodule Jidoka.Agent.Chat do
   end
 
   defp normalize_request_context(opts, default_context, nil) do
-    with {:ok, runtime_context} <- Jidoka.Context.normalize(Keyword.get(opts, :context, %{})) do
-      {:ok, Jidoka.Context.merge(default_context, runtime_context)}
+    with {:ok, runtime_context} <- Jidoka.Context.normalize(Keyword.get(opts, :context, %{})),
+         context <- Jidoka.Context.merge(default_context, runtime_context),
+         :ok <- reject_raw_context_secrets(context) do
+      {:ok, context}
     end
   end
 
   defp normalize_request_context(opts, _default_context, context_schema) do
-    Jidoka.Context.normalize(Keyword.get(opts, :context, %{}), context_schema)
+    with {:ok, context} <- Jidoka.Context.normalize(Keyword.get(opts, :context, %{}), context_schema),
+         :ok <- reject_raw_context_secrets(context) do
+      {:ok, context}
+    end
   end
 
   defp attach_runtime_character(opts, context) do
@@ -116,6 +121,10 @@ defmodule Jidoka.Agent.Chat do
     opts
     |> Keyword.drop([:context, :character, :conversation, :hooks, :controls, :guardrails, :output, :start_opts])
     |> Keyword.put(:tool_context, context)
+  end
+
+  defp reject_raw_context_secrets(context) do
+    Jidoka.Credential.reject_raw_secrets(context, field: :context)
   end
 
   defp maybe_prepare_ash_context(context, nil), do: {:ok, context}

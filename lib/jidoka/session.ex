@@ -274,8 +274,10 @@ defmodule Jidoka.Session do
   end
 
   defp normalize_context(id, context) do
-    with {:ok, runtime_context} <- Jidoka.Context.normalize(context) do
-      {:ok, Jidoka.Context.merge(%{session: id}, runtime_context)}
+    with {:ok, runtime_context} <- Jidoka.Context.normalize(context),
+         context <- Jidoka.Context.merge(%{session: id}, runtime_context),
+         :ok <- Jidoka.Credential.reject_raw_secrets(context, field: :context) do
+      {:ok, context}
     end
   end
 
