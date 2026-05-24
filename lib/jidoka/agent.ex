@@ -35,6 +35,14 @@ defmodule Jidoka.Agent do
   - `lifecycle` for runtime behavior such as memory, hooks, and compaction
   - `schedules` for first-class recurring agent turns registered by the application
 
+  Vocabulary:
+
+  - context is caller-provided data for a turn
+  - agent state belongs to the running process
+  - memory recalls facts across turns or from a store
+  - compaction summarizes older transcript context for future model calls
+  - result is the final app-facing value returned from a turn
+
   A nested runtime module is generated automatically and uses `Jido.AI.Agent`
   with the configured tool modules. The `tools` block supports explicit
   `Jidoka.Tool` modules, while `capabilities` handles integrations such as

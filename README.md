@@ -98,6 +98,17 @@ That example introduces the core growth path:
 - `controls` are policy boundaries around input, operations, and results
 - human-in-the-loop flows are controls that pause risky operations for approval
 
+Use these nouns consistently:
+
+- **context** is per-turn application data supplied by the caller, such as
+  actor, account, tenant, or ticket ids
+- **agent state** belongs to the running process and is not the normal place for
+  application inputs
+- **memory** recalls useful facts from prior turns or external stores
+- **compaction** summarizes older transcript context so the next model call can
+  stay smaller
+- **result** is the final value returned to application code
+
 From there, add only what the agent actually needs:
 
 - `memory` when useful facts should survive turns

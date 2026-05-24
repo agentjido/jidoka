@@ -32,6 +32,26 @@ groups:
 - **Testing:** provider-free tests, tool tests, result tests, workflow tests,
   live evals.
 
+## Vocabulary
+
+Jidoka should keep state-like words narrow:
+
+- **Context** is caller-provided runtime data for a turn. It may be a naked map
+  or a Zoi-validated contract. It is how the host app supplies actor, tenant,
+  account, ticket, credential references, and other request-scoped facts.
+- **Agent state** is internal process state owned by the running runtime agent.
+  It tracks requests, strategy state, latest compaction snapshots, and other
+  implementation details. Users should not reach for agent state just to pass
+  app data into a turn.
+- **Memory** recalls facts across turns or from an external store. It is not a
+  replacement for required context; if a tool needs `account_id`, the caller
+  should pass it explicitly.
+- **Compaction** reduces the provider-facing transcript window by summarizing
+  older conversation context. It does not delete the original thread and should
+  not be taught as memory.
+- **Result** is the app-facing final value from a turn. Typed results validate
+  that value before callers receive it.
+
 ## Topic DAG
 
 ```mermaid
