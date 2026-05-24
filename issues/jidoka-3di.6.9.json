@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.9",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Decided the V3 boundary: Jidoka.Control is the public policy concept, Jidoka.Guardrail is now hidden as implementation detail, and Jidoka.Hook remains documented only for lifecycle callbacks rather than policy decisions.",
+      "timestamp": "2026-05-24T23:17:27Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E5: Decide whether Jidoka.Hook and Jidoka.Guardrail modules are deleted, renamed, o...",
   "type": "task",
-  "updated_at": "2026-05-24T23:15:55Z"
+  "updated_at": "2026-05-24T23:17:27Z"
 }
