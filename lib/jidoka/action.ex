@@ -4,7 +4,7 @@ defmodule Jidoka.Action do
 
   `Jidoka.Action` is the user-facing wrapper around `Jido.Action`. It keeps
   authoring focused on deterministic application operations while Jidoka handles
-  the lower-level conversion into LLM/provider tools at runtime.
+  the provider-facing operation metadata at runtime.
 
   Actions are Zoi-first and Zoi-only for schema authoring. If an action defines
   `schema` or `output_schema`, they must resolve to Zoi schemas.

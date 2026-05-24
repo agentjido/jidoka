@@ -5,29 +5,29 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 ## Agent DSL
 
 - Define agents with `use Jidoka.Agent`.
-- Put core configuration inside `agent do ... end`.
-- Use `schema Zoi.object(...)` for runtime context validation.
+- Put core configuration inside `agent :id do ... end`.
+- Use `context Zoi.object(...)` for runtime context validation.
 - Prefer `context:` at runtime. Do not pass `tool_context:` to Jidoka public APIs.
-- Use `defaults.character` for structured persona/voice data backed by
-  `jido_character`. Use `defaults.instructions` for task, policy, and safety
-  instructions.
+- Use `character` for structured persona/voice data backed by `jido_character`.
+  Use `instructions` for task, policy, and safety instructions.
 - Use per-call `character:` only when a request should override the configured
   character for that turn.
 - Keep prompts explicit. Jidoka does not automatically inject context into model
-  prompts unless a system prompt, hook, tool, or memory configuration does so.
+  prompts unless instructions, controls, actions, or memory configuration do so.
 
 ## Extensions
 
-- Use `capabilities do` for explicit tool modules, Ash resources, MCP tool
-  sync, web access, skills, plugins, subagents, workflow capabilities, and
-  handoffs.
-- Use `lifecycle do` for memory, hooks, and guardrails.
+- Use `tools do` for direct action modules.
+- Use `capabilities do` for Ash resources, MCP sync, web access, skills,
+  plugins, subagents, workflow capabilities, and handoffs.
+- Use `controls do` for input, operation, and result policy.
+- Use `lifecycle do` for runtime behavior such as memory and compaction.
 - Use `web :search` for search-only agents and `web :read_only` for search plus
   public page reading. Do not expose raw browser automation for low-risk agents.
 - Use `subagent` for manager-pattern delegation inside an agent turn. Do not
   model handoffs or workflow graphs as subagents.
 - Use `workflow` inside `capabilities do` when an agent should choose a known
-  deterministic process as a tool-like capability.
+  deterministic process as a provider-visible operation.
 - Use `handoff` inside `capabilities do` when an agent should transfer future
   conversation ownership to another agent for the same `conversation:`.
 
@@ -43,15 +43,15 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
   Use agents for open-ended LLM turns and subagents for delegated capabilities
   inside one agent turn.
 - Workflows may call agents as bounded steps, and agents may expose workflows
-  as tool-like capabilities. Keep the boundary explicit: agents decide intent;
-  workflows run fixed processes.
+  as provider-visible operations. Keep the boundary explicit: agents decide
+  intent; workflows run fixed processes.
 - Keep raw Runic concepts out of public Jidoka code. Do not expose facts,
   directives, strategy state, or Runic nodes in user-authored workflows.
 
 ## Imported Agents
 
 - Use `Jidoka.import_agent/2` or `Jidoka.import_agent_file/2` for JSON/YAML specs.
-- Resolve imported tools, characters, hooks, guardrails, plugins, skills,
+- Resolve imported action refs, characters, hooks, guardrails, plugins, skills,
   subagents, workflows, and handoffs through explicit `available_*` registries.
   Imported `web` capabilities use built-in modes and do not need a registry.
 - Prefer inline `defaults.character` maps that parse through `Jido.Character`

@@ -47,7 +47,7 @@ defmodule Jidoka.Agent do
   with the configured action modules. The `tools` block supports explicit
   `Jidoka.Action` modules, while `capabilities` handles integrations such as
   `ash_resource` expansion via `AshJido`.
-  Subagent entries compile specialist agents into provider tool delegation
+  Subagent entries compile specialist agents into provider-visible delegation
   capabilities while keeping the parent agent in control. Subagent entries can
   tune child `timeout`, public `forward_context`, and parent-visible `result`
   shape without introducing handoffs or workflow graphs.
@@ -58,7 +58,7 @@ defmodule Jidoka.Agent do
   prompt before `instructions`; per-request `character:` overrides can be
   supplied through `Jidoka.chat/3` or the generated agent `chat/3` function.
   Plugin entries accept `Jidoka.Plugin` modules and merge their declared
-  action-backed operations into the same LLM-visible tool registry.
+  action-backed operations into the same provider-visible operation surface.
   Schedule entries compile into `schedules/0` metadata that can be registered
   with `Jidoka.Schedule.Manager` from the application runtime boundary.
   """

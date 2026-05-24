@@ -9,7 +9,7 @@
 Jidoka is an approachable Elixir package for building LLM agents.
 
 It gives developers a small, declarative agent DSL for common LLM agent
-workflows: chat, tools, typed results, human-in-the-loop controls, memory,
+workflows: chat, actions, typed results, human-in-the-loop controls, memory,
 compaction, schedules, subagents, workflows, handoffs, debugging, and tracing.
 
 Jidoka is intentionally thin. It gives you a friendly authoring layer on top of
@@ -193,7 +193,7 @@ runtime module into the full runtime when production needs outgrow the wrapper.
 
 Debugging is a first-class Jidoka concern. During development, use inspection,
 request summaries, traces, AgentView projections, and Kino/Livebook views to
-answer practical questions: what prompt was sent, what tools ran, what control
+answer practical questions: what prompt was sent, what operations ran, what control
 interrupted, what result was returned, and what changed between turns.
 
 Production observability stays standards-friendly instead of becoming a
