@@ -7,9 +7,15 @@
   "id": "jidoka-3di.7.2",
   "labels": [],
   "parent": "jidoka-3di.7",
+  "comments": [
+    {
+      "text": "Added the Jidoka.Credential reference struct with normalized provider/account/actor/tenant/scopes/lease/expires/risk/confirmation/audit metadata fields and focused tests.",
+      "timestamp": "2026-05-24T23:47:05Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E6: Define credential reference fields: provider, account, actor, tenant, scopes, l...",
   "type": "task",
-  "updated_at": "2026-05-24T23:45:07Z"
+  "updated_at": "2026-05-24T23:47:05Z"
 }
