@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.8",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Added explicit coverage for public control stage normalization plus existing input/result/operation control behavior, ordering, conditional matching, interruption, and raising-control normalization. Control execution errors now report operation :control.",
+      "timestamp": "2026-05-24T23:13:56Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E5: Add tests for input controls, operation controls, result controls, ordering, co...",
   "type": "task",
-  "updated_at": "2026-05-24T23:12:04Z"
+  "updated_at": "2026-05-24T23:13:56Z"
 }
