@@ -259,6 +259,36 @@ defmodule JidokaTest.AgentBasicsTest do
     assert prompt =~ "You are a concise assistant."
   end
 
+  test "runtime characters replace compile-time persona but preserve instructions" do
+    assert {:ok, opts} =
+             Jidoka.Agent.prepare_chat_opts(
+               [
+                 character: %{
+                   name: "Escalation Advisor",
+                   identity: %{role: "Urgent support specialist"},
+                   instructions: ["Use the escalation voice."]
+                 }
+               ],
+               %{context: %{}, context_schema: nil}
+             )
+
+    runtime_context = Keyword.fetch!(opts, :tool_context)
+
+    request = react_request([%{role: :user, content: "hello"}])
+    state = react_state()
+    config = react_config(CharacterAgent.request_transformer())
+
+    assert {:ok, %{messages: [%{role: :system, content: prompt}, %{role: :user, content: "hello"}]}} =
+             CharacterAgent.request_transformer().transform_request(request, state, config, runtime_context)
+
+    assert prompt =~ "# Character: Escalation Advisor"
+    assert prompt =~ "- Role: Urgent support specialist"
+    assert prompt =~ "Use the escalation voice."
+    assert prompt =~ "Answer with the support policy first."
+    refute prompt =~ "Policy Advisor"
+    refute prompt =~ "Stay within published policy."
+  end
+
   test "rejects invalid runtime characters" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Jidoka.Agent.prepare_chat_opts([character: 42], nil)
