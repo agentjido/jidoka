@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T22:58:57Z",
   "created": "2026-05-24T20:35:39Z",
   "description": "Parent epic: V3 E4: Actions and tools\n\nSource task 7/7 from MILESTONE_V3.md:\n\n- Review file layout for action/tool adapters.\n\nEpic closure criteria:\n- the public DSL reads as actions/capabilities, not plumbing\n- all operation surfaces have consistent validation and inspection\n- tests cover duplicate/invalid operation registration\n",
   "id": "jidoka-3di.5.7",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E4: Review file layout for action/tool adapters",
   "type": "task",
   "updated_at": "2026-05-24T22:58:57Z"
