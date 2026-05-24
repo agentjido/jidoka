@@ -122,4 +122,65 @@ defmodule JidokaTest.CredentialTest do
     assert error.details.reason == :raw_credential_value
     assert error.details.paths == ["access_token"]
   end
+
+  test "operation controls can match credential reference metadata" do
+    runtime = JidokaTest.GuardrailedAgent.runtime_module()
+    agent = new_runtime_agent(runtime)
+
+    credential =
+      Credential.new!(
+        provider: "github",
+        account: "acct_123",
+        tenant: "acme",
+        scopes: ["repo", "issues:write"],
+        risk: :high,
+        confirmation_required: true
+      )
+
+    control = %Jidoka.Control.Operation{
+      ref: JidokaTest.BlockOperationControl,
+      match: %{
+        credential: %{
+          provider: "github",
+          tenant: "acme",
+          scope: "repo",
+          risk: :high,
+          confirmation_required: true
+        }
+      }
+    }
+
+    assert {:ok, _agent, {:ai_react_start, params}} =
+             Jidoka.Guardrails.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "call a tool",
+                  request_id: "req-credential-match",
+                  tool_context: %{credential_ref: credential}
+                }},
+               %{input: [], output: [], tool: [control]}
+             )
+
+    callback = Map.fetch!(params.tool_context, :__tool_guardrail_callback__)
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             callback.(%{
+               tool_name: "github_create_issue",
+               tool_call_id: "tc-credential-match",
+               arguments: %{title: "Hello"},
+               context: params.tool_context
+             })
+
+    assert error.details.label == "block_operation"
+    assert error.details.cause == :operation_blocked
+
+    assert :ok =
+             callback.(%{
+               tool_name: "github_create_issue",
+               tool_call_id: "tc-credential-skip",
+               arguments: %{credential_ref: %{provider: "slack", scopes: ["chat:write"]}},
+               context: %{}
+             })
+  end
 end

@@ -239,6 +239,33 @@ defmodule Jidoka.Guardrails.Runner do
     Enum.all?(match, fn
       {:kind, kind} -> kind in [:action, :tool]
       {:name, name} -> to_string(input.tool_name) == to_string(name)
+      {:credential, credential_match} -> match_credentials?(credential_match, input)
+      _other -> false
+    end)
+  end
+
+  defp match_credentials?(credential_match, %Tool{} = input) when is_map(credential_match) do
+    input
+    |> operation_credentials()
+    |> Enum.any?(&credential_matches?(&1, credential_match))
+  end
+
+  defp match_credentials?(_credential_match, _input), do: false
+
+  defp operation_credentials(%Tool{} = input) do
+    Jidoka.Credential.references([input.arguments, input.context])
+  end
+
+  defp credential_matches?(%Jidoka.Credential{} = credential, match) do
+    Enum.all?(match, fn
+      {:provider, provider} -> credential.provider == to_string(provider)
+      {:account, account} -> credential.account == to_string(account)
+      {:actor, actor} -> credential.actor == to_string(actor)
+      {:tenant, tenant} -> credential.tenant == to_string(tenant)
+      {:scope, scope} -> to_string(scope) in credential.scopes
+      {:scopes, scopes} when is_list(scopes) -> Enum.all?(scopes, &(to_string(&1) in credential.scopes))
+      {:risk, risk} -> credential.risk == risk
+      {:confirmation_required, required?} -> credential.confirmation_required == required?
       _other -> false
     end)
   end

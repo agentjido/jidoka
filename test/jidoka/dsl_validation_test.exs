@@ -86,6 +86,41 @@ defmodule JidokaTest.DslValidationTest do
            ] = module.operation_controls()
   end
 
+  test "supports credential-aware operation control matching syntax" do
+    module =
+      compile_agent("""
+      agent :credential_matched_control_agent do
+        instructions "Apply credential-aware controls."
+      end
+
+      controls do
+        operation JidokaTest.BlockOperationControl,
+          when: [
+            credential: [
+              provider: :github,
+              scope: :repo,
+              risk: :high,
+              confirmation_required: true
+            ]
+          ]
+      end
+      """)
+
+    assert [
+             %Jidoka.Control.Operation{
+               ref: JidokaTest.BlockOperationControl,
+               match: %{
+                 credential: %{
+                   provider: "github",
+                   scope: "repo",
+                   risk: :high,
+                   confirmation_required: true
+                 }
+               }
+             }
+           ] = module.operation_controls()
+  end
+
   test "compiles every supported V3 DSL section" do
     module =
       compile_agent("""

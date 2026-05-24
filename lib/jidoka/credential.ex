@@ -15,6 +15,16 @@ defmodule Jidoka.Credential do
   """
 
   @risks [:unknown, :low, :medium, :high, :critical]
+  @reference_keys MapSet.new([
+                    "credential",
+                    "credential_ref",
+                    "credential_refs",
+                    "credentials",
+                    "connection",
+                    "connection_ref",
+                    "connection_refs",
+                    "connections"
+                  ])
 
   @derive {Inspect,
            only: [
@@ -143,8 +153,57 @@ defmodule Jidoka.Credential do
   @spec raw_secret_paths(term()) :: [String.t()]
   def raw_secret_paths(value), do: raw_secret_paths(value, [])
 
+  @doc """
+  Extracts normalized credential references from a nested value.
+
+  Jidoka looks for `%Jidoka.Credential{}` values and maps stored under common
+  reference keys such as `:credential`, `:credential_ref`, and `:connection_ref`.
+  Invalid reference-shaped maps are ignored so application context can contain
+  unrelated metadata without failing credential-aware controls.
+  """
+  @spec references(term()) :: [t()]
+  def references(value) do
+    value
+    |> collect_references()
+    |> Enum.uniq_by(&reference_identity/1)
+  end
+
   defp value(attrs, key, default \\ nil) do
     Map.get(attrs, key, Map.get(attrs, Atom.to_string(key), default))
+  end
+
+  defp collect_references(%__MODULE__{} = credential), do: [credential]
+
+  defp collect_references(%{} = map) do
+    Enum.flat_map(map, fn {key, value} ->
+      if reference_key?(key) do
+        normalize_reference_values(value)
+      else
+        collect_references(value)
+      end
+    end)
+  end
+
+  defp collect_references(values) when is_list(values), do: Enum.flat_map(values, &collect_references/1)
+  defp collect_references(_value), do: []
+
+  defp normalize_reference_values(%__MODULE__{} = credential), do: [credential]
+  defp normalize_reference_values(values) when is_list(values), do: Enum.flat_map(values, &normalize_reference_values/1)
+
+  defp normalize_reference_values(%{} = attrs) do
+    case new(attrs) do
+      {:ok, credential} -> [credential]
+      {:error, _reason} -> collect_references(attrs)
+    end
+  end
+
+  defp normalize_reference_values(_value), do: []
+
+  defp reference_key?(key), do: MapSet.member?(@reference_keys, key_to_string(key))
+
+  defp reference_identity(%__MODULE__{} = credential) do
+    {credential.provider, credential.account, credential.actor, credential.tenant, credential.lease_id,
+     credential.scopes}
   end
 
   defp raw_secret_paths(%__MODULE__{}, _path), do: []
