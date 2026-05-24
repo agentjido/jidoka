@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T22:31:46Z",
   "created": "2026-05-24T20:35:39Z",
   "description": "Parent epic: V3 E3: Context and typed results\n\nSource task 8/8 from MILESTONE_V3.md:\n\n- Review generated `context/0`, `context_schema/0`, `output/0`, and\n  `output_schema/0`.\n\nEpic closure criteria:\n- new users can pass a naked map first and add schema later\n- typed results are stable enough for app code\n- context/result docs avoid conflating state, memory, and output\n",
   "id": "jidoka-3di.4.8",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E3: Review generated context/0, contextschema/0, output/0, and outputschema/0",
   "type": "task",
   "updated_at": "2026-05-24T22:31:46Z"
