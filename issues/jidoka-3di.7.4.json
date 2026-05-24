@@ -7,9 +7,15 @@
   "id": "jidoka-3di.7.4",
   "labels": [],
   "parent": "jidoka-3di.7",
+  "comments": [
+    {
+      "text": "Added credential-aware operation control matching through when: [credential: ...], including provider/scope/risk/confirmation predicates and runtime matching against credential refs in context or tool arguments.",
+      "timestamp": "2026-05-24T23:56:35Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E6: Add control matching for credential metadata",
   "type": "task",
-  "updated_at": "2026-05-24T23:52:43Z"
+  "updated_at": "2026-05-24T23:56:35Z"
 }
