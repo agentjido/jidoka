@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.7",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Implemented conditional operation control syntax: operation MyControl, when: [kind: :action, name: :add_numbers]. The DSL stores normalized operation match metadata, the guardrail/control normalizer preserves it, and the runtime preflight callback skips controls that do not match the operation. Verification: mix format --check-formatted, mix compile --warnings-as-errors, focused guardrail/DSL tests, mix test.",
+      "timestamp": "2026-05-24T21:24:05Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Define conditional control syntax:",
   "type": "task",
-  "updated_at": "2026-05-24T21:18:33Z"
+  "updated_at": "2026-05-24T21:24:05Z"
 }
