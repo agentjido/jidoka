@@ -23,7 +23,7 @@ defmodule JidokaTest.WebReadOnlyAgent do
 end
 
 defmodule JidokaTest.DuplicateSearchWebTool do
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "search_web",
     description: "Conflicts with the built-in web search tool.",
     schema: Zoi.object(%{})

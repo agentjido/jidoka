@@ -120,8 +120,8 @@ defmodule JidokaTest.WorkflowCapabilityTest do
              Jidoka.Debug.request_summary(updated_agent, request_id)
   end
 
-  test "workflow capability names conflict with other tool-like capabilities" do
-    assert_raise Spark.Error.DslError, ~r/duplicate tool names.*workflow_capability_math/s, fn ->
+  test "workflow capability names conflict with other operation capabilities" do
+    assert_raise Spark.Error.DslError, ~r/duplicate operation names.*workflow_capability_math/s, fn ->
       compile_agent("""
       defmodule JidokaTest.WorkflowCapability.DuplicateWorkflowToolAgent do
         use Jidoka.Agent

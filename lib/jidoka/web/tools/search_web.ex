@@ -3,7 +3,7 @@ defmodule Jidoka.Web.Tools.SearchWeb do
   Search the public web through `jido_browser`'s Brave Search action.
   """
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "search_web",
     description: "Search the public web and return a small set of title, URL, and snippet results.",
     schema:

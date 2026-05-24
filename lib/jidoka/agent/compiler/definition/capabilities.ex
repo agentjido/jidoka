@@ -188,7 +188,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
                 path: path,
-                hint: "Use Jidoka tool modules that publish valid tool names.",
+                hint: "Use Jidoka action modules that publish valid names.",
                 module: owner_module
               )
     end
@@ -304,11 +304,11 @@ defmodule Jidoka.Agent.Definition.Capabilities do
         |> Enum.sort()
 
       raise Jidoka.Agent.Dsl.Error.exception(
-              message: "duplicate tool names in Jidoka agent: #{Enum.join(duplicates, ", ")}",
+              message: "duplicate operation names in Jidoka agent: #{Enum.join(duplicates, ", ")}",
               path: [:capabilities],
               value: duplicates,
               hint:
-                "Rename or remove one of the conflicting tools across direct, Ash, MCP, skill, plugin, web, subagent, workflow, and handoff sources.",
+                "Rename or remove one of the conflicting operations across direct actions, Ash, MCP, skill, plugin, web, subagent, workflow, and handoff sources.",
               module: owner_module
             )
     end

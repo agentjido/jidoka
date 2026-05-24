@@ -1,5 +1,5 @@
 defmodule JidokaTest.AddNumbers do
-  use Jidoka.Tool,
+  use Jidoka.Action,
     description: "Adds two integers together.",
     schema: Zoi.object(%{a: Zoi.integer(), b: Zoi.integer()})
 
@@ -10,7 +10,7 @@ defmodule JidokaTest.AddNumbers do
 end
 
 defmodule JidokaTest.MultiplyNumbers do
-  use Jidoka.Tool,
+  use Jidoka.Action,
     description: "Multiplies two integers together.",
     schema: Zoi.object(%{a: Zoi.integer(), b: Zoi.integer()})
 

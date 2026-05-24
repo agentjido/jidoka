@@ -3,7 +3,7 @@ defmodule Jidoka.Web.Tools.SnapshotUrl do
   Return an LLM-friendly read-only snapshot of a public HTTP(S) page.
   """
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "snapshot_url",
     description:
       "Inspect a public HTTP(S) page and return content, links, and headings. Local and private network URLs are blocked.",

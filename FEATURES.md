@@ -11,7 +11,7 @@ groups:
 - **Core turn model:** chat turns, sessions, streaming.
 - **Agent contract:** model, instructions, context, result.
 - **Runtime inputs:** context maps, context schemas, characters.
-- **Operation surface:** actions/tools, Ash actions, web tools, MCP tools,
+- **Operation surface:** actions, Ash actions, web tools, MCP tools,
   skills, plugins, catalogs.
 - **Runtime controls:** input controls, operation controls, result controls,
   interrupts, approvals.
@@ -29,7 +29,7 @@ groups:
   tracing, observability standards, and Kino/Livebook views.
 - **Portability:** imported JSON/YAML agents.
 - **Automation:** schedules.
-- **Testing:** provider-free tests, tool tests, result tests, workflow tests,
+- **Testing:** provider-free tests, action tests, result tests, workflow tests,
   live evals.
 
 ## Vocabulary
@@ -73,7 +73,7 @@ graph TD
     D --> K["Result Controls"]
     G --> L["Input Controls"]
 
-    B --> M["Actions / Tools"]
+    B --> M["Actions"]
     F --> M
     M --> N["Operation Controls"]
     K --> HI["Human In The Loop"]
@@ -133,7 +133,7 @@ graph TD
 2. **Sessions:** identity, multi-turn context, pipe syntax.
 3. **Context:** pass runtime facts safely.
 4. **Typed Results:** make replies useful to application code.
-5. **Actions / Tools:** let the agent do deterministic work.
+5. **Actions:** let the agent do deterministic work.
 6. **Controls:** input, operation, result boundaries.
 7. **Human-in-the-Loop:** pause risky inputs, operations, or results for review.
 8. **Credential Brokering:** planned support for authenticated tools to use
@@ -151,7 +151,7 @@ graph TD
 18. **Imported Agents:** portable specs and registries.
 19. **Durability + Graduation:** move from Jidoka session addressing to durable
     runtime storage, hibernate/thaw, checkpoints, and thread journals.
-20. **Testing:** contract, tool, result, workflow, and live checks.
+20. **Testing:** contract, action, result, workflow, and live checks.
 
 ## Canonical Table Of Contents
 
@@ -163,7 +163,7 @@ sets:
 3. Sessions
 4. Context
 5. Typed results
-6. Actions / tools
+6. Actions
 7. Controls
 8. Human-in-the-loop
 9. Credential brokering
@@ -275,7 +275,7 @@ Sources:
 | Sessions | Strong and often process-backed or store-backed. | Jidoka's plain `Session` descriptor is distinctive; document clearly as addressing, not durability. |
 | Context | Common but often implicit. | Make context explicit and schema-able; this is a beginner-friendly differentiator. |
 | Typed results | Strong across Instructor/BAML/schema packages, less consistently tied to agents. | Keep as a first-class agent contract, but teach it after context. |
-| Actions / tools | Universal. Strong packages emphasize typed contracts. | Use `action` language in V2; let the underlying action layer own execution contracts where possible. |
+| Actions | Universal. Strong packages emphasize typed contracts. | Use `action` language in V2; let the underlying action layer own execution contracts where possible. |
 | Controls | Present as middleware, guardrails, approvals, or interrupts. | `controls` is a strong unifying noun if it stays simple: input, operation, result. |
 | Human-in-the-loop | Strong in graph/workflow packages and approval-oriented agent systems. | Make it a named feature built from controls and interrupts, not a separate runtime. |
 | Credential brokering | Emerging; not obviously first-class in Elixir agent packages yet. | Add as planned integration/security topic. Likely belongs near tools, controls, catalogs, and connect-style integrations. |
@@ -289,7 +289,7 @@ Sources:
 | Tool integrations | Strong and growing. MCP, Ash, browser, catalogs appear repeatedly. | Use catalogs/connect as the scalable integration story; avoid listing 100 tool modules in prompts. |
 | Imported agents | Less common as JSON/YAML specs; protocols cover remote agents. | Keep imported agents as portability, with allowlisted registries as a safety boundary. |
 | Durability | Strong in lower-level runtimes and graph systems via checkpoints, journals, persistence, and resume. | Do not pretend `Jidoka.Session` is durable; teach the graduation path into durable runtime storage and instance managers. |
-| Testing | Present in eval packages, less often in agent DSLs. | Make testing a full onboarding topic: contract tests, tool tests, workflow tests, trace assertions, optional evals. |
+| Testing | Present in eval packages, less often in agent DSLs. | Make testing a full onboarding topic: contract tests, action tests, workflow tests, trace assertions, optional evals. |
 
 ### Gaps And Reframed Features
 

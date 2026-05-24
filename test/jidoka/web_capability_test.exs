@@ -119,8 +119,8 @@ defmodule JidokaTest.WebCapabilityTest do
     assert error.details.reason == :invalid_format
   end
 
-  test "web capability names conflict with other tool-like capabilities" do
-    assert_raise Spark.Error.DslError, ~r/duplicate tool names.*search_web/s, fn ->
+  test "web capability names conflict with other operation capabilities" do
+    assert_raise Spark.Error.DslError, ~r/duplicate operation names.*search_web/s, fn ->
       compile_agent("""
       defmodule JidokaTest.WebDuplicateToolAgent do
         use Jidoka.Agent

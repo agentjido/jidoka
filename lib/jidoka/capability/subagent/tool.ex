@@ -26,7 +26,7 @@ defmodule Jidoka.Subagent.Tool do
   def tool_module_ast(tool_module, %{name: name, description: description} = subagent) do
     quote location: :keep do
       defmodule unquote(tool_module) do
-        use Jidoka.Tool,
+        use Jidoka.Action,
           name: unquote(name),
           description: unquote(description),
           schema: unquote(Macro.escape(Jidoka.Subagent.Tool.task_schema())),

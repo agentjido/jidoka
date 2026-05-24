@@ -1,7 +1,7 @@
 defmodule JidokaTest.WorkflowSpike.AddAmount do
   @moduledoc false
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "workflow_spike_add_amount",
     description: "Adds a fixed amount to a workflow value.",
     schema:
@@ -19,7 +19,7 @@ end
 defmodule JidokaTest.WorkflowSpike.DoubleValue do
   @moduledoc false
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "workflow_spike_double_value",
     description: "Doubles a workflow value.",
     schema: Zoi.object(%{value: Zoi.integer()})
@@ -33,7 +33,7 @@ end
 defmodule JidokaTest.WorkflowSpike.Fail do
   @moduledoc false
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "workflow_spike_fail",
     description: "Fails with a caller-provided reason.",
     schema:

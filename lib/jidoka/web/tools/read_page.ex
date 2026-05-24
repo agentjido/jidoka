@@ -3,7 +3,7 @@ defmodule Jidoka.Web.Tools.ReadPage do
   Read a public HTTP(S) page through `jido_browser`.
   """
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "read_page",
     description: "Read a public HTTP(S) page as markdown, text, or HTML. Local and private network URLs are blocked.",
     schema:

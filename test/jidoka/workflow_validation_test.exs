@@ -120,7 +120,7 @@ defmodule JidokaTest.WorkflowValidationTest do
   end
 
   test "rejects invalid static targets" do
-    assert_workflow_dsl_error(~r/not a valid action-backed tool/s, """
+    assert_workflow_dsl_error(~r/not a valid action-backed module/s, """
     workflow do
       id :bad_tool_workflow
       input Zoi.object(%{value: Zoi.integer()})

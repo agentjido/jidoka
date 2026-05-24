@@ -1,26 +1,5 @@
 defmodule Jidoka.Tool do
-  @moduledoc """
-  Thin wrapper around `Jido.Action` for defining Jidoka-friendly tools.
-
-  The goal is to keep the tool authoring surface small while still producing
-  plain Jido actions underneath.
-
-  Jidoka tools are Zoi-first and Zoi-only for schema authoring. If a tool defines
-  `schema` or `output_schema`, they must resolve to Zoi schemas. Legacy
-  NimbleOptions schemas and raw JSON Schema maps are not supported through the
-  Jidoka surface.
-
-      defmodule MyApp.Tools.AddNumbers do
-        use Jidoka.Tool,
-          description: "Adds two integers together.",
-          schema: Zoi.object(%{a: Zoi.integer(), b: Zoi.integer()})
-
-        @impl true
-        def run(%{a: a, b: b}, _context) do
-          {:ok, %{sum: a + b}}
-        end
-      end
-  """
+  @moduledoc false
 
   @required_functions [
     {:run, 2},
@@ -53,7 +32,7 @@ defmodule Jidoka.Tool do
 
     defaults = [
       name: module_name,
-      description: "Jidoka tool #{module_name}"
+      description: "Jidoka action #{module_name}"
     ]
 
     quote location: :keep do
@@ -83,10 +62,10 @@ defmodule Jidoka.Tool do
   def validate_action_module(module) when is_atom(module) do
     cond do
       match?({:error, _}, Code.ensure_compiled(module)) ->
-        {:error, "tool #{inspect(module)} could not be loaded"}
+        {:error, "action #{inspect(module)} could not be loaded"}
 
       missing = missing_functions(module) ->
-        {:error, "tool #{inspect(module)} is not a valid action-backed tool; missing #{Enum.join(missing, ", ")}"}
+        {:error, "action #{inspect(module)} is not a valid action-backed module; missing #{Enum.join(missing, ", ")}"}
 
       true ->
         validate_tool_name(module)
@@ -94,7 +73,7 @@ defmodule Jidoka.Tool do
   end
 
   def validate_action_module(other),
-    do: {:error, "tool entries must be modules, got: #{inspect(other)}"}
+    do: {:error, "action entries must be modules, got: #{inspect(other)}"}
 
   @doc """
   Validates that a module behaves like a Jidoka tool.
@@ -107,8 +86,8 @@ defmodule Jidoka.Tool do
       :ok
     else
       {:error, message} ->
-        if String.contains?(message, "valid action-backed tool") do
-          {:error, String.replace(message, "valid action-backed tool", "valid Jidoka tool")}
+        if String.contains?(message, "valid action-backed module") do
+          {:error, String.replace(message, "valid action-backed module", "valid Jidoka action")}
         else
           {:error, message}
         end
@@ -116,7 +95,7 @@ defmodule Jidoka.Tool do
   end
 
   def validate_tool_module(other),
-    do: {:error, "tool entries must be modules, got: #{inspect(other)}"}
+    do: {:error, "action entries must be modules, got: #{inspect(other)}"}
 
   @doc """
   Returns the published name for a validated action-backed tool module.
@@ -133,7 +112,7 @@ defmodule Jidoka.Tool do
         {:error, reason}
 
       _ ->
-        {:error, "tool #{inspect(module)} must publish a non-empty string name"}
+        {:error, "action #{inspect(module)} must publish a non-empty string name"}
     end
   end
 
@@ -154,7 +133,7 @@ defmodule Jidoka.Tool do
         if Enum.uniq(names) == names do
           {:ok, names}
         else
-          {:error, "tool names must be unique within a Jidoka agent"}
+          {:error, "action names must be unique within a Jidoka agent"}
         end
 
       other ->
@@ -177,7 +156,7 @@ defmodule Jidoka.Tool do
         {:error, reason}
 
       _ ->
-        {:error, "tool #{inspect(module)} must publish a non-empty string name"}
+        {:error, "action #{inspect(module)} must publish a non-empty string name"}
     end
   end
 
@@ -198,7 +177,7 @@ defmodule Jidoka.Tool do
         if Enum.uniq(names) == names do
           {:ok, names}
         else
-          {:error, "tool names must be unique within a Jidoka agent"}
+          {:error, "action names must be unique within a Jidoka agent"}
         end
 
       other ->
@@ -280,17 +259,17 @@ defmodule Jidoka.Tool do
     case module.name() do
       name when is_binary(name) ->
         if String.trim(name) == "" do
-          {:error, "tool #{inspect(module)} must publish a non-empty string name"}
+          {:error, "action #{inspect(module)} must publish a non-empty string name"}
         else
           :ok
         end
 
       other ->
-        {:error, "tool #{inspect(module)} must publish a string name via name/0, got: #{inspect(other)}"}
+        {:error, "action #{inspect(module)} must publish a string name via name/0, got: #{inspect(other)}"}
     end
   rescue
     error ->
-      {:error, "tool #{inspect(module)} failed while reading name/0: #{Exception.message(error)}"}
+      {:error, "action #{inspect(module)} failed while reading name/0: #{Exception.message(error)}"}
   end
 
   defp validate_tool_schema(module, function_name) do
@@ -305,11 +284,11 @@ defmodule Jidoka.Tool do
 
       true ->
         {:error,
-         "tool #{inspect(module)} must use a Zoi schema for #{function_name}/0; NimbleOptions and raw JSON Schema maps are not supported in Jidoka.Tool"}
+         "action #{inspect(module)} must use a Zoi schema for #{function_name}/0; NimbleOptions and raw JSON Schema maps are not supported in Jidoka.Action"}
     end
   rescue
     error ->
-      {:error, "tool #{inspect(module)} failed while reading #{function_name}/0: #{Exception.message(error)}"}
+      {:error, "action #{inspect(module)} failed while reading #{function_name}/0: #{Exception.message(error)}"}
   end
 
   defp zoi_schema?(schema) do

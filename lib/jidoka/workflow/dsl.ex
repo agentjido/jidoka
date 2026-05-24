@@ -42,7 +42,7 @@ defmodule Jidoka.Workflow.Dsl do
       module: [
         type: :atom,
         required: true,
-        doc: "A `Jidoka.Tool` or generic Jido Action-backed module."
+        doc: "A `Jidoka.Action` or generic Jido Action-backed module."
       ],
       input: [
         type: :any,

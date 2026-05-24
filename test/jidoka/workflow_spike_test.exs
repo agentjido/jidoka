@@ -13,7 +13,7 @@ defmodule Jidoka.WorkflowSpikeTest do
   alias Runic.Workflow.Invokable
 
   describe "direct Runic execution" do
-    test "runs a Jidoka.Tool-backed pipeline end-to-end" do
+    test "runs a Jidoka.Action-backed pipeline end-to-end" do
       productions =
         WorkflowSpike.pipeline_workflow()
         |> Workflow.react_until_satisfied(%{value: 5})
@@ -32,7 +32,7 @@ defmodule Jidoka.WorkflowSpikeTest do
   end
 
   describe "Jido.Runic.Strategy command loop" do
-    test "runs a Jidoka.Tool-backed pipeline through ExecuteRunnable directives" do
+    test "runs a Jidoka.Action-backed pipeline through ExecuteRunnable directives" do
       agent = make_agent(WorkflowSpike.pipeline_workflow())
 
       {agent, directives} = feed(agent, %{value: 5})

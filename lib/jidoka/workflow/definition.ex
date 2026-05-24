@@ -226,7 +226,7 @@ defmodule Jidoka.Workflow.Definition do
           message,
           [:steps, step.name, :tool],
           step.module,
-          "Use a module defined with `use Jidoka.Tool` or any valid Jido Action-backed module."
+          "Use a module defined with `use Jidoka.Action` or any valid Jido Action-backed module."
         )
     end
   end

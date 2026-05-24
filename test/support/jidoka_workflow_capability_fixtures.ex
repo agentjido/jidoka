@@ -1,7 +1,7 @@
 defmodule JidokaTest.WorkflowCapability.AddOne do
   @moduledoc false
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "workflow_capability_add_one",
     description: "Adds one to a workflow value.",
     schema: Zoi.object(%{value: Zoi.integer()})
@@ -13,7 +13,7 @@ end
 defmodule JidokaTest.WorkflowCapability.DoubleValue do
   @moduledoc false
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "workflow_capability_double_value",
     description: "Doubles a workflow value.",
     schema: Zoi.object(%{value: Zoi.integer()})
@@ -25,7 +25,7 @@ end
 defmodule JidokaTest.WorkflowCapability.Fail do
   @moduledoc false
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "workflow_capability_fail",
     description: "Fails with a caller-provided reason.",
     schema: Zoi.object(%{reason: Zoi.string()})
@@ -100,7 +100,7 @@ end
 defmodule JidokaTest.WorkflowCapability.DuplicateNameTool do
   @moduledoc false
 
-  use Jidoka.Tool,
+  use Jidoka.Action,
     name: "workflow_capability_math",
     description: "Conflicts with the default workflow capability name.",
     schema: Zoi.object(%{value: Zoi.integer()})

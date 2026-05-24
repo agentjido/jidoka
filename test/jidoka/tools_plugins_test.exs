@@ -3,13 +3,15 @@ defmodule JidokaTest.ToolsPluginsTest do
 
   alias JidokaTest.{AddNumbers, MathPlugin, MultiplyNumbers, PluginAgent, ToolAgent}
 
-  test "wraps Jido.Action with Jidoka.Tool defaults" do
+  test "wraps Jido.Action with Jidoka.Action defaults" do
     assert AddNumbers.name() == "add_numbers"
     assert AddNumbers.description() == "Adds two integers together."
     assert %{name: "add_numbers", parameters_schema: %{}} = AddNumbers.to_tool()
+    assert Jidoka.Action.name(AddNumbers) == {:ok, "add_numbers"}
+    assert Jidoka.Action.names([AddNumbers, MultiplyNumbers]) == {:ok, ["add_numbers", "multiply_numbers"]}
   end
 
-  test "exposes configured tool modules and names" do
+  test "exposes configured action modules as provider tools" do
     assert ToolAgent.tools() == [AddNumbers]
     assert ToolAgent.tool_names() == ["add_numbers"]
   end
@@ -25,7 +27,7 @@ defmodule JidokaTest.ToolsPluginsTest do
     assert PluginAgent.plugin_names() == ["math_plugin"]
   end
 
-  test "merges plugin actions into the agent tool registry" do
+  test "merges plugin actions into the provider tool registry" do
     assert PluginAgent.tools() == [MultiplyNumbers]
     assert PluginAgent.tool_names() == ["multiply_numbers"]
   end

@@ -19,7 +19,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     %Spark.Dsl.Entity{
       name: :action,
       describe: """
-      Register a deterministic action/tool module for this agent.
+      Register a deterministic action module for this agent.
       """,
       target: Tool,
       args: [:module],
@@ -27,7 +27,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
         module: [
           type: :atom,
           required: true,
-          doc: "A module defined with `use Jidoka.Tool` or a compatible Jido action module."
+          doc: "A module defined with `use Jidoka.Action` or a compatible Jido action module."
         ]
       ]
     }
@@ -38,7 +38,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     %Spark.Dsl.Entity{
       name: :ash_resource,
       describe: """
-      Register all generated AshJido actions for an Ash resource as agent tools.
+      Register all generated AshJido actions for an Ash resource.
       """,
       target: AshResource,
       args: [:resource],
@@ -238,7 +238,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     %Spark.Dsl.Entity{
       name: :workflow,
       describe: """
-      Register a deterministic Jidoka workflow as a tool-like agent capability.
+      Register a deterministic Jidoka workflow as a provider-visible agent capability.
       """,
       target: Workflow,
       args: [:workflow],

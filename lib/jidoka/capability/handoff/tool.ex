@@ -32,7 +32,7 @@ defmodule Jidoka.Handoff.Tool do
   def tool_module_ast(tool_module, %{name: name, description: description} = handoff) do
     quote location: :keep do
       defmodule unquote(tool_module) do
-        use Jidoka.Tool,
+        use Jidoka.Action,
           name: unquote(name),
           description: unquote(description),
           schema: unquote(Macro.escape(Jidoka.Handoff.Tool.input_schema())),

@@ -381,8 +381,8 @@ defmodule JidokaTest.DslValidationTest do
     """)
   end
 
-  test "rejects duplicate action names across tool-like sources" do
-    assert_dsl_error(~r/duplicate tool names.*multiply_numbers/s, """
+  test "rejects duplicate action names across operation sources" do
+    assert_dsl_error(~r/duplicate operation names.*multiply_numbers/s, """
     agent :duplicate_capability_agent do
       instructions "This should fail."
     end
@@ -440,7 +440,7 @@ defmodule JidokaTest.DslValidationTest do
   end
 
   test "rejects invalid action modules" do
-    assert_dsl_error(~r/not a valid Jidoka tool/, """
+    assert_dsl_error(~r/not a valid Jidoka action/, """
     agent :invalid_tool_agent do
       instructions "This should fail."
     end
@@ -489,11 +489,11 @@ defmodule JidokaTest.DslValidationTest do
     assert error.message =~ "not a valid Jidoka guardrail"
   end
 
-  test "rejects NimbleOptions schemas in Jidoka.Tool" do
+  test "rejects NimbleOptions schemas in Jidoka.Action" do
     assert_raise CompileError, ~r/must use a Zoi schema for schema\/0/, fn ->
       compile_source("""
       defmodule JidokaTest.NimbleSchemaTool do
-        use Jidoka.Tool,
+        use Jidoka.Action,
           schema: [a: [type: :integer, required: true]]
 
         @impl true
@@ -503,11 +503,11 @@ defmodule JidokaTest.DslValidationTest do
     end
   end
 
-  test "rejects raw JSON Schema maps in Jidoka.Tool" do
+  test "rejects raw JSON Schema maps in Jidoka.Action" do
     assert_raise CompileError, ~r/must use a Zoi schema for schema\/0/, fn ->
       compile_source("""
       defmodule JidokaTest.JsonSchemaTool do
-        use Jidoka.Tool,
+        use Jidoka.Action,
           schema: %{"type" => "object", "properties" => %{"a" => %{"type" => "integer"}}}
 
         @impl true

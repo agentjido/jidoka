@@ -69,7 +69,7 @@ defmodule MyApp.SupportAgent do
 
   tools do
     # Actions are deterministic operations the agent can call.
-    action MyApp.Tools.LoadTicket
+    action MyApp.Actions.LoadTicket
   end
 
   controls do
@@ -94,7 +94,7 @@ Then call it with session context:
 That example introduces the core growth path:
 
 - `context` is caller-provided runtime data
-- `tools` are deterministic operations the agent may call
+- `actions` are deterministic operations the agent may call
 - `controls` are policy boundaries around input, operations, and results
 - human-in-the-loop flows are controls that pause risky operations for approval
 
@@ -215,9 +215,9 @@ and production telemetry tell the same story.
   and views.
 - **Typed results:** validate final results with Zoi when the app needs
   structured data.
-- **Actions / tools:** expose deterministic operations the agent may call.
+- **Actions:** expose deterministic operations the agent may call.
 - **Controls:** add policy at input, operation, and result boundaries.
-- **Human-in-the-loop:** pause risky inputs, tool calls, or results for manual
+- **Human-in-the-loop:** pause risky inputs, operations, or results for manual
   approval through controls and interrupts.
 - **Credential brokering:** planned support for authenticated tools to use
   credentials without exposing raw secrets to the model.
@@ -239,7 +239,7 @@ and production telemetry tell the same story.
 - **Durability:** graduate to durable runtime storage, hibernate/thaw,
   checkpoints, and thread journals when sessions need to survive process
   restarts.
-- **Testing:** verify contracts, tools, results, workflows, and live behavior.
+- **Testing:** verify contracts, actions, results, workflows, and live behavior.
 
 ## Install
 

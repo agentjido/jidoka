@@ -233,7 +233,7 @@ defmodule JidokaTest.HandoffsTest do
 
     assert reason =~ "handoff target must be :auto"
 
-    assert_raise Spark.Error.DslError, ~r/duplicate tool names.*add_numbers/s, fn ->
+    assert_raise Spark.Error.DslError, ~r/duplicate operation names.*add_numbers/s, fn ->
       Code.compile_string("""
       defmodule JidokaTest.DuplicateHandoffToolAgent do
         use Jidoka.Agent
