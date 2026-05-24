@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.1",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Finalized the V3 controls syntax at the DSL entity layer: controls now compile into InputControl, OperationControl, and ResultControl entities with a  argument, and operation controls support the simple  match syntax.",
+      "timestamp": "2026-05-24T23:03:03Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E5: Design final V3 controls do ... end syntax",
   "type": "task",
-  "updated_at": "2026-05-24T22:59:20Z"
+  "updated_at": "2026-05-24T23:03:03Z"
 }
