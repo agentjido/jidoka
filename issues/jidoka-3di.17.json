@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:44Z",
+  "description": "Purpose: make the persistence boundary honest and useful.\n\nDone when:\n- users understand when sessions stop being enough\n- the graduation path is tested or explicitly documented as a runtime concern\n- no public API implies session persistence unless it exists\n",
+  "id": "jidoka-3di.17",
+  "labels": [],
+  "parent": "jidoka-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "V3 E16: Durability and graduation",
+  "type": "epic",
+  "updated_at": "2026-05-24T20:35:44Z"
+}
