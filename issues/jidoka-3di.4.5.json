@@ -7,9 +7,15 @@
   "id": "jidoka-3di.4.5",
   "labels": [],
   "parent": "jidoka-3di.4",
+  "comments": [
+    {
+      "text": "Decided public DSL/docs should say result while retaining Jidoka.Output as the implementation boundary for raw provider/model output. Updated docs and private codegen naming to reinforce that split.",
+      "timestamp": "2026-05-24T22:24:29Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E3: Decide whether public docs should say result while internal modules still use o...",
   "type": "task",
-  "updated_at": "2026-05-24T22:21:36Z"
+  "updated_at": "2026-05-24T22:24:29Z"
 }
