@@ -4,7 +4,9 @@
     "jidoka-3di.5",
     "jidoka-3di.6"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.16"
+  ],
   "created": "2026-05-24T20:35:43Z",
   "description": "Purpose: finalize delegation and ownership transfer.\n\nDone when:\n- delegation and ownership transfer are separate concepts in code and docs\n- handoff routing works cleanly with sessions\n",
   "id": "jidoka-3di.14",
