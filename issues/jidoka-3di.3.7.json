@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.7",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Added provider-free multi-turn session coverage. The test verifies repeated Jidoka.chat/3 calls through one session reuse the same runtime agent, preserve merged session/per-turn context, produce distinct request IDs, retain both request records, and expose traces for each turn.",
+      "timestamp": "2026-05-24T22:02:09Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Add tests for multi-turn behavior and session reuse",
   "type": "task",
-  "updated_at": "2026-05-24T21:59:57Z"
+  "updated_at": "2026-05-24T22:02:09Z"
 }
