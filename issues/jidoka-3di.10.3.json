@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:41Z",
+  "description": "Parent epic: V3 E9: Memory and compaction\n\nSource task 3/6 from MILESTONE_V3.md:\n\n- Decide whether memory configuration lives under `agent` in V3 and which manual\n  memory APIs belong in the public surface.\n\nEpic closure criteria:\n- memory and compaction have separate, crisp docs and tests\n- compaction does not mutate the canonical transcript\n",
+  "id": "jidoka-3di.10.3",
+  "labels": [],
+  "parent": "jidoka-3di.10",
+  "priority": 2,
+  "status": "open",
+  "title": "E9: Decide whether memory configuration lives under agent in V3 and which manual me...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:41Z"
+}
