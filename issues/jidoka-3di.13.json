@@ -4,7 +4,8 @@
     "jidoka-3di.5"
   ],
   "blocks": [
-    "jidoka-3di.16"
+    "jidoka-3di.16",
+    "jidoka-3di.18"
   ],
   "created": "2026-05-24T20:35:42Z",
   "description": "Purpose: finalize deterministic multi-step processes.\n\nDone when:\n- workflows are deterministic and testable without model calls\n- workflow-as-action execution is documented and verified\n",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "V3 E12: Workflows",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:48Z"
+  "updated_at": "2026-05-24T20:35:49Z"
 }
