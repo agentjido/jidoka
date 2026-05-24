@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.3",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Satisfied by the controls/lifecycle split: Jidoka.Guardrail is hidden as an implementation detail, while Jidoka.Hook remains documented only for lifecycle callbacks. Policy decisions now point to Jidoka.Control.",
+      "timestamp": "2026-05-24T23:19:17Z"
+    }
+  ],
   "priority": 2,
   "status": "open",
   "title": "E5: Delete hook-like concepts unless they have a clear lifecycle purpose in the V3...",
   "type": "task",
-  "updated_at": "2026-05-24T20:35:40Z"
+  "updated_at": "2026-05-24T23:19:17Z"
 }
