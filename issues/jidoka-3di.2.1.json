@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.1",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Implemented the V3 primary agent entrypoint as a top-level Spark entity: agent :id do ... end. Moved model/instructions/character/context/output into the agent contract for the compiler path, migrated deterministic fixtures/tests to the new shape, and added a compile-time validation test for the new entrypoint. Verification: mix format --check-formatted, mix compile --warnings-as-errors, mix test.",
+      "timestamp": "2026-05-24T20:59:59Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Implement agent :id do ... end as the primary entrypoint",
   "type": "task",
-  "updated_at": "2026-05-24T20:48:49Z"
+  "updated_at": "2026-05-24T20:59:59Z"
 }
