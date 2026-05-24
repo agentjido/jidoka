@@ -46,6 +46,25 @@ defmodule JidokaTest.DslValidationTest do
     assert module.tool_names() == ["add_numbers"]
   end
 
+  test "collapses guardrail-facing policy into controls" do
+    module =
+      compile_agent("""
+      agent :controlled_agent do
+        instructions "Apply controls."
+      end
+
+      controls do
+        input JidokaTest.SafePromptGuardrail
+        operation JidokaTest.ApproveLargeMathToolGuardrail
+        result JidokaTest.SafeReplyGuardrail
+      end
+      """)
+
+    assert module.input_guardrails() == [JidokaTest.SafePromptGuardrail]
+    assert module.tool_guardrails() == [JidokaTest.ApproveLargeMathToolGuardrail]
+    assert module.output_guardrails() == [JidokaTest.SafeReplyGuardrail]
+  end
+
   test "rejects legacy top-level sections" do
     for {section, body} <- [
           {"memory", "mode :conversation"},

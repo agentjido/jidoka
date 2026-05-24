@@ -102,13 +102,8 @@ defmodule Jidoka.Agent.Definition do
       |> LifecycleConfig.resolve_hooks!(owner_module)
 
     configured_guardrails =
-      owner_module
-      |> section_entities(
-        [:lifecycle],
-        &(match?(%Jidoka.Agent.Dsl.InputGuardrail{}, &1) or
-            match?(%Jidoka.Agent.Dsl.OutputGuardrail{}, &1) or
-            match?(%Jidoka.Agent.Dsl.ToolGuardrail{}, &1))
-      )
+      (guardrail_entities(owner_module, [:lifecycle]) ++
+         guardrail_entities(owner_module, [:controls]))
       |> LifecycleConfig.resolve_guardrails!(owner_module)
 
     direct_tool_modules =
@@ -322,5 +317,15 @@ defmodule Jidoka.Agent.Definition do
     owner_module
     |> Spark.Dsl.Extension.get_entities(path)
     |> Enum.filter(predicate)
+  end
+
+  defp guardrail_entities(owner_module, path) do
+    section_entities(
+      owner_module,
+      path,
+      &(match?(%Jidoka.Agent.Dsl.InputGuardrail{}, &1) or
+          match?(%Jidoka.Agent.Dsl.OutputGuardrail{}, &1) or
+          match?(%Jidoka.Agent.Dsl.ToolGuardrail{}, &1))
+    )
   end
 end
