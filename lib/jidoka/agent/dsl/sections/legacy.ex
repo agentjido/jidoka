@@ -3,17 +3,6 @@ defmodule Jidoka.Agent.Dsl.Sections.Legacy do
 
   alias Jidoka.Agent.Dsl.Sections.{Capabilities, Lifecycle}
 
-  @spec tools_section() :: Spark.Dsl.Section.t()
-  def tools_section do
-    %Spark.Dsl.Section{
-      name: :tools,
-      describe: """
-      Legacy tool section. Use capabilities instead.
-      """,
-      entities: [Capabilities.tool_entity(), Capabilities.ash_resource_entity(), Capabilities.mcp_tools_entity()]
-    }
-  end
-
   @spec skills_section() :: Spark.Dsl.Section.t()
   def skills_section do
     %Spark.Dsl.Section{

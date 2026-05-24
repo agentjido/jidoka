@@ -51,6 +51,7 @@ defmodule Jidoka.Agent.Definition do
     configured_compaction = CompactionConfig.resolve!(owner_module)
 
     capability_entities = Spark.Dsl.Extension.get_entities(owner_module, [:capabilities])
+    tool_entities = Spark.Dsl.Extension.get_entities(owner_module, [:tools])
 
     configured_subagents =
       owner_module
@@ -111,7 +112,7 @@ defmodule Jidoka.Agent.Definition do
       |> LifecycleConfig.resolve_guardrails!(owner_module)
 
     direct_tool_modules =
-      capability_entities
+      (capability_entities ++ tool_entities)
       |> Enum.filter(&match?(%Jidoka.Agent.Dsl.Tool{}, &1))
       |> Enum.map(& &1.module)
 

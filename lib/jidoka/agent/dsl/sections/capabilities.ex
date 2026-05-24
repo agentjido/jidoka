@@ -33,6 +33,25 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     }
   end
 
+  @spec action_entity() :: Spark.Dsl.Entity.t()
+  def action_entity do
+    %Spark.Dsl.Entity{
+      name: :action,
+      describe: """
+      Register a deterministic action/tool module for this agent.
+      """,
+      target: Tool,
+      args: [:module],
+      schema: [
+        module: [
+          type: :atom,
+          required: true,
+          doc: "A module defined with `use Jidoka.Tool` or a compatible Jido action module."
+        ]
+      ]
+    }
+  end
+
   @spec ash_resource_entity() :: Spark.Dsl.Entity.t()
   def ash_resource_entity do
     %Spark.Dsl.Entity{

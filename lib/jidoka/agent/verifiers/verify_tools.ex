@@ -5,8 +5,8 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
 
   @impl true
   def verify(dsl_state) do
-    dsl_state
-    |> Spark.Dsl.Verifier.get_entities([:capabilities])
+    (Spark.Dsl.Verifier.get_entities(dsl_state, [:capabilities]) ++
+       Spark.Dsl.Verifier.get_entities(dsl_state, [:tools]))
     |> Enum.reduce_while({:ok, MapSet.new()}, fn
       %Jidoka.Agent.Dsl.Tool{} = tool_ref, {:ok, seen_names} ->
         module = tool_ref.module

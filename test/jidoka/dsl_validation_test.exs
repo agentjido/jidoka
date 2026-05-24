@@ -30,10 +30,25 @@ defmodule JidokaTest.DslValidationTest do
     assert module.context_schema() != nil
   end
 
+  test "keeps deterministic actions outside the agent block" do
+    module =
+      compile_agent("""
+      agent :action_agent do
+        instructions "Use deterministic actions when useful."
+      end
+
+      tools do
+        action JidokaTest.AddNumbers
+      end
+      """)
+
+    assert module.tools() == [JidokaTest.AddNumbers]
+    assert module.tool_names() == ["add_numbers"]
+  end
+
   test "rejects legacy top-level sections" do
     for {section, body} <- [
           {"memory", "mode :conversation"},
-          {"tools", "tool JidokaTest.AddNumbers"},
           {"skills", "skill \"math-discipline\""},
           {"plugins", "plugin JidokaTest.MathPlugin"},
           {"subagents", "subagent JidokaTest.ResearchSpecialist"},

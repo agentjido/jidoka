@@ -4,7 +4,6 @@ defmodule Jidoka.Agent.Definition.Legacy do
   @legacy_sections [
     defaults: "Move `model`, `instructions`, and `character` inside `agent :id do ... end`.",
     memory: "Move `memory do ... end` inside `lifecycle do ... end`.",
-    tools: "Move `tool`, `ash_resource`, and `mcp_tools` declarations inside `capabilities do ... end`.",
     skills: "Move `skill` and `load_path` declarations inside `capabilities do ... end`.",
     plugins: "Move `plugin` declarations inside `capabilities do ... end`.",
     subagents: "Move `subagent` declarations inside `capabilities do ... end`.",
