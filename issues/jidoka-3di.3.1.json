@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.1",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Added an explicit generated-helper surface test covering identity, runtime module, result/controls helpers, and absence of removed output/guardrail helper aliases. Existing tests cover model aliases and instruction resolution. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:48:46Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Verify agent identity, model aliases, instructions, and generated functions",
   "type": "task",
-  "updated_at": "2026-05-24T21:47:19Z"
+  "updated_at": "2026-05-24T21:48:46Z"
 }
