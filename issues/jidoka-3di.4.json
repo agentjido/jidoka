@@ -3,7 +3,9 @@
   "blocked_by": [
     "jidoka-3di.3"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.5"
+  ],
   "created": "2026-05-24T20:35:39Z",
   "description": "Purpose: make runtime input and application-facing output feel obvious.\n\nDone when:\n- new users can pass a naked map first and add schema later\n- typed results are stable enough for app code\n- context/result docs avoid conflating state, memory, and output\n",
   "id": "jidoka-3di.4",

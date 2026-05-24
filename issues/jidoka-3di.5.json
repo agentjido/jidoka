@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.4"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:39Z",
   "description": "Purpose: finalize deterministic operations as the agent's capability surface.\n\nDone when:\n- the public DSL reads as actions/capabilities, not plumbing\n- all operation surfaces have consistent validation and inspection\n- tests cover duplicate/invalid operation registration\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E4: Actions and tools",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:39Z"
+  "updated_at": "2026-05-24T20:35:47Z"
 }
