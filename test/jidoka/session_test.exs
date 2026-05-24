@@ -133,6 +133,66 @@ defmodule JidokaTest.SessionTest do
     end
   end
 
+  test "session chat reuses the runtime agent across repeated turns" do
+    session = session!("multi-turn", context: %{tenant: "acme"})
+    agent_id = session.agent_id
+    test_pid = self()
+
+    guardrail = fn input ->
+      send(test_pid, {:session_turn, input.message, input.context, input.agent.id, input.server, input.request_id})
+      {:interrupt, %{kind: :approval, message: "Stopped #{input.message}", data: %{}}}
+    end
+
+    try do
+      assert Session.whereis(session) == nil
+
+      assert {:interrupt, %Jidoka.Interrupt{message: "Stopped first turn"}} =
+               Jidoka.chat(session, "first turn", context: %{turn: "one"}, guardrails: [input: guardrail])
+
+      assert_receive {:session_turn, "first turn", first_context, ^agent_id, first_pid, first_request_id}
+      assert is_pid(first_pid)
+      assert Session.whereis(session) == first_pid
+
+      assert Jidoka.Context.strip_internal(first_context) == %{
+               session: session.id,
+               tenant: "acme",
+               turn: "one"
+             }
+
+      assert {:ok, first_summary} = Jidoka.inspect_request(session)
+      assert first_summary.request_id == first_request_id
+      assert first_summary.input_message == "first turn"
+
+      assert {:interrupt, %Jidoka.Interrupt{message: "Stopped second turn"}} =
+               Jidoka.chat(session, "second turn", context: %{turn: "two"}, guardrails: [input: guardrail])
+
+      assert_receive {:session_turn, "second turn", second_context, ^agent_id, second_pid, second_request_id}
+      assert second_pid == first_pid
+      refute second_request_id == first_request_id
+
+      assert Jidoka.Context.strip_internal(second_context) == %{
+               session: session.id,
+               tenant: "acme",
+               turn: "two"
+             }
+
+      assert {:ok, second_summary} = Jidoka.inspect_request(session)
+      assert second_summary.request_id == second_request_id
+      assert second_summary.input_message == "second turn"
+
+      assert {:ok, first_trace} = Jidoka.inspect_trace(session, first_request_id)
+      assert {:ok, second_trace} = Jidoka.inspect_trace(session, second_request_id)
+      assert first_trace.agent_id == session.agent_id
+      assert second_trace.agent_id == session.agent_id
+
+      assert {:ok, %{agent: agent}} = Jido.AgentServer.state(first_pid)
+      assert Map.has_key?(agent.state.requests, first_request_id)
+      assert Map.has_key?(agent.state.requests, second_request_id)
+    after
+      stop_session_agent(session)
+    end
+  end
+
   test "start_chat_request accepts sessions for async turns" do
     session = session!("async-chat")
 
