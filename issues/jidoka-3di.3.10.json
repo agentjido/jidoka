@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.10",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Reviewed and tightened process ownership docs. README now separates module-target convenience, direct supervision, session-scoped runtime addressing, and app-owned runtime graduation. Public docs mention when to use module, PID/id, or session targets. Added the pipe-friendly Jidoka.session/3 helper used by the README and covered it in tests.",
+      "timestamp": "2026-05-24T22:12:35Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Review process ownership docs for direct supervision, session-scoped runtime, a...",
   "type": "task",
-  "updated_at": "2026-05-24T22:09:24Z"
+  "updated_at": "2026-05-24T22:12:35Z"
 }
