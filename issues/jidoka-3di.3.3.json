@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.3",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Implemented module targets for Jidoka.chat/3 by starting or reusing the generated runtime under the public agent id. Added provider-free coverage for module, pid, id, and session targets. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:54:03Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Verify Jidoka.chat/3 works for module, pid, id, and session targets",
   "type": "task",
-  "updated_at": "2026-05-24T21:50:44Z"
+  "updated_at": "2026-05-24T21:54:03Z"
 }
