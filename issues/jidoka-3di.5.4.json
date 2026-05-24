@@ -7,9 +7,15 @@
   "id": "jidoka-3di.5.4",
   "labels": [],
   "parent": "jidoka-3di.5",
+  "comments": [
+    {
+      "text": "Added a consolidated operation surface test covering direct actions, plugins, skills, web tools, Ash resources, workflow capabilities, imported specs, and MCP sync through the same provider-visible operation model.",
+      "timestamp": "2026-05-24T22:49:01Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E4: Verify direct actions, workflows-as-tools, web tools, MCP tools, skills, plugin...",
   "type": "task",
-  "updated_at": "2026-05-24T22:46:36Z"
+  "updated_at": "2026-05-24T22:49:01Z"
 }
