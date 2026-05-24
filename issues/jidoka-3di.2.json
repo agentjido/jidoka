@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:38Z",
+  "description": "Purpose: make the V3 DSL canonical before validating features.\n\nDone when:\n- the simplified DSL is the only documented DSL\n- pre-V3 DSL shapes are removed\n- DSL tests cover success, failure, and error-message quality\n",
+  "id": "jidoka-3di.2",
+  "labels": [],
+  "parent": "jidoka-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "V3 E1: Simplified DSL foundation",
+  "type": "epic",
+  "updated_at": "2026-05-24T20:35:38Z"
+}
