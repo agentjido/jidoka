@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.5"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:43Z",
   "description": "Purpose: finalize delegation and ownership transfer.\n\nDone when:\n- delegation and ownership transfer are separate concepts in code and docs\n- handoff routing works cleanly with sessions\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E13: Subagents and handoffs",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:43Z"
+  "updated_at": "2026-05-24T20:35:48Z"
 }
