@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.4",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Settled the V3 code-facing nouns for this slice: agent/context/action/result are now reflected in the DSL. Added result schema syntax that maps to the existing structured-output runtime, generated result/result_schema helpers, and preserved internal output keys for runtime continuity. Verification: mix format --check-formatted, mix compile --warnings-as-errors, focused DSL/output tests, mix test.",
+      "timestamp": "2026-05-24T21:11:47Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Decide final nouns for agent, context, result, actions, controls, memory, compa...",
   "type": "task",
-  "updated_at": "2026-05-24T21:07:08Z"
+  "updated_at": "2026-05-24T21:11:47Z"
 }
