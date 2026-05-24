@@ -86,7 +86,7 @@ defmodule JidokaTest.HooksTest do
       assert {:error, %Jidoka.Error.ExecutionError{} = error} =
                Jidoka.chat(pid, "hello", hooks: [before_turn: bad_hook])
 
-      assert error.message == "Hook before_turn failed."
+      assert error.message == "Lifecycle hook before_turn failed."
       assert error.details.stage == :before_turn
       assert error.details.cause =~ "before_turn hook must return {:ok, map_or_keyword_overrides}"
     after

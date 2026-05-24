@@ -45,7 +45,9 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
     assert error.details.operation == :chat
     assert error.details.reason == :not_found
     assert error.details.cause == :not_found
-    assert Jidoka.format_error(error) == "Jidoka agent could not be found."
+
+    assert Jidoka.format_error(error) ==
+             "Jidoka agent could not be found. Start it first, or pass a compiled agent module/session."
   end
 
   test "Jidoka.chat wraps stopped runtime pids" do
@@ -60,7 +62,9 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
     assert error.details.reason == :not_found
     assert error.details.cause == :not_found
     assert error.details.target == pid
-    assert Jidoka.format_error(error) == "Jidoka agent could not be found."
+
+    assert Jidoka.format_error(error) ==
+             "Jidoka agent could not be found. Start it first, or pass a compiled agent module/session."
   end
 
   test "Jidoka.chat validates conversation before routing or server lookup" do
@@ -69,7 +73,7 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
 
     assert error.details.operation == :prepare_chat_opts
     assert error.details.reason == :invalid_conversation
-    assert Jidoka.format_error(error) == "conversation must be a non-empty string."
+    assert Jidoka.format_error(error) == "Invalid conversation: pass `conversation:` as a non-empty string."
   end
 
   test "Jidoka.chat returns beginner-readable invalid context errors" do

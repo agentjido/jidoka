@@ -32,7 +32,7 @@ defmodule JidokaTest.ChatStreamTest do
       assert {:error, %Jidoka.Error.ExecutionError{} = error} =
                ChatStream.await(stream, timeout: 1_000)
 
-      assert error.message == "Guardrail safe_prompt blocked input."
+      assert error.message == "Control safe_prompt blocked input."
 
       assert [%Event{kind: :request_failed, request_id: request_id}] = Enum.to_list(stream)
       assert request_id == request.id

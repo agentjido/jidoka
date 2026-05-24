@@ -32,7 +32,7 @@ defmodule Jidoka.Error.Normalize do
     do: passthrough_or_execution(error, "Jidoka chat failed.", :chat, context)
 
   def chat_error(:not_found, context) do
-    Error.validation_error("Jidoka agent could not be found.",
+    Error.validation_error("Jidoka agent could not be found. Start it first, or pass a compiled agent module/session.",
       field: :agent,
       value: detail(context, :target),
       details: details(context, %{operation: :chat, reason: :not_found, cause: :not_found})
@@ -126,7 +126,7 @@ defmodule Jidoka.Error.Normalize do
   end
 
   def chat_option_error({:invalid_conversation, value}, context) do
-    Error.validation_error("conversation must be a non-empty string.",
+    Error.validation_error("Invalid conversation: pass `conversation:` as a non-empty string.",
       field: :conversation,
       value: value,
       details: details(context, %{operation: :prepare_chat_opts, reason: :invalid_conversation, cause: value})
@@ -396,7 +396,7 @@ defmodule Jidoka.Error.Normalize do
     if jidoka_error?(error) do
       error
     else
-      Error.execution_error("Hook #{stage} failed.",
+      Error.execution_error("Lifecycle hook #{stage} failed.",
         phase: :hook,
         details: details(context, %{operation: :hook, stage: stage, cause: error})
       )
@@ -404,7 +404,7 @@ defmodule Jidoka.Error.Normalize do
   end
 
   def hook_error(stage, reason, context) do
-    Error.execution_error("Hook #{stage} failed.",
+    Error.execution_error("Lifecycle hook #{stage} failed.",
       phase: :hook,
       details: details(context, %{operation: :hook, stage: stage, cause: reason})
     )
@@ -417,7 +417,7 @@ defmodule Jidoka.Error.Normalize do
     if jidoka_error?(error) do
       error
     else
-      Error.execution_error("Guardrail #{label} blocked #{stage}.",
+      Error.execution_error("Control #{label} blocked #{stage}.",
         phase: :guardrail,
         details: details(context, %{operation: :guardrail, stage: stage, label: label, cause: error})
       )
@@ -425,7 +425,7 @@ defmodule Jidoka.Error.Normalize do
   end
 
   def guardrail_error(stage, label, reason, context) do
-    Error.execution_error("Guardrail #{label} blocked #{stage}.",
+    Error.execution_error("Control #{label} blocked #{stage}.",
       phase: :guardrail,
       details: details(context, %{operation: :guardrail, stage: stage, label: label, cause: reason})
     )

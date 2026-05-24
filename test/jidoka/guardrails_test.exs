@@ -149,7 +149,7 @@ defmodule JidokaTest.GuardrailsTest do
     assert {:error, %Jidoka.Error.ExecutionError{} = error} =
              Jido.AI.Request.get_result(updated_agent, "req-guard-1")
 
-    assert error.message == "Guardrail safe_prompt blocked input."
+    assert error.message == "Control safe_prompt blocked input."
     assert error.details.stage == :input
     assert error.details.label == "safe_prompt"
     assert error.details.cause == :unsafe_prompt
@@ -173,7 +173,7 @@ defmodule JidokaTest.GuardrailsTest do
     assert {:error, %Jidoka.Error.ExecutionError{} = error} =
              Jido.AI.Request.get_result(updated_agent, "req-guard-2")
 
-    assert error.message == "Guardrail safe_reply blocked output."
+    assert error.message == "Control safe_reply blocked output."
     assert error.details.stage == :output
     assert error.details.label == "safe_reply"
     assert error.details.cause == :unsafe_reply

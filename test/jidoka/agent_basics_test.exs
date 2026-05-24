@@ -361,7 +361,7 @@ defmodule JidokaTest.AgentBasicsTest do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Jidoka.chat("missing-agent-id", "hello")
 
-    assert error.message == "Jidoka agent could not be found."
+    assert error.message == "Jidoka agent could not be found. Start it first, or pass a compiled agent module/session."
     assert error.details.reason == :not_found
     assert error.details.cause == :not_found
   end
