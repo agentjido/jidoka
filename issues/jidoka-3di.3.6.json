@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.6",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Removed duplicate top-level chat_request/finalize_chat_request facade APIs. Kept chat/3 as the primary turn primitive, with explicit streaming and async request helpers where they serve distinct runtime use cases. Added public API tests to prevent Session.ask/3 and the removed facades from returning.",
+      "timestamp": "2026-05-24T21:59:31Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Remove any duplicate chat/session APIs that do not add value",
   "type": "task",
-  "updated_at": "2026-05-24T21:57:21Z"
+  "updated_at": "2026-05-24T21:59:31Z"
 }
