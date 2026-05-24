@@ -7,9 +7,15 @@
   "id": "jidoka-3di.4.4",
   "labels": [],
   "parent": "jidoka-3di.4",
+  "comments": [
+    {
+      "text": "Added typed result contract coverage for generated result helpers, structured-output instructions, and JSON Schema conversion. Existing runtime finalization tests continue to verify parsed result replacement before result controls run.",
+      "timestamp": "2026-05-24T22:20:37Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E3: Verify typed result DSL and runtime finalization",
   "type": "task",
-  "updated_at": "2026-05-24T22:19:16Z"
+  "updated_at": "2026-05-24T22:20:37Z"
 }
