@@ -4,7 +4,9 @@
     "jidoka-3di.5",
     "jidoka-3di.7"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.18"
+  ],
   "created": "2026-05-24T20:35:43Z",
   "description": "Purpose: finalize external capability integration.\n\nDone when:\n- core integrations are tested and safe by default\n- large catalog support has a clear extension boundary\n- anything that should move to a companion package has an issue or explicit\n  contract\n",
   "id": "jidoka-3di.15",
@@ -14,5 +16,5 @@
   "status": "open",
   "title": "V3 E14: Tool integrations",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:48Z"
+  "updated_at": "2026-05-24T20:35:49Z"
 }
