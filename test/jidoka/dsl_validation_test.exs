@@ -451,6 +451,28 @@ defmodule JidokaTest.DslValidationTest do
     """)
   end
 
+  test "requires actions and workflow capabilities to reference named modules" do
+    assert_dsl_error(~r/action :load_ticket could not be loaded/, """
+    agent :inline_action_agent do
+      instructions "This should fail."
+    end
+
+    tools do
+      action :load_ticket
+    end
+    """)
+
+    assert_dsl_error(~r/workflow :daily_digest is not a valid Jidoka workflow/, """
+    agent :inline_workflow_agent do
+      instructions "This should fail."
+    end
+
+    capabilities do
+      workflow :daily_digest
+    end
+    """)
+  end
+
   test "rejects invalid request hook stages" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Jidoka.Agent.prepare_chat_opts([hooks: [bogus: InjectTenantHook]], nil)

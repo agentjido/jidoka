@@ -54,6 +54,14 @@ Jidoka should keep state-like words narrow:
 - Public DSL/docs should say **result**. Internal modules may retain `Output`
   where they bridge raw model/provider output into that app-facing result.
 
+## Operation Boundary
+
+Jidoka should not support inline action or workflow definitions inside the
+agent DSL for V3. Agents reference named action modules and named workflow
+modules. Workflow modules may define their own ordered steps, but the agent
+contract should stay focused on which operations are available, not on embedding
+their implementation.
+
 ## Topic DAG
 
 ```mermaid
