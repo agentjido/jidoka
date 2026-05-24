@@ -281,14 +281,4 @@ defmodule Jidoka do
   @spec inspect_compaction(Session.t() | pid() | String.t() | Jido.Agent.t(), keyword()) ::
           {:ok, Jidoka.Compaction.t() | nil} | {:error, term()}
   defdelegate inspect_compaction(target, opts \\ []), to: Jidoka.Compaction
-
-  @doc false
-  @spec chat_request(pid() | atom() | {:via, module(), term()}, String.t(), keyword()) ::
-          {:ok, term()} | {:error, term()}
-  defdelegate chat_request(server, message, opts), to: Jidoka.Chat
-
-  @doc false
-  @spec finalize_chat_request(pid() | atom() | {:via, module(), term()}, String.t(), term()) ::
-          {:ok, term()} | {:error, term()}
-  defdelegate finalize_chat_request(server, request_id, fallback_result), to: Jidoka.Chat
 end
