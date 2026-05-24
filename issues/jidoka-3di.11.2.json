@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:42Z",
+  "description": "Parent epic: V3 E10: Streaming and AgentView\n\nSource task 2/6 from MILESTONE_V3.md:\n\n- Verify AgentView default projections for sessions, pids, raw agents, and\n  custom view modules.\n\nEpic closure criteria:\n- streaming and AgentView support a clean UI story\n- projected state matches the canonical runtime state\n",
+  "id": "jidoka-3di.11.2",
+  "labels": [],
+  "parent": "jidoka-3di.11",
+  "priority": 2,
+  "status": "open",
+  "title": "E10: Verify AgentView default projections for sessions, pids, raw agents, and custom...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:42Z"
+}
