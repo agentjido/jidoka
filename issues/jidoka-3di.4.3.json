@@ -7,9 +7,15 @@
   "id": "jidoka-3di.4.3",
   "labels": [],
   "parent": "jidoka-3di.4",
+  "comments": [
+    {
+      "text": "Refined vocabulary for context, agent state, memory, compaction, and result in README, FEATURES, and the Jidoka.Agent moduledoc. Docs now distinguish per-turn app inputs from runtime process state, recalled facts, transcript windowing, and app-facing return values.",
+      "timestamp": "2026-05-24T22:18:40Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E3: Refine the naming distinction between context, agent state, memory, and compaction",
   "type": "task",
-  "updated_at": "2026-05-24T22:17:03Z"
+  "updated_at": "2026-05-24T22:18:40Z"
 }
