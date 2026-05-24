@@ -6,6 +6,7 @@
   "blocks": [
     "jidoka-3di.11",
     "jidoka-3di.12",
+    "jidoka-3di.17",
     "jidoka-3di.4",
     "jidoka-3di.8"
   ],
@@ -18,5 +19,5 @@
   "status": "open",
   "title": "V3 E2: Agents, chat turns, and sessions",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:47Z"
+  "updated_at": "2026-05-24T20:35:48Z"
 }
