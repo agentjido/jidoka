@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T22:27:20Z",
   "created": "2026-05-24T20:35:39Z",
   "description": "Parent epic: V3 E3: Context and typed results\n\nSource task 6/8 from MILESTONE_V3.md:\n\n- Verify output validation, repair, bypass, metadata, and guardrail ordering.\n\nEpic closure criteria:\n- new users can pass a naked map first and add schema later\n- typed results are stable enough for app code\n- context/result docs avoid conflating state, memory, and output\n",
   "id": "jidoka-3di.4.6",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E3: Verify output validation, repair, bypass, metadata, and guardrail ordering",
   "type": "task",
   "updated_at": "2026-05-24T22:27:20Z"
