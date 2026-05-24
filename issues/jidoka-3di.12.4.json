@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:42Z",
+  "description": "Parent epic: V3 E11: Schedules\n\nSource task 4/6 from MILESTONE_V3.md:\n\n- Verify schedules accept sessions as targets.\n\nEpic closure criteria:\n- schedules are clearly first-class Jidoka features\n- tests cover agent targets, session targets, and workflow targets\n",
+  "id": "jidoka-3di.12.4",
+  "labels": [],
+  "parent": "jidoka-3di.12",
+  "priority": 2,
+  "status": "open",
+  "title": "E11: Verify schedules accept sessions as targets",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:42Z"
+}
