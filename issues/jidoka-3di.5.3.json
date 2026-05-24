@@ -7,9 +7,15 @@
   "id": "jidoka-3di.5.3",
   "labels": [],
   "parent": "jidoka-3di.5",
+  "comments": [
+    {
+      "text": "Decided V3 does not support inline action or workflow definitions inside agent modules. Agents reference named action/workflow modules; workflow modules own their own step DSL. Added docs and validation tests for module references.",
+      "timestamp": "2026-05-24T22:46:19Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E4: Decide where inline action/workflow definitions are allowed, if anywhere",
   "type": "task",
-  "updated_at": "2026-05-24T22:43:24Z"
+  "updated_at": "2026-05-24T22:46:19Z"
 }
