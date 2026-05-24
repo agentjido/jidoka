@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.8",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Added edge-case coverage for invalid session ids, invalid per-turn context, stopped runtime pids, and missing agent normalization. Fixed stopped PID chat targets so they return Jidoka not-found validation errors instead of leaking GenServer exits.",
+      "timestamp": "2026-05-24T22:05:36Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Add tests for invalid ids, invalid context, stopped agents, and missing agents",
   "type": "task",
-  "updated_at": "2026-05-24T22:02:58Z"
+  "updated_at": "2026-05-24T22:05:36Z"
 }
