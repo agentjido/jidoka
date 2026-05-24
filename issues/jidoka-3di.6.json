@@ -4,6 +4,7 @@
     "jidoka-3di.5"
   ],
   "blocks": [
+    "jidoka-3di.14",
     "jidoka-3di.7"
   ],
   "created": "2026-05-24T20:35:40Z",
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "V3 E5: Controls and human in the loop",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:47Z"
+  "updated_at": "2026-05-24T20:35:48Z"
 }
