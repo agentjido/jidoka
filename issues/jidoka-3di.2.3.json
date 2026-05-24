@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T21:03:18Z",
   "created": "2026-05-24T20:35:38Z",
   "description": "Parent epic: V3 E1: Simplified DSL foundation\n\nSource task 3/13 from MILESTONE_V3.md:\n\n- Keep tool/action definitions outside the agent block.\n\nEpic closure criteria:\n- the simplified DSL is the only documented DSL\n- pre-V3 DSL shapes are removed\n- DSL tests cover success, failure, and error-message quality\n",
   "id": "jidoka-3di.2.3",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E1: Keep tool/action definitions outside the agent block",
   "type": "task",
   "updated_at": "2026-05-24T21:03:18Z"
