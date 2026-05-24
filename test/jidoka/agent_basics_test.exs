@@ -45,6 +45,8 @@ defmodule JidokaTest.AgentBasicsTest do
 
     assert function_exported?(ChatAgent, :chat, 3)
     assert function_exported?(ChatAgent, :start_link, 1)
+    assert function_exported?(ChatAgent, :context, 0)
+    assert function_exported?(ChatAgent, :context_schema, 0)
     assert function_exported?(ChatAgent, :result, 0)
     assert function_exported?(ChatAgent, :result_schema, 0)
     assert function_exported?(ChatAgent, :controls, 0)
@@ -54,11 +56,15 @@ defmodule JidokaTest.AgentBasicsTest do
 
     refute function_exported?(ChatAgent, :output, 0)
     refute function_exported?(ChatAgent, :output_schema, 0)
+    refute function_exported?(ChatAgent, :contextschema, 0)
+    refute function_exported?(ChatAgent, :outputschema, 0)
     refute function_exported?(ChatAgent, :guardrails, 0)
     refute function_exported?(ChatAgent, :input_guardrails, 0)
     refute function_exported?(ChatAgent, :tool_guardrails, 0)
     refute function_exported?(ChatAgent, :output_guardrails, 0)
 
+    assert ChatAgent.context() == %{}
+    assert ChatAgent.context_schema() == nil
     assert ChatAgent.result() == nil
     assert ChatAgent.result_schema() == nil
     assert ChatAgent.controls() == %{input: [], output: [], tool: []}
