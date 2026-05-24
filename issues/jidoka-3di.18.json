@@ -2,6 +2,7 @@
   "assignee": "",
   "blocked_by": [
     "jidoka-3di.10",
+    "jidoka-3di.11",
     "jidoka-3di.7",
     "jidoka-3di.9"
   ],
@@ -15,5 +16,5 @@
   "status": "open",
   "title": "V3 E17: Testing, examples, and docs",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:48Z"
+  "updated_at": "2026-05-24T20:35:49Z"
 }
