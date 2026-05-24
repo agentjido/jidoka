@@ -6,7 +6,6 @@ defmodule Jidoka.Agent.Definition do
     Capabilities,
     CompactionConfig,
     ContextConfig,
-    Legacy,
     LifecycleConfig,
     MemoryConfig,
     OutputConfig,
@@ -18,8 +17,6 @@ defmodule Jidoka.Agent.Definition do
   @spec build!(Macro.Env.t()) :: t()
   def build!(%Macro.Env{} = env) do
     owner_module = env.module
-
-    Legacy.reject_legacy_placements!(owner_module)
 
     agent = agent_contract!(owner_module)
 

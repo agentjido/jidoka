@@ -1,7 +1,7 @@
 defmodule Jidoka.Agent.Dsl do
   @moduledoc false
 
-  alias Jidoka.Agent.Dsl.Sections.{Capabilities, Contract, Controls, Legacy, Lifecycle, Memory, Schedules, Tools}
+  alias Jidoka.Agent.Dsl.Sections.{Capabilities, Contract, Controls, Lifecycle, Schedules, Tools}
 
   @contract_section Contract.section()
   @tools_section Tools.section()
@@ -9,12 +9,6 @@ defmodule Jidoka.Agent.Dsl do
   @capabilities_section Capabilities.section()
   @lifecycle_section Lifecycle.section()
   @schedules_section Schedules.section()
-  @memory_section Memory.section()
-  @legacy_skills_section Legacy.skills_section()
-  @legacy_plugins_section Legacy.plugins_section()
-  @legacy_subagents_section Legacy.subagents_section()
-  @legacy_hooks_section Legacy.hooks_section()
-  @legacy_guardrails_section Legacy.guardrails_section()
 
   use Spark.Dsl.Extension,
     sections: [
@@ -23,13 +17,7 @@ defmodule Jidoka.Agent.Dsl do
       @controls_section,
       @capabilities_section,
       @lifecycle_section,
-      @schedules_section,
-      @memory_section,
-      @legacy_skills_section,
-      @legacy_subagents_section,
-      @legacy_plugins_section,
-      @legacy_hooks_section,
-      @legacy_guardrails_section
+      @schedules_section
     ],
     verifiers: [
       Jidoka.Agent.Verifiers.VerifyModel,

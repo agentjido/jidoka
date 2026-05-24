@@ -65,16 +65,18 @@ defmodule JidokaTest.DslValidationTest do
     assert module.output_guardrails() == [JidokaTest.SafeReplyGuardrail]
   end
 
-  test "rejects legacy top-level sections" do
+  test "rejects discarded top-level sections" do
     for {section, body} <- [
+          {"defaults", "model :fast"},
           {"memory", "mode :conversation"},
           {"skills", "skill \"math-discipline\""},
           {"plugins", "plugin JidokaTest.MathPlugin"},
           {"subagents", "subagent JidokaTest.ResearchSpecialist"},
           {"hooks", "before_turn JidokaTest.InjectTenantHook"},
-          {"guardrails", "input JidokaTest.SafePromptGuardrail"}
+          {"guardrails", "input JidokaTest.SafePromptGuardrail"},
+          {"output", "schema Zoi.object(%{answer: Zoi.string()})"}
         ] do
-      assert_dsl_error(~r/Top-level `#{section} do .*` is not valid/s, """
+      assert_compile_error(~r/Top-level `#{section} do .*` is not valid/s, """
       agent :legacy_#{section}_agent do
         instructions "This should fail."
       end
@@ -333,6 +335,22 @@ defmodule JidokaTest.DslValidationTest do
     """
 
     assert_raise Spark.Error.DslError, pattern, fn ->
+      compile_source(source)
+    end
+  end
+
+  defp assert_compile_error(pattern, body) do
+    module = Module.concat(JidokaTest.DynamicDsl, "Agent#{System.unique_integer([:positive])}")
+
+    source = """
+    defmodule #{inspect(module)} do
+      use Jidoka.Agent
+
+      #{body}
+    end
+    """
+
+    assert_raise CompileError, pattern, fn ->
       compile_source(source)
     end
   end

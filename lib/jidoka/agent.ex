@@ -72,6 +72,7 @@ defmodule Jidoka.Agent do
 
     quote location: :keep do
       use Jidoka.Agent.SparkDsl
+      import Jidoka.Agent.Dsl.Forbidden
 
       @before_compile Jidoka.Agent
     end
