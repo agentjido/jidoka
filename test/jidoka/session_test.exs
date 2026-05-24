@@ -44,6 +44,17 @@ defmodule JidokaTest.SessionTest do
     assert error.field == :id
 
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             Session.new(agent: ChatAgent, id: "case", conversation_id: "!!!")
+
+    assert error.field == :conversation_id
+    assert error.details.reason == :invalid_session_id
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             Session.new(agent: ChatAgent, id: "case", agent_id: "")
+
+    assert error.field == :agent_id
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Session.new(agent: ChatAgent, id: "case", context: [:not_a_pair])
 
     assert error.field == :context

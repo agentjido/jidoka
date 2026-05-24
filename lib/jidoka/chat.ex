@@ -148,7 +148,7 @@ defmodule Jidoka.Chat do
   end
 
   defp chat_config(server) do
-    case Jido.AgentServer.state(server) do
+    case agent_server_state(server) do
       {:ok, %{agent_module: runtime_module}} when is_atom(runtime_module) ->
         if function_exported?(runtime_module, :__jidoka_definition__, 0) do
           definition = runtime_module.__jidoka_definition__()
@@ -182,6 +182,10 @@ defmodule Jidoka.Chat do
     end
   end
 
+  defp resolve_server(pid, _opts) when is_pid(pid) do
+    if Process.alive?(pid), do: {:ok, pid}, else: {:error, :not_found}
+  end
+
   defp resolve_server(module, opts)
        when is_atom(module) do
     if jidoka_agent_module?(module) do
@@ -192,6 +196,14 @@ defmodule Jidoka.Chat do
   end
 
   defp resolve_server(server, _opts), do: {:ok, server}
+
+  defp agent_server_state(server) do
+    Jido.AgentServer.state(server)
+  rescue
+    _error -> {:error, :not_found}
+  catch
+    :exit, _reason -> {:error, :not_found}
+  end
 
   defp jidoka_agent_module?(module) do
     Code.ensure_loaded?(module) and function_exported?(module, :runtime_module, 0) and

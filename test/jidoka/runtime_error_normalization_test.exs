@@ -48,6 +48,21 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
     assert Jidoka.format_error(error) == "Jidoka agent could not be found."
   end
 
+  test "Jidoka.chat wraps stopped runtime pids" do
+    assert {:ok, pid} = ChatAgent.start_link(id: "runtime-stopped-pid-normalization")
+    assert :ok = Jidoka.stop_agent(pid)
+    refute Process.alive?(pid)
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             Jidoka.chat(pid, "hello")
+
+    assert error.details.operation == :chat
+    assert error.details.reason == :not_found
+    assert error.details.cause == :not_found
+    assert error.details.target == pid
+    assert Jidoka.format_error(error) == "Jidoka agent could not be found."
+  end
+
   test "Jidoka.chat validates conversation before routing or server lookup" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Jidoka.chat("missing-runtime-normalization-agent", "hello", conversation: "")
@@ -55,6 +70,22 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
     assert error.details.operation == :prepare_chat_opts
     assert error.details.reason == :invalid_conversation
     assert Jidoka.format_error(error) == "conversation must be a non-empty string."
+  end
+
+  test "Jidoka.chat returns beginner-readable invalid context errors" do
+    try do
+      assert {:error, %Jidoka.Error.ValidationError{} = error} =
+               Jidoka.chat(ChatAgent, "hello", context: [:bad])
+
+      assert error.field == :context
+      assert error.details.reason == :expected_map
+      assert Jidoka.format_error(error) == "Invalid context: pass `context:` as a map or keyword list."
+    after
+      case Jidoka.whereis(ChatAgent.id()) do
+        pid when is_pid(pid) -> Jidoka.stop_agent(pid)
+        nil -> :ok
+      end
+    end
   end
 
   test "prepare_chat_opts wraps malformed request hook specs" do
