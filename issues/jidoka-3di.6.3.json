@@ -2,6 +2,7 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T23:19:17Z",
   "created": "2026-05-24T20:35:40Z",
   "description": "Parent epic: V3 E5: Controls and human in the loop\n\nSource task 3/9 from MILESTONE_V3.md:\n\n- Delete hook-like concepts unless they have a clear lifecycle purpose in the\n  V3 model.\n\nEpic closure criteria:\n- Controls are the one public policy concept\n- human-in-the-loop is demonstrated without new runtime machinery\n- raising controls cannot crash the agent process\n",
   "id": "jidoka-3di.6.3",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "E5: Delete hook-like concepts unless they have a clear lifecycle purpose in the V3...",
   "type": "task",
   "updated_at": "2026-05-24T23:19:17Z"
