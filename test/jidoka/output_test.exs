@@ -206,7 +206,14 @@ defmodule JidokaTest.OutputTest do
     assert {:ok, %{category: :billing, confidence: 0.88, summary: "Billing issue"}} =
              Request.get_result(agent, request_id)
 
-    assert get_in(agent.state, [:requests, request_id, :meta, :jidoka_output, :status]) == :repaired
+    assert %{
+             status: :repaired,
+             attempt: 1,
+             raw_preview: "billing issue with high confidence",
+             validation_error: validation_error
+           } = get_in(agent.state, [:requests, request_id, :meta, :jidoka_output])
+
+    assert is_binary(validation_error)
   end
 
   test "output raw mode bypasses structured finalization" do
@@ -234,6 +241,34 @@ defmodule JidokaTest.OutputTest do
 
     assert {:ok, agent, []} = Output.on_after_cmd(agent, {:ai_react_start, params}, [], StructuredOutputAgent.result())
     assert {:ok, "raw assistant answer"} = Request.get_result(agent, request_id)
+  end
+
+  test "output raw mode bypasses result controls in generated runtimes" do
+    runtime = StructuredOutputAgent.runtime_module()
+    request_id = "req-output-raw-runtime"
+
+    {:ok, context} =
+      [context: %{notify_pid: self()}, output: :raw]
+      |> Jidoka.Agent.prepare_chat_opts(StructuredOutputAgent.__jidoka__())
+      |> case do
+        {:ok, opts} -> {:ok, Keyword.fetch!(opts, :tool_context)}
+        other -> other
+      end
+
+    {:ok, agent, {:ai_react_start, params}} =
+      runtime.on_before_cmd(
+        new_runtime_agent(runtime),
+        {:ai_react_start, %{query: "Classify this", request_id: request_id, tool_context: context}}
+      )
+
+    agent =
+      agent
+      |> Request.start_request(request_id, "Classify this")
+      |> Request.complete_request(request_id, "raw assistant answer")
+
+    assert {:ok, agent, []} = runtime.on_after_cmd(agent, {:ai_react_start, params}, [])
+    assert {:ok, "raw assistant answer"} = Request.get_result(agent, request_id)
+    refute_received {:structured_output_guardrail, _outcome}
   end
 
   test "output raw mode also bypasses generic runtime completion finalization" do

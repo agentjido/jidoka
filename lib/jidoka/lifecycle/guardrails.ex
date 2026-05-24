@@ -192,7 +192,7 @@ defmodule Jidoka.Guardrails do
   defp run_output_guardrails(agent, request_id, directives) when is_binary(request_id) do
     case {get_request_guardrail_meta(agent, request_id), current_outcome(agent, request_id)} do
       {%{} = meta, outcome} when not is_nil(outcome) ->
-        if Map.get(meta, :output_applied?, false) do
+        if Map.get(meta, :output_applied?, false) or raw_output_mode?(meta[:context]) do
           {:ok, agent, directives}
         else
           input = %Output{
@@ -255,6 +255,18 @@ defmodule Jidoka.Guardrails do
   end
 
   defp run_output_guardrails(agent, _request_id, directives), do: {:ok, agent, directives}
+
+  defp raw_output_mode?(context) when is_map(context) do
+    key = Jidoka.Output.context_key()
+
+    case Map.get(context, key) || Map.get(context, Atom.to_string(key)) do
+      %{mode: :raw} -> true
+      %{mode: "raw"} -> true
+      _other -> false
+    end
+  end
+
+  defp raw_output_mode?(_context), do: false
 
   defp force_request_failure(agent, request_id, error) do
     state =
