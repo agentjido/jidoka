@@ -48,7 +48,7 @@ defmodule JidokaTest.GuardrailsTest do
     agent = new_runtime_agent(runtime)
 
     assert [%Jidoka.Control.Operation{match: %{kind: :action, name: "add_numbers"}}] =
-             ConditionalControlAgent.tool_guardrails()
+             ConditionalControlAgent.operation_controls()
 
     assert {:ok, _agent, {:ai_react_start, params}} =
              runtime.on_before_cmd(
@@ -78,16 +78,16 @@ defmodule JidokaTest.GuardrailsTest do
              })
   end
 
-  test "exposes configured guardrails by stage" do
-    assert GuardrailedAgent.guardrails() == %{
+  test "exposes configured controls by stage" do
+    assert GuardrailedAgent.controls() == %{
              input: [SafePromptGuardrail],
              output: [SafeReplyGuardrail],
              tool: [ApproveLargeMathToolGuardrail]
            }
 
-    assert GuardrailedAgent.input_guardrails() == [SafePromptGuardrail]
-    assert GuardrailedAgent.output_guardrails() == [SafeReplyGuardrail]
-    assert GuardrailedAgent.tool_guardrails() == [ApproveLargeMathToolGuardrail]
+    assert GuardrailedAgent.input_controls() == [SafePromptGuardrail]
+    assert GuardrailedAgent.result_controls() == [SafeReplyGuardrail]
+    assert GuardrailedAgent.operation_controls() == [ApproveLargeMathToolGuardrail]
   end
 
   test "accepts request-scoped module, MFA, and function guardrails" do

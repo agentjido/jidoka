@@ -215,18 +215,6 @@ defmodule Jidoka.Agent.Codegen do
       def result_schema, do: unquote(Macro.escape(output_schema(definition.result)))
 
       @doc """
-      Returns the configured structured result contract, if any.
-      """
-      @spec output() :: Jidoka.Output.t() | nil
-      def output, do: unquote(Macro.escape(definition.output))
-
-      @doc """
-      Returns the configured structured result schema, if any.
-      """
-      @spec output_schema() :: Zoi.schema() | map() | nil
-      def output_schema, do: unquote(Macro.escape(output_schema(definition.output)))
-
-      @doc """
       Returns first-class schedules declared for this agent.
 
       Register these with `Jidoka.Schedule.Manager` or `Jidoka.schedule/2` from
@@ -362,28 +350,28 @@ defmodule Jidoka.Agent.Codegen do
       def interrupt_hooks, do: unquote(Macro.escape(definition.hooks.on_interrupt))
 
       @doc """
-      Returns the configured Jidoka guardrails by stage.
+      Returns the configured controls by stage.
       """
-      @spec guardrails() :: Jidoka.Guardrails.stage_map()
-      def guardrails, do: unquote(Macro.escape(definition.guardrails))
+      @spec controls() :: Jidoka.Guardrails.stage_map()
+      def controls, do: unquote(Macro.escape(definition.guardrails))
 
       @doc """
-      Returns the configured input guardrails.
+      Returns controls that run before the model sees the user input.
       """
-      @spec input_guardrails() :: [Jidoka.Guardrails.guardrail_ref()]
-      def input_guardrails, do: unquote(Macro.escape(definition.guardrails.input))
+      @spec input_controls() :: [Jidoka.Guardrails.guardrail_ref()]
+      def input_controls, do: unquote(Macro.escape(definition.guardrails.input))
 
       @doc """
-      Returns the configured output guardrails.
+      Returns controls that run before operation execution.
       """
-      @spec output_guardrails() :: [Jidoka.Guardrails.guardrail_ref()]
-      def output_guardrails, do: unquote(Macro.escape(definition.guardrails.output))
+      @spec operation_controls() :: [Jidoka.Guardrails.guardrail_ref()]
+      def operation_controls, do: unquote(Macro.escape(definition.guardrails.tool))
 
       @doc """
-      Returns the configured tool guardrails.
+      Returns controls that run before the final result is returned.
       """
-      @spec tool_guardrails() :: [Jidoka.Guardrails.guardrail_ref()]
-      def tool_guardrails, do: unquote(Macro.escape(definition.guardrails.tool))
+      @spec result_controls() :: [Jidoka.Guardrails.guardrail_ref()]
+      def result_controls, do: unquote(Macro.escape(definition.guardrails.output))
 
       @doc """
       Returns any Ash resources registered through `ash_resource`.

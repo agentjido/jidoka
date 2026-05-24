@@ -31,16 +31,15 @@ defmodule Jidoka.Agent.Definition.LifecycleConfig do
   end
 
   defp normalize_guardrails!(guardrails, owner_module) do
-    with :ok <- ensure_unique_stage_refs!(owner_module, guardrails, "guardrail", [:lifecycle]),
+    with :ok <- ensure_unique_stage_refs!(owner_module, guardrails, "control", [:controls]),
          {:ok, normalized} <- Jidoka.Guardrails.normalize_dsl_guardrails(guardrails) do
       normalized
     else
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:lifecycle],
-                hint:
-                  "Declare guardrails as `input_guardrail`, `output_guardrail`, or `tool_guardrail` inside `lifecycle`.",
+                path: [:controls],
+                hint: "Declare controls as `input`, `operation`, or `result` inside `controls`.",
                 module: owner_module
               )
     end
@@ -68,7 +67,7 @@ defmodule Jidoka.Agent.Definition.LifecycleConfig do
                 message: "#{label} #{inspect(ref)} is defined more than once for #{stage}",
                 path: path ++ [stage],
                 value: ref,
-                hint: "Remove the duplicate #{label} declaration from the #{stage} lifecycle stage.",
+                hint: "Remove the duplicate #{label} declaration from the #{stage} stage.",
                 module: owner_module
               )
     end

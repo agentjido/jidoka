@@ -115,7 +115,7 @@ defmodule Jidoka.Kino.AgentView do
     [
       %{surface: "compaction", summary: Render.inspect_value(Map.get(definition, :compaction))},
       %{surface: "memory", summary: Render.inspect_value(Map.get(definition, :memory))},
-      %{surface: "output", summary: Render.inspect_value(Map.get(definition, :output))},
+      %{surface: "result", summary: Render.inspect_value(Map.get(definition, :result))},
       %{surface: "hooks", summary: Render.inspect_value(Map.get(definition, :hooks, %{}))},
       %{surface: "guardrails", summary: Render.inspect_value(Map.get(definition, :guardrails, %{}))}
     ]
@@ -203,7 +203,7 @@ defmodule Jidoka.Kino.AgentView do
     [
       if_present(Map.get(definition, :compaction), "compaction"),
       if_present(Map.get(definition, :memory), "memory"),
-      if_present(Map.get(definition, :output), "output"),
+      if_present(Map.get(definition, :result), "result"),
       if_present(Map.get(definition, :hooks), "hooks"),
       if_present(Map.get(definition, :guardrails), "guardrails")
     ]

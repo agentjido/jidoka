@@ -17,7 +17,8 @@ defmodule JidokaTest.OutputTest do
 
     assert StructuredOutputAgent.result_schema() == StructuredOutputAgent.result().schema
     assert StructuredOutputAgent.__jidoka__().result == StructuredOutputAgent.result()
-    assert StructuredOutputAgent.output() == StructuredOutputAgent.result()
+    refute function_exported?(StructuredOutputAgent, :output, 0)
+    refute function_exported?(StructuredOutputAgent, :output_schema, 0)
   end
 
   test "parses JSON text and validates through Zoi with normalized keys and atom enums" do
@@ -167,7 +168,7 @@ defmodule JidokaTest.OutputTest do
   end
 
   test "repair is invoked when initial output parsing fails" do
-    output = StructuredOutputAgent.output()
+    output = StructuredOutputAgent.result()
     request_id = "req-output-repair"
 
     agent =
@@ -214,7 +215,7 @@ defmodule JidokaTest.OutputTest do
       |> Request.start_request(request_id, "Classify this")
       |> Request.complete_request(request_id, "raw assistant answer")
 
-    assert {:ok, agent, []} = Output.on_after_cmd(agent, {:ai_react_start, params}, [], StructuredOutputAgent.output())
+    assert {:ok, agent, []} = Output.on_after_cmd(agent, {:ai_react_start, params}, [], StructuredOutputAgent.result())
     assert {:ok, "raw assistant answer"} = Request.get_result(agent, request_id)
   end
 
@@ -244,7 +245,7 @@ defmodule JidokaTest.OutputTest do
 
   test "output runtime no-ops without contracts, start actions, or completed requests" do
     runtime = StructuredOutputPlainAgent.runtime_module()
-    output = StructuredOutputPlainAgent.output()
+    output = StructuredOutputPlainAgent.result()
     agent = new_runtime_agent(runtime)
 
     assert {:ok, ^agent, {:not_react, %{}}} = Output.on_before_cmd(agent, {:not_react, %{}}, output)
@@ -277,7 +278,7 @@ defmodule JidokaTest.OutputTest do
            tool_context: %{},
            runtime_context: %{}
          }},
-        StructuredOutputPlainAgent.output()
+        StructuredOutputPlainAgent.result()
       )
 
     assert get_in(agent.state, [:requests, request_id, :meta, :jidoka_output_runtime, :mode]) == :structured
@@ -296,7 +297,7 @@ defmodule JidokaTest.OutputTest do
                agent,
                {:ai_react_runtime_event, %{kind: :request_completed}},
                [],
-               StructuredOutputPlainAgent.output()
+               StructuredOutputPlainAgent.result()
              )
 
     assert {:ok, %{category: :technical, confidence: 0.64, summary: "Bug report"}} =
@@ -322,7 +323,7 @@ defmodule JidokaTest.OutputTest do
   end
 
   test "output repair failures record validation metadata" do
-    output = StructuredOutputAgent.output()
+    output = StructuredOutputAgent.result()
     request_id = "req-output-repair-failure"
 
     agent =
@@ -344,7 +345,7 @@ defmodule JidokaTest.OutputTest do
   end
 
   test "output repair exceptions are normalized" do
-    output = StructuredOutputAgent.output()
+    output = StructuredOutputAgent.result()
     request_id = "req-output-repair-exception"
 
     agent =
@@ -364,7 +365,7 @@ defmodule JidokaTest.OutputTest do
   end
 
   test "default output repair requires an agent model" do
-    output = StructuredOutputAgent.output()
+    output = StructuredOutputAgent.result()
     request_id = "req-output-missing-model-repair"
 
     agent =

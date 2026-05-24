@@ -60,9 +60,9 @@ defmodule JidokaTest.DslValidationTest do
       end
       """)
 
-    assert module.input_guardrails() == [JidokaTest.SafePromptGuardrail]
-    assert module.tool_guardrails() == [JidokaTest.ApproveLargeMathToolGuardrail]
-    assert module.output_guardrails() == [JidokaTest.SafeReplyGuardrail]
+    assert module.input_controls() == [JidokaTest.SafePromptGuardrail]
+    assert module.operation_controls() == [JidokaTest.ApproveLargeMathToolGuardrail]
+    assert module.result_controls() == [JidokaTest.SafeReplyGuardrail]
   end
 
   test "compiles every supported V3 DSL section" do
@@ -140,9 +140,9 @@ defmodule JidokaTest.DslValidationTest do
     assert module.interrupt_hooks() == [JidokaTest.NotifyOpsHook]
     assert %{mode: :conversation, namespace: :per_agent} = module.memory()
     assert %{mode: :manual, strategy: :summary, keep_last: 2} = module.compaction()
-    assert module.input_guardrails() == [JidokaTest.SafePromptGuardrail]
-    assert module.tool_guardrails() == [JidokaTest.ApproveLargeMathToolGuardrail]
-    assert module.output_guardrails() == [JidokaTest.SafeReplyGuardrail]
+    assert module.input_controls() == [JidokaTest.SafePromptGuardrail]
+    assert module.operation_controls() == [JidokaTest.ApproveLargeMathToolGuardrail]
+    assert module.result_controls() == [JidokaTest.SafeReplyGuardrail]
 
     assert [
              %Jidoka.Schedule{
@@ -409,7 +409,7 @@ defmodule JidokaTest.DslValidationTest do
     end
     """)
 
-    assert_dsl_error(~r/guardrail .*defined more than once/, """
+    assert_dsl_error(~r/control .*defined more than once/, """
     agent :duplicate_guardrail_agent do
       instructions "This should fail."
     end
@@ -419,6 +419,24 @@ defmodule JidokaTest.DslValidationTest do
       input JidokaTest.SafePromptGuardrail
     end
     """)
+  end
+
+  test "control validation errors point to the controls section" do
+    error =
+      capture_dsl_error("""
+      agent :source_aware_controls_agent do
+        instructions "This should fail."
+      end
+
+      controls do
+        input JidokaTest.SafePromptGuardrail
+        input JidokaTest.SafePromptGuardrail
+      end
+      """)
+
+    assert error.path == [:controls, :input]
+    assert error.message =~ "control JidokaTest.SafePromptGuardrail is defined more than once"
+    assert error.message =~ "Fix: Remove the duplicate control declaration from the input stage."
   end
 
   test "rejects invalid action modules" do
@@ -511,6 +529,22 @@ defmodule JidokaTest.DslValidationTest do
     """
 
     assert_raise Spark.Error.DslError, pattern, fn ->
+      compile_source(source)
+    end
+  end
+
+  defp capture_dsl_error(body) do
+    module = Module.concat(JidokaTest.DynamicDsl, "Agent#{System.unique_integer([:positive])}")
+
+    source = """
+    defmodule #{inspect(module)} do
+      use Jidoka.Agent
+
+      #{body}
+    end
+    """
+
+    assert_raise Spark.Error.DslError, fn ->
       compile_source(source)
     end
   end

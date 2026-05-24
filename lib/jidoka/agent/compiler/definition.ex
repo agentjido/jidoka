@@ -208,7 +208,6 @@ defmodule Jidoka.Agent.Definition do
       context_schema: configured_context_schema,
       context: configured_context,
       result: configured_output,
-      output: configured_output,
       schedules: configured_schedules,
       compaction: configured_compaction,
       memory: configured_memory,
