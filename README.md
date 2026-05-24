@@ -403,9 +403,7 @@ direct model strings (`"anthropic:claude-haiku-4-5"`) or inline maps wherever
 Jidoka is currently beta. The core authoring surface (agents, tools, workflows,
 imports, structured output, tracing, structured errors, examples, and the Phoenix
 LiveView consumer) is ready for early adopters, but small breaking changes are
-still possible before stable 1.0. See
-[ROADMAP.md](https://github.com/agentjido/jidoka/blob/main/ROADMAP.md) for the
-current state.
+still possible before stable 1.0.
 
 ## Try the demos and develop locally
 

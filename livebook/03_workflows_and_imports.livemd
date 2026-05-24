@@ -1,5 +1,7 @@
 # Jidoka: Workflows And Imports
 
+## Section
+
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fraw.githubusercontent.com%2Fagentjido%2Fjidoka%2Fmain%2Flivebook%2F03_workflows_and_imports.livemd)
 
 Use deterministic workflows for multi-step application logic, expose a workflow
@@ -285,3 +287,5 @@ Jidoka.Kino.chat("Imported-agent tool call", fn ->
   Jidoka.chat(imported_session, "Use the add_numbers tool to add 7 and 35. Reply with only the sum.")
 end)
 ```
+
+<!-- livebook:{"offset":6976,"stamp":{"token":"XCP._Thq9XCQZPyuhWzHT5BB9i3NF9rC0S1rkOONHN8UXOI-LJpFjKF6APFzjLU3OIA6i-nC47qnFYJCCdN9C8jBA3pMqkoQZk5TfGPfdjcfKyWdUjC-u-GWVckblBs","version":2}} -->

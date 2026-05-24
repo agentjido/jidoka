@@ -30,8 +30,8 @@ Jidoka follows the Jido package quality standards:
 
 - Keep changes focused and explain public API changes clearly.
 - Add or update tests with behavior changes.
-- Update `README.md`, `CHANGELOG.md`, or `ROADMAP.md` when a change affects package
-  direction or user-facing workflows.
+- Update `README.md` or `CHANGELOG.md` when a change affects package direction
+  or user-facing workflows.
 - Do not commit secrets, `.env`, generated docs, coverage reports, or Dialyzer
   PLTs.
 

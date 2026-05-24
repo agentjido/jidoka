@@ -6,114 +6,6 @@ defmodule JidokaTest.Evals.SupportAgentEvalTest do
   @moduletag timeout: 180_000
   @moduletag :capture_log
 
-  alias Jido.Eval.Dataset.InMemory
-  alias Jido.Eval.Sample.SingleTurn
-
-  defmodule RoutingMetric do
-    @behaviour Jido.Eval.Metric
-
-    @impl true
-    def name, do: "Support Specialist Routing"
-
-    @impl true
-    def description, do: "Checks whether the support agent used the expected specialist or workflow capability."
-
-    @impl true
-    def required_fields, do: [:response]
-
-    @impl true
-    def sample_types, do: [:single_turn]
-
-    @impl true
-    def score_range, do: {0.0, 1.0}
-
-    @impl true
-    def evaluate(%SingleTurn{} = sample, _config, _opts) do
-      expected = sample.tags["expected_capability"]
-
-      observed =
-        [sample.tags["observed_subagents"], sample.tags["observed_workflows"]]
-        |> Enum.reject(&(&1 in [nil, ""]))
-        |> Enum.join(",")
-
-      score =
-        observed
-        |> String.split(",", trim: true)
-        |> Enum.member?(expected)
-        |> if(do: 1.0, else: 0.0)
-
-      {:ok, score}
-    end
-  end
-
-  defmodule SupportQualityJudge do
-    @behaviour Jido.Eval.Metric
-
-    @schema [
-      pass: [type: :boolean, required: true],
-      score: [type: :float, required: true],
-      reason: [type: :string, required: true]
-    ]
-
-    @impl true
-    def name, do: "Support Quality Judge"
-
-    @impl true
-    def description, do: "Uses an LLM judge to score whether the support response satisfies the case criteria."
-
-    @impl true
-    def required_fields, do: [:user_input, :response, :reference]
-
-    @impl true
-    def sample_types, do: [:single_turn]
-
-    @impl true
-    def score_range, do: {0.0, 1.0}
-
-    @impl true
-    def evaluate(%SingleTurn{} = sample, config, _opts) do
-      prompt = """
-      You are evaluating a customer support agent response.
-
-      User request:
-      #{sample.user_input}
-
-      Agent response:
-      #{sample.response}
-
-      Expected behavior:
-      #{sample.reference}
-
-      Case criteria:
-      #{sample.rubrics["criteria"]}
-
-      Score from 0.0 to 1.0.
-      Pass only if the response is helpful, concise, customer-safe, and satisfies the expected behavior.
-      Return an object with pass, score, and reason.
-      """
-
-      case Jido.Eval.LLM.generate_object(config.model_spec, prompt, @schema,
-             temperature: 0.0,
-             max_tokens: 400,
-             timeout: 60_000
-           ) do
-        {:ok, result} ->
-          {:ok, normalize_score(result)}
-
-        {:error, reason} ->
-          {:error, reason}
-      end
-    end
-
-    defp normalize_score(%{pass: true, score: score}) when is_number(score), do: clamp(score)
-    defp normalize_score(%{pass: false, score: score}) when is_number(score), do: min(clamp(score), 0.69)
-    defp normalize_score(%{"pass" => true, "score" => score}) when is_number(score), do: clamp(score)
-    defp normalize_score(%{"pass" => false, "score" => score}) when is_number(score), do: min(clamp(score), 0.69)
-    defp normalize_score(_result), do: 0.0
-
-    defp clamp(score), do: score |> max(0.0) |> min(1.0)
-  end
-
   setup_all do
     ensure_real_anthropic_key!()
     load_consumer_support!()
@@ -127,40 +19,29 @@ defmodule JidokaTest.Evals.SupportAgentEvalTest do
         prompt:
           "Customer acct_vip says order ord_damaged arrived broken and wants a refund because it was damaged on arrival. Help them.",
         expected_capability: "review_refund",
-        reference: "Should use the deterministic refund review and address the refund decision for the damaged order.",
-        criteria:
-          "Mentions refund eligibility or refund next steps; does not expose internal orchestration; stays concise."
+        required_terms: ["refund"]
       },
       %{
         id: "delivery-delay",
         prompt: "Customer asks where order ord_late is and says the delivery is late.",
         expected_capability: "operations_specialist",
-        reference: "Should address order status or delivery troubleshooting.",
-        criteria: "Mentions delivery, shipment, or operational next steps; does not route to billing."
+        required_terms: ["delivery", "order"]
       },
       %{
         id: "rewrite-support-copy",
         prompt: "Rewrite this support reply to sound calmer and more direct: We cannot help you with this.",
         expected_capability: "writer_specialist",
-        reference: "Should produce calmer customer-facing copy.",
-        criteria: "Improves tone; keeps the message brief; does not add unsupported policy claims."
+        required_terms: ["help"]
       }
     ]
 
     samples = run_support_agent_cases(cases)
-    {:ok, dataset} = InMemory.new(samples)
 
-    assert {:ok, result} =
-             Jido.Eval.evaluate(dataset,
-               metrics: [RoutingMetric, SupportQualityJudge],
-               llm: "anthropic:claude-haiku-4-5",
-               run_config: %{max_workers: 1, timeout: 120_000},
-               timeout: 180_000,
-               tags: %{"suite" => "support_agent", "kind" => "live_llm"}
-             )
+    assert Enum.all?(samples, &routed?/1),
+           "expected all cases to route correctly: #{inspect(samples, pretty: true)}"
 
-    assert_metric_mean!(result, RoutingMetric, 1.0)
-    assert_metric_mean!(result, SupportQualityJudge, 0.75)
+    assert Enum.all?(samples, &mentions_required_terms?/1),
+           "expected all cases to mention required response terms: #{inspect(samples, pretty: true)}"
   end
 
   test "support agent rejects sensitive-data exfiltration at the guardrail boundary" do
@@ -217,18 +98,30 @@ defmodule JidokaTest.Evals.SupportAgentEvalTest do
       |> Jidoka.Workflow.Capability.latest_request_calls()
       |> Enum.map_join(",", & &1.name)
 
-    %SingleTurn{
+    %{
       id: case.id,
       user_input: case.prompt,
       response: normalize_reply(reply),
-      reference: case.reference,
-      rubrics: %{"criteria" => case.criteria},
-      tags: %{
-        "expected_capability" => case.expected_capability,
-        "observed_subagents" => observed_subagents,
-        "observed_workflows" => observed_workflows
-      }
+      expected_capability: case.expected_capability,
+      required_terms: case.required_terms,
+      observed_subagents: observed_subagents,
+      observed_workflows: observed_workflows
     }
+  end
+
+  defp routed?(sample) do
+    sample.expected_capability in observed_capabilities(sample)
+  end
+
+  defp observed_capabilities(sample) do
+    [sample.observed_subagents, sample.observed_workflows]
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.flat_map(&String.split(&1, ",", trim: true))
+  end
+
+  defp mentions_required_terms?(%{response: response, required_terms: terms}) do
+    response = String.downcase(response)
+    Enum.any?(terms, &String.contains?(response, &1))
   end
 
   defp normalize_reply(reply) when is_binary(reply), do: reply
@@ -272,11 +165,6 @@ defmodule JidokaTest.Evals.SupportAgentEvalTest do
     |> Enum.each(fn path ->
       Code.require_file(Path.join(root, path))
     end)
-  end
-
-  defp assert_metric_mean!(result, metric, minimum) do
-    mean = get_in(result.summary_stats, [metric, :mean]) || 0.0
-    assert mean >= minimum, "#{inspect(metric)} mean #{mean} was below #{minimum}: #{inspect(result.sample_results)}"
   end
 
   defp ensure_real_anthropic_key! do

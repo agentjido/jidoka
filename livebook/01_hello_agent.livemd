@@ -1,5 +1,7 @@
 # Jidoka: Hello Agent
 
+## Section
+
 [![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fraw.githubusercontent.com%2Fagentjido%2Fjidoka%2Fmain%2Flivebook%2F01_hello_agent.livemd)
 
 Build the smallest useful Jidoka agent, inspect its compiled definition, and
@@ -107,3 +109,5 @@ Continue with:
 
 * [Tools And Context](02_tools_and_context.livemd)
 * [Workflows And Imports](03_workflows_and_imports.livemd)
+
+<!-- livebook:{"offset":2632,"stamp":{"token":"XCP.zIL9J-K5MbgRBgv_2W6qsIug_ODPCvalCyH7Ti5fFMN20QQ761gYtPvXzfgidbEWhR6-zKMAy9vyM3Zug27j8kvXvpUydK0km2iTp67p7d4LshHaYCiwNPHIeo4","version":2}} -->

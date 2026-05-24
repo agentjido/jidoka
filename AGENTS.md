@@ -16,6 +16,13 @@ Both paths describe the same conceptual Jidoka agent.
 
 ## Working Rules
 
+- This project tracks work with `bw` (beadwork), which persists plans, progress,
+  and decisions to git so they survive compaction, session boundaries, and
+  context loss.
+- Always run `bw prime` before starting work. Without it, agents miss workflow
+  context, current state, and repo hygiene warnings.
+- Committing, closing Beadwork issues, and syncing are part of completing a task,
+  not separate actions requiring additional permission.
 - Prefer changes in this package over changes in vendored dependencies.
 - Keep the public Jidoka API small, explicit, and biased toward common agent use
   cases.
@@ -68,4 +75,3 @@ Run package commands from this directory:
 ## References
 
 - `README.md`
-- `ROADMAP.md`

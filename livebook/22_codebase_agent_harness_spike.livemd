@@ -1,0 +1,649 @@
+# Jidoka: Codebase Agent Harness Spike
+
+## Section
+
+[![Run in Livebook](https://livebook.dev/badge/v1/blue.svg)](https://livebook.dev/run?url=https%3A%2F%2Fraw.githubusercontent.com%2Fagentjido%2Fjidoka%2Fmain%2Flivebook%2F22_codebase_agent_harness_spike.livemd)
+
+Use this notebook to pressure test a Sherlock-style codebase agent shape:
+Jidoka owns the product-facing agent boundary, while `jido_harness` and
+`jido_opencode` provide the live coding harness.
+
+This spike intentionally requires real OpenCode execution. It should fail early
+with a clear preflight error if `opencode` or Z.AI auth is missing.
+
+By default the notebook inspects the local Jidoka checkout. Set
+`TARGET_REPO_PATH` or Livebook secret `LB_TARGET_REPO_PATH` to point at another
+repository.
+
+## Setup
+
+```elixir
+source_root = Path.expand("../../..", __DIR__)
+jidoka_path = Path.expand("..", __DIR__)
+harness_path = Path.join([source_root, "JidoRepo", "packages", "jido_harness"])
+opencode_path = Path.join([source_root, "JidoRepo", "packages", "jido_opencode"])
+
+jidoka_dep =
+  if File.exists?(Path.join(jidoka_path, "mix.exs")) do
+    {:jidoka, path: jidoka_path}
+  else
+    {:jidoka, git: "https://github.com/agentjido/jidoka.git", branch: "main"}
+  end
+
+harness_dep =
+  if File.exists?(Path.join(harness_path, "mix.exs")) do
+    {:jido_harness, path: harness_path, override: true}
+  else
+    {:jido_harness, github: "agentjido/jido_harness", branch: "main", override: true}
+  end
+
+opencode_dep =
+  if File.exists?(Path.join(opencode_path, "mix.exs")) do
+    {:jido_opencode, path: opencode_path}
+  else
+    {:jido_opencode, github: "agentjido/jido_opencode", branch: "main"}
+  end
+
+Mix.install(
+  [
+    jidoka_dep,
+    harness_dep,
+    opencode_dep,
+    {:kino, "~> 0.19.0"}
+  ],
+  config: [
+    jidoka: [
+      model_aliases: %{fast: "anthropic:claude-haiku-4-5"}
+    ],
+    jido_harness: [
+      providers: %{opencode: Jido.OpenCode.Adapter},
+      default_provider: :opencode
+    ]
+  ],
+  force: false
+)
+```
+
+```elixir
+Jidoka.Kino.setup()
+
+providers =
+  :jido_harness
+  |> Application.get_env(:providers, %{})
+  |> Map.put(:opencode, Jido.OpenCode.Adapter)
+
+Application.put_env(:jido_harness, :providers, providers)
+Application.put_env(:jido_harness, :default_provider, :opencode)
+
+for key <- ["ZAI_API_KEY", "ZAI_BASE_URL", "OPENCODE_MODEL"] do
+  livebook_key = "LB_#{key}"
+  existing = System.get_env(key)
+  livebook_value = System.get_env(livebook_key)
+
+  if (is_nil(existing) or existing == "") and is_binary(livebook_value) and livebook_value != "" do
+    System.put_env(key, livebook_value)
+  end
+end
+
+:ok
+```
+
+## Preflight OpenCode
+
+```elixir
+contract = Jido.OpenCode.Adapter.runtime_contract()
+{:ok, capabilities} = Jido.Harness.capabilities(:opencode)
+
+compatibility =
+  case Jido.OpenCode.Compatibility.status() do
+    {:ok, status} -> {:ok, status}
+    {:error, reason} -> {:error, reason}
+  end
+
+opencode_program =
+  case compatibility do
+    {:ok, status} -> status.program
+    {:error, _reason} -> System.find_executable("opencode")
+  end
+
+base_url =
+  System.get_env("ZAI_BASE_URL") ||
+    get_in(Map.from_struct(contract), [:sprite_env_injected, "ZAI_BASE_URL"]) ||
+    "https://api.z.ai/api/anthropic"
+
+model =
+  System.get_env("OPENCODE_MODEL") ||
+    get_in(Map.from_struct(contract), [:sprite_env_injected, "OPENCODE_MODEL"]) ||
+    "zai-coding-plan/glm-4.5-air"
+
+zai_api_key_configured? = System.get_env("ZAI_API_KEY") not in [nil, ""]
+
+auth_status =
+  cond do
+    zai_api_key_configured? ->
+      "ok: ZAI_API_KEY configured"
+
+    is_binary(opencode_program) ->
+      case System.cmd(opencode_program, ["models", "zai-coding-plan"], stderr_to_stdout: true) do
+        {output, 0} ->
+          if String.contains?(output, "zai-coding-plan/") do
+            "ok: OpenCode CLI auth"
+          else
+            "failed: OpenCode models output did not include zai-coding-plan/"
+          end
+
+        {_output, status} ->
+          "failed: OpenCode model auth probe exited #{status}"
+      end
+
+    true ->
+      "missing"
+  end
+
+preflight_rows = [
+  %{
+    check: "OpenCode CLI",
+    required?: true,
+    status: if(opencode_program, do: "ok: #{opencode_program}", else: "missing")
+  },
+  %{
+    check: "OpenCode JSON run compatibility",
+    required?: true,
+    status:
+      case compatibility do
+        {:ok, status} -> "ok: #{status.version}"
+        {:error, reason} -> "failed: #{Exception.message(reason)}"
+      end
+  },
+  %{check: "Z.AI auth", required?: true, status: auth_status},
+  %{
+    check: "ZAI_API_KEY",
+    required?: false,
+    status: if(zai_api_key_configured?, do: "configured", else: "missing")
+  },
+  %{check: "ZAI_BASE_URL", required?: false, status: base_url},
+  %{check: "OPENCODE_MODEL", required?: false, status: model},
+  %{check: "harness provider", required?: true, status: inspect(Jido.Harness.providers())},
+  %{check: "streaming?", required?: false, status: inspect(capabilities.streaming?)},
+  %{check: "resume?", required?: false, status: inspect(capabilities.resume?)},
+  %{check: "cancellation?", required?: false, status: inspect(capabilities.cancellation?)}
+]
+
+Jidoka.Kino.table("OpenCode harness preflight", preflight_rows,
+  keys: [:check, :required?, :status]
+)
+
+missing_required =
+  preflight_rows
+  |> Enum.filter(&(&1.required? and String.starts_with?(to_string(&1.status), "missing")))
+  |> Enum.map(& &1.check)
+
+failed_required =
+  preflight_rows
+  |> Enum.filter(&(&1.required? and String.starts_with?(to_string(&1.status), "failed:")))
+  |> Enum.map(& &1.check)
+
+if missing_required != [] or failed_required != [] do
+  raise """
+  This spike requires real OpenCode execution.
+
+  Missing: #{Enum.join(missing_required, ", ")}
+  Failed: #{Enum.join(failed_required, ", ")}
+
+  Install OpenCode with `npm install -g opencode-ai` and configure either
+  ZAI_API_KEY, Livebook secret LB_ZAI_API_KEY, or authenticated OpenCode CLI
+  access before continuing.
+  """
+end
+
+%{
+  capabilities: Map.from_struct(capabilities),
+  runtime_contract:
+    contract
+    |> Map.from_struct()
+    |> Map.take([
+      :provider,
+      :host_env_required_any,
+      :sprite_env_forward,
+      :sprite_env_injected,
+      :runtime_tools_required
+    ])
+}
+```
+
+## Define Harness Helpers
+
+```elixir
+defmodule LivebookDemo.CodebaseHarness do
+  @moduledoc false
+
+  @default_timeout_ms 180_000
+  @allowed_tools ["read", "glob", "grep", "list"]
+  @citation_pattern ~r/(?<file>(?:[A-Za-z0-9_\.-]+\.(?:md|exs)|(?:lib|test|guides|livebook|research|config|dev)\/[A-Za-z0-9_\.\/-]+))(?::(?<line>\d+))?/
+
+  def default_question do
+    """
+    Can this repo support a codebase agent using Jidoka plus OpenCode? Cite files and identify blockers.
+
+    Constraints:
+    - Treat the repository as read-only.
+    - Cite file paths and line numbers when you make implementation claims.
+    - Return Markdown with these sections: Verdict, Supporting Evidence, Blockers, Recommended Next Slice.
+    """
+  end
+
+  def run(question, repo_path, timeout_ms \\ @default_timeout_ms) do
+    prompt = build_prompt(question)
+    started_at_ms = System.monotonic_time(:millisecond)
+
+    result =
+      Jido.Harness.run(:opencode, prompt,
+        cwd: repo_path,
+        timeout_ms: timeout_ms,
+        allowed_tools: @allowed_tools,
+        model: model()
+      )
+
+    elapsed_ms = System.monotonic_time(:millisecond) - started_at_ms
+
+    case result do
+      {:ok, stream} ->
+        events = Enum.to_list(stream)
+        answer = final_text(events)
+        citations = citations(answer)
+
+        {:ok,
+         %{
+           answer: answer,
+           citations: citations,
+           warnings: warnings(citations),
+           raw_event_count: length(events),
+           provider: "opencode",
+           session_id: session_id(events),
+           elapsed_ms: elapsed_ms,
+           events: events
+         }}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  def event_rows(events) do
+    events
+    |> Enum.with_index(1)
+    |> Enum.map(fn {event, seq} ->
+      %{
+        seq: seq,
+        type: event.type,
+        session_id: event.session_id || "-",
+        payload: compact_payload(event.payload)
+      }
+    end)
+  end
+
+  def readiness_rows(capabilities) do
+    [
+      %{
+        category: "works now",
+        finding: "Jidoka can expose a harness call as a typed tool and inspect the compiled agent contract."
+      },
+      %{
+        category: "works now",
+        finding: "jido_harness gives the app one provider-neutral call boundary for OpenCode."
+      },
+      %{
+        category: "works with app policy",
+        finding: "Repo authorization, checkout selection, transcript persistence, and retention remain app-owned."
+      },
+      %{
+        category: "adapter blocker",
+        finding: "allowed_tools is present on RunRequest but current jido_opencode does not enforce OpenCode permissions."
+      },
+      %{
+        category: "adapter blocker",
+        finding:
+          "Current OpenCode adapter reports streaming=#{capabilities.streaming?}, resume=#{capabilities.resume?}, cancellation=#{capabilities.cancellation?}, tool events=#{capabilities.tool_calls?}."
+      },
+      %{
+        category: "adapter blocker",
+        finding:
+          "Current OpenCode adapter can fall back to raw JSONL for newer nested part.text events; this notebook decodes that text locally, but the adapter should map it natively."
+      },
+      %{
+        category: "Jidoka blocker",
+        finding: "No first-class durable transcript/run store is proven by this spike; production would need app storage."
+      }
+    ]
+  end
+
+  defp build_prompt(question) do
+    """
+    You are running inside a codebase investigation harness.
+
+    #{question}
+
+    Return concise, evidence-backed findings. Do not modify files.
+    """
+  end
+
+  defp model do
+    System.get_env("OPENCODE_MODEL") || "zai-coding-plan/glm-4.5-air"
+  end
+
+  defp final_text(events) do
+    final =
+      events
+      |> Enum.filter(&(&1.type == :output_text_final))
+      |> Enum.map(&Map.get(&1.payload, "text"))
+      |> Enum.reject(&blank?/1)
+      |> Enum.join("\n")
+
+    decoded_final = decode_opencode_jsonl_text(final)
+
+    cond do
+      not blank?(decoded_final) ->
+        decoded_final
+
+      not blank?(final) ->
+        final
+
+      true ->
+        events
+        |> Enum.flat_map(fn event ->
+          [
+            Map.get(event.payload, "text"),
+            Map.get(event.payload, "result")
+          ]
+        end)
+        |> Enum.reject(&blank?/1)
+        |> Enum.join("\n")
+    end
+  end
+
+  defp decode_opencode_jsonl_text(text) when is_binary(text) do
+    text
+    |> String.split("\n", trim: true)
+    |> Enum.flat_map(&decode_opencode_json_line/1)
+    |> Enum.reject(&blank?/1)
+    |> Enum.join("\n")
+  end
+
+  defp decode_opencode_jsonl_text(_text), do: nil
+
+  defp decode_opencode_json_line(line) do
+    case Jason.decode(line) do
+      {:ok, raw} when is_map(raw) ->
+        extract_opencode_text(raw)
+
+      _ ->
+        []
+    end
+  end
+
+  defp extract_opencode_text(%{"part" => %{"type" => "text", "text" => text}})
+       when is_binary(text) do
+    [String.trim(text)]
+  end
+
+  defp extract_opencode_text(%{"text" => text}) when is_binary(text), do: [String.trim(text)]
+  defp extract_opencode_text(%{"result" => text}) when is_binary(text), do: [String.trim(text)]
+
+  defp extract_opencode_text(%{"message" => %{"content" => content}}) when is_list(content) do
+    Enum.flat_map(content, fn
+      %{"type" => "text", "text" => text} when is_binary(text) -> [String.trim(text)]
+      _ -> []
+    end)
+  end
+
+  defp extract_opencode_text(_raw), do: []
+
+  defp citations(text) when is_binary(text) do
+    @citation_pattern
+    |> Regex.scan(text, capture: :all_names)
+    |> Enum.map(fn
+      [file, ""] -> %{file: file, line: nil}
+      [file, line] -> %{file: file, line: String.to_integer(line)}
+    end)
+    |> Enum.uniq()
+  end
+
+  defp warnings(citations) do
+    citation_warning =
+      if citations == [] do
+        ["No file citations detected in the OpenCode answer; treat this as a failed citation-quality check."]
+      else
+        []
+      end
+
+    citation_warning ++
+      [
+        "Read-only safety is prompt/app policy only until jido_opencode wires OpenCode permissions or uses a read-only workspace.",
+        "Current jido_opencode is buffered-first, so LiveView-style token/tool streaming is not proven by this spike.",
+        "Current jido_opencode does not expose resume, cancellation, tool-call, tool-result, or file-change events.",
+        "Current jido_opencode may surface raw OpenCode JSONL for nested part.text events; the notebook decodes it locally as spike evidence."
+      ]
+  end
+
+  defp session_id(events) do
+    events
+    |> Enum.map(& &1.session_id)
+    |> Enum.find(&(is_binary(&1) and &1 != ""))
+  end
+
+  defp compact_payload(payload) when is_map(payload) do
+    payload
+    |> Enum.map(fn {key, value} -> {key, summarize_value(value)} end)
+    |> Enum.into(%{})
+    |> inspect(limit: 4, printable_limit: 180)
+  end
+
+  defp summarize_value(value) when is_binary(value) do
+    if String.length(value) > 220, do: String.slice(value, 0, 220) <> "...", else: value
+  end
+
+  defp summarize_value(value), do: value
+
+  defp blank?(value), do: is_nil(value) or String.trim(to_string(value)) == ""
+end
+```
+
+## Run The Harness Directly
+
+```elixir
+target_repo_path =
+  System.get_env("TARGET_REPO_PATH") ||
+    System.get_env("LB_TARGET_REPO_PATH") ||
+    Path.expand("..", __DIR__)
+
+codebase_question = LivebookDemo.CodebaseHarness.default_question()
+
+{:ok, harness_summary} =
+  LivebookDemo.CodebaseHarness.run(codebase_question, target_repo_path, 180_000)
+
+Jidoka.Kino.table(
+  "Direct harness run",
+  [
+    %{
+      provider: harness_summary.provider,
+      session_id: harness_summary.session_id || "-",
+      events: harness_summary.raw_event_count,
+      elapsed_ms: harness_summary.elapsed_ms,
+      citations: length(harness_summary.citations)
+    }
+  ],
+  keys: [:provider, :session_id, :events, :elapsed_ms, :citations]
+)
+
+Jidoka.Kino.table(
+  "Harness events",
+  LivebookDemo.CodebaseHarness.event_rows(harness_summary.events),
+  keys: [:seq, :type, :session_id, :payload]
+)
+
+Kino.Markdown.new("### OpenCode answer\n\n#{harness_summary.answer}")
+```
+
+```elixir
+Jidoka.Kino.table("Citation check", harness_summary.citations, keys: [:file, :line])
+Jidoka.Kino.table("Harness warnings", Enum.map(harness_summary.warnings, &%{warning: &1}))
+```
+
+## Wrap The Harness As A Jidoka Tool
+
+```elixir
+defmodule LivebookDemo.CodebaseHarness.Tools.InvestigateCodebase do
+  use Jidoka.Tool,
+    name: "investigate_codebase",
+    description: "Runs a read-oriented OpenCode investigation through Jido.Harness.",
+    schema:
+      Zoi.object(%{
+        question: Zoi.string(),
+        repo_path: Zoi.string(),
+        timeout_ms: Zoi.integer() |> Zoi.optional()
+      }),
+    output_schema:
+      Zoi.object(%{
+        answer: Zoi.string(),
+        citations:
+          Zoi.array(
+            Zoi.object(%{
+              file: Zoi.string(),
+              line: Zoi.integer() |> Zoi.nullish()
+            })
+          ),
+        warnings: Zoi.array(Zoi.string()),
+        raw_event_count: Zoi.integer(),
+        provider: Zoi.string()
+      })
+
+  @impl true
+  def run(%{question: question, repo_path: repo_path} = params, _context) do
+    timeout_ms = Map.get(params, :timeout_ms, 180_000)
+
+    case LivebookDemo.CodebaseHarness.run(question, repo_path, timeout_ms) do
+      {:ok, result} ->
+        {:ok, Map.take(result, [:answer, :citations, :warnings, :raw_event_count, :provider])}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+end
+
+defmodule LivebookDemo.CodebaseHarness.Agent do
+  use Jidoka.Agent
+
+  agent do
+    id :livebook_codebase_harness_agent
+
+    schema Zoi.object(%{
+      actor: Zoi.map() |> Zoi.optional(),
+      repo_path: Zoi.string()
+    })
+  end
+
+  defaults do
+    model :fast
+
+    instructions """
+    You help developers investigate codebases.
+    Use investigate_codebase for repository-specific questions.
+    Prefer cited, implementation-grounded answers over broad speculation.
+    """
+  end
+
+  capabilities do
+    tool LivebookDemo.CodebaseHarness.Tools.InvestigateCodebase
+  end
+end
+```
+
+Inspect the compiled agent/tool contract before running any provider-backed
+Jidoka chat.
+
+```elixir
+{:ok, agent_definition} = Jidoka.inspect_agent(LivebookDemo.CodebaseHarness.Agent)
+
+%{
+  id: agent_definition.id,
+  context_schema: LivebookDemo.CodebaseHarness.Agent.context_schema(),
+  tool_names: LivebookDemo.CodebaseHarness.Agent.tool_names(),
+  tool_output_schema: LivebookDemo.CodebaseHarness.Tools.InvestigateCodebase.output_schema()
+}
+```
+
+Run the Jidoka tool directly. This is the acceptance path for the spike because
+it proves the public Jidoka capability boundary without requiring a second
+provider-backed Jidoka chat turn.
+
+```elixir
+tool_question = """
+Identify the narrowest Jidoka surface needed to expose OpenCode as a codebase investigation capability.
+Cite the relevant Jidoka files and call out blockers.
+"""
+
+{:ok, tool_result} =
+  LivebookDemo.CodebaseHarness.Tools.InvestigateCodebase.run(
+    %{question: tool_question, repo_path: target_repo_path, timeout_ms: 180_000},
+    %{actor: %{id: "livebook-user"}}
+  )
+
+Jidoka.Kino.table(
+  "Jidoka tool wrapper result",
+  [
+    %{
+      provider: tool_result.provider,
+      events: tool_result.raw_event_count,
+      citations: length(tool_result.citations),
+      warnings: length(tool_result.warnings)
+    }
+  ],
+  keys: [:provider, :events, :citations, :warnings]
+)
+
+Jidoka.Kino.table("Tool citation check", tool_result.citations, keys: [:file, :line])
+Kino.Markdown.new("### Tool answer\n\n#{tool_result.answer}")
+```
+
+## Readiness Table
+
+```elixir
+Jidoka.Kino.table(
+  "Jidoka + OpenCode readiness",
+  LivebookDemo.CodebaseHarness.readiness_rows(capabilities),
+  keys: [:category, :finding]
+)
+```
+
+## Optional Provider-Backed Jidoka Chat
+
+The spike acceptance path above does not require a second model stack. Run this
+cell only when an Anthropic key is configured and you want to see the normal
+Jidoka chat loop decide to call the harness tool.
+
+```elixir
+chat_session =
+  Jidoka.Session.new!(
+    agent: LivebookDemo.CodebaseHarness.Agent,
+    id: "livebook-codebase-harness",
+    context: %{repo_path: target_repo_path, actor: %{id: "livebook-user"}}
+  )
+
+Jidoka.Kino.chat("Codebase harness chat", fn ->
+  Jidoka.chat(
+    chat_session,
+    "Use investigate_codebase to summarize whether this repo is ready for a Sherlock-style codebase agent."
+  )
+end)
+```
+
+## What This Spike Proves
+
+If every core cell runs, we have evidence for this shape:
+
+* Jidoka can expose a coding harness through its existing typed tool boundary.
+* `jido_harness` is the right provider-neutral seam for coding agents.
+* `jido_opencode` can perform the codebase investigation live today.
+* Production readiness depends on adapter work for permissions, streaming,
+  resume, cancellation, richer events, and durable app storage.

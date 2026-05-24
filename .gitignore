@@ -32,6 +32,13 @@ jidoka-*.tar
 # Local environment files.
 .env
 
+# Local planning/release scratch docs.
+/EXAMPLE_AGENTS.md
+/JIDOKA_GAPS.md
+/RELEASE.md
+/ROADMAP.md
+/DOCS_TODO.md
+
 # Editor/IDE and OS files.
 .elixir_ls/
 .vscode/

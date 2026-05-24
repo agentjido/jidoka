@@ -63,6 +63,7 @@ dependency setup.
 | `19_production_checklist.livemd` | Provider, runtime, context, guardrail, and inspection pre-flight checks. |
 | `20_kitchen_sink.livemd` | Advanced capstone that composes the main Jidoka features in one support-router scenario. |
 | `21_structured_output.livemd` | Agent-level typed output, validation, repair, imported specs, and optional provider chat. |
+| `22_codebase_agent_harness_spike.livemd` | Live OpenCode harness spike for a Sherlock-style codebase agent wrapped as a Jidoka tool. |
 
 ## Acceptance Checklist
 

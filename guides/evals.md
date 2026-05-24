@@ -95,11 +95,11 @@ boundaries:
 A live eval case should record the prompt, context, expected behavior, and
 scoring result.
 
-## Use Jido Eval
+## Keep The Harness Small
 
-Jidoka's support eval suite uses the pinned `agentjido/jido_eval` Git dependency
-as a dataset and result harness. Keep `jido_eval` responsible for the eval run
-structure, then write Jidoka-specific checks around request inspection and
+Jidoka's support eval suite intentionally uses plain ExUnit instead of an eval
+framework dependency. Keep the harness close to the agent boundary, then write
+Jidoka-specific checks around request inspection, tracing, capability calls, and
 output.
 
 Typical flow:
@@ -109,7 +109,8 @@ Typical flow:
 3. Run each prompt through `Jidoka.chat/3`.
 4. Inspect the latest request with `Jidoka.inspect_request/1`.
 5. Score routing/tool/workflow/handoff behavior deterministically.
-6. Use an LLM judge only for language quality or nuanced answer checks.
+6. Keep LLM-judge checks optional and explicit when language quality needs a
+   second model call.
 
 ## Keep Evals Actionable
 
