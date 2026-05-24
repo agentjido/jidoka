@@ -51,6 +51,8 @@ Jidoka should keep state-like words narrow:
   not be taught as memory.
 - **Result** is the app-facing final value from a turn. Typed results validate
   that value before callers receive it.
+- Public DSL/docs should say **result**. Internal modules may retain `Output`
+  where they bridge raw model/provider output into that app-facing result.
 
 ## Topic DAG
 

@@ -1,6 +1,11 @@
 defmodule Jidoka.Output do
   @moduledoc """
-  Structured final-output contracts for Jidoka agents.
+  Structured result contracts for Jidoka agents.
+
+  The Jidoka DSL and beginner-facing docs call this concept `result`: the final
+  app-facing value returned from a turn. This implementation module keeps the
+  `Output` name because it owns parsing, validating, repairing, and finalizing
+  raw model/provider output before the caller receives that result.
   """
 
   alias Jidoka.Output.{Config, Runtime, Schema}
@@ -27,7 +32,7 @@ defmodule Jidoka.Output do
   def context_key, do: Config.context_key()
 
   @doc """
-  Builds a structured output contract from DSL/imported options.
+  Builds a structured result contract from DSL/imported options.
   """
   @spec new(keyword() | map() | t() | nil) :: {:ok, t() | nil} | {:error, term()}
   def new(nil), do: {:ok, nil}
@@ -39,22 +44,22 @@ defmodule Jidoka.Output do
     end
   end
 
-  def new(other), do: {:error, "output must be a map or keyword list, got: #{inspect(other)}"}
+  def new(other), do: {:error, "result contract must be a map or keyword list, got: #{inspect(other)}"}
 
   @doc """
-  Validates a parsed output value against the configured schema.
+  Validates a parsed result value against the configured schema.
   """
   @spec validate(t(), term()) :: {:ok, map()} | {:error, term()}
   def validate(%__MODULE__{} = output, value), do: Schema.validate(output, value)
 
   @doc """
-  Parses and validates raw model output.
+  Parses and validates raw model/provider output into the app-facing result.
   """
   @spec parse(t(), term()) :: {:ok, map()} | {:error, term()}
   def parse(%__MODULE__{} = output, value), do: Schema.parse(output, value)
 
   @doc """
-  Returns a prompt snippet that asks the model to produce the final output shape.
+  Returns a prompt snippet that asks the model to produce the final result shape.
   """
   @spec instructions(t() | map() | nil) :: String.t() | nil
   def instructions(nil), do: nil
@@ -67,7 +72,7 @@ defmodule Jidoka.Output do
   end
 
   @doc """
-  Converts an output contract to JSON Schema for provider repair calls and docs.
+  Converts a result contract to JSON Schema for provider repair calls and docs.
   """
   @spec json_schema(t()) :: map()
   def json_schema(%__MODULE__{} = output), do: Schema.json_schema(output)
@@ -81,7 +86,7 @@ defmodule Jidoka.Output do
   def on_after_cmd(agent, action, directives, output), do: Runtime.on_after_cmd(agent, action, directives, output)
 
   @doc """
-  Finalizes a completed request result into structured output.
+  Finalizes a completed request result into the structured app-facing result.
   """
   @spec finalize(Jido.Agent.t(), String.t(), t(), keyword()) :: Jido.Agent.t()
   def finalize(agent, request_id, %__MODULE__{} = output, opts \\ []) when is_binary(request_id) do

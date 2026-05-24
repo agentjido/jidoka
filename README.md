@@ -107,7 +107,8 @@ Use these nouns consistently:
 - **memory** recalls useful facts from prior turns or external stores
 - **compaction** summarizes older transcript context so the next model call can
   stay smaller
-- **result** is the final value returned to application code
+- **result** is the final value returned to application code after Jidoka parses
+  and validates the raw model answer when a typed result contract is declared
 
 From there, add only what the agent actually needs:
 

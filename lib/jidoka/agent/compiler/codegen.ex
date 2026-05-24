@@ -219,7 +219,7 @@ defmodule Jidoka.Agent.Codegen do
       Returns the configured structured result schema, if any.
       """
       @spec result_schema() :: Zoi.schema() | map() | nil
-      def result_schema, do: unquote(Macro.escape(output_schema(definition.result)))
+      def result_schema, do: unquote(Macro.escape(result_schema(definition.result)))
 
       @doc """
       Returns first-class schedules declared for this agent.
@@ -400,6 +400,6 @@ defmodule Jidoka.Agent.Codegen do
     end
   end
 
-  defp output_schema(%Jidoka.Output{schema: schema}), do: schema
-  defp output_schema(_output), do: nil
+  defp result_schema(%Jidoka.Output{schema: schema}), do: schema
+  defp result_schema(_result), do: nil
 end
