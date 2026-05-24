@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:46Z",
+  "description": "Parent epic: V3 E17: Testing, examples, and docs\n\nSource task 7/7 from MILESTONE_V3.md:\n\n- Add docs for test doubles, deterministic actions, trace assertions, and\n  provider-gated live tests.\n\nEpic closure criteria:\n- docs, examples, and Livebooks teach the same progression\n- every shipped example has an automated smoke test\n",
+  "id": "jidoka-3di.18.7",
+  "labels": [],
+  "parent": "jidoka-3di.18",
+  "priority": 2,
+  "status": "open",
+  "title": "E17: Add docs for test doubles, deterministic actions, trace assertions, and provide...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:46Z"
+}
