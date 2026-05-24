@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:44Z",
+  "description": "Purpose: finalize portable agent specs and registries.\n\nDone when:\n- JSON and YAML import/export preserve the supported contract\n- registries are explicit, safe, and collision-resistant\n",
+  "id": "jidoka-3di.16",
+  "labels": [],
+  "parent": "jidoka-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "V3 E15: Imported agents",
+  "type": "epic",
+  "updated_at": "2026-05-24T20:35:44Z"
+}
