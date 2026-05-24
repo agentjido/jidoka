@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-24T20:35:40Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "jidoka-3di.7",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E6: Add tests for redaction, context merging, audit metadata, and blocked credentia...",
   "type": "task",
-  "updated_at": "2026-05-24T20:35:40Z"
+  "updated_at": "2026-05-24T23:59:50Z"
 }
