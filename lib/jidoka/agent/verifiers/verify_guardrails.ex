@@ -9,20 +9,21 @@ defmodule Jidoka.Agent.Verifiers.VerifyGuardrails do
        Spark.Dsl.Verifier.get_entities(dsl_state, [:controls]))
     |> Enum.filter(&guardrail_entity?/1)
     |> Enum.reduce_while({:ok, default_seen()}, fn
-      guardrail_ref, {:ok, seen} ->
-        stage = stage_for(guardrail_ref)
+      control_ref, {:ok, seen} ->
+        stage = stage_for(control_ref)
+        ref = control_ref(control_ref)
 
         cond do
-          duplicate_ref?(seen, stage, guardrail_ref.guardrail) ->
-            {:halt, {:error, duplicate_guardrail_error(dsl_state, guardrail_ref, stage)}}
+          duplicate_ref?(seen, stage, ref) ->
+            {:halt, {:error, duplicate_guardrail_error(dsl_state, control_ref, stage)}}
 
           true ->
-            case Jidoka.Guardrails.validate_dsl_guardrail_ref(stage, guardrail_ref.guardrail) do
+            case Jidoka.Guardrails.validate_dsl_guardrail_ref(stage, ref) do
               :ok ->
-                {:cont, {:ok, put_seen(seen, stage, guardrail_ref.guardrail)}}
+                {:cont, {:ok, put_seen(seen, stage, ref)}}
 
               {:error, message} ->
-                {:halt, {:error, guardrail_error(dsl_state, guardrail_ref, message)}}
+                {:halt, {:error, guardrail_error(dsl_state, control_ref, message)}}
             end
         end
     end)
@@ -32,19 +33,21 @@ defmodule Jidoka.Agent.Verifiers.VerifyGuardrails do
     end
   end
 
-  defp stage_for(%Jidoka.Agent.Dsl.InputGuardrail{}), do: :input
-  defp stage_for(%Jidoka.Agent.Dsl.OutputGuardrail{}), do: :output
-  defp stage_for(%Jidoka.Agent.Dsl.ToolGuardrail{}), do: :tool
+  defp stage_for(%Jidoka.Agent.Dsl.InputControl{}), do: :input
+  defp stage_for(%Jidoka.Agent.Dsl.ResultControl{}), do: :output
+  defp stage_for(%Jidoka.Agent.Dsl.OperationControl{}), do: :tool
 
-  defp guardrail_entity?(%Jidoka.Agent.Dsl.InputGuardrail{}), do: true
-  defp guardrail_entity?(%Jidoka.Agent.Dsl.OutputGuardrail{}), do: true
-  defp guardrail_entity?(%Jidoka.Agent.Dsl.ToolGuardrail{}), do: true
+  defp guardrail_entity?(%Jidoka.Agent.Dsl.InputControl{}), do: true
+  defp guardrail_entity?(%Jidoka.Agent.Dsl.ResultControl{}), do: true
+  defp guardrail_entity?(%Jidoka.Agent.Dsl.OperationControl{}), do: true
   defp guardrail_entity?(_other), do: false
+
+  defp control_ref(%{control: control}), do: control
 
   defp guardrail_error(dsl_state, guardrail_ref, message) do
     Spark.Error.DslError.exception(
       message: message,
-      path: [:lifecycle, stage_for(guardrail_ref)],
+      path: [:controls, stage_for(guardrail_ref)],
       module: Spark.Dsl.Verifier.get_persisted(dsl_state, :module),
       location: Spark.Dsl.Entity.anno(guardrail_ref)
     )
@@ -52,8 +55,8 @@ defmodule Jidoka.Agent.Verifiers.VerifyGuardrails do
 
   defp duplicate_guardrail_error(dsl_state, guardrail_ref, stage) do
     Spark.Error.DslError.exception(
-      message: "guardrail #{inspect(guardrail_ref.guardrail)} is defined more than once for #{stage}",
-      path: [:lifecycle, stage],
+      message: "control #{inspect(control_ref(guardrail_ref))} is defined more than once for #{stage}",
+      path: [:controls, stage],
       module: Spark.Dsl.Verifier.get_persisted(dsl_state, :module),
       location: Spark.Dsl.Entity.anno(guardrail_ref)
     )

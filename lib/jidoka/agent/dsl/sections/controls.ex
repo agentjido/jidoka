@@ -1,7 +1,7 @@
 defmodule Jidoka.Agent.Dsl.Sections.Controls do
   @moduledoc false
 
-  alias Jidoka.Agent.Dsl.{InputGuardrail, OutputGuardrail, ToolGuardrail}
+  alias Jidoka.Agent.Dsl.{InputControl, OperationControl, ResultControl}
 
   @spec input_entity() :: Spark.Dsl.Entity.t()
   def input_entity do
@@ -10,13 +10,13 @@ defmodule Jidoka.Agent.Dsl.Sections.Controls do
       describe: """
       Register a control that validates or interrupts the turn input.
       """,
-      target: InputGuardrail,
-      args: [:guardrail],
+      target: InputControl,
+      args: [:control],
       schema: [
-        guardrail: [
+        control: [
           type: :any,
           required: true,
-          doc: "A Jidoka.Guardrail module or MFA tuple."
+          doc: "A Jidoka.Control module or MFA tuple."
         ]
       ]
     }
@@ -29,13 +29,13 @@ defmodule Jidoka.Agent.Dsl.Sections.Controls do
       describe: """
       Register a control that validates or interrupts the final agent result.
       """,
-      target: OutputGuardrail,
-      args: [:guardrail],
+      target: ResultControl,
+      args: [:control],
       schema: [
-        guardrail: [
+        control: [
           type: :any,
           required: true,
-          doc: "A Jidoka.Guardrail module or MFA tuple."
+          doc: "A Jidoka.Control module or MFA tuple."
         ]
       ]
     }
@@ -48,13 +48,13 @@ defmodule Jidoka.Agent.Dsl.Sections.Controls do
       describe: """
       Register a control that validates or interrupts an agent operation.
       """,
-      target: ToolGuardrail,
-      args: [:guardrail],
+      target: OperationControl,
+      args: [:control],
       schema: [
-        guardrail: [
+        control: [
           type: :any,
           required: true,
-          doc: "A Jidoka.Guardrail module or MFA tuple."
+          doc: "A Jidoka.Control module or MFA tuple."
         ],
         when: [
           type: :any,

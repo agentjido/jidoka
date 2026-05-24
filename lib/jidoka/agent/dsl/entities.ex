@@ -220,20 +220,20 @@ defmodule Jidoka.Agent.Dsl.InterruptHook do
   defstruct [:hook, :__spark_metadata__]
 end
 
-defmodule Jidoka.Agent.Dsl.InputGuardrail do
+defmodule Jidoka.Agent.Dsl.InputControl do
   @moduledoc false
 
-  defstruct [:guardrail, :__spark_metadata__]
+  defstruct [:control, :__spark_metadata__]
 end
 
-defmodule Jidoka.Agent.Dsl.OutputGuardrail do
+defmodule Jidoka.Agent.Dsl.ResultControl do
   @moduledoc false
 
-  defstruct [:guardrail, :__spark_metadata__]
+  defstruct [:control, :__spark_metadata__]
 end
 
-defmodule Jidoka.Agent.Dsl.ToolGuardrail do
+defmodule Jidoka.Agent.Dsl.OperationControl do
   @moduledoc false
 
-  defstruct [:guardrail, :match, :__spark_metadata__]
+  defstruct [:control, :match, :__spark_metadata__]
 end

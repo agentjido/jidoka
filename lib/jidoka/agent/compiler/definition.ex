@@ -319,9 +319,9 @@ defmodule Jidoka.Agent.Definition do
     section_entities(
       owner_module,
       path,
-      &(match?(%Jidoka.Agent.Dsl.InputGuardrail{}, &1) or
-          match?(%Jidoka.Agent.Dsl.OutputGuardrail{}, &1) or
-          match?(%Jidoka.Agent.Dsl.ToolGuardrail{}, &1))
+      &(match?(%Jidoka.Agent.Dsl.InputControl{}, &1) or
+          match?(%Jidoka.Agent.Dsl.ResultControl{}, &1) or
+          match?(%Jidoka.Agent.Dsl.OperationControl{}, &1))
     )
   end
 end

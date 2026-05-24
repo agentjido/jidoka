@@ -88,21 +88,21 @@ defmodule Jidoka.Agent.Definition.LifecycleConfig do
 
   defp guardrails_stage_map(guardrail_entities, owner_module) do
     Enum.reduce(guardrail_entities, Jidoka.Guardrails.default_stage_map(), fn
-      %Jidoka.Agent.Dsl.InputGuardrail{guardrail: guardrail}, acc ->
-        Map.update!(acc, :input, &(&1 ++ [guardrail]))
+      %Jidoka.Agent.Dsl.InputControl{control: control}, acc ->
+        Map.update!(acc, :input, &(&1 ++ [control]))
 
-      %Jidoka.Agent.Dsl.OutputGuardrail{guardrail: guardrail}, acc ->
-        Map.update!(acc, :output, &(&1 ++ [guardrail]))
+      %Jidoka.Agent.Dsl.ResultControl{control: control}, acc ->
+        Map.update!(acc, :output, &(&1 ++ [control]))
 
-      %Jidoka.Agent.Dsl.ToolGuardrail{guardrail: guardrail, match: match}, acc ->
-        Map.update!(acc, :tool, &(&1 ++ [operation_control!(owner_module, guardrail, match)]))
+      %Jidoka.Agent.Dsl.OperationControl{control: control, match: match}, acc ->
+        Map.update!(acc, :tool, &(&1 ++ [operation_control!(owner_module, control, match)]))
     end)
   end
 
-  defp operation_control!(_owner_module, guardrail, nil), do: guardrail
+  defp operation_control!(_owner_module, control, nil), do: control
 
-  defp operation_control!(owner_module, guardrail, match) do
-    %Jidoka.Control.Operation{ref: guardrail, match: normalize_operation_match!(owner_module, match)}
+  defp operation_control!(owner_module, control, match) do
+    %Jidoka.Control.Operation{ref: control, match: normalize_operation_match!(owner_module, match)}
   end
 
   defp normalize_operation_match!(owner_module, match) when is_list(match) do

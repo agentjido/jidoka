@@ -65,6 +65,27 @@ defmodule JidokaTest.DslValidationTest do
     assert module.result_controls() == [JidokaTest.SafeReplyGuardrail]
   end
 
+  test "supports final V3 operation control matching syntax" do
+    module =
+      compile_agent("""
+      agent :matched_control_agent do
+        instructions "Apply matched controls."
+      end
+
+      controls do
+        operation JidokaTest.BlockOperationControl,
+          when: [kind: :subagent]
+      end
+      """)
+
+    assert [
+             %Jidoka.Control.Operation{
+               ref: JidokaTest.BlockOperationControl,
+               match: %{kind: :subagent}
+             }
+           ] = module.operation_controls()
+  end
+
   test "compiles every supported V3 DSL section" do
     module =
       compile_agent("""
