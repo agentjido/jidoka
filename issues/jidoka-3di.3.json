@@ -15,9 +15,15 @@
   "id": "jidoka-3di.3",
   "labels": [],
   "parent": "jidoka-3di",
+  "comments": [
+    {
+      "text": "Completed E2. Core chat/session model is now covered across module, pid, id, and session targets; sessions are documented and tested as descriptors/addressing; duplicate facades are removed; edge cases and beginner-facing error shapes are covered; process ownership docs are clearer.",
+      "timestamp": "2026-05-24T22:13:12Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "V3 E2: Agents, chat turns, and sessions",
   "type": "epic",
-  "updated_at": "2026-05-24T21:47:08Z"
+  "updated_at": "2026-05-24T22:13:12Z"
 }
