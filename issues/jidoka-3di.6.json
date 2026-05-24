@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.5"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:40Z",
   "description": "Purpose: collapse hooks/guardrails/middleware into one teachable policy model.\n\nDone when:\n- Controls are the one public policy concept\n- human-in-the-loop is demonstrated without new runtime machinery\n- raising controls cannot crash the agent process\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E5: Controls and human in the loop",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:40Z"
+  "updated_at": "2026-05-24T20:35:47Z"
 }
