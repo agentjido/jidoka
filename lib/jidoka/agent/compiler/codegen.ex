@@ -203,13 +203,25 @@ defmodule Jidoka.Agent.Codegen do
       def context, do: unquote(Macro.escape(definition.context))
 
       @doc """
-      Returns the configured structured output contract, if any.
+      Returns the configured structured result contract, if any.
+      """
+      @spec result() :: Jidoka.Output.t() | nil
+      def result, do: unquote(Macro.escape(definition.result))
+
+      @doc """
+      Returns the configured structured result schema, if any.
+      """
+      @spec result_schema() :: Zoi.schema() | map() | nil
+      def result_schema, do: unquote(Macro.escape(output_schema(definition.result)))
+
+      @doc """
+      Returns the configured structured result contract, if any.
       """
       @spec output() :: Jidoka.Output.t() | nil
       def output, do: unquote(Macro.escape(definition.output))
 
       @doc """
-      Returns the configured structured output schema, if any.
+      Returns the configured structured result schema, if any.
       """
       @spec output_schema() :: Zoi.schema() | map() | nil
       def output_schema, do: unquote(Macro.escape(output_schema(definition.output)))

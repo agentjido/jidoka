@@ -117,25 +117,20 @@ defmodule JidokaTest.DslValidationTest do
     """)
   end
 
-  test "validates structured output contracts" do
-    assert_dsl_error(~r/output schema must be a Zoi object\/map schema/, """
+  test "validates structured result contracts" do
+    assert_dsl_error(~r/result schema must be a Zoi object\/map schema/, """
     agent :invalid_output_schema_agent do
       instructions "This should fail."
 
-      output do
-        schema Zoi.string()
-      end
+      result Zoi.string()
     end
     """)
 
-    assert_dsl_error(~r/output retries must be a non-negative integer/, """
+    assert_dsl_error(~r/result repair must be a non-negative integer/, """
     agent :invalid_output_retries_agent do
       instructions "This should fail."
 
-      output do
-        schema Zoi.object(%{summary: Zoi.string()})
-        retries -1
-      end
+      result Zoi.object(%{summary: Zoi.string()}), repair: -1
     end
     """)
 
@@ -143,9 +138,7 @@ defmodule JidokaTest.DslValidationTest do
     agent :json_schema_output_agent do
       instructions "This should fail."
 
-      output do
-        schema %{"type" => "object", "properties" => %{"summary" => %{"type" => "string"}}}
-      end
+      result %{"type" => "object", "properties" => %{"summary" => %{"type" => "string"}}}
     end
     """)
   end

@@ -1,13 +1,14 @@
 defmodule Jidoka.Agent.Dsl.Sections.Contract do
   @moduledoc false
 
-  @spec output_entity() :: Spark.Dsl.Entity.t()
-  def output_entity do
+  @spec result_entity() :: Spark.Dsl.Entity.t()
+  def result_entity do
     %Spark.Dsl.Entity{
-      name: :output,
-      target: Jidoka.Agent.Dsl.Output,
+      name: :result,
+      target: Jidoka.Agent.Dsl.Result,
+      args: [:schema],
       describe: """
-      Configure the final structured output contract for this agent.
+      Configure the final structured result contract for this agent.
       """,
       schema: [
         schema: [
@@ -15,11 +16,12 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
           required: true,
           doc: "A Zoi object/map schema for the final agent response."
         ],
-        retries: [
+        repair: [
           type: :integer,
           required: false,
+          as: :retries,
           default: 1,
-          doc: "Number of final-output repair attempts. Values above 3 are capped."
+          doc: "Number of final result repair attempts. Values above 3 are capped."
         ],
         on_validation_error: [
           type: {:in, [:repair, :error]},
@@ -37,7 +39,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
       name: :agent,
       target: Jidoka.Agent.Dsl.Agent,
       args: [:id],
-      singleton_entity_keys: [:output],
+      singleton_entity_keys: [:result],
       describe: """
       Configure the immutable Jidoka agent contract.
       """,
@@ -87,7 +89,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
         ]
       ],
       entities: [
-        output: [output_entity()]
+        result: [result_entity()]
       ]
     }
   end

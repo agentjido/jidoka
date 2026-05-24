@@ -11,12 +11,13 @@ defmodule JidokaTest.OutputTest do
             summary: Zoi.string()
           })
 
-  test "builds an agent-level output contract and exposes generated helpers" do
+  test "builds an agent-level result contract and exposes generated helpers" do
     assert %Output{schema_kind: :zoi, retries: 1, on_validation_error: :repair} =
-             StructuredOutputAgent.output()
+             StructuredOutputAgent.result()
 
-    assert StructuredOutputAgent.output_schema() == StructuredOutputAgent.output().schema
-    assert StructuredOutputAgent.__jidoka__().output == StructuredOutputAgent.output()
+    assert StructuredOutputAgent.result_schema() == StructuredOutputAgent.result().schema
+    assert StructuredOutputAgent.__jidoka__().result == StructuredOutputAgent.result()
+    assert StructuredOutputAgent.output() == StructuredOutputAgent.result()
   end
 
   test "parses JSON text and validates through Zoi with normalized keys and atom enums" do

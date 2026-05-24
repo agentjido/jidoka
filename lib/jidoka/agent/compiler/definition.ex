@@ -46,7 +46,7 @@ defmodule Jidoka.Agent.Definition do
     configured_context_schema = ContextConfig.resolve_schema!(agent.context, owner_module)
 
     configured_context = ContextConfig.resolve_defaults!(owner_module, configured_context_schema)
-    configured_output = OutputConfig.resolve!(owner_module, agent.output)
+    configured_output = OutputConfig.resolve!(owner_module, agent.result)
     configured_schedules = ScheduleConfig.resolve!(owner_module)
     configured_compaction = CompactionConfig.resolve!(owner_module)
 
@@ -215,6 +215,7 @@ defmodule Jidoka.Agent.Definition do
       model: resolved_model,
       context_schema: configured_context_schema,
       context: configured_context,
+      result: configured_output,
       output: configured_output,
       schedules: configured_schedules,
       compaction: configured_compaction,
@@ -257,6 +258,7 @@ defmodule Jidoka.Agent.Definition do
       character_spec: character_spec,
       context_schema: configured_context_schema,
       context: configured_context,
+      result: configured_output,
       output: configured_output,
       schedules: configured_schedules,
       compaction: configured_compaction,

@@ -185,9 +185,8 @@ defmodule JidokaTest.StructuredOutputAgent do
     model :fast
     instructions "Classify the ticket and return the configured object."
 
-    output do
-      schema @output_schema
-      retries(1)
+    result @output_schema do
+      repair(1)
       on_validation_error(:repair)
     end
   end
@@ -210,9 +209,8 @@ defmodule JidokaTest.StructuredOutputPlainAgent do
     model :fast
     instructions "Classify the ticket and return the configured object."
 
-    output do
-      schema @output_schema
-      retries(1)
+    result @output_schema do
+      repair(1)
       on_validation_error(:repair)
     end
   end

@@ -8,12 +8,12 @@ defmodule Jidoka.Agent.Dsl.Agent do
     :character,
     :description,
     :context,
-    :output,
+    :result,
     :__spark_metadata__
   ]
 end
 
-defmodule Jidoka.Agent.Dsl.Output do
+defmodule Jidoka.Agent.Dsl.Result do
   @moduledoc false
 
   defstruct [:schema, :retries, :on_validation_error, :__spark_metadata__]
