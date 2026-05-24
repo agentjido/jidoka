@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.9",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Removed legacy Spark sections, top-level memory parser registration, legacy placement verifier, and lifecycle guardrail entities. Added forbidden-section macros so discarded V3 shapes fail fast. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:33:35Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Remove dead verifiers/entities created only for discarded DSL shapes",
   "type": "task",
-  "updated_at": "2026-05-24T21:28:53Z"
+  "updated_at": "2026-05-24T21:33:35Z"
 }
