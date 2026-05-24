@@ -18,6 +18,45 @@ defmodule JidokaTest.ContextMemoryTest do
     assert Keyword.get(opts, :tool_context) == %{tenant: "acme", locale: "en-US"}
   end
 
+  test "passes naked context maps through agents without a schema" do
+    assert {:ok, opts} =
+             Jidoka.Agent.prepare_chat_opts(
+               [context: %{tenant: "acme", actor_id: "user-1", ticket: %{id: "T-123"}}],
+               nil
+             )
+
+    assert Keyword.get(opts, :tool_context) == %{
+             tenant: "acme",
+             actor_id: "user-1",
+             ticket: %{id: "T-123"}
+           }
+
+    assert {:ok, pid} = ChatAgent.start_link(id: "naked-context-map-test")
+    test_pid = self()
+
+    guardrail = fn input ->
+      send(test_pid, {:naked_context, Jidoka.Context.strip_internal(input.context)})
+      {:interrupt, %{kind: :approval, message: "stop before provider", data: %{}}}
+    end
+
+    try do
+      assert {:interrupt, %Jidoka.Interrupt{kind: :approval}} =
+               Jidoka.chat(pid, "hello",
+                 context: %{tenant: "acme", actor_id: "user-1", ticket: %{id: "T-123"}},
+                 guardrails: [input: guardrail]
+               )
+
+      assert_receive {:naked_context,
+                      %{
+                        tenant: "acme",
+                        actor_id: "user-1",
+                        ticket: %{id: "T-123"}
+                      }}
+    after
+      :ok = Jidoka.stop_agent(pid)
+    end
+  end
+
   test "rejects malformed context lists with a structured validation error instead of raising" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Jidoka.Agent.prepare_chat_opts([context: [1, 2]], nil)
