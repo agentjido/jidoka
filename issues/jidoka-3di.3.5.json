@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.5",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Expanded session lifecycle coverage to call Session.snapshot/2 and Session.trace/2 directly after a session chat turn, alongside existing context, conversation id, agent id, inspect_request/trace, and handoff helper coverage. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:56:58Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Confirm session context, conversation id, agent id, handoff owner, trace, and s...",
   "type": "task",
-  "updated_at": "2026-05-24T21:55:46Z"
+  "updated_at": "2026-05-24T21:56:58Z"
 }
