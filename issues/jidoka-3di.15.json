@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.5"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:43Z",
   "description": "Purpose: finalize external capability integration.\n\nDone when:\n- core integrations are tested and safe by default\n- large catalog support has a clear extension boundary\n- anything that should move to a companion package has an issue or explicit\n  contract\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E14: Tool integrations",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:43Z"
+  "updated_at": "2026-05-24T20:35:48Z"
 }
