@@ -218,7 +218,7 @@ and production telemetry tell the same story.
 - **Actions:** expose deterministic operations the agent may call.
 - **Controls:** add policy at input, operation, and result boundaries.
 - **Human-in-the-loop:** pause risky inputs, operations, or results for manual
-  approval through controls and interrupts.
+  approval through controls, `Jidoka.Approval`, and interrupts.
 - **Credential brokering:** planned support for authenticated tools to use
   credentials without exposing raw secrets to the model.
 - **Debugging:** inspect prompts, requests, traces, runtime state, and projected

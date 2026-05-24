@@ -72,6 +72,16 @@ defmodule JidokaTest.GuardrailsTest do
     assert_control_short_circuits({:error, :failed}, {:error, "anonymous_guardrail", :failed})
   end
 
+  test "approval helper gives controls a named human-in-the-loop return value" do
+    control = fn _input ->
+      Jidoka.Approval.request("Approve the refund.", data: [amount: 10_000])
+    end
+
+    assert {:interrupt, "anonymous_guardrail",
+            %Jidoka.Interrupt{kind: :approval, message: "Approve the refund.", data: %{amount: 10_000}}} =
+             Jidoka.Guardrails.Runner.run_guardrails([control], control_input())
+  end
+
   test "runs operation controls only when their condition matches" do
     runtime = ConditionalControlAgent.runtime_module()
     agent = new_runtime_agent(runtime)
