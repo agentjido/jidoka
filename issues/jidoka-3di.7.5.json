@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T23:59:21Z",
   "created": "2026-05-24T20:35:40Z",
   "description": "Parent epic: V3 E6: Credential brokering\n\nSource task 5/8 from MILESTONE_V3.md:\n\n- Add tracing that records credential references without secret values.\n\nEpic closure criteria:\n- credential brokering has either a working minimal implementation or a\n  deliberately documented interface contract with follow-up issues\n- the security invariant is tested: no raw credential values leak\n",
   "id": "jidoka-3di.7.5",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E6: Add tracing that records credential references without secret values",
   "type": "task",
   "updated_at": "2026-05-24T23:59:21Z"
