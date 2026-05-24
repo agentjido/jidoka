@@ -7,9 +7,15 @@
   "id": "jidoka-3di.5.2",
   "labels": [],
   "parent": "jidoka-3di.5",
+  "comments": [
+    {
+      "text": "Strengthened action metadata tests: action name/description, Zoi schema presence, provider tool JSON Schema fields, and generated agent tool metadata are now asserted explicitly.",
+      "timestamp": "2026-05-24T22:43:05Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E4: Verify action schemas, descriptions, names, and generated tool metadata",
   "type": "task",
-  "updated_at": "2026-05-24T22:41:11Z"
+  "updated_at": "2026-05-24T22:43:05Z"
 }
