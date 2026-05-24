@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:39Z",
+  "description": "Parent epic: V3 E4: Actions and tools\n\nSource task 1/7 from MILESTONE_V3.md:\n\n- Standardize V3 naming around `action`; use `tool` only where model/provider\n  terminology requires it.\n\nEpic closure criteria:\n- the public DSL reads as actions/capabilities, not plumbing\n- all operation surfaces have consistent validation and inspection\n- tests cover duplicate/invalid operation registration\n",
+  "id": "jidoka-3di.5.1",
+  "labels": [],
+  "parent": "jidoka-3di.5",
+  "priority": 2,
+  "status": "open",
+  "title": "E4: Standardize V3 naming around action; use tool only where model/provider termino...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:39Z"
+}
