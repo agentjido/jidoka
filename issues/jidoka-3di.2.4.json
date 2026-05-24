@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T21:11:47Z",
   "created": "2026-05-24T20:35:38Z",
   "description": "Parent epic: V3 E1: Simplified DSL foundation\n\nSource task 4/13 from MILESTONE_V3.md:\n\n- Decide final nouns for agent, context, result, actions, controls, memory,\n  compaction, schedules, workflows, subagents, handoffs, and imports.\n\nEpic closure criteria:\n- the simplified DSL is the only documented DSL\n- pre-V3 DSL shapes are removed\n- DSL tests cover success, failure, and error-message quality\n",
   "id": "jidoka-3di.2.4",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E1: Decide final nouns for agent, context, result, actions, controls, memory, compa...",
   "type": "task",
   "updated_at": "2026-05-24T21:11:47Z"
