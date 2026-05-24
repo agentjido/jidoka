@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.5",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Documented control stage ordering and short-circuit semantics, and added tests proving controls run in declaration order while allow results continue, then stop later controls on block, interrupt, or error.",
+      "timestamp": "2026-05-24T23:11:35Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E5: Define control execution order and short-circuit semantics",
   "type": "task",
-  "updated_at": "2026-05-24T23:09:20Z"
+  "updated_at": "2026-05-24T23:11:35Z"
 }
