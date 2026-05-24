@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T23:13:56Z",
   "created": "2026-05-24T20:35:40Z",
   "description": "Parent epic: V3 E5: Controls and human in the loop\n\nSource task 8/9 from MILESTONE_V3.md:\n\n- Add tests for input controls, operation controls, result controls, ordering,\n  conditional matching, interruption, approval resume, and raising controls.\n\nEpic closure criteria:\n- Controls are the one public policy concept\n- human-in-the-loop is demonstrated without new runtime machinery\n- raising controls cannot crash the agent process\n",
   "id": "jidoka-3di.6.8",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E5: Add tests for input controls, operation controls, result controls, ordering, co...",
   "type": "task",
   "updated_at": "2026-05-24T23:13:56Z"
