@@ -65,6 +65,95 @@ defmodule JidokaTest.DslValidationTest do
     assert module.output_guardrails() == [JidokaTest.SafeReplyGuardrail]
   end
 
+  test "compiles every supported V3 DSL section" do
+    module =
+      compile_agent("""
+      @result_schema Zoi.object(%{summary: Zoi.string()})
+
+      agent :full_section_agent do
+        model :fast
+        instructions "Exercise the supported DSL sections."
+        character :none
+        context Zoi.object(%{tenant: Zoi.string() |> Zoi.default("demo")})
+
+        result @result_schema do
+          repair(1)
+          on_validation_error(:repair)
+        end
+      end
+
+      tools do
+        action JidokaTest.AddNumbers
+      end
+
+      capabilities do
+        plugin JidokaTest.MathPlugin
+      end
+
+      lifecycle do
+        before_turn JidokaTest.InjectTenantHook
+        after_turn JidokaTest.NormalizeReplyHook
+        on_interrupt JidokaTest.NotifyOpsHook
+
+        memory do
+          mode :conversation
+          namespace :per_agent
+          capture :conversation
+          inject :instructions
+          retrieve(limit: 2)
+        end
+
+        compaction do
+          mode :manual
+          strategy :summary
+          max_messages(8)
+          keep_last(2)
+          max_summary_chars(256)
+          prompt("Compact older context.")
+        end
+      end
+
+      controls do
+        input JidokaTest.SafePromptGuardrail
+        operation JidokaTest.ApproveLargeMathToolGuardrail
+        result JidokaTest.SafeReplyGuardrail
+      end
+
+      schedules do
+        schedule :daily_digest do
+          cron("0 9 * * *")
+          timezone("America/Chicago")
+          prompt("Prepare the daily digest.")
+          conversation("daily-digest")
+          overlap(:skip)
+        end
+      end
+      """)
+
+    assert module.id() == "full_section_agent"
+    assert module.context().tenant == "demo"
+    assert module.result_schema() != nil
+    assert module.tool_names() == ["add_numbers", "multiply_numbers"]
+    assert module.plugins() == [JidokaTest.MathPlugin]
+    assert module.before_turn_hooks() == [JidokaTest.InjectTenantHook]
+    assert module.after_turn_hooks() == [JidokaTest.NormalizeReplyHook]
+    assert module.interrupt_hooks() == [JidokaTest.NotifyOpsHook]
+    assert %{mode: :conversation, namespace: :per_agent} = module.memory()
+    assert %{mode: :manual, strategy: :summary, keep_last: 2} = module.compaction()
+    assert module.input_guardrails() == [JidokaTest.SafePromptGuardrail]
+    assert module.tool_guardrails() == [JidokaTest.ApproveLargeMathToolGuardrail]
+    assert module.output_guardrails() == [JidokaTest.SafeReplyGuardrail]
+
+    assert [
+             %Jidoka.Schedule{
+               id: "full_section_agent:daily_digest",
+               cron: "0 9 * * *",
+               prompt: "Prepare the daily digest.",
+               conversation: "daily-digest"
+             }
+           ] = module.schedules()
+  end
+
   test "rejects discarded top-level sections" do
     for {section, body} <- [
           {"defaults", "model :fast"},
@@ -200,6 +289,35 @@ defmodule JidokaTest.DslValidationTest do
     lifecycle do
       memory do
         namespace {:context, :session}
+      end
+    end
+    """)
+  end
+
+  test "validates compaction lifecycle configuration" do
+    assert_dsl_error(~r/keep_last must be less than max_messages/, """
+    agent :invalid_compaction_agent do
+      instructions "This should fail."
+    end
+
+    lifecycle do
+      compaction do
+        max_messages(4)
+        keep_last(4)
+      end
+    end
+    """)
+  end
+
+  test "validates schedule configuration" do
+    assert_dsl_error(~r/prompt.*required|required.*prompt/s, """
+    agent :invalid_schedule_agent do
+      instructions "This should fail."
+    end
+
+    schedules do
+      schedule :missing_prompt do
+        cron("0 9 * * *")
       end
     end
     """)
