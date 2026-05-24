@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:45Z",
+  "description": "Purpose: rebuild the teaching surface after the implementation settles.\n\nDone when:\n- docs, examples, and Livebooks teach the same progression\n- every shipped example has an automated smoke test\n",
+  "id": "jidoka-3di.18",
+  "labels": [],
+  "parent": "jidoka-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "V3 E17: Testing, examples, and docs",
+  "type": "epic",
+  "updated_at": "2026-05-24T20:35:45Z"
+}
