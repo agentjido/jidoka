@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:38Z",
+  "description": "Root epic for Milestone V3.\n\nGoal: clean-break V3 surface for Jidoka's simplified DSL and feature closure.\n\nLoaded from MILESTONE_V3.md. The root document contains phase gates, the full DAG, operating rules, task details, and the risk register.\n",
+  "id": "jidoka-3di",
+  "labels": [],
+  "priority": 1,
+  "status": "open",
+  "title": "V3: simplified DSL and feature closure",
+  "type": "epic",
+  "updated_at": "2026-05-24T20:35:38Z"
+}
