@@ -21,6 +21,23 @@ defmodule JidokaTest.OutputTest do
     refute function_exported?(StructuredOutputAgent, :output_schema, 0)
   end
 
+  test "typed result contracts expose instructions and JSON Schema" do
+    result = StructuredOutputAgent.result()
+
+    assert Output.instructions(result) =~ "Return the final answer as a single JSON object"
+
+    assert %{
+             "type" => "object",
+             "required" => required,
+             "properties" => properties
+           } = Output.json_schema(result)
+
+    assert Enum.sort(required) == ["category", "confidence", "summary"]
+    assert properties["category"]["enum"] == ["billing", "technical", "account"]
+    assert properties["confidence"]["type"] == "number"
+    assert properties["summary"]["type"] == "string"
+  end
+
   test "parses JSON text and validates through Zoi with normalized keys and atom enums" do
     {:ok, output} = Output.new(schema: @schema)
 
