@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:43Z",
+  "description": "Parent epic: V3 E12: Workflows\n\nSource task 4/6 from MILESTONE_V3.md:\n\n- Verify functions, tools, agents, imported agents, context, inputs, outputs,\n  and failure handling.\n\nEpic closure criteria:\n- workflows are deterministic and testable without model calls\n- workflow-as-action execution is documented and verified\n",
+  "id": "jidoka-3di.13.4",
+  "labels": [],
+  "parent": "jidoka-3di.13",
+  "priority": 2,
+  "status": "open",
+  "title": "E12: Verify functions, tools, agents, imported agents, context, inputs, outputs, and...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:43Z"
+}
