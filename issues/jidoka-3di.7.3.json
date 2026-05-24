@@ -7,9 +7,15 @@
   "id": "jidoka-3di.7.3",
   "labels": [],
   "parent": "jidoka-3di.7",
+  "comments": [
+    {
+      "text": "Added raw credential detection and rejection across public chat/session context and tool preflight, while redacting sensitive debug context previews.",
+      "timestamp": "2026-05-24T23:51:49Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E6: Ensure raw secrets never enter prompts, transcripts, traces, or tool args",
   "type": "task",
-  "updated_at": "2026-05-24T23:48:27Z"
+  "updated_at": "2026-05-24T23:51:49Z"
 }
