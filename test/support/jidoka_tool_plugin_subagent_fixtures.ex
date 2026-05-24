@@ -20,6 +20,15 @@ defmodule JidokaTest.MultiplyNumbers do
   end
 end
 
+defmodule JidokaTest.FailingAction do
+  use Jidoka.Action,
+    description: "Always returns the requested failure reason.",
+    schema: Zoi.object(%{reason: Zoi.string()})
+
+  @impl true
+  def run(%{reason: reason}, _context), do: {:error, reason}
+end
+
 defmodule JidokaTest.ToolAgent do
   use Jidoka.Agent
 

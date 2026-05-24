@@ -133,7 +133,7 @@ defmodule Jidoka.Tool do
         if Enum.uniq(names) == names do
           {:ok, names}
         else
-          {:error, "action names must be unique within a Jidoka agent"}
+          {:error, duplicate_operation_names_message(names)}
         end
 
       other ->
@@ -177,7 +177,7 @@ defmodule Jidoka.Tool do
         if Enum.uniq(names) == names do
           {:ok, names}
         else
-          {:error, "action names must be unique within a Jidoka agent"}
+          {:error, duplicate_operation_names_message(names)}
         end
 
       other ->
@@ -303,5 +303,15 @@ defmodule Jidoka.Tool do
     else
       :ok
     end
+  end
+
+  defp duplicate_operation_names_message(names) do
+    duplicates =
+      names
+      |> Enum.frequencies()
+      |> Enum.filter(fn {_name, count} -> count > 1 end)
+      |> Enum.map_join(", ", fn {name, _count} -> name end)
+
+    "duplicate operation names in Jidoka agent: #{duplicates}"
   end
 end
