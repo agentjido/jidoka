@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.8",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Updated public docs and test fixtures to prefer V3 tools/actions and controls/result syntax. Verified with focused DSL/control/capability tests plus full mix test.",
+      "timestamp": "2026-05-24T21:28:34Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Replace pre-V3 DSL terms in docs and tests",
   "type": "task",
-  "updated_at": "2026-05-24T21:24:25Z"
+  "updated_at": "2026-05-24T21:28:34Z"
 }
