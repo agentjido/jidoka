@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.7",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Added Jidoka.Approval.request/2 as the named human-in-the-loop helper for controls. It returns a structured approval interrupt and is covered by control runner tests and README feature text.",
+      "timestamp": "2026-05-24T23:15:29Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E5: Make human-in-the-loop a named feature using interrupts and approvals",
   "type": "task",
-  "updated_at": "2026-05-24T23:14:20Z"
+  "updated_at": "2026-05-24T23:15:29Z"
 }
