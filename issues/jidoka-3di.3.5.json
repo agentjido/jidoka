@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T21:56:59Z",
   "created": "2026-05-24T20:35:39Z",
   "description": "Parent epic: V3 E2: Agents, chat turns, and sessions\n\nSource task 5/10 from MILESTONE_V3.md:\n\n- Confirm session context, conversation id, agent id, handoff owner, trace, and\n  snapshot helpers.\n\nEpic closure criteria:\n- `chat/3` is the one public turn primitive\n- sessions are clearly addressing, not durability\n- session and chat tests cover happy paths and edge cases\n",
   "id": "jidoka-3di.3.5",
@@ -14,8 +15,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E2: Confirm session context, conversation id, agent id, handoff owner, trace, and s...",
   "type": "task",
-  "updated_at": "2026-05-24T21:56:58Z"
+  "updated_at": "2026-05-24T21:56:59Z"
 }
