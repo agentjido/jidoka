@@ -7,9 +7,15 @@
   "id": "jidoka-3di.6.2",
   "labels": [],
   "parent": "jidoka-3di.6",
+  "comments": [
+    {
+      "text": "Added the public controls facade and request `controls:` option, exposed generated `controls/0` as input/result/operation, normalized control option errors under `:controls`, and kept the existing internal runner as the execution backend for this slice.",
+      "timestamp": "2026-05-24T23:08:47Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E5: Replace input/output/tool guardrails with input/result/operation controls",
   "type": "task",
-  "updated_at": "2026-05-24T23:03:34Z"
+  "updated_at": "2026-05-24T23:08:47Z"
 }
