@@ -5,45 +5,73 @@ defmodule Jidoka.Guardrails.Runner do
   alias Jidoka.Interrupt
 
   @guardrail_timeout_ms 5_000
+  @type control_result(input) :: {:ok, input} | {:error, String.t(), term()} | {:interrupt, String.t(), Interrupt.t()}
 
   @spec run_input([Jidoka.Guardrails.guardrail_ref()], Input.t()) ::
-          :ok | {:error, String.t(), term()} | {:interrupt, String.t(), Interrupt.t()}
+          control_result(Input.t())
   def run_input(guardrails, %Input{} = input) do
-    run_guardrails(guardrails, input)
+    run_controls(guardrails, input)
   end
 
   @spec run_output([Jidoka.Guardrails.guardrail_ref()], Output.t()) ::
-          :ok | {:error, String.t(), term()} | {:interrupt, String.t(), Interrupt.t()}
+          control_result(Output.t())
   def run_output(guardrails, %Output{} = input) do
-    run_guardrails(guardrails, input)
+    run_controls(guardrails, input)
   end
 
   @spec run_guardrails([Jidoka.Guardrails.guardrail_ref()], struct()) ::
           :ok | {:error, String.t(), term()} | {:interrupt, String.t(), Interrupt.t()}
   def run_guardrails(guardrails, input) do
-    Enum.reduce_while(guardrails, :ok, fn guardrail, :ok ->
-      label = guardrail_label(guardrail)
-      trace_guardrail(input, label, :start)
+    case run_controls(guardrails, input) do
+      {:ok, _input} -> :ok
+      other -> other
+    end
+  end
 
-      case invoke_guardrail(guardrail, input) do
-        result when result in [:ok, :cont] ->
-          trace_guardrail(input, label, :allow, %{outcome: :allow})
-          {:cont, :ok}
+  @spec run_controls([Jidoka.Guardrails.guardrail_ref()], struct()) ::
+          control_result(struct())
+  def run_controls(guardrails, input) do
+    Enum.reduce_while(guardrails, {:ok, input}, fn guardrail, {:ok, input_acc} ->
+      label = guardrail_label(guardrail)
+      trace_guardrail(input_acc, label, :start)
+
+      case invoke_guardrail(guardrail, input_acc) do
+        result when result in [:ok, :cont, :allow] ->
+          trace_guardrail(input_acc, label, :allow, %{outcome: :allow})
+          {:cont, {:ok, input_acc}}
+
+        {:transform, transform} ->
+          case apply_transform(input_acc, transform) do
+            {:ok, transformed_input} ->
+              case validate_transformed_input(transformed_input) do
+                :ok ->
+                  trace_guardrail(input_acc, label, :transform, %{outcome: :transform})
+                  {:cont, {:ok, transformed_input}}
+
+                {:error, reason} ->
+                  trace_guardrail(input_acc, label, :error, %{outcome: :error, error: reason})
+                  {:halt, {:error, label, reason}}
+              end
+
+            {:error, reason} ->
+              trace_guardrail(input_acc, label, :error, %{outcome: :error, error: Jidoka.Error.format(reason)})
+              {:halt, {:error, label, reason}}
+          end
 
         {:block, reason} ->
-          trace_guardrail(input, label, :block, %{outcome: :block, error: Jidoka.Error.format(reason)})
+          trace_guardrail(input_acc, label, :block, %{outcome: :block, error: Jidoka.Error.format(reason)})
           {:halt, {:error, label, reason}}
 
         {:error, reason} ->
-          trace_guardrail(input, label, :error, %{outcome: :error, error: Jidoka.Error.format(reason)})
+          trace_guardrail(input_acc, label, :error, %{outcome: :error, error: Jidoka.Error.format(reason)})
           {:halt, {:error, label, reason}}
 
         {:interrupt, interrupt} ->
-          trace_guardrail(input, label, :interrupt, %{outcome: :interrupt})
+          trace_guardrail(input_acc, label, :interrupt, %{outcome: :interrupt})
           {:halt, {:interrupt, label, normalize_interrupt(interrupt)}}
 
         other ->
-          trace_guardrail(input, label, :error, %{outcome: :error, error: "invalid guardrail result"})
+          trace_guardrail(input_acc, label, :error, %{outcome: :error, error: "invalid guardrail result"})
           {:halt, {:error, label, invalid_result_message(other)}}
       end
     end)
@@ -58,8 +86,92 @@ defmodule Jidoka.Guardrails.Runner do
   end
 
   defp invalid_result_message(other) do
-    "controls must return :cont, :ok, {:block, reason}, {:error, reason}, or {:interrupt, interrupt}; got: #{inspect(other)}"
+    "controls must return :allow, :cont, :ok, {:transform, updates}, {:block, reason}, {:error, reason}, or {:interrupt, interrupt}; got: #{inspect(other)}"
   end
+
+  defp apply_transform(%Tool{}, _transform) do
+    {:error, "operation controls cannot transform operation inputs in this version"}
+  end
+
+  defp apply_transform(%{} = input, %{__struct__: module} = transformed) do
+    if module == input.__struct__ do
+      {:ok, transformed}
+    else
+      {:error, transform_type_error(input, transformed)}
+    end
+  end
+
+  defp apply_transform(%{} = input, transform)
+       when not is_struct(transform) and (is_map(transform) or is_list(transform)) do
+    with {:ok, updates} <- normalize_transform_updates(transform),
+         :ok <- validate_transform_keys(input, updates) do
+      {:ok, struct(input, updates)}
+    end
+  end
+
+  defp apply_transform(input, transform), do: {:error, transform_type_error(input, transform)}
+
+  defp normalize_transform_updates(updates) when is_map(updates), do: {:ok, updates}
+
+  defp normalize_transform_updates(updates) when is_list(updates) do
+    if Keyword.keyword?(updates) do
+      {:ok, Map.new(updates)}
+    else
+      {:error, "control transform updates must be a map, keyword list, or replacement control input struct"}
+    end
+  end
+
+  defp validate_transform_keys(input, updates) do
+    allowed_keys =
+      input
+      |> Map.from_struct()
+      |> Map.keys()
+      |> MapSet.new()
+
+    unknown_keys = updates |> Map.keys() |> Enum.reject(&MapSet.member?(allowed_keys, &1))
+
+    case unknown_keys do
+      [] -> :ok
+      _ -> {:error, "control transform contains unsupported keys: #{inspect(unknown_keys)}"}
+    end
+  end
+
+  defp transform_type_error(input, transform) do
+    "control transform must return #{inspect(input.__struct__)}, a map, or a keyword list; got: #{inspect(transform)}"
+  end
+
+  defp validate_transformed_input(%Input{context: context}) when not is_map(context) do
+    {:error, "input control transforms must keep context as a map"}
+  end
+
+  defp validate_transformed_input(%Input{metadata: metadata}) when not is_map(metadata) do
+    {:error, "input control transforms must keep metadata as a map"}
+  end
+
+  defp validate_transformed_input(%Input{llm_opts: llm_opts}) when not is_list(llm_opts) do
+    {:error, "input control transforms must keep llm_opts as a keyword list"}
+  end
+
+  defp validate_transformed_input(%Output{context: context}) when not is_map(context) do
+    {:error, "result control transforms must keep context as a map"}
+  end
+
+  defp validate_transformed_input(%Output{metadata: metadata}) when not is_map(metadata) do
+    {:error, "result control transforms must keep metadata as a map"}
+  end
+
+  defp validate_transformed_input(%Output{llm_opts: llm_opts}) when not is_list(llm_opts) do
+    {:error, "result control transforms must keep llm_opts as a keyword list"}
+  end
+
+  defp validate_transformed_input(%Output{outcome: {:ok, _result}}), do: :ok
+  defp validate_transformed_input(%Output{outcome: {:error, _reason}}), do: :ok
+
+  defp validate_transformed_input(%Output{}) do
+    {:error, "result control transforms must keep outcome as {:ok, result} or {:error, reason}"}
+  end
+
+  defp validate_transformed_input(_input), do: :ok
 
   defp guardrail_label(module) when is_atom(module) do
     case Jidoka.Guardrail.guardrail_name(module) do

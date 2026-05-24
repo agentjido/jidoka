@@ -63,28 +63,15 @@ defmodule Jidoka.Guardrails do
       request_opts: params
     }
 
-    guardrail_meta = %{
-      guardrails: guardrails,
-      message: input.message,
-      context: input.context,
-      allowed_tools: input.allowed_tools,
-      llm_opts: input.llm_opts,
-      request_opts: input.request_opts,
-      metadata: input.metadata
-    }
-
     case Runner.run_input(guardrails.input, input) do
-      :ok ->
-        params =
-          Map.update(params, :tool_context, %{}, fn tool_context ->
-            tool_context
-            |> Kernel.||(%{})
-            |> maybe_attach_tool_guardrail_callback(guardrails.tool, agent, request_id)
-          end)
+      {:ok, %Input{} = input} ->
+        params = apply_input_control_result(params, input, guardrails, agent, request_id)
+        guardrail_meta = guardrail_meta(guardrails, input)
 
         {:ok, put_request_guardrail_meta(agent, request_id, guardrail_meta), {:ai_react_start, params}}
 
       {:error, label, reason} ->
+        guardrail_meta = guardrail_meta(guardrails, input)
         error = Runner.normalize_guardrail_error(:input, label, reason, agent, request_id)
 
         agent =
@@ -95,6 +82,8 @@ defmodule Jidoka.Guardrails do
         {:ok, agent, {:ai_react_request_error, %{request_id: request_id, reason: :guardrail_blocked, message: query}}}
 
       {:interrupt, label, %Interrupt{} = interrupt} ->
+        guardrail_meta = guardrail_meta(guardrails, input)
+
         agent =
           agent
           |> Request.fail_request(request_id, {:interrupt, interrupt})
@@ -169,6 +158,51 @@ defmodule Jidoka.Guardrails do
   defp maybe_attach_tool_guardrail_callback(context, _tool_guardrails, _agent, _request_id),
     do: context
 
+  defp apply_input_control_result(params, %Input{} = input, guardrails, agent, request_id) do
+    context =
+      input.context
+      |> Kernel.||(%{})
+      |> maybe_attach_tool_guardrail_callback(guardrails.tool, agent, request_id)
+
+    params
+    |> Map.merge(input.request_opts || %{})
+    |> Map.put(:query, input.message)
+    |> maybe_put_existing(:prompt, input.message)
+    |> Map.put(:tool_context, context)
+    |> Map.put(:runtime_context, context)
+    |> maybe_put_optional(:allowed_tools, input.allowed_tools)
+    |> Map.put(:llm_opts, input.llm_opts || [])
+  end
+
+  defp maybe_put_existing(params, key, value) do
+    if Map.has_key?(params, key), do: Map.put(params, key, value), else: params
+  end
+
+  defp maybe_put_optional(params, _key, nil), do: params
+  defp maybe_put_optional(params, key, value), do: Map.put(params, key, value)
+
+  defp guardrail_meta(guardrails, %Input{} = input) do
+    %{
+      guardrails: guardrails,
+      message: input.message,
+      context: input.context,
+      allowed_tools: input.allowed_tools,
+      llm_opts: input.llm_opts,
+      request_opts: input.request_opts,
+      metadata: input.metadata
+    }
+  end
+
+  defp apply_output_control_result(agent, _request_id, outcome, %Output{outcome: outcome}), do: agent
+
+  defp apply_output_control_result(agent, request_id, _outcome, %Output{outcome: {:ok, result}}) do
+    Request.complete_request(agent, request_id, result)
+  end
+
+  defp apply_output_control_result(agent, request_id, _outcome, %Output{outcome: {:error, reason}}) do
+    force_request_failure(agent, request_id, reason)
+  end
+
   defp put_request_guardrail_meta(agent, request_id, guardrail_meta) do
     update_in(agent.state, [:requests, request_id], fn
       nil ->
@@ -209,7 +243,9 @@ defmodule Jidoka.Guardrails do
           }
 
           case Runner.run_output(get_in(meta, [:guardrails, :output]) || [], input) do
-            :ok ->
+            {:ok, %Output{} = input} ->
+              agent = apply_output_control_result(agent, request_id, outcome, input)
+
               {:ok,
                put_request_guardrail_meta(
                  agent,

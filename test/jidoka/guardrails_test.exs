@@ -61,6 +61,24 @@ defmodule JidokaTest.GuardrailsTest do
     assert_received :second_control
   end
 
+  test "accepts explicit allow as a control return value" do
+    assert :ok = Jidoka.Guardrails.Runner.run_guardrails([fn _input -> :allow end], control_input())
+  end
+
+  test "rejects invalid control transforms" do
+    assert {:error, "anonymous_guardrail", reason} =
+             Jidoka.Guardrails.Runner.run_guardrails([fn _input -> {:transform, %{unknown: true}} end], control_input())
+
+    assert reason =~ "unsupported keys"
+  end
+
+  test "rejects operation control transforms" do
+    assert {:error, "anonymous_guardrail", reason} =
+             Jidoka.Guardrails.Runner.run_guardrails([fn _input -> {:transform, %{arguments: %{}}} end], tool_input())
+
+    assert reason =~ "operation controls cannot transform operation inputs"
+  end
+
   test "short-circuits later controls on block, interrupt, and error" do
     assert_control_short_circuits({:block, :blocked}, {:error, "anonymous_guardrail", :blocked})
 
@@ -210,6 +228,42 @@ defmodule JidokaTest.GuardrailsTest do
     assert error.details.cause == :unsafe_prompt
   end
 
+  test "input controls can transform the provider-facing message and context" do
+    runtime = GuardrailedAgent.runtime_module()
+    agent = new_runtime_agent(runtime)
+
+    transform = fn %Jidoka.Guardrails.Input{} = input ->
+      {:transform,
+       %{
+         message: "sanitized prompt",
+         context: Map.put(input.context, :policy, :sanitized),
+         llm_opts: [temperature: 0.0]
+       }}
+    end
+
+    assert {:ok, updated_agent, {:ai_react_start, params}} =
+             Jidoka.Guardrails.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "raw prompt",
+                  request_id: "req-input-transform",
+                  tool_context: %{session: "s1"}
+                }},
+               %{input: [transform], output: [], tool: []}
+             )
+
+    assert params.query == "sanitized prompt"
+    assert params.tool_context.session == "s1"
+    assert params.tool_context.policy == :sanitized
+    assert params.runtime_context == params.tool_context
+    assert params.llm_opts == [temperature: 0.0]
+
+    meta = get_in(updated_agent.state, [:requests, "req-input-transform", :meta, :jidoka_guardrails])
+    assert meta.message == "sanitized prompt"
+    assert meta.context.policy == :sanitized
+  end
+
   test "runs result controls after hooks and blocks the final result" do
     runtime = GuardrailedAgent.runtime_module()
     agent = new_runtime_agent(runtime)
@@ -232,6 +286,39 @@ defmodule JidokaTest.GuardrailsTest do
     assert error.details.stage == :output
     assert error.details.label == "safe_reply"
     assert error.details.cause == :unsafe_reply
+  end
+
+  test "result controls can transform the completed request result" do
+    runtime = GuardrailedAgent.runtime_module()
+    agent = new_runtime_agent(runtime)
+    request_id = "req-result-transform"
+
+    transform = fn %Jidoka.Guardrails.Output{} ->
+      {:transform, %{outcome: {:ok, "clean result"}}}
+    end
+
+    agent = Jido.AI.Request.start_request(agent, request_id, "hello")
+
+    assert {:ok, agent, {:ai_react_start, _params}} =
+             Jidoka.Guardrails.on_before_cmd(
+               agent,
+               {:ai_react_start, %{query: "hello", request_id: request_id, tool_context: %{}}},
+               %{input: [], output: [transform], tool: []}
+             )
+
+    agent = Jido.AI.Request.complete_request(agent, request_id, "raw result")
+
+    assert {:ok, updated_agent, []} =
+             Jidoka.Guardrails.on_after_cmd(
+               agent,
+               {:ai_react_start, %{request_id: request_id}},
+               [],
+               %{input: [], output: [transform], tool: []}
+             )
+
+    assert {:ok, "clean result"} = Jido.AI.Request.get_result(updated_agent, request_id)
+
+    assert get_in(updated_agent.state, [:requests, request_id, :meta, :jidoka_guardrails, :output_applied?])
   end
 
   test "operation controls attach a runtime callback that interrupts before operation execution" do
@@ -348,6 +435,20 @@ defmodule JidokaTest.GuardrailsTest do
       context: %{},
       allowed_tools: nil,
       llm_opts: [],
+      metadata: %{},
+      request_opts: %{}
+    }
+  end
+
+  defp tool_input do
+    %Jidoka.Guardrails.Tool{
+      agent: nil,
+      server: self(),
+      request_id: "req-operation-transform",
+      tool_name: "add_numbers",
+      tool_call_id: "tc-operation-transform",
+      arguments: %{a: 1, b: 2},
+      context: %{},
       metadata: %{},
       request_opts: %{}
     }

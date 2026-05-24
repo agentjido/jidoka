@@ -7,20 +7,22 @@ defmodule Jidoka.Control do
 
   Return values:
 
-  - `:cont` or `:ok` to continue
+  - `:allow`, `:cont`, or `:ok` to continue
+  - `{:transform, updates}` to continue with an updated input/result control
+    struct or a map/keyword of fields to update
   - `{:block, reason}` to stop intentionally with a policy failure
   - `{:interrupt, interrupt}` to pause for approval or outside input
   - `{:error, reason}` for an unexpected control failure
 
-  Controls run in declaration order within their stage. The first `:cont` or
-  `:ok` result allows the next control to run. The first `{:block, reason}`,
-  `{:interrupt, interrupt}`, or `{:error, reason}` result short-circuits the
-  stage and prevents later controls in that stage from running.
+  Controls run in declaration order within their stage. Allow and transform
+  results allow the next control to run. The first `{:block, reason}`,
+  `{:interrupt, interrupt}`, `{:error, reason}`, or invalid transform result
+  short-circuits the stage and prevents later controls in that stage from
+  running.
 
   Placement in the agent loop:
 
-  - input controls run before memory retrieval, compaction injection, and the
-    provider call
+  - input controls run after lifecycle preparation and before the provider call
   - operation controls run immediately before an action, workflow, subagent, or
     handoff operation executes
   - result controls run after typed result parsing/repair and before the caller
@@ -34,11 +36,20 @@ defmodule Jidoka.Control do
   @type decision ::
           :cont
           | :ok
+          | :allow
+          | {:transform, struct() | map() | keyword()}
           | {:block, term()}
           | {:interrupt, term()}
           | {:error, term()}
 
+  @doc """
+  Returns the stable published name for the control.
+  """
   @callback name() :: name()
+
+  @doc """
+  Evaluates the control for the current input, operation, or result.
+  """
   @callback call(term()) :: decision()
 
   @doc """
@@ -68,7 +79,10 @@ defmodule Jidoka.Control do
     end
   end
 
-  @doc false
+  @doc """
+  Validates the control module contract after compilation.
+  """
+  @spec __after_compile__(Macro.Env.t(), binary()) :: :ok | no_return()
   def __after_compile__(env, _bytecode) do
     case validate_control_module(env.module) do
       :ok ->
