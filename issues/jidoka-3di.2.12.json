@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.12",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Reviewed generated V3 agent helpers and source-aware errors. Removed generated output/output_schema aliases, replaced generated guardrail helpers with controls/input_controls/operation_controls/result_controls, updated Kino definition rendering to use result, and locked controls error path/hint coverage. Verified format, compile --warnings-as-errors, and full mix test.",
+      "timestamp": "2026-05-24T21:44:49Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Review generated code and source-aware error messages",
   "type": "task",
-  "updated_at": "2026-05-24T21:41:30Z"
+  "updated_at": "2026-05-24T21:44:49Z"
 }
