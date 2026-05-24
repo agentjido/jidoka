@@ -7,9 +7,15 @@
   "id": "jidoka-3di.1.2",
   "labels": [],
   "parent": "jidoka-3di.1",
+  "comments": [
+    {
+      "text": "Completed in V3_BASELINE.md and attached to jidoka-3di.1.",
+      "timestamp": "2026-05-24T20:46:43Z"
+    }
+  ],
   "priority": 2,
   "status": "open",
   "title": "E0: Record current test coverage by feature area",
   "type": "task",
-  "updated_at": "2026-05-24T20:35:38Z"
+  "updated_at": "2026-05-24T20:46:43Z"
 }
