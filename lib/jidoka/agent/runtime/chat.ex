@@ -97,12 +97,12 @@ defmodule Jidoka.Agent.Chat do
 
   defp attach_runtime_extensions(opts, context) do
     with {:ok, hooks} <- Jidoka.Hooks.normalize_request_hooks(Keyword.get(opts, :hooks, nil)),
-         {:ok, guardrails} <-
-           Jidoka.Guardrails.normalize_request_guardrails(Keyword.get(opts, :guardrails, nil)) do
+         {:ok, controls} <-
+           Jidoka.Controls.normalize_request_controls(Keyword.get(opts, :controls, Keyword.get(opts, :guardrails, nil))) do
       {:ok,
        context
        |> Jidoka.Hooks.attach_request_hooks(hooks)
-       |> Jidoka.Guardrails.attach_request_guardrails(guardrails)}
+       |> Jidoka.Controls.attach_request_controls(controls)}
     else
       {:error, reason} -> {:error, Jidoka.Error.Normalize.chat_option_error(reason)}
     end
@@ -114,7 +114,7 @@ defmodule Jidoka.Agent.Chat do
 
   defp finalize_chat_opts(opts, context) do
     opts
-    |> Keyword.drop([:context, :character, :conversation, :hooks, :guardrails, :output, :start_opts])
+    |> Keyword.drop([:context, :character, :conversation, :hooks, :controls, :guardrails, :output, :start_opts])
     |> Keyword.put(:tool_context, context)
   end
 

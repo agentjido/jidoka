@@ -70,10 +70,14 @@ defmodule Jidoka.Error.Normalize do
   end
 
   def chat_option_error({:invalid_guardrail_spec, message}, context) when is_binary(message) do
+    chat_option_error({:invalid_control_spec, message}, context)
+  end
+
+  def chat_option_error({:invalid_control_spec, message}, context) when is_binary(message) do
     Error.validation_error(message,
-      field: :guardrails,
+      field: :controls,
       value: detail(context, :value),
-      details: details(context, %{operation: :prepare_chat_opts, reason: :invalid_guardrail_spec, cause: message})
+      details: details(context, %{operation: :prepare_chat_opts, reason: :invalid_control_spec, cause: message})
     )
   end
 
@@ -87,13 +91,17 @@ defmodule Jidoka.Error.Normalize do
   end
 
   def chat_option_error({:invalid_guardrail_stage, stage}, context) do
-    Error.validation_error("Invalid guardrail stage #{inspect(stage)}.",
-      field: :guardrails,
+    chat_option_error({:invalid_control_stage, stage}, context)
+  end
+
+  def chat_option_error({:invalid_control_stage, stage}, context) do
+    Error.validation_error("Invalid control stage #{inspect(stage)}.",
+      field: :controls,
       value: stage,
       details:
         details(context, %{
           operation: :prepare_chat_opts,
-          reason: :invalid_guardrail_stage,
+          reason: :invalid_control_stage,
           stage: stage,
           cause: stage
         })
@@ -109,11 +117,15 @@ defmodule Jidoka.Error.Normalize do
   end
 
   def chat_option_error({:invalid_guardrail, stage, message}, context) when is_binary(message) do
+    chat_option_error({:invalid_control, stage, message}, context)
+  end
+
+  def chat_option_error({:invalid_control, stage, message}, context) when is_binary(message) do
     Error.validation_error(message,
-      field: :guardrails,
+      field: :controls,
       value: stage,
       details:
-        details(context, %{operation: :prepare_chat_opts, reason: :invalid_guardrail, stage: stage, cause: message})
+        details(context, %{operation: :prepare_chat_opts, reason: :invalid_control, stage: stage, cause: message})
     )
   end
 

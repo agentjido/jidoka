@@ -81,8 +81,8 @@ defmodule JidokaTest.GuardrailsTest do
   test "exposes configured controls by stage" do
     assert GuardrailedAgent.controls() == %{
              input: [SafePromptGuardrail],
-             output: [SafeReplyGuardrail],
-             tool: [ApproveLargeMathToolGuardrail]
+             result: [SafeReplyGuardrail],
+             operation: [ApproveLargeMathToolGuardrail]
            }
 
     assert GuardrailedAgent.input_controls() == [SafePromptGuardrail]
@@ -90,7 +90,7 @@ defmodule JidokaTest.GuardrailsTest do
     assert GuardrailedAgent.operation_controls() == [ApproveLargeMathToolGuardrail]
   end
 
-  test "accepts request-scoped module, MFA, and function guardrails" do
+  test "accepts request-scoped module, MFA, and function controls" do
     runtime_fun = fn %Jidoka.Guardrails.Input{} = input ->
       {:error, {:runtime_input, input.message}}
     end
@@ -99,7 +99,7 @@ defmodule JidokaTest.GuardrailsTest do
              Jidoka.Agent.prepare_chat_opts(
                [
                  context: %{tenant: "runtime"},
-                 guardrails: [
+                 controls: [
                    input: [
                      SafePromptGuardrail,
                      {GuardrailCallbacks, :input, ["runtime_mfa"]},
@@ -121,16 +121,16 @@ defmodule JidokaTest.GuardrailsTest do
            } = tool_context[:__jidoka_guardrails__]
   end
 
-  test "rejects malformed request-scoped guardrail specs with a validation error" do
+  test "rejects malformed request-scoped control specs with a validation error" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
-             Jidoka.Agent.prepare_chat_opts([guardrails: [1, 2]], nil)
+             Jidoka.Agent.prepare_chat_opts([controls: [1, 2]], nil)
 
-    assert error.field == :guardrails
-    assert error.details.reason == :invalid_guardrail_spec
-    assert error.message =~ "guardrails must be a keyword list or map"
+    assert error.field == :controls
+    assert error.details.reason == :invalid_control_spec
+    assert error.message =~ "controls must be a keyword list or map"
   end
 
-  test "runs input guardrails and blocks before the LLM call" do
+  test "runs input controls and blocks before the LLM call" do
     runtime = GuardrailedAgent.runtime_module()
     agent = new_runtime_agent(runtime)
 
@@ -155,7 +155,7 @@ defmodule JidokaTest.GuardrailsTest do
     assert error.details.cause == :unsafe_prompt
   end
 
-  test "runs output guardrails after hooks and blocks the final result" do
+  test "runs result controls after hooks and blocks the final result" do
     runtime = GuardrailedAgent.runtime_module()
     agent = new_runtime_agent(runtime)
 
@@ -179,7 +179,7 @@ defmodule JidokaTest.GuardrailsTest do
     assert error.details.cause == :unsafe_reply
   end
 
-  test "tool guardrails attach a runtime callback that interrupts before tool execution" do
+  test "operation controls attach a runtime callback that interrupts before operation execution" do
     runtime = GuardrailedAgent.runtime_module()
     agent = new_runtime_agent(runtime)
     test_pid = self()
@@ -209,7 +209,7 @@ defmodule JidokaTest.GuardrailsTest do
     assert_receive {:hook_interrupt, :approval, :tool_guardrail}
   end
 
-  test "translates input guardrail interrupts from Jidoka.chat and runs interrupt hooks" do
+  test "translates input control interrupts from Jidoka.chat and runs interrupt hooks" do
     assert {:ok, pid} = GuardrailedAgent.start_link(id: "guardrailed-agent-test")
     test_pid = self()
 
@@ -217,7 +217,7 @@ defmodule JidokaTest.GuardrailsTest do
       assert {:interrupt, %Jidoka.Interrupt{kind: :approval}} =
                Jidoka.chat(pid, "hello",
                  context: %{notify_pid: test_pid},
-                 guardrails: [
+                 controls: [
                    input: fn _input ->
                      {:interrupt,
                       %{

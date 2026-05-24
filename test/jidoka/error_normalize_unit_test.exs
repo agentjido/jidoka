@@ -30,11 +30,11 @@ defmodule JidokaTest.ErrorNormalizeUnitTest do
 
   test "chat option errors map request option failures to specific fields" do
     cases = [
-      {{:invalid_guardrail_spec, "bad guardrails"}, :guardrails, :invalid_guardrail_spec},
+      {{:invalid_control_spec, "bad controls"}, :controls, :invalid_control_spec},
       {{:invalid_hook_stage, :during_turn}, :hooks, :invalid_hook_stage},
-      {{:invalid_guardrail_stage, :during_turn}, :guardrails, :invalid_guardrail_stage},
+      {{:invalid_control_stage, :during_turn}, :controls, :invalid_control_stage},
       {{:invalid_hook, :before_turn, "bad hook"}, :hooks, :invalid_hook},
-      {{:invalid_guardrail, :input, "bad guardrail"}, :guardrails, :invalid_guardrail},
+      {{:invalid_control, :input, "bad control"}, :controls, :invalid_control},
       {{:invalid_character, "bad character"}, :character, :invalid_character}
     ]
 

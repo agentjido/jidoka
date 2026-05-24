@@ -359,25 +359,25 @@ defmodule Jidoka.Agent.Codegen do
       @doc """
       Returns the configured controls by stage.
       """
-      @spec controls() :: Jidoka.Guardrails.stage_map()
-      def controls, do: unquote(Macro.escape(definition.guardrails))
+      @spec controls() :: Jidoka.Controls.stage_map()
+      def controls, do: Jidoka.Controls.public_stage_map(unquote(Macro.escape(definition.guardrails)))
 
       @doc """
       Returns controls that run before the model sees the user input.
       """
-      @spec input_controls() :: [Jidoka.Guardrails.guardrail_ref()]
+      @spec input_controls() :: [Jidoka.Controls.control_ref()]
       def input_controls, do: unquote(Macro.escape(definition.guardrails.input))
 
       @doc """
       Returns controls that run before operation execution.
       """
-      @spec operation_controls() :: [Jidoka.Guardrails.guardrail_ref()]
+      @spec operation_controls() :: [Jidoka.Controls.control_ref()]
       def operation_controls, do: unquote(Macro.escape(definition.guardrails.tool))
 
       @doc """
       Returns controls that run before the final result is returned.
       """
-      @spec result_controls() :: [Jidoka.Guardrails.guardrail_ref()]
+      @spec result_controls() :: [Jidoka.Controls.control_ref()]
       def result_controls, do: unquote(Macro.escape(definition.guardrails.output))
 
       @doc """

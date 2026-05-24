@@ -57,16 +57,15 @@ defmodule Jidoka.Guardrails.Config do
   defp stage_ref_opts do
     [
       stages: @stages,
-      spec_label: "guardrails",
-      ref_label: "guardrail",
-      invalid_stage: :invalid_guardrail_stage,
-      invalid_spec: :invalid_guardrail_spec,
-      invalid_ref: :invalid_guardrail,
-      module_validator: &Jidoka.Guardrail.validate_guardrail_module/1,
-      dsl_function_error:
-        "DSL guardrails do not support anonymous functions; use a Jidoka.Guardrail module or MFA instead",
+      spec_label: "controls",
+      ref_label: "control",
+      invalid_stage: :invalid_control_stage,
+      invalid_spec: :invalid_control_spec,
+      invalid_ref: :invalid_control,
+      module_validator: &Jidoka.Control.validate_control_module/1,
+      dsl_function_error: "DSL controls do not support anonymous functions; use a Jidoka.Control module or MFA instead",
       invalid_ref_message: fn other ->
-        "guardrail refs must be a Jidoka.Guardrail module, MFA tuple, or runtime function, got: #{inspect(other)}"
+        "control refs must be a Jidoka.Control module, MFA tuple, or runtime function, got: #{inspect(other)}"
       end
     ]
   end

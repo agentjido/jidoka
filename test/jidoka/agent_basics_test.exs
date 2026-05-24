@@ -67,7 +67,7 @@ defmodule JidokaTest.AgentBasicsTest do
     assert ChatAgent.context_schema() == nil
     assert ChatAgent.result() == nil
     assert ChatAgent.result_schema() == nil
-    assert ChatAgent.controls() == %{input: [], output: [], tool: []}
+    assert ChatAgent.controls() == %{input: [], result: [], operation: []}
   end
 
   test "exposes the configured instructions" do

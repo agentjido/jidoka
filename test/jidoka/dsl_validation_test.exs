@@ -46,7 +46,7 @@ defmodule JidokaTest.DslValidationTest do
     assert module.tool_names() == ["add_numbers"]
   end
 
-  test "collapses guardrail-facing policy into controls" do
+  test "collapses policy into input, operation, and result controls" do
     module =
       compile_agent("""
       agent :controlled_agent do
@@ -431,7 +431,7 @@ defmodule JidokaTest.DslValidationTest do
     """)
 
     assert_dsl_error(~r/control .*defined more than once/, """
-    agent :duplicate_guardrail_agent do
+    agent :duplicate_control_agent do
       instructions "This should fail."
     end
 
@@ -513,23 +513,23 @@ defmodule JidokaTest.DslValidationTest do
     assert error.message =~ "not a valid Jidoka hook"
   end
 
-  test "rejects invalid request guardrail stages" do
+  test "rejects invalid request control stages" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
-             Jidoka.Agent.prepare_chat_opts([guardrails: [bogus: SafePromptGuardrail]], nil)
+             Jidoka.Agent.prepare_chat_opts([controls: [bogus: SafePromptGuardrail]], nil)
 
-    assert error.field == :guardrails
-    assert error.details.reason == :invalid_guardrail_stage
+    assert error.field == :controls
+    assert error.details.reason == :invalid_control_stage
     assert error.details.stage == :bogus
   end
 
-  test "rejects invalid request guardrail refs" do
+  test "rejects invalid request control refs" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
-             Jidoka.Agent.prepare_chat_opts([guardrails: [input: String]], nil)
+             Jidoka.Agent.prepare_chat_opts([controls: [input: String]], nil)
 
-    assert error.field == :guardrails
-    assert error.details.reason == :invalid_guardrail
+    assert error.field == :controls
+    assert error.details.reason == :invalid_control
     assert error.details.stage == :input
-    assert error.message =~ "not a valid Jidoka guardrail"
+    assert error.message =~ "not a valid Jidoka control"
   end
 
   test "rejects NimbleOptions schemas in Jidoka.Action" do

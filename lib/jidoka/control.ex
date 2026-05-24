@@ -3,8 +3,7 @@ defmodule Jidoka.Control do
   Defines reusable policy controls for Jidoka agents.
 
   Controls are small modules that decide whether an input, operation, or final
-  result may continue. They use the same runtime surface as guardrails, but the
-  public V3 DSL names the concept by the broader job it performs.
+  result may continue.
 
   Return values:
 
