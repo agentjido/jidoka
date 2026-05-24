@@ -10,6 +10,7 @@ defmodule Jidoka.Guardrails do
   @type stage :: :input | :output | :tool
   @type guardrail_ref ::
           module()
+          | Jidoka.Control.Operation.t()
           | {module(), atom(), [term()]}
           | (term() -> Jidoka.Control.decision())
   @type stage_map :: %{

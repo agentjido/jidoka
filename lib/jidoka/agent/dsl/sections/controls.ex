@@ -55,6 +55,12 @@ defmodule Jidoka.Agent.Dsl.Sections.Controls do
           type: :any,
           required: true,
           doc: "A Jidoka.Guardrail module or MFA tuple."
+        ],
+        when: [
+          type: :any,
+          required: false,
+          as: :match,
+          doc: "Optional operation match such as `[kind: :action, name: :refund_customer]`."
         ]
       ]
     }

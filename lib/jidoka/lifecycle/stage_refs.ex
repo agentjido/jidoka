@@ -129,6 +129,13 @@ defmodule Jidoka.StageRefs do
     end
   end
 
+  defp normalize_stage_ref(%Jidoka.Control.Operation{ref: ref} = operation, :tool, mode, opts) do
+    case normalize_stage_ref(ref, :tool, mode, opts) do
+      {:ok, normalized_ref} -> {:ok, %{operation | ref: normalized_ref}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp normalize_stage_ref({module, function, args} = ref, _stage, _mode, opts)
        when is_atom(module) and is_atom(function) and is_list(args) do
     label = Keyword.fetch!(opts, :ref_label)

@@ -68,6 +68,8 @@ defmodule Jidoka.Guardrails.Runner do
     end
   end
 
+  defp guardrail_label(%Jidoka.Control.Operation{ref: ref}), do: guardrail_label(ref)
+
   defp guardrail_label({module, function, args}),
     do: "#{inspect(module)}.#{function}/#{length(args) + 1}"
 
@@ -75,6 +77,14 @@ defmodule Jidoka.Guardrails.Runner do
 
   defp invoke_guardrail(module, input) when is_atom(module) do
     invoke_with_timeout(fn -> module.call(input) end)
+  end
+
+  defp invoke_guardrail(%Jidoka.Control.Operation{} = operation, input) do
+    if operation_matches?(operation, input) do
+      invoke_guardrail(operation.ref, input)
+    else
+      :cont
+    end
   end
 
   defp invoke_guardrail({module, function, args}, input) do
@@ -108,6 +118,18 @@ defmodule Jidoka.Guardrails.Runner do
 
   defp normalize_interrupt(%Interrupt{} = interrupt), do: interrupt
   defp normalize_interrupt(interrupt), do: Interrupt.new(interrupt)
+
+  defp operation_matches?(%Jidoka.Control.Operation{match: nil}, _input), do: true
+  defp operation_matches?(%Jidoka.Control.Operation{match: match}, %Tool{} = input), do: match_tool?(match, input)
+  defp operation_matches?(%Jidoka.Control.Operation{}, _input), do: false
+
+  defp match_tool?(match, input) when is_map(match) do
+    Enum.all?(match, fn
+      {:kind, kind} -> kind in [:action, :tool]
+      {:name, name} -> to_string(input.tool_name) == to_string(name)
+      _other -> false
+    end)
+  end
 
   defp trace_guardrail(input, label, event, extra \\ %{}) do
     Jidoka.Trace.emit(

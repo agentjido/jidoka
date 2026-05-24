@@ -232,6 +232,21 @@ defmodule JidokaTest.GuardrailedAgent do
   end
 end
 
+defmodule JidokaTest.ConditionalControlAgent do
+  use Jidoka.Agent
+
+  agent :conditional_control_agent do
+    model :fast
+    instructions "You have conditional operation controls."
+  end
+
+  controls do
+    operation(JidokaTest.BlockOperationControl,
+      when: [kind: :action, name: :add_numbers]
+    )
+  end
+end
+
 defmodule JidokaTest.InterruptingAgent do
   use Jidoka.Agent
 

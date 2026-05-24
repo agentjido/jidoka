@@ -6,6 +6,7 @@ defmodule JidokaTest.GuardrailsTest do
     AllowOperationControl,
     ApproveLargeMathToolGuardrail,
     BlockOperationControl,
+    ConditionalControlAgent,
     GuardrailCallbacks,
     GuardrailedAgent,
     SafePromptGuardrail,
@@ -40,6 +41,41 @@ defmodule JidokaTest.GuardrailsTest do
 
     assert {:error, "block_operation", :operation_blocked} =
              Jidoka.Guardrails.Runner.run_guardrails([BlockOperationControl], input)
+  end
+
+  test "runs operation controls only when their condition matches" do
+    runtime = ConditionalControlAgent.runtime_module()
+    agent = new_runtime_agent(runtime)
+
+    assert [%Jidoka.Control.Operation{match: %{kind: :action, name: "add_numbers"}}] =
+             ConditionalControlAgent.tool_guardrails()
+
+    assert {:ok, _agent, {:ai_react_start, params}} =
+             runtime.on_before_cmd(
+               agent,
+               {:ai_react_start, %{query: "calculate", request_id: "req-conditional-control", tool_context: %{}}}
+             )
+
+    callback = params.tool_context[:__tool_guardrail_callback__]
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             callback.(%{
+               tool_name: "add_numbers",
+               tool_call_id: "tc-match",
+               arguments: %{a: 1, b: 2},
+               context: params.tool_context
+             })
+
+    assert error.details.label == "block_operation"
+    assert error.details.cause == :operation_blocked
+
+    assert :ok =
+             callback.(%{
+               tool_name: "multiply_numbers",
+               tool_call_id: "tc-skip",
+               arguments: %{a: 20, b: 2},
+               context: params.tool_context
+             })
   end
 
   test "exposes configured guardrails by stage" do

@@ -92,3 +92,15 @@ defmodule Jidoka.Control do
     String.replace(message, "guardrail", "control")
   end
 end
+
+defmodule Jidoka.Control.Operation do
+  @moduledoc false
+
+  @enforce_keys [:ref]
+  defstruct [:ref, :match]
+
+  @type t :: %__MODULE__{
+          ref: Jidoka.Guardrails.guardrail_ref(),
+          match: map() | nil
+        }
+end

@@ -235,5 +235,5 @@ end
 defmodule Jidoka.Agent.Dsl.ToolGuardrail do
   @moduledoc false
 
-  defstruct [:guardrail, :__spark_metadata__]
+  defstruct [:guardrail, :match, :__spark_metadata__]
 end
