@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:40Z",
+  "description": "Purpose: make local runtime debugging a product feature.\n\nDone when:\n- users can answer what happened in a turn without reading logs\n- errors are normalized, readable, and safe to display\n- debugging output is structured, bounded, and safe by default\n",
+  "id": "jidoka-3di.8",
+  "labels": [],
+  "parent": "jidoka-3di",
+  "priority": 2,
+  "status": "open",
+  "title": "V3 E7: Errors, debugging, and inspection",
+  "type": "epic",
+  "updated_at": "2026-05-24T20:35:40Z"
+}
