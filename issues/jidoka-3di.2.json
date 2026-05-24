@@ -11,9 +11,15 @@
   "id": "jidoka-3di.2",
   "labels": [],
   "parent": "jidoka-3di",
+  "comments": [
+    {
+      "text": "E1 complete: V3 agent entrypoint, tools/actions, result contracts, controls, conditional operation controls, cleanup of legacy parser support, validation coverage, generated helper alignment, and formatter support are implemented and verified.",
+      "timestamp": "2026-05-24T21:47:01Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "V3 E1: Simplified DSL foundation",
   "type": "epic",
-  "updated_at": "2026-05-24T20:48:33Z"
+  "updated_at": "2026-05-24T21:47:01Z"
 }
