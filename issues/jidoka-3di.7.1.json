@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:40Z",
+  "description": "Parent epic: V3 E6: Credential brokering\n\nSource task 1/8 from MILESTONE_V3.md:\n\n- Decide whether V3 ships full credential brokering or only the data model and\n  control hooks. Prefer interface contract over unsafe execution.\n\nEpic closure criteria:\n- credential brokering has either a working minimal implementation or a\n  deliberately documented interface contract with follow-up issues\n- the security invariant is tested: no raw credential values leak\n",
+  "id": "jidoka-3di.7.1",
+  "labels": [],
+  "parent": "jidoka-3di.7",
+  "priority": 2,
+  "status": "open",
+  "title": "E6: Decide whether V3 ships full credential brokering or only the data model and co...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:40Z"
+}
