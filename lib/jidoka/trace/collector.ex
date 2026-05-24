@@ -37,6 +37,7 @@ defmodule Jidoka.Trace.Collector do
     [:jidoka, :handoff, :event],
     [:jidoka, :mcp, :event],
     [:jidoka, :output, :event],
+    [:jidoka, :credential, :event],
     [:jidoka, :schedule, :event]
   ]
 
@@ -270,6 +271,10 @@ defmodule Jidoka.Trace.Collector do
   defp event_name_label(:compaction, metadata), do: string_value(metadata, :compaction) || string_value(metadata, :name)
   defp event_name_label(:mcp, metadata), do: string_value(metadata, :endpoint)
   defp event_name_label(:output, metadata), do: string_value(metadata, :output) || string_value(metadata, :name)
+
+  defp event_name_label(:credential, metadata),
+    do: string_value(metadata, :provider) || string_value(metadata, :tool_name)
+
   defp event_name_label(:schedule, metadata), do: string_value(metadata, :schedule_id) || string_value(metadata, :name)
   defp event_name_label(_category, metadata), do: string_value(metadata, :name)
 

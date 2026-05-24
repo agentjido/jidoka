@@ -138,6 +138,8 @@ defmodule Jidoka.Guardrails do
       }
 
       with :ok <- Jidoka.Credential.reject_raw_secrets(arguments, field: :arguments) do
+        trace_credential_refs(agent, request_id, tool_name, tool_call_id, arguments, runtime_context)
+
         case Runner.run_guardrails(tool_guardrails, input) do
           :ok ->
             :ok
@@ -157,6 +159,22 @@ defmodule Jidoka.Guardrails do
 
   defp maybe_attach_tool_guardrail_callback(context, _tool_guardrails, _agent, _request_id),
     do: context
+
+  defp trace_credential_refs(agent, request_id, tool_name, tool_call_id, arguments, context) do
+    credentials = Jidoka.Credential.references([arguments, context])
+
+    if credentials != [] do
+      Jidoka.Trace.emit(:credential, %{
+        event: :referenced,
+        phase: :operation,
+        request_id: request_id,
+        agent_id: Map.get(agent, :id),
+        tool_name: tool_name,
+        tool_call_id: tool_call_id,
+        credentials: Enum.map(credentials, &Jidoka.Credential.metadata/1)
+      })
+    end
+  end
 
   defp apply_input_control_result(params, %Input{} = input, guardrails, agent, request_id) do
     context =

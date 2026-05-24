@@ -168,9 +168,33 @@ defmodule Jidoka.Credential do
     |> Enum.uniq_by(&reference_identity/1)
   end
 
+  @doc """
+  Returns sanitized metadata for traces, logs, and inspection surfaces.
+  """
+  @spec metadata(t()) :: map()
+  def metadata(%__MODULE__{} = credential) do
+    %{
+      provider: credential.provider,
+      account: credential.account,
+      actor: credential.actor,
+      tenant: credential.tenant,
+      scopes: credential.scopes,
+      lease_id: credential.lease_id,
+      expires_at: format_expires_at(credential.expires_at),
+      risk: credential.risk,
+      confirmation_required: credential.confirmation_required,
+      audit_metadata: Jidoka.Sanitize.payload(credential.audit_metadata)
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) or value == [] or value == %{} end)
+    |> Map.new()
+  end
+
   defp value(attrs, key, default \\ nil) do
     Map.get(attrs, key, Map.get(attrs, Atom.to_string(key), default))
   end
+
+  defp format_expires_at(nil), do: nil
+  defp format_expires_at(%DateTime{} = expires_at), do: DateTime.to_iso8601(expires_at)
 
   defp collect_references(%__MODULE__{} = credential), do: [credential]
 

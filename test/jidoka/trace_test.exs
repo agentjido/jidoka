@@ -204,6 +204,64 @@ defmodule JidokaTest.TraceTest do
     assert Enum.any?(memory_trace.events, &(&1.category == :memory and &1.event == :retrieve))
   end
 
+  test "records credential references without raw secret values" do
+    request_id = unique_id("req-credential-trace")
+    agent = new_runtime_agent(JidokaTest.GuardrailedAgent.runtime_module())
+
+    credential =
+      Jidoka.Credential.new!(
+        provider: "github",
+        account: "acct_123",
+        tenant: "acme",
+        scopes: ["repo"],
+        lease_id: "lease_123",
+        risk: :high,
+        confirmation_required: true,
+        audit_metadata: %{api_key: "raw-secret", request_id: request_id}
+      )
+
+    assert {:ok, _agent, {:ai_react_start, params}} =
+             Jidoka.Guardrails.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "call a credentialed tool",
+                  request_id: request_id,
+                  tool_context: %{credential_ref: credential}
+                }},
+               %{input: [], output: [], tool: []}
+             )
+
+    callback = Map.fetch!(params.tool_context, :__tool_guardrail_callback__)
+
+    assert :ok =
+             callback.(%{
+               tool_name: "github_create_issue",
+               tool_call_id: "tc-credential-trace",
+               arguments: %{title: "Hello"},
+               context: params.tool_context
+             })
+
+    assert {:ok, trace} = Trace.for_request(agent.id, request_id)
+
+    event = Enum.find(trace.events, &(&1.category == :credential and &1.event == :referenced))
+
+    assert event.metadata.credentials == [
+             %{
+               provider: "github",
+               account: "acct_123",
+               tenant: "acme",
+               scopes: ["repo"],
+               lease_id: "lease_123",
+               risk: :high,
+               confirmation_required: true,
+               audit_metadata: %{api_key: "[REDACTED]", request_id: request_id}
+             }
+           ]
+
+    refute inspect(event.metadata) =~ "raw-secret"
+  end
+
   defp trace_context(agent_id, request_id) do
     %{
       Jidoka.Subagent.server_key() => self(),
