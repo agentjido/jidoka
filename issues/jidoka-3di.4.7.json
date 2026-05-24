@@ -7,9 +7,15 @@
   "id": "jidoka-3di.4.7",
   "labels": [],
   "parent": "jidoka-3di.4",
+  "comments": [
+    {
+      "text": "Added edge-case coverage for schema key coercion, invalid repaired output, and raw-mode behavior. Also fixed context schema normalization so string keys matching declared atom fields are parsed without creating atoms.",
+      "timestamp": "2026-05-24T22:30:13Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E3: Add tests for schema coercion, missing required context, malformed output, inva...",
   "type": "task",
-  "updated_at": "2026-05-24T22:27:38Z"
+  "updated_at": "2026-05-24T22:30:13Z"
 }
