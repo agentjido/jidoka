@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-24T23:15:29Z",
   "created": "2026-05-24T20:35:40Z",
   "description": "Parent epic: V3 E5: Controls and human in the loop\n\nSource task 7/9 from MILESTONE_V3.md:\n\n- Make human-in-the-loop a named feature using interrupts and approvals.\n\nEpic closure criteria:\n- Controls are the one public policy concept\n- human-in-the-loop is demonstrated without new runtime machinery\n- raising controls cannot crash the agent process\n",
   "id": "jidoka-3di.6.7",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E5: Make human-in-the-loop a named feature using interrupts and approvals",
   "type": "task",
   "updated_at": "2026-05-24T23:15:29Z"
