@@ -3,7 +3,9 @@
   "blocked_by": [
     "jidoka-3di.3"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.9"
+  ],
   "created": "2026-05-24T20:35:40Z",
   "description": "Purpose: make local runtime debugging a product feature.\n\nDone when:\n- users can answer what happened in a turn without reading logs\n- errors are normalized, readable, and safe to display\n- debugging output is structured, bounded, and safe by default\n",
   "id": "jidoka-3di.8",
