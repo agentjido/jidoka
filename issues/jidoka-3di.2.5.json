@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.5",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Added V3 controls do input/operation/result as the public policy surface over the existing guardrail runtime. Controls now feed generated input/tool/output guardrail helpers and compile-time validation. Verification: mix format --check-formatted, mix compile --warnings-as-errors, mix test test/jidoka/dsl_validation_test.exs, mix test.",
+      "timestamp": "2026-05-24T21:14:32Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Collapse overlapping guardrail/hook/middleware concepts into controls",
   "type": "task",
-  "updated_at": "2026-05-24T21:12:07Z"
+  "updated_at": "2026-05-24T21:14:32Z"
 }
