@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:40Z",
+  "description": "Parent epic: V3 E5: Controls and human in the loop\n\nSource task 6/9 from MILESTONE_V3.md:\n\n- Define how controls interact with typed results, retries, schedules,\n  subagents, workflows, and handoffs.\n\nEpic closure criteria:\n- Controls are the one public policy concept\n- human-in-the-loop is demonstrated without new runtime machinery\n- raising controls cannot crash the agent process\n",
+  "id": "jidoka-3di.6.6",
+  "labels": [],
+  "parent": "jidoka-3di.6",
+  "priority": 2,
+  "status": "open",
+  "title": "E5: Define how controls interact with typed results, retries, schedules, subagents,...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:40Z"
+}
