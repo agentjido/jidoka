@@ -7,9 +7,15 @@
   "id": "jidoka-3di.3.9",
   "labels": [],
   "parent": "jidoka-3di.3",
+  "comments": [
+    {
+      "text": "Reviewed beginner-facing chat/session error shapes. Updated messages to guide missing-agent recovery, made invalid conversation wording explicit, and aligned runtime block failures with V3 controls terminology while keeping structured details stable.",
+      "timestamp": "2026-05-24T22:08:51Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E2: Review error shapes for beginner readability",
   "type": "task",
-  "updated_at": "2026-05-24T22:06:05Z"
+  "updated_at": "2026-05-24T22:08:51Z"
 }
