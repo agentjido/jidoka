@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:38Z",
+  "description": "Parent epic: V3 E0: Baseline and scope\n\nSource task 6/10 from MILESTONE_V3.md:\n\n- Record which tests require live providers and which are deterministic.\n\nEpic closure criteria:\n- there is a baseline report attached to the beadwork epic\n- the V3 epic DAG is represented in beadwork dependencies\n- the feature-to-test matrix exists\n- no implementation work starts without a baseline\n",
+  "id": "jidoka-3di.1.6",
+  "labels": [],
+  "parent": "jidoka-3di.1",
+  "priority": 2,
+  "status": "open",
+  "title": "E0: Record which tests require live providers and which are deterministic",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:38Z"
+}
