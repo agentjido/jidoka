@@ -7,9 +7,15 @@
   "id": "jidoka-3di.2.3",
   "labels": [],
   "parent": "jidoka-3di.2",
+  "comments": [
+    {
+      "text": "Implemented the V3 top-level tools section with action entries wired into the existing tool resolution and verifier path. Added a compile-time DSL test proving actions remain outside the agent block and generate the expected tool module/name. Verification: mix format --check-formatted, mix compile --warnings-as-errors, mix test test/jidoka/dsl_validation_test.exs, mix test.",
+      "timestamp": "2026-05-24T21:03:18Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E1: Keep tool/action definitions outside the agent block",
   "type": "task",
-  "updated_at": "2026-05-24T21:00:57Z"
+  "updated_at": "2026-05-24T21:03:18Z"
 }
