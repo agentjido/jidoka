@@ -3,7 +3,9 @@
   "blocked_by": [
     "jidoka-3di.5"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.7"
+  ],
   "created": "2026-05-24T20:35:40Z",
   "description": "Purpose: collapse hooks/guardrails/middleware into one teachable policy model.\n\nDone when:\n- Controls are the one public policy concept\n- human-in-the-loop is demonstrated without new runtime machinery\n- raising controls cannot crash the agent process\n",
   "id": "jidoka-3di.6",

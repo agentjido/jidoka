@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-3di.6"
+  ],
   "blocks": [],
   "created": "2026-05-24T20:35:40Z",
   "description": "Purpose: plan and implement the first secure credential boundary.\n\nDone when:\n- credential brokering has either a working minimal implementation or a\n  deliberately documented interface contract with follow-up issues\n- the security invariant is tested: no raw credential values leak\n",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "V3 E6: Credential brokering",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:40Z"
+  "updated_at": "2026-05-24T20:35:47Z"
 }
