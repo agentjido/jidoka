@@ -14,25 +14,6 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     Workflow
   }
 
-  @spec tool_entity() :: Spark.Dsl.Entity.t()
-  def tool_entity do
-    %Spark.Dsl.Entity{
-      name: :tool,
-      describe: """
-      Register a Jidoka tool module for this agent.
-      """,
-      target: Tool,
-      args: [:module],
-      schema: [
-        module: [
-          type: :atom,
-          required: true,
-          doc: "A module defined with `use Jidoka.Tool`."
-        ]
-      ]
-    }
-  end
-
   @spec action_entity() :: Spark.Dsl.Entity.t()
   def action_entity do
     %Spark.Dsl.Entity{
@@ -345,10 +326,9 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     %Spark.Dsl.Section{
       name: :capabilities,
       describe: """
-      Register the tools, skills, plugins, web access, subagents, workflows, and handoffs available to this agent.
+      Register integrations, skills, plugins, web access, subagents, workflows, and handoffs available to this agent.
       """,
       entities: [
-        tool_entity(),
         ash_resource_entity(),
         mcp_tools_entity(),
         skill_ref_entity(),

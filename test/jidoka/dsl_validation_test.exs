@@ -177,6 +177,64 @@ defmodule JidokaTest.DslValidationTest do
     end
   end
 
+  test "rejects ambiguous V3-adjacent syntax" do
+    assert_dsl_error(~r/required :id option|agent.*id.*required|missing required.*id/s, """
+    agent do
+      instructions "This should fail."
+    end
+    """)
+
+    assert_compile_error(~r/`tool` is not valid.*tools do action/s, """
+    agent :tool_in_tools_agent do
+      instructions "This should fail."
+    end
+
+    tools do
+      tool JidokaTest.AddNumbers
+    end
+    """)
+
+    assert_compile_error(~r/`tool` is not valid.*tools do action/s, """
+    agent :tool_in_capabilities_agent do
+      instructions "This should fail."
+    end
+
+    capabilities do
+      tool JidokaTest.AddNumbers
+    end
+    """)
+
+    assert_compile_error(~r/`input_guardrail` is not valid.*controls do input/s, """
+    agent :lifecycle_guardrail_agent do
+      instructions "This should fail."
+    end
+
+    lifecycle do
+      input_guardrail JidokaTest.SafePromptGuardrail
+    end
+    """)
+
+    assert_compile_error(~r/`tool` is not valid.*tools do action/s, """
+    agent :tool_control_agent do
+      instructions "This should fail."
+    end
+
+    controls do
+      tool JidokaTest.SafePromptGuardrail
+    end
+    """)
+
+    assert_compile_error(~r/Top-level `output do .*` is not valid/s, """
+    agent :old_output_agent do
+      instructions "This should fail."
+
+      output do
+        schema Zoi.object(%{summary: Zoi.string()})
+      end
+    end
+    """)
+  end
+
   test "requires lower snake case agent ids" do
     assert_dsl_error(~r/agent.*id.*lower snake case/s, """
     agent "Bad-ID" do
