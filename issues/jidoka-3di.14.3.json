@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-24T20:35:43Z",
+  "description": "Parent epic: V3 E13: Subagents and handoffs\n\nSource task 3/5 from MILESTONE_V3.md:\n\n- Add tests for missing child agent, failed child start, child interrupt,\n  invalid return, forwarding modes, and handoff reset.\n\nEpic closure criteria:\n- delegation and ownership transfer are separate concepts in code and docs\n- handoff routing works cleanly with sessions\n",
+  "id": "jidoka-3di.14.3",
+  "labels": [],
+  "parent": "jidoka-3di.14",
+  "priority": 2,
+  "status": "open",
+  "title": "E13: Add tests for missing child agent, failed child start, child interrupt, invalid...",
+  "type": "task",
+  "updated_at": "2026-05-24T20:35:43Z"
+}
