@@ -3,7 +3,9 @@
   "blocked_by": [
     "jidoka-3di.8"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-3di.18"
+  ],
   "created": "2026-05-24T20:35:41Z",
   "description": "Purpose: align production telemetry with standards-friendly backends.\n\nDone when:\n- local Jidoka traces and production telemetry share correlation fields\n- observability docs remain standards-friendly and dependency-light\n",
   "id": "jidoka-3di.9",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "V3 E8: Observability standards",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:47Z"
+  "updated_at": "2026-05-24T20:35:48Z"
 }
