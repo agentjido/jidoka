@@ -7,9 +7,15 @@
   "id": "jidoka-3di.10.2",
   "labels": [],
   "parent": "jidoka-3di.10",
+  "comments": [
+    {
+      "text": "Audited compaction mode handling, threshold checks, prompt override validation/resolution, manual compaction, provider-facing message trimming, failure-open behavior, inspection, and existing tests. Current coverage already exercises auto/manual/off, below-threshold skips, prompt module/MFA/static overrides, manual session and pid paths, summarize failures, retained tails, tool-call boundary preservation, request transformer injection, trace/inspection/Kino consumers, and imported JSON/YAML round trips. Recorded the V3 public contract: compact/2 and inspect_compaction/2 stay; compaction may trim only provider-facing messages and never the canonical thread. Verified with mix format --check-formatted, mix compile --warnings-as-errors, mix test, mix docs --warnings-as-errors, mix doctor --raise, and git diff --check.",
+      "timestamp": "2026-05-25T01:29:29Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E9: Audit compaction modes, thresholding, prompt override, manual compaction, and p...",
   "type": "task",
-  "updated_at": "2026-05-25T01:27:47Z"
+  "updated_at": "2026-05-25T01:29:29Z"
 }
