@@ -2,13 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T15:26:42Z",
+  "close_reason": "Standardized README and Livebook setup on a clean Git dependency until Hex release, added the :fast model alias config, tested notebook code fences, synced Livebook dev endpoints, and ran verification.",
   "created": "2026-05-25T15:20:20Z",
   "description": "Standardize README and Livebook setup on a clean Git dependency reference until Hex release, and add the :fast model alias config to Livebook Mix.install blocks.",
   "id": "jidoka-ud6",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Clean Livebook install setup",
   "type": "task",
-  "updated_at": "2026-05-25T15:20:20Z"
+  "updated_at": "2026-05-25T15:26:42Z"
 }
