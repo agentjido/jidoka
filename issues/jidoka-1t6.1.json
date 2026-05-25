@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T23:16:46Z",
   "created": "2026-05-25T23:12:05Z",
   "description": "Jidoka.Output.Runtime accepts a retries option but maybe_repair/7 only performs one repair attempt. Implement the configured retry behavior or tighten the option semantics, with tests for success after multiple repairs and final failure.",
   "id": "jidoka-1t6.1",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 0,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Fix structured result repair retries",
   "type": "bug",
-  "updated_at": "2026-05-25T23:12:42Z"
+  "updated_at": "2026-05-25T23:16:46Z"
 }
