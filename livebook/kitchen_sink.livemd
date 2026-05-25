@@ -1,0 +1,364 @@
+# Jidoka Kitchen Sink
+
+```elixir
+dep =
+  if File.exists?(Path.expand("../mix.exs", __DIR__)) do
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  else
+    {:jidoka, "~> 1.0"}
+  end
+
+Mix.install([dep], consolidate_protocols: false)
+```
+
+## Build The Pieces First
+
+```elixir
+defmodule LivebookDemo.KitchenSink.LoadTicket do
+  use Jidoka.Action,
+    name: "load_ticket",
+    description: "Loads a ticket from the host application.",
+    schema: Zoi.object(%{id: Zoi.string()})
+
+  @impl true
+  def run(%{id: id}, context) do
+    {:ok,
+     %{
+       id: id,
+       account_id: Map.fetch!(context, :account_id),
+       status: :open,
+       priority: :high,
+       subject: "Invoice failed after plan change"
+     }}
+  end
+end
+
+defmodule LivebookDemo.KitchenSink.ScoreRisk do
+  use Jidoka.Action,
+    name: "score_risk",
+    description: "Scores ticket risk from priority and account context.",
+    schema: Zoi.object(%{priority: Zoi.enum([:low, :normal, :high])})
+
+  @impl true
+  def run(%{priority: :high}, _context), do: {:ok, %{risk: :high, escalation_required: true}}
+  def run(_params, _context), do: {:ok, %{risk: :normal, escalation_required: false}}
+end
+
+defmodule LivebookDemo.KitchenSink.FetchPolicy do
+  use Jidoka.Action,
+    name: "fetch_policy",
+    description: "Returns the policy summary for a support topic.",
+    schema: Zoi.object(%{topic: Zoi.string()})
+
+  @impl true
+  def run(%{topic: "billing"}, _context), do: {:ok, %{policy: "Billing changes need account-owner review."}}
+  def run(%{topic: topic}, _context), do: {:ok, %{policy: "No special policy for #{topic}."}}
+end
+
+defmodule LivebookDemo.KitchenSink.TriageWorkflow do
+  use Jidoka.Workflow
+
+  workflow do
+    id :kitchen_sink_triage
+    description "Loads a ticket, scores risk, and fetches policy context."
+    input Zoi.object(%{ticket_id: Zoi.string(), topic: Zoi.string()})
+  end
+
+  steps do
+    action :load_ticket, LivebookDemo.KitchenSink.LoadTicket,
+      input: %{id: input(:ticket_id)}
+
+    action :score_risk, LivebookDemo.KitchenSink.ScoreRisk,
+      input: %{priority: from(:load_ticket, :priority)}
+
+    action :fetch_policy, LivebookDemo.KitchenSink.FetchPolicy,
+      input: %{topic: input(:topic)}
+  end
+
+  output %{
+    ticket: from(:load_ticket),
+    risk: from(:score_risk),
+    policy: from(:fetch_policy, :policy)
+  }
+end
+```
+
+## Controls And Specialists
+
+```elixir
+defmodule LivebookDemo.KitchenSink.BlockSecrets do
+  use Jidoka.Control, name: "block_secrets"
+
+  @impl true
+  def call(%Jidoka.Guardrails.Input{message: message}) do
+    if String.contains?(String.downcase(message), "api_key") do
+      {:block, :raw_secret_in_prompt}
+    else
+      :cont
+    end
+  end
+end
+
+defmodule LivebookDemo.KitchenSink.RequireCredentialApproval do
+  use Jidoka.Control, name: "require_credential_approval"
+
+  @impl true
+  def call(%Jidoka.Guardrails.Tool{operation_kind: :action, context: context, tool_name: tool_name}) do
+    if Map.get(context, :credential_ref) do
+      Jidoka.Approval.request("Approve authenticated operation.",
+        data: %{tool: to_string(tool_name), account_id: context.account_id}
+      )
+    else
+      :cont
+    end
+  end
+end
+
+defmodule LivebookDemo.KitchenSink.ReviewHighRiskResult do
+  use Jidoka.Control, name: "review_high_risk_result"
+
+  @impl true
+  def call(%Jidoka.Guardrails.Output{outcome: {:ok, %{risk: :high} = result}}) do
+    Jidoka.Approval.request("Review high-risk result.", data: result)
+  end
+
+  def call(%Jidoka.Guardrails.Output{}), do: :cont
+end
+
+defmodule LivebookDemo.KitchenSink.ResearchSpecialist do
+  defmodule Runtime do
+    use Jido.Agent,
+      name: "kitchen_sink_research_runtime",
+      schema: Zoi.object(%{})
+  end
+
+  def name, do: "research_specialist"
+  def runtime_module, do: Runtime
+  def start_link(opts \\ []), do: Jidoka.start_agent(Runtime, opts)
+
+  def chat(_pid, message, opts \\ []) do
+    context = Keyword.get(opts, :context, %{})
+    {:ok, %{summary: "researched #{message}", tenant: Map.get(context, :tenant, "none")}}
+  end
+end
+```
+
+## Compile The Agent
+
+```elixir
+defmodule LivebookDemo.KitchenSink.SupportDeskAgent do
+  use Jidoka.Agent
+
+  @result_schema Zoi.object(%{
+                   category: Zoi.enum([:billing, :technical, :account]),
+                   risk: Zoi.enum([:normal, :high]),
+                   next_step: Zoi.string(),
+                   escalation_required: Zoi.boolean()
+                 })
+
+  agent :kitchen_sink_support_desk do
+    model :fast
+    instructions "Triage support tickets with deterministic tools before giving guidance."
+    character :none
+
+    context(
+      Zoi.object(%{
+        account_id: Zoi.string() |> Zoi.default("acct_demo"),
+        actor_id: Zoi.string() |> Zoi.default("system"),
+        tenant: Zoi.string() |> Zoi.default("demo"),
+        session: Zoi.string() |> Zoi.optional(),
+        credential_ref: Zoi.any() |> Zoi.optional()
+      })
+    )
+
+    result @result_schema do
+      repair 1
+      on_validation_error :repair
+    end
+
+    schedule :daily_support_digest do
+      cron "0 9 * * *"
+      timezone "America/Chicago"
+      prompt "Prepare the daily support digest."
+      conversation "support-digest"
+      overlap :skip
+    end
+  end
+
+  tools do
+    action LivebookDemo.KitchenSink.LoadTicket
+  end
+
+  capabilities do
+    workflow LivebookDemo.KitchenSink.TriageWorkflow,
+      as: :triage_ticket,
+      result: :structured
+
+    subagent LivebookDemo.KitchenSink.ResearchSpecialist,
+      as: "research_specialist",
+      description: "Ask the specialist for focused background."
+  end
+
+  lifecycle do
+    memory do
+      mode :conversation
+      namespace {:context, :session}
+      capture :conversation
+      retrieve limit: 3
+      inject :instructions
+    end
+
+    compaction do
+      mode :manual
+      strategy :summary
+      max_messages 8
+      keep_last 2
+      max_summary_chars 500
+      prompt "Compact this support conversation for future turns."
+    end
+  end
+
+  controls do
+    input LivebookDemo.KitchenSink.BlockSecrets
+
+    operation LivebookDemo.KitchenSink.RequireCredentialApproval,
+      when: [kind: :action]
+
+    result LivebookDemo.KitchenSink.ReviewHighRiskResult
+  end
+end
+
+alias LivebookDemo.KitchenSink.SupportDeskAgent
+
+{:ok, definition} = Jidoka.inspect_agent(SupportDeskAgent)
+
+%{
+  id: SupportDeskAgent.id(),
+  tools: SupportDeskAgent.tool_names(),
+  workflows: Enum.map(SupportDeskAgent.workflows(), & &1.name),
+  subagents: Enum.map(SupportDeskAgent.subagents(), & &1.name),
+  schedules: Enum.map(SupportDeskAgent.schedules(), & &1.id),
+  controls: Map.new(definition.guardrails, fn {stage, controls} -> {stage, length(controls)} end),
+  memory: definition.memory != nil,
+  compaction: definition.compaction != nil
+}
+```
+
+## Exercise Deterministic Pieces
+
+```elixir
+context = %{
+  account_id: "acct_123",
+  actor_id: "user_123",
+  tenant: "acme",
+  session: "ticket-123"
+}
+
+{:ok, ticket} = LivebookDemo.KitchenSink.LoadTicket.run(%{id: "ticket-123"}, context)
+
+{:ok, workflow_result} =
+  LivebookDemo.KitchenSink.TriageWorkflow.run(%{ticket_id: "ticket-123", topic: "billing"},
+    context: context
+  )
+
+{:ok, typed_result} =
+  LivebookDemo.KitchenSink.SupportDeskAgent.result()
+  |> Jidoka.Output.parse(
+    ~s({"category":"billing","risk":"high","next_step":"Escalate to account owner.","escalation_required":true})
+  )
+
+%{
+  ticket: ticket,
+  workflow_result: workflow_result,
+  typed_result: typed_result
+}
+```
+
+## Inspect A Provider-Free Turn
+
+```elixir
+context = %{
+  account_id: "acct_123",
+  actor_id: "user_123",
+  tenant: "acme",
+  session: "ticket-123"
+}
+
+session =
+  LivebookDemo.KitchenSink.SupportDeskAgent
+  |> Jidoka.session("ticket-123", context: context)
+
+stop_before_provider = fn input ->
+  Jidoka.Approval.request("Pause before provider execution.", data: %{request: input.request_id})
+end
+
+try do
+  {:interrupt, interrupt} =
+    Jidoka.chat(session, "Triage ticket-123.",
+      controls: [input: stop_before_provider]
+    )
+
+  {:ok, request} = Jidoka.inspect_request(session)
+  {:ok, trace} = Jidoka.inspect_trace(session)
+  {:ok, view} = Jidoka.Session.snapshot(session)
+
+  %{
+    interrupt: Map.take(interrupt, [:kind, :message, :data]),
+    request_id: request.request_id,
+    trace_events: Enum.map(trace.events, &{&1.category, &1.event}),
+    view_kind: view.kind,
+    view_agent_id: view.agent_id
+  }
+after
+  if pid = Jidoka.Session.whereis(session), do: Jidoka.stop_agent(pid)
+end
+```
+
+## Schedule And Import Boundaries
+
+```elixir
+context = %{
+  account_id: "acct_123",
+  actor_id: "user_123",
+  tenant: "acme",
+  session: "ticket-123"
+}
+
+schedule_id = "kitchen-sink-triage-#{System.unique_integer([:positive])}"
+
+{:ok, _schedule} =
+  Jidoka.schedule_workflow(LivebookDemo.KitchenSink.TriageWorkflow,
+    id: schedule_id,
+    cron: "0 9 * * *",
+    input: %{ticket_id: "ticket-123", topic: "billing"},
+    context: context,
+    enabled?: false
+  )
+
+{:ok, scheduled_run} = Jidoka.run_schedule(schedule_id)
+Jidoka.cancel_schedule(schedule_id)
+
+import_spec = %{
+  "agent" => %{"id" => "portable_support_agent"},
+  "defaults" => %{"instructions" => "Use allowlisted support operations."},
+  "capabilities" => %{
+    "tools" => ["load_ticket"],
+    "workflows" => [%{"workflow" => "kitchen_sink_triage", "as" => "triage_ticket"}],
+    "subagents" => [%{"agent" => "research_specialist"}]
+  }
+}
+
+{:ok, imported} =
+  Jidoka.import_agent(import_spec,
+    available_tools: [LivebookDemo.KitchenSink.LoadTicket],
+    available_workflows: %{"kitchen_sink_triage" => LivebookDemo.KitchenSink.TriageWorkflow},
+    available_subagents: %{"research_specialist" => LivebookDemo.KitchenSink.ResearchSpecialist}
+  )
+
+%{
+  scheduled_result: scheduled_run.result,
+  imported_tools: Enum.map(imported.tool_modules, & &1.name()),
+  imported_workflows: Enum.map(imported.workflows, & &1.name),
+  imported_subagents: Enum.map(imported.subagents, & &1.name)
+}
+```
