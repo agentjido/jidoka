@@ -7,9 +7,15 @@
   "id": "jidoka-3di.8.2",
   "labels": [],
   "parent": "jidoka-3di.8",
+  "comments": [
+    {
+      "text": "Verified the public inspection surfaces together on a running agent, including inspect_agent, inspect_request(pid, request_id), inspect_trace, inspect_compaction, and Agent.View snapshot projection. Fixed the two-arity inspect_request path for running agent refs.",
+      "timestamp": "2026-05-25T00:14:31Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E7: Verify inspectagent, inspectrequest, inspecttrace, inspectcompaction, and Agent...",
   "type": "task",
-  "updated_at": "2026-05-25T00:09:56Z"
+  "updated_at": "2026-05-25T00:14:31Z"
 }
