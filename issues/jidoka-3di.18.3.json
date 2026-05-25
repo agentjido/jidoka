@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T04:31:26Z",
+  "close_reason": "Added a provider-free beginner Livebook aligned with README, FEATURES.md, and examples, and evaluated all code cells.",
   "created": "2026-05-24T20:35:45Z",
   "description": "Parent epic: V3 E17: Testing, examples, and docs\n\nSource task 3/7 from MILESTONE_V3.md:\n\n- Rebuild Livebooks only after the DSL is stable.\n\nEpic closure criteria:\n- docs, examples, and Livebooks teach the same progression\n- every shipped example has an automated smoke test\n",
   "id": "jidoka-3di.18.3",
   "labels": [],
   "parent": "jidoka-3di.18",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E17: Rebuild Livebooks only after the DSL is stable",
   "type": "task",
-  "updated_at": "2026-05-25T04:26:35Z"
+  "updated_at": "2026-05-25T04:31:26Z"
 }
