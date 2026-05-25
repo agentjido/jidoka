@@ -7,9 +7,15 @@
   "id": "jidoka-3di.11.3",
   "labels": [],
   "parent": "jidoka-3di.11",
+  "comments": [
+    {
+      "text": "Decision: keep AgentView as the concrete V3 module name, but teach the beginner concept as UI projection. Updated README, FEATURES, moduledoc, and decision log. Full gate passed.",
+      "timestamp": "2026-05-25T01:58:37Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E10: Decide whether AgentView should be renamed or repositioned for beginner clarity",
   "type": "task",
-  "updated_at": "2026-05-25T01:56:54Z"
+  "updated_at": "2026-05-25T01:58:37Z"
 }
