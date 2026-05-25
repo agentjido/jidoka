@@ -7,9 +7,15 @@
   "id": "jidoka-3di.13.6",
   "labels": [],
   "parent": "jidoka-3di.13",
+  "comments": [
+    {
+      "text": "Simplified beginner-facing workflow terminology: exposed workflows are now described as workflow operations/model-callable operations, public validation messages avoid workflow capability wording, and raw execution-graph terminology is kept out of user-facing docs.",
+      "timestamp": "2026-05-25T02:56:52Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E12: Review whether workflow terminology needs simplification for beginners",
   "type": "task",
-  "updated_at": "2026-05-25T02:49:43Z"
+  "updated_at": "2026-05-25T02:56:52Z"
 }
