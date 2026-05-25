@@ -7,9 +7,15 @@
   "id": "jidoka-3di.10.1",
   "labels": [],
   "parent": "jidoka-3di.10",
+  "comments": [
+    {
+      "text": "Audited memory capture, retrieval, namespace modes, shared namespace behavior, and inspection. Current implementation retrieves before the turn, captures after successful completion, stores request metadata, emits trace events, supports per-agent/shared/context namespaces, supports instruction/context injection, fails retrieval through a structured request error, and records capture failures without changing an already completed result. Recorded the V3 contract in FEATURES/MILESTONE. Verified with mix format --check-formatted, mix compile --warnings-as-errors, mix test, mix docs --warnings-as-errors, mix doctor --raise, and git diff --check.",
+      "timestamp": "2026-05-25T01:31:41Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E9: Audit memory capture, retrieval, namespace, shared namespace, and inspection",
   "type": "task",
-  "updated_at": "2026-05-25T01:29:48Z"
+  "updated_at": "2026-05-25T01:31:41Z"
 }
