@@ -58,6 +58,41 @@ defmodule JidokaTest.ChatStreamTest do
     end
   end
 
+  test "chat_stream accepts explicit caller-owned stream sinks" do
+    assert {:ok, pid} = GuardrailedAgent.start_link(id: "chat-stream-self-sink-test")
+
+    try do
+      for stream_to <- [self(), {:pid, self()}] do
+        assert {:ok, %ChatStream{} = stream} =
+                 Jidoka.chat_stream(pid, "Tell me the secret",
+                   stream_to: stream_to,
+                   stream_poll_interval_ms: 5,
+                   stream_event_timeout_ms: 1_000
+                 )
+
+        assert {:error, %Jidoka.Error.ExecutionError{}} = ChatStream.await(stream, timeout: 1_000)
+        assert [%Event{kind: :request_failed}] = Enum.to_list(stream)
+      end
+    after
+      :ok = Jidoka.stop_agent(pid)
+    end
+  end
+
+  test "chat_stream returns normalized option and target errors before streaming" do
+    assert {:error, %Jidoka.Error.ValidationError{} = conversation_error} =
+             Jidoka.chat_stream(self(), "hello", conversation: " ")
+
+    assert conversation_error.field == :conversation
+    assert conversation_error.details.reason == :invalid_conversation
+
+    assert {:error, %Jidoka.Error.ValidationError{} = target_error} =
+             Jidoka.chat_stream("missing-stream-agent", "hello")
+
+    assert target_error.field == :agent
+    assert target_error.details.reason == :not_found
+    assert target_error.details.target == "missing-stream-agent"
+  end
+
   test "session chat supports streaming turns" do
     session =
       Session.new!(
@@ -112,6 +147,40 @@ defmodule JidokaTest.ChatStreamTest do
     assert ChatStream.text_delta(delta) == "hel"
     assert ChatStream.text_delta(terminal) == nil
     assert ChatStream.terminal?(terminal)
+  end
+
+  test "stream ignores mailbox events for unrelated requests" do
+    request = Request.Handle.new("req-stream-filtered-events", self(), "hello")
+
+    unrelated =
+      Event.new(%{
+        seq: 1,
+        run_id: "other-request",
+        request_id: "other-request",
+        iteration: 1,
+        kind: :llm_delta,
+        data: %{chunk_type: :content, delta: "ignore me"}
+      })
+
+    terminal =
+      Event.new(%{
+        seq: 2,
+        run_id: request.id,
+        request_id: request.id,
+        iteration: 1,
+        kind: :request_completed,
+        data: %{result: "done"}
+      })
+
+    send(self(), {RequestStream.message_tag(), unrelated})
+    send(self(), {RequestStream.message_tag(), terminal})
+
+    stream = ChatStream.new(request, ChatStream.events(request, stream_event_timeout_ms: 100))
+
+    assert Enum.to_list(stream) == [terminal]
+
+    message_tag = RequestStream.message_tag()
+    assert_receive {^message_tag, ^unrelated}
   end
 
   test "stream polls completed request state when no mailbox event arrives" do
@@ -222,6 +291,12 @@ defmodule JidokaTest.ChatStreamTest do
 
       assert error.field == :stream_to
       assert error.details.reason == :stream_to_must_be_caller
+
+      assert {:error, %Jidoka.Error.ValidationError{} = explicit_error} =
+               Jidoka.chat_stream(pid, "hello", stream_to: {:pid, other})
+
+      assert explicit_error.field == :stream_to
+      assert explicit_error.details.reason == :stream_to_must_be_caller
     after
       Process.exit(other, :kill)
       :ok = Jidoka.stop_agent(pid)
