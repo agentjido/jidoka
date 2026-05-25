@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T15:16:19Z",
+  "description": "Collapse the new concept Livebook teaching surface into the existing singular livebook folder, remove duplicate livebooks package/formatter references, and retest via Livebook dev endpoints.",
+  "id": "jidoka-7zr",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Reconcile Livebook folder naming",
+  "type": "task",
+  "updated_at": "2026-05-25T15:16:19Z"
+}
