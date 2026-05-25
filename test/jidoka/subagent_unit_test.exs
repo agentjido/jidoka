@@ -36,6 +36,9 @@ defmodule JidokaTest.SubagentUnitTest do
     assert {:error, reason} = Subagent.validate_agent_module(MissingRuntimeModule)
     assert reason =~ "missing runtime_module/0"
 
+    assert {:error, reason} = Subagent.validate_agent_module(JidokaTest.MissingChildAgent)
+    assert reason =~ "could not be loaded"
+
     assert {:error, reason} = Subagent.normalize_target({:peer, " "})
     assert reason =~ "peer ids must not be empty"
 

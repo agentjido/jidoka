@@ -636,3 +636,19 @@ defmodule JidokaTest.WrongPeerHandoffAgent do
     )
   end
 end
+
+defmodule JidokaTest.StartFailureHandoffAgent do
+  use Jidoka.Agent
+
+  agent :start_failure_handoff_agent do
+    model :fast
+    instructions "Transfer ownership to a specialist that fails during startup."
+  end
+
+  capabilities do
+    handoff(JidokaTest.StartFailureSpecialist,
+      as: :start_failure_specialist,
+      description: "Transfer to a specialist that cannot start."
+    )
+  end
+end

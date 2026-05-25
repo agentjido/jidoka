@@ -13,6 +13,7 @@ defmodule JidokaTest.HandoffsTest do
     ReviewHandoffSpecialist,
     SessionBillingHandoffAgent,
     SessionHandoffRouterAgent,
+    StartFailureHandoffAgent,
     WrongPeerHandoffAgent
   }
 
@@ -176,6 +177,31 @@ defmodule JidokaTest.HandoffsTest do
     after
       assert Jidoka.whereis("wrong-billing-peer-handoff-test") == pid
       reset_agent("wrong-billing-peer-handoff-test")
+    end
+  end
+
+  test "invalid payloads and failed auto-target starts return normalized handoff errors" do
+    tool = handoff_tool(HandoffRouterAgent, "billing_specialist")
+
+    assert {:error, %Jidoka.Error.ValidationError{} = invalid_error} =
+             tool.run(%{message: " "}, handoff_context(unique_id("invalid-payload")))
+
+    assert invalid_error.message == "Handoff message must be a non-empty string."
+    assert invalid_error.details.reason == :invalid_payload
+
+    conversation_id = unique_id("handoff-start-failure")
+    start_failure_tool = handoff_tool(StartFailureHandoffAgent, "start_failure_specialist")
+
+    try do
+      assert {:error, %Jidoka.Error.ExecutionError{} = start_error} =
+               run_transfer(start_failure_tool, conversation_id, %{})
+
+      assert start_error.message == "Handoff target agent could not be started."
+      assert start_error.details.reason == :start_failed
+      assert start_error.details.cause == {:start_failed, :boom}
+      assert is_nil(Jidoka.handoff_owner(conversation_id))
+    after
+      cleanup_conversation(conversation_id)
     end
   end
 
