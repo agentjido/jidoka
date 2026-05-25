@@ -7,9 +7,15 @@
   "id": "jidoka-3di.7.8",
   "labels": [],
   "parent": "jidoka-3di.7",
+  "comments": [
+    {
+      "text": "Documented the credential broker execution boundary: Jidoka carries references and blocks raw secrets, while app-owned brokers/proxies/connect layers resolve and inject credentials at tool execution time.",
+      "timestamp": "2026-05-25T00:05:57Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E6: Document how brokers/proxies/connect layers inject real credentials at executio...",
   "type": "task",
-  "updated_at": "2026-05-25T00:03:56Z"
+  "updated_at": "2026-05-25T00:05:57Z"
 }
