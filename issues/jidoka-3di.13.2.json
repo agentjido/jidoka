@@ -7,9 +7,15 @@
   "id": "jidoka-3di.13.2",
   "labels": [],
   "parent": "jidoka-3di.13",
+  "comments": [
+    {
+      "text": "Decided workflows remain a separate use Jidoka.Workflow surface, while action-backed workflow steps now use action :name, MyAction. Added compile-time coverage rejecting action-style using options and inspection coverage for :action steps.",
+      "timestamp": "2026-05-25T02:38:27Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E12: Decide whether workflow syntax should mirror action syntax or remain a separate...",
   "type": "task",
-  "updated_at": "2026-05-25T02:32:09Z"
+  "updated_at": "2026-05-25T02:38:27Z"
 }
