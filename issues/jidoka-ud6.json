@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-25T15:20:20Z",
@@ -7,7 +7,7 @@
   "id": "jidoka-ud6",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Clean Livebook install setup",
   "type": "task",
   "updated_at": "2026-05-25T15:20:20Z"
