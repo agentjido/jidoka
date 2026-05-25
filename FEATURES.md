@@ -495,6 +495,9 @@ interchange, and beta compatibility tests while the canonical DSL settles.
    systems emphasize persistence, branching, checkpointing, and resume. Jidoka
    should not hide this behind `Session`: the first story is graduation to
    durable runtime storage, hibernate/thaw, checkpoints, and thread journals.
+   V3 should not add thin adapter helpers around this. `runtime_module/0` is the
+   explicit handoff point into the app-owned runtime that supervises and stores
+   the agent.
 2. **Human-in-the-loop as a named concept.** Controls can already interrupt or
    approve. The product gap is naming and teaching it explicitly as
    human-in-the-loop, especially for risky tools and final results.

@@ -208,6 +208,9 @@ or support replay:
 
 Jidoka is the on-ramp: start with the smaller DSL, then move the generated
 runtime module into the full runtime when production needs outgrow the wrapper.
+V3 does not add a separate Jidoka durability adapter. The stable handoff point
+is `MyAgent.runtime_module()`, which keeps the persistence API owned by the
+runtime that actually supervises and stores the agent.
 
 ## Phoenix And UI State
 
