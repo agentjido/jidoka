@@ -36,6 +36,10 @@ defmodule JidokaTest.ImportedAgentTest do
     end
   end
 
+  defmodule MetadataOnlyPlugin do
+    use Jidoka.Plugin, name: "metadata_plugin", tools: []
+  end
+
   test "imports a constrained imported agent from JSON" do
     json =
       imported_spec("json_agent",
@@ -95,6 +99,114 @@ defmodule JidokaTest.ImportedAgentTest do
     assert agent.guardrail_modules.input == [SafePromptGuardrail]
     assert agent.guardrail_modules.output == [SafeReplyGuardrail]
     assert agent.guardrail_modules.tool == [ApproveLargeMathToolGuardrail]
+  end
+
+  test "JSON and YAML round-trip the full supported imported spec contract" do
+    output = %{
+      "schema" => %{
+        "type" => "object",
+        "required" => ["summary"],
+        "properties" => %{"summary" => %{"type" => "string"}}
+      },
+      "retries" => 1,
+      "on_validation_error" => "repair"
+    }
+
+    source = %{
+      "agent" => %{
+        "id" => "full_round_trip_agent",
+        "description" => "Portable imported agent.",
+        "context" => %{"tenant" => "acme", "channel" => "support"}
+      },
+      "defaults" => %{
+        "model" => %{"provider" => "openai", "id" => "gpt-4.1", "base_url" => "http://localhost:4000/v1"},
+        "instructions" => "Line one.\nLine two.",
+        "character" => %{"name" => "Imported Specialist", "identity" => %{"role" => "Support"}}
+      },
+      "capabilities" => %{
+        "tools" => ["add_numbers"],
+        "skills" => ["module-math-skill"],
+        "skill_paths" => ["test/fixtures/skills"],
+        "mcp_tools" => [%{"endpoint" => "github", "prefix" => "github_"}],
+        "subagents" => [
+          %{
+            "agent" => "research_agent",
+            "as" => "research_delegate",
+            "description" => "Ask research to handle one bounded task.",
+            "target" => "peer",
+            "peer_id" => "research-peer",
+            "timeout_ms" => 12_345,
+            "forward_context" => %{"mode" => "only", "keys" => ["tenant"]},
+            "result" => "structured"
+          }
+        ],
+        "workflows" => [
+          %{
+            "workflow" => "workflow_capability_math",
+            "as" => "run_math",
+            "description" => "Run deterministic math.",
+            "timeout" => 23_456,
+            "forward_context" => "none",
+            "result" => "structured"
+          }
+        ],
+        "handoffs" => [
+          %{
+            "agent" => "billing_specialist",
+            "as" => "billing_owner",
+            "description" => "Transfer billing ownership.",
+            "target" => "peer",
+            "peer_id" => "billing-peer",
+            "forward_context" => %{"mode" => "except", "keys" => ["secret"]}
+          }
+        ],
+        "web" => [%{"mode" => "read_only"}],
+        "plugins" => ["metadata_plugin"]
+      },
+      "lifecycle" => %{
+        "compaction" => %{
+          "mode" => "manual",
+          "strategy" => "summary",
+          "max_messages" => 40,
+          "keep_last" => 8,
+          "max_summary_chars" => 2_000,
+          "prompt" => "Summarize the useful state."
+        },
+        "memory" => %{
+          "mode" => "conversation",
+          "namespace" => "shared",
+          "shared_namespace" => "support",
+          "capture" => "conversation",
+          "retrieve" => %{"limit" => 3},
+          "inject" => "instructions"
+        },
+        "hooks" => %{
+          "before_turn" => ["inject_tenant"],
+          "after_turn" => ["normalize_reply"],
+          "on_interrupt" => ["notify_ops"]
+        },
+        "guardrails" => %{
+          "input" => ["safe_prompt"],
+          "output" => ["safe_reply"],
+          "tool" => ["approve_large_math_tool"]
+        }
+      },
+      "output" => output
+    }
+
+    import_opts = imported_registry_opts()
+    assert {:ok, normalized_import_opts} = Jidoka.ImportedAgent.Registries.normalize_opts(import_opts)
+
+    assert {:ok, %ImportedAgent{} = agent} = Jidoka.import_agent(source, import_opts)
+    external = Jidoka.ImportedAgent.Spec.to_external_map(agent.spec)
+
+    for format <- [:json, :yaml] do
+      assert {:ok, encoded} = Jidoka.encode_agent(agent, format: format)
+      assert {:ok, decoded} = Jidoka.ImportedAgent.Codec.decode(encoded, format)
+      assert {:ok, round_tripped_spec} = Jidoka.ImportedAgent.Spec.new(decoded, normalized_import_opts)
+
+      assert Jidoka.ImportedAgent.Spec.to_external_map(round_tripped_spec) == external
+    end
   end
 
   test "imports skills and mcp tool sync settings" do
@@ -877,6 +989,19 @@ defmodule JidokaTest.ImportedAgentTest do
       nil -> :ok
       pid -> Jidoka.stop_agent(pid)
     end
+  end
+
+  defp imported_registry_opts do
+    [
+      available_tools: [AddNumbers],
+      available_skills: [ModuleMathSkill],
+      available_plugins: [MetadataOnlyPlugin],
+      available_subagents: [ResearchSpecialist],
+      available_workflows: [WorkflowCapability.MathWorkflow],
+      available_handoffs: [BillingHandoffSpecialist],
+      available_hooks: [InjectTenantHook, NormalizeReplyHook, NotifyOpsHook],
+      available_guardrails: [SafePromptGuardrail, SafeReplyGuardrail, ApproveLargeMathToolGuardrail]
+    ]
   end
 
   defp imported_spec(id, opts) do

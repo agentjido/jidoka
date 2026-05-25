@@ -193,7 +193,7 @@ defmodule Jidoka.ImportedAgent.Codec do
       |> Ymlr.document!()
       |> yaml_document_body()
 
-    "  character:\n" <> indent_lines(rendered, 2)
+    "  character:\n" <> indent_lines(rendered, 4)
   end
 
   defp encode_yaml_output(nil), do: nil
