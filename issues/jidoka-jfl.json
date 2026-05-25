@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T15:27:09Z",
+  "description": "Clean up verbose LivebookDemo module names in Livebook examples while keeping notebooks deterministic and easy to read.",
+  "id": "jidoka-jfl",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Simplify Livebook module names",
+  "type": "task",
+  "updated_at": "2026-05-25T15:27:09Z"
+}
