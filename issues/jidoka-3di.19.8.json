@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T04:58:56Z",
+  "close_reason": "Reviewed ExDoc grouping against the V3 public surface. Reorganized groups around Authoring, Runtime, Capabilities, Livebook, and Errors; removed stale/non-public group entries; expanded the Jidoka facade moduledoc; and hid the internal trace collector from generated API docs. Verified compile, docs warnings-as-errors, tests, and doctor.",
   "created": "2026-05-24T20:35:46Z",
   "description": "Parent epic: V3 E18: Final hardening\n\nSource task 8/9 from MILESTONE_V3.md:\n\n- Review public API docs and ExDoc groups.\n\nEpic closure criteria:\n- all verification passes\n- remaining known gaps are documented as post-V3 work\n- the package has one coherent V3 story from README to tests\n",
   "id": "jidoka-3di.19.8",
   "labels": [],
   "parent": "jidoka-3di.19",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E18: Review public API docs and ExDoc groups",
   "type": "task",
-  "updated_at": "2026-05-25T04:56:37Z"
+  "updated_at": "2026-05-25T04:58:56Z"
 }
