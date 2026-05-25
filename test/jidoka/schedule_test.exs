@@ -293,6 +293,15 @@ defmodule JidokaTest.ScheduleTest do
       assert {:ok, [%Schedule{} = updated]} = Jidoka.list_schedules(manager: manager)
       assert updated.last_status == :interrupted
       assert hd(updated.history).status == :interrupted
+
+      assert {:ok, trace} = Jidoka.Trace.for_request(session.agent_id, run.request_id)
+
+      assert Enum.any?(trace.events, fn event ->
+               event.category == :schedule and event.event == :start and
+                 event.metadata.session_id == session.id and
+                 event.metadata.conversation_id == session.conversation_id and
+                 event.metadata.context_ref == session.context_ref
+             end)
     after
       case Session.whereis(session) do
         pid when is_pid(pid) -> Jidoka.stop_agent(pid)
