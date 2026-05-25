@@ -345,6 +345,21 @@ metadata; the actual secret stays with the system that owns the integration.
   restarts.
 - **Testing:** verify contracts, actions, results, workflows, and live behavior.
 
+## Imported Agents
+
+Imported agents are an experimental portability surface for controlled JSON/YAML
+interchange. They are not arbitrary code loading.
+
+An imported spec can name tools, plugins, subagents, workflows, handoffs, hooks,
+guardrails, skills, web capabilities, memory, compaction, and typed results, but
+names only resolve through registries supplied by the host application. Raw
+module strings are rejected; the app must explicitly decide which modules and
+local skill paths are available at import time.
+
+Use imported agents for fixtures, portability tests, generated specs, and
+controlled interchange. Use the Elixir DSL as the canonical authoring surface
+while the beta DSL settles.
+
 ## Install
 
 ```elixir

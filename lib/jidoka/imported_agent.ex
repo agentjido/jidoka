@@ -7,6 +7,11 @@ defmodule Jidoka.ImportedAgent do
   prefer the Elixir DSL as the canonical authoring surface while the DSL
   settles.
 
+  Importing a spec is constrained data loading, not arbitrary code loading. Raw
+  module strings stay invalid; tools, plugins, subagents, workflows, handoffs,
+  hooks, guardrails, characters, and skills must resolve through host-provided
+  registries.
+
   Most applications should call `Jidoka.import_agent/2` or
   `Jidoka.import_agent_file/2` rather than this module directly. The struct is
   still documented because public Jidoka APIs return it.

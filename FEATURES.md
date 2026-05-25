@@ -477,6 +477,18 @@ Sources:
 | Durability | Strong in lower-level runtimes and graph systems via checkpoints, journals, persistence, and resume. | Do not pretend `Jidoka.Session` is durable; teach the graduation path into durable runtime storage and instance managers. |
 | Testing | Present in eval packages, less often in agent DSLs. | Make testing a full onboarding topic: contract tests, action tests, workflow tests, trace assertions, optional evals. |
 
+### Imported Agent Boundary
+
+Imported JSON/YAML agents are constrained data specs. They should never be
+taught as arbitrary code loading or as a replacement for the Elixir DSL. Every
+module-backed capability must resolve through an explicit host-provided
+registry: actions, plugins, subagents, workflows, handoffs, hooks, guardrails,
+characters, and skills. Raw module strings stay invalid. Local skill load paths
+remain an app-owned boundary.
+
+The useful V3 role is portability: fixtures, generated specs, controlled
+interchange, and beta compatibility tests while the canonical DSL settles.
+
 ### Gaps And Reframed Features
 
 1. **Durable sessions and branching transcripts.** Several runtimes and graph

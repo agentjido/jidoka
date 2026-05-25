@@ -55,6 +55,10 @@ defmodule Jidoka do
   controlled interchange, fixtures, and registry-backed portability tests while
   the canonical Elixir DSL settles.
 
+  Importing is constrained data loading, not arbitrary code loading. Raw module
+  strings in specs are rejected. Any module-backed capability must be made
+  available through an explicit host-provided registry.
+
   The imported format mirrors the beta DSL sections: `agent`, `defaults`,
   `capabilities`, and `lifecycle`.
 
