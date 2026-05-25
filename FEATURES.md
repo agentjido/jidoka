@@ -17,10 +17,10 @@ groups:
   interrupts, approvals.
 - **Human-in-the-loop:** approval and interruption flows expressed through
   controls rather than a separate policy system.
-- **Credential brokering:** planned authenticated tool calls where a broker,
-  proxy, or sidecar injects the real credential after the LLM/tool-planning
-  boundary, so raw secrets stay out of prompts, transcripts, tool arguments,
-  and model logs.
+- **Credential brokering:** authenticated tool calls carry credential
+  references while a broker, proxy, sidecar, or connect layer injects the real
+  credential after the LLM/tool-planning boundary, so raw secrets stay out of
+  prompts, transcripts, tool arguments, traces, and model logs.
 - **State helpers:** memory, compaction, and a clear durability graduation path.
 - **Orchestration:** workflows, subagents, handoffs.
 - **Runtime integration:** shared runtime, app-owned runtime,
@@ -144,8 +144,8 @@ graph TD
 5. **Actions:** let the agent do deterministic work.
 6. **Controls:** input, operation, result boundaries.
 7. **Human-in-the-Loop:** pause risky inputs, operations, or results for review.
-8. **Credential Brokering:** planned support for authenticated tools to use
-   credentials without exposing raw secrets to the model.
+8. **Credential Brokering:** authenticated tools use credential references
+   without exposing raw secrets to the model.
 9. **Debugging:** inspect prompts, requests, runtime state, and traces locally.
 10. **Observability Standards:** connect structured telemetry to OpenTelemetry
     GenAI-compatible backends.
@@ -213,6 +213,31 @@ credential reference, vault id, connection id, or provider name. It should not
 receive the raw credential value. At execution time, a broker, proxy, sidecar,
 or integration runtime attaches the real credential to the outbound request.
 
+V3 contract:
+
+- Jidoka owns the credential reference data model via `%Jidoka.Credential{}`.
+- Jidoka accepts credential references in session context, runtime context, and
+  tool arguments.
+- Jidoka rejects raw secret-looking keys such as `api_key`, `token`, `password`,
+  and `client_secret` before prompts or tool calls.
+- Controls can match credential metadata such as provider, tenant, scope, risk,
+  and confirmation requirement.
+- Traces and inspection surfaces record sanitized credential metadata, not
+  credential values.
+- The host app or integration layer owns vault lookup, OAuth refresh, tenant
+  routing, request signing, and outbound credential injection.
+
+Execution shape:
+
+1. The caller places a credential reference in session context or tool
+   arguments.
+2. The agent plans an authenticated operation using only reference metadata.
+3. Operation controls allow, block, or interrupt based on the operation and
+   credential metadata.
+4. The broker/proxy/connect layer resolves the reference inside the application
+   boundary and signs or authorizes the outbound request.
+5. Jidoka receives the operation result and traces sanitized credential usage.
+
 This matters most for:
 
 - web/API tools that call third-party services
@@ -223,15 +248,15 @@ This matters most for:
 - audit trails where the app needs to know which credential lease was used
   without exposing the secret
 
-Open design questions:
+Deferred design questions:
 
-- Is credential brokering a Jidoka-owned DSL feature, a `jido_connect` feature,
-  or a shared Jido integration boundary?
-- Should Jidoka expose a small `credentials do ... end` DSL, or should it only
-  pass `credential_ref` / `connection_ref` through context?
-- Should controls be able to match credential metadata such as provider, scope,
-  risk, tenant, actor, and confirmation requirement?
-- How should tracing show credential usage without logging sensitive values?
+- Whether a future DSL should add a dedicated `credentials do ... end` block or
+  keep credential references entirely in context and tool metadata.
+- Whether catalog/connect integrations should standardize additional reference
+  fields beyond provider, account, actor, tenant, scopes, lease, risk, and audit
+  metadata.
+- Whether the application broker contract should be formalized as a Jido shared
+  behavior once more integrations exist.
 
 External references:
 

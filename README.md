@@ -205,6 +205,39 @@ Your host app still configures the telemetry exporter. Jidoka's job is to
 preserve session, conversation, request, run, and trace IDs so local debugging
 and production telemetry tell the same story.
 
+## Credential Brokering
+
+Jidoka treats credentials as references, not secrets. Pass a
+`%Jidoka.Credential{}` or an app-owned `credential_ref` / `connection_ref`
+through session context or tool arguments. Jidoka preserves that metadata for
+controls, traces, and inspection, while rejecting raw secret-looking keys such
+as `api_key`, `token`, `password`, and `client_secret` before they can enter a
+prompt, transcript, trace, or tool call.
+
+```elixir
+credential =
+  Jidoka.Credential.new!(
+    provider: :github,
+    account: "acct_123",
+    actor: current_user.id,
+    scopes: ["repo"],
+    lease_id: "lease_123",
+    risk: :high,
+    confirmation_required: true
+  )
+
+session =
+  Jidoka.session(MyApp.SupportAgent, "ticket-123",
+    context: %{actor_id: current_user.id, credential_ref: credential}
+  )
+```
+
+At execution time, your broker, proxy, sidecar, or connect layer exchanges the
+reference for the real credential inside your application boundary. That layer
+can look up a vault record, refresh OAuth, choose a tenant-specific connection,
+or sign the outbound request. The model sees only the operation and reference
+metadata; the actual secret stays with the system that owns the integration.
+
 ## Feature Map
 
 - **Agents:** define identity, model, instructions, and runtime behavior in one
@@ -219,8 +252,9 @@ and production telemetry tell the same story.
 - **Controls:** add policy at input, operation, and result boundaries.
 - **Human-in-the-loop:** pause risky inputs, operations, or results for manual
   approval through controls, `Jidoka.Approval`, and interrupts.
-- **Credential brokering:** planned support for authenticated tools to use
-  credentials without exposing raw secrets to the model.
+- **Credential brokering:** carry credential references through sessions,
+  controls, traces, and tool execution without exposing raw secrets to the
+  model.
 - **Debugging:** inspect prompts, requests, traces, runtime state, and projected
   conversation views while building agents.
 - **Observability standards:** flow structured telemetry into OpenTelemetry
