@@ -419,6 +419,9 @@ mix docs --warnings-as-errors
 mix doctor --raise
 ```
 
+For the recommended provider-free testing progression, see
+[Testing Jidoka Agents](testing.md).
+
 ## Status
 
 The old guide, example, dev, and Livebook support trees are being replaced while
