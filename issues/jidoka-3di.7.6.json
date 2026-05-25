@@ -7,9 +7,15 @@
   "id": "jidoka-3di.7.6",
   "labels": [],
   "parent": "jidoka-3di.7",
+  "comments": [
+    {
+      "text": "Added explicit credential coverage for audit metadata redaction, session context merging, safe credential refs, and blocked credential use.",
+      "timestamp": "2026-05-25T00:01:55Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E6: Add tests for redaction, context merging, audit metadata, and blocked credentia...",
   "type": "task",
-  "updated_at": "2026-05-24T23:59:50Z"
+  "updated_at": "2026-05-25T00:01:55Z"
 }
