@@ -7,9 +7,15 @@
   "id": "jidoka-3di.13.3",
   "labels": [],
   "parent": "jidoka-3di.13",
+  "comments": [
+    {
+      "text": "Verified workflow execution order without model calls using a dependent-step fixture, and asserted exposed workflows are valid generated Jidoka.Action modules on the agent operation surface.",
+      "timestamp": "2026-05-25T02:41:35Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E12: Verify workflow steps execute in order and expose the workflow as an action",
   "type": "task",
-  "updated_at": "2026-05-25T02:38:54Z"
+  "updated_at": "2026-05-25T02:41:35Z"
 }
