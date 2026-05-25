@@ -65,6 +65,10 @@ defmodule Jidoka.Trace do
     |> drop_nil_values()
   end
 
+  def correlation_refs(source) when is_list(source) do
+    if Keyword.keyword?(source), do: source |> Map.new() |> correlation_refs(), else: %{}
+  end
+
   def correlation_refs(_source), do: %{}
 
   @doc """
@@ -181,7 +185,7 @@ defmodule Jidoka.Trace do
   end
 
   defp nested_correlation_refs(%{} = source) do
-    [:extra_refs, :refs, :context, :tool_context, :runtime_context]
+    [:extra_refs, :refs, :context, :tool_context, :runtime_context, :metadata, :request_opts]
     |> Enum.reduce(%{}, fn key, acc ->
       case get_value(source, key) do
         %{} = nested -> Map.merge(acc, correlation_refs(nested))

@@ -283,8 +283,9 @@ defmodule Jidoka.Guardrails.Runner do
           tool_name: Map.get(input, :tool_name),
           context_keys: input |> Map.get(:context, %{}) |> context_keys()
         },
-        extra
+        Jidoka.Trace.correlation_refs(input)
       )
+      |> Map.merge(extra)
     )
   end
 

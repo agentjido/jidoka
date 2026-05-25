@@ -303,8 +303,9 @@ defmodule Jidoka.Hooks.Runner do
           context_keys: context_keys(input.context),
           allowed_tool_count: count_list(input.allowed_tools)
         },
-        extra
+        Jidoka.Trace.correlation_refs(input)
       )
+      |> Map.merge(extra)
     )
   end
 
