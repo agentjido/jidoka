@@ -3,6 +3,10 @@ defmodule JidokaTest.TraceTest do
 
   alias Jidoka.Trace
 
+  @trace_session_id "trace-session"
+  @trace_conversation_id "trace-conversation"
+  @trace_context_ref "trace-context"
+
   defmodule InterruptInputGuardrail do
     use Jidoka.Guardrail, name: "trace_interrupt_input"
 
@@ -413,6 +417,7 @@ defmodule JidokaTest.TraceTest do
     assert Enum.any?(workflow_trace.events, &(&1.category == :workflow and &1.event == :start))
     assert Enum.any?(workflow_trace.events, &(&1.category == :workflow and &1.event == :step))
     assert Enum.any?(workflow_trace.events, &(&1.category == :workflow and &1.event == :stop))
+    assert_lifecycle_refs(workflow_trace, :workflow)
 
     subagent_request_id = unique_id("req-subagent")
     subagent_tool = find_tool(JidokaTest.OrchestratorAgent, "research_agent")
@@ -426,6 +431,7 @@ defmodule JidokaTest.TraceTest do
     assert {:ok, subagent_trace} = Trace.for_request(agent_id, subagent_request_id)
     assert Enum.any?(subagent_trace.events, &(&1.category == :subagent and &1.event == :start))
     assert Enum.any?(subagent_trace.events, &(&1.category == :subagent and &1.event == :stop))
+    assert_lifecycle_refs(subagent_trace, :subagent)
 
     handoff_request_id = unique_id("req-handoff")
     conversation_id = unique_id("trace-conversation")
@@ -469,6 +475,7 @@ defmodule JidokaTest.TraceTest do
 
     assert {:ok, guardrail_trace} = Trace.for_request(agent_id, guardrail_request_id)
     assert Enum.any?(guardrail_trace.events, &(&1.category == :guardrail and &1.event == :interrupt))
+    assert_lifecycle_refs(guardrail_trace, :guardrail)
 
     memory_request_id = unique_id("req-memory")
     memory_agent = JidokaTest.MemoryAgent.runtime_module().new(id: agent_id)
@@ -480,7 +487,11 @@ defmodule JidokaTest.TraceTest do
                 %{
                   query: "remember this",
                   request_id: memory_request_id,
-                  tool_context: %{session: unique_id("session")}
+                  tool_context: %{
+                    session: @trace_session_id,
+                    conversation_id: @trace_conversation_id,
+                    context_ref: @trace_context_ref
+                  }
                 }},
                JidokaTest.MemoryAgent.memory(),
                JidokaTest.MemoryAgent.context()
@@ -488,6 +499,7 @@ defmodule JidokaTest.TraceTest do
 
     assert {:ok, memory_trace} = Trace.for_request(agent_id, memory_request_id)
     assert Enum.any?(memory_trace.events, &(&1.category == :memory and &1.event == :retrieve))
+    assert_lifecycle_refs(memory_trace, :memory)
   end
 
   test "records credential references without raw secret values" do
@@ -555,8 +567,22 @@ defmodule JidokaTest.TraceTest do
       Jidoka.Handoff.server_key() => self(),
       Jidoka.Handoff.request_id_key() => request_id,
       Jidoka.Trace.agent_id_key() => agent_id,
+      session: @trace_session_id,
+      conversation_id: @trace_conversation_id,
+      context_ref: @trace_context_ref,
       tenant: "acme"
     }
+  end
+
+  defp assert_lifecycle_refs(trace, category) do
+    events = Enum.filter(trace.events, &(&1.category == category))
+    assert events != []
+
+    for event <- events do
+      assert event.metadata.session_id == @trace_session_id
+      assert event.metadata.conversation_id == @trace_conversation_id
+      assert event.metadata.context_ref == @trace_context_ref
+    end
   end
 
   defp unique_id(prefix) do

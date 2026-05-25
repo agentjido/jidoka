@@ -144,7 +144,12 @@ defmodule JidokaTest.OutputTest do
          %{
            query: "Classify this",
            request_id: request_id,
-           tool_context: %{notify_pid: self()}
+           tool_context: %{
+             notify_pid: self(),
+             session: "output-session",
+             conversation_id: "output-conversation",
+             context_ref: "output-context"
+           }
          }}
       )
 
@@ -161,7 +166,13 @@ defmodule JidokaTest.OutputTest do
     assert get_in(agent.state, [:requests, request_id, :meta, :jidoka_output, :status]) == :validated
 
     assert {:ok, trace} = Jidoka.Trace.for_request(agent.id, request_id)
-    assert Enum.any?(trace.events, &(&1.category == :output and &1.event == :validated))
+
+    assert Enum.any?(trace.events, fn event ->
+             event.category == :output and event.event == :validated and
+               event.metadata.session_id == "output-session" and
+               event.metadata.conversation_id == "output-conversation" and
+               event.metadata.context_ref == "output-context"
+           end)
   end
 
   test "finalizes completed requests from generic runtime completion actions" do

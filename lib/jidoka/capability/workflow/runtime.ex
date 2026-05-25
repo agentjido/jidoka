@@ -155,16 +155,15 @@ defmodule Jidoka.Workflow.Capability.Runtime do
 
     Jidoka.Trace.emit(
       :workflow,
-      Map.merge(
-        %{
-          event: event,
-          workflow: workflow.workflow,
-          name: workflow.name,
-          request_id: Map.get(context, Jidoka.Subagent.Context.request_id_key()),
-          agent_id: Map.get(context, Jidoka.Trace.agent_id_key())
-        },
-        metadata
-      ),
+      Jidoka.Trace.correlation_refs(context)
+      |> Map.merge(%{
+        event: event,
+        workflow: workflow.workflow,
+        name: workflow.name,
+        request_id: Map.get(context, Jidoka.Subagent.Context.request_id_key()),
+        agent_id: Map.get(context, Jidoka.Trace.agent_id_key())
+      })
+      |> Map.merge(metadata),
       measurements
     )
   end

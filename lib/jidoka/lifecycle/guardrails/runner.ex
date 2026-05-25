@@ -273,18 +273,16 @@ defmodule Jidoka.Guardrails.Runner do
   defp trace_guardrail(input, label, event, extra \\ %{}) do
     Jidoka.Trace.emit(
       :guardrail,
-      Map.merge(
-        %{
-          event: event,
-          phase: guardrail_phase(input),
-          guardrail: label,
-          request_id: Map.get(input, :request_id),
-          agent_id: input |> Map.get(:agent) |> agent_id(),
-          tool_name: Map.get(input, :tool_name),
-          context_keys: input |> Map.get(:context, %{}) |> context_keys()
-        },
-        Jidoka.Trace.correlation_refs(input)
-      )
+      Jidoka.Trace.correlation_refs(input)
+      |> Map.merge(%{
+        event: event,
+        phase: guardrail_phase(input),
+        guardrail: label,
+        request_id: Map.get(input, :request_id),
+        agent_id: input |> Map.get(:agent) |> agent_id(),
+        tool_name: Map.get(input, :tool_name),
+        context_keys: input |> Map.get(:context, %{}) |> context_keys()
+      })
       |> Map.merge(extra)
     )
   end

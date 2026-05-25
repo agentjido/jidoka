@@ -282,10 +282,21 @@ defmodule Jidoka.Schedule.Executor do
         cron: schedule.cron,
         timezone: schedule.timezone
       }
+      |> Map.merge(schedule_correlation_refs(schedule))
       |> Map.merge(extra)
 
     Jidoka.Trace.emit(:schedule, metadata)
   end
+
+  defp schedule_correlation_refs(%Schedule{target: %Jidoka.Session{} = session}) do
+    %{
+      session_id: session.id,
+      conversation_id: session.conversation_id,
+      context_ref: session.context_ref
+    }
+  end
+
+  defp schedule_correlation_refs(_schedule), do: %{}
 
   defp schedule_id_for_trace(%Schedule{target: target}) when is_binary(target), do: target
   defp schedule_id_for_trace(%Schedule{target: %Jidoka.Session{} = session}), do: session.agent_id

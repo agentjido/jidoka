@@ -11,17 +11,16 @@ defmodule Jidoka.Subagent.Runtime.Trace do
 
     Jidoka.Trace.emit(
       :subagent,
-      Map.merge(
-        %{
-          event: event,
-          subagent: subagent.name,
-          name: subagent.name,
-          target: inspect(subagent.target),
-          request_id: Map.get(context, Jidoka.Subagent.Context.request_id_key()),
-          agent_id: Map.get(context, Jidoka.Trace.agent_id_key())
-        },
-        metadata
-      ),
+      Jidoka.Trace.correlation_refs(context)
+      |> Map.merge(%{
+        event: event,
+        subagent: subagent.name,
+        name: subagent.name,
+        target: inspect(subagent.target),
+        request_id: Map.get(context, Jidoka.Subagent.Context.request_id_key()),
+        agent_id: Map.get(context, Jidoka.Trace.agent_id_key())
+      })
+      |> Map.merge(metadata),
       measurements
     )
   end

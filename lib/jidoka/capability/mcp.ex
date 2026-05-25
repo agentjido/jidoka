@@ -396,16 +396,15 @@ defmodule Jidoka.MCP do
   defp trace_mcp(context, entry, event, metadata \\ %{}) do
     Jidoka.Trace.emit(
       :mcp,
-      Map.merge(
-        %{
-          event: event,
-          endpoint: entry.endpoint,
-          prefix: entry.prefix,
-          request_id: Map.get(context, Jidoka.Subagent.request_id_key()),
-          agent_id: Map.get(context, Jidoka.Trace.agent_id_key())
-        },
-        metadata
-      )
+      Jidoka.Trace.correlation_refs(context)
+      |> Map.merge(%{
+        event: event,
+        endpoint: entry.endpoint,
+        prefix: entry.prefix,
+        request_id: Map.get(context, Jidoka.Subagent.request_id_key()),
+        agent_id: Map.get(context, Jidoka.Trace.agent_id_key())
+      })
+      |> Map.merge(metadata)
     )
   end
 end

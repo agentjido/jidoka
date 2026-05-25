@@ -293,18 +293,16 @@ defmodule Jidoka.Hooks.Runner do
   defp trace_hook(stage, hook, event, input, extra \\ %{}) do
     Jidoka.Trace.emit(
       :hook,
-      Map.merge(
-        %{
-          event: event,
-          phase: stage,
-          hook: hook_label(hook),
-          request_id: input.request_id,
-          agent_id: Map.get(input.agent, :id),
-          context_keys: context_keys(input.context),
-          allowed_tool_count: count_list(input.allowed_tools)
-        },
-        Jidoka.Trace.correlation_refs(input)
-      )
+      Jidoka.Trace.correlation_refs(input)
+      |> Map.merge(%{
+        event: event,
+        phase: stage,
+        hook: hook_label(hook),
+        request_id: input.request_id,
+        agent_id: Map.get(input.agent, :id),
+        context_keys: context_keys(input.context),
+        allowed_tool_count: count_list(input.allowed_tools)
+      })
       |> Map.merge(extra)
     )
   end

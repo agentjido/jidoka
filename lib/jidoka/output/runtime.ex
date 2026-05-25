@@ -432,6 +432,7 @@ defmodule Jidoka.Output.Runtime do
         category: :output,
         agent_id: Map.get(context, Jidoka.Trace.agent_id_key())
       }
+      |> then(&Map.merge(Jidoka.Trace.correlation_refs(context), &1))
       |> Map.merge(extra)
 
     Jidoka.Trace.emit(:output, metadata)

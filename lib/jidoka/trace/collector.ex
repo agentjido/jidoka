@@ -204,7 +204,11 @@ defmodule Jidoka.Trace.Collector do
 
   defp normalize_event(seq, event_name, measurements, metadata) do
     with {:ok, source, category, event} <- event_shape(event_name, metadata) do
-      metadata = Map.merge(metadata, Jidoka.Trace.correlation_refs(metadata))
+      metadata =
+        metadata
+        |> Jidoka.Trace.correlation_refs()
+        |> Map.merge(drop_nil_values(metadata))
+
       sanitized_measurements = Jidoka.Sanitize.payload(measurements)
       sanitized_metadata = Jidoka.Sanitize.payload(metadata)
       request_id = string_value(metadata, :request_id)
@@ -464,6 +468,8 @@ defmodule Jidoka.Trace.Collector do
   defp maybe_limit(values, nil), do: values
   defp maybe_limit(values, limit) when is_integer(limit) and limit >= 0, do: Enum.take(values, limit)
   defp maybe_limit(values, _limit), do: values
+
+  defp drop_nil_values(map), do: Map.reject(map, fn {_key, value} -> is_nil(value) end)
 
   defp get_value(map, key) when is_map(map) do
     Map.get(map, key) || Map.get(map, Atom.to_string(key))

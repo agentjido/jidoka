@@ -164,15 +164,19 @@ defmodule Jidoka.Guardrails do
     credentials = Jidoka.Credential.references([arguments, context])
 
     if credentials != [] do
-      Jidoka.Trace.emit(:credential, %{
-        event: :referenced,
-        phase: :operation,
-        request_id: request_id,
-        agent_id: Map.get(agent, :id),
-        tool_name: tool_name,
-        tool_call_id: tool_call_id,
-        credentials: Enum.map(credentials, &Jidoka.Credential.metadata/1)
-      })
+      Jidoka.Trace.emit(
+        :credential,
+        %{
+          event: :referenced,
+          phase: :operation,
+          request_id: request_id,
+          agent_id: Map.get(agent, :id),
+          tool_name: tool_name,
+          tool_call_id: tool_call_id,
+          credentials: Enum.map(credentials, &Jidoka.Credential.metadata/1)
+        }
+        |> then(&Map.merge(Jidoka.Trace.correlation_refs(context), &1))
+      )
     end
   end
 

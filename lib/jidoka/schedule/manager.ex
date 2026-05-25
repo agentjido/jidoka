@@ -326,17 +326,21 @@ defmodule Jidoka.Schedule.Manager do
       error_preview: nil
     }
 
-    Jidoka.Trace.emit(:schedule, %{
-      event: :skip,
-      schedule_id: schedule.id,
-      name: schedule.id,
-      kind: schedule.kind,
-      agent_id: schedule.agent_id || schedule.id,
-      request_id: run_id,
-      run_id: run_id,
-      status: :skipped,
-      reason: :overlap
-    })
+    Jidoka.Trace.emit(
+      :schedule,
+      %{
+        event: :skip,
+        schedule_id: schedule.id,
+        name: schedule.id,
+        kind: schedule.kind,
+        agent_id: schedule.agent_id || schedule.id,
+        request_id: run_id,
+        run_id: run_id,
+        status: :skipped,
+        reason: :overlap
+      }
+      |> Map.merge(schedule_correlation_refs(schedule))
+    )
 
     run
   end
@@ -368,6 +372,16 @@ defmodule Jidoka.Schedule.Manager do
   defp run_id(%Schedule{id: id}) do
     "schedule-#{id}-#{System.unique_integer([:positive, :monotonic])}"
   end
+
+  defp schedule_correlation_refs(%Schedule{target: %Jidoka.Session{} = session}) do
+    %{
+      session_id: session.id,
+      conversation_id: session.conversation_id,
+      context_ref: session.context_ref
+    }
+  end
+
+  defp schedule_correlation_refs(_schedule), do: %{}
 
   defp normalize_id(id) when is_atom(id), do: Atom.to_string(id)
   defp normalize_id(id) when is_binary(id), do: id

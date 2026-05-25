@@ -227,18 +227,17 @@ defmodule Jidoka.Handoff.Runtime do
 
     Jidoka.Trace.emit(
       :handoff,
-      Map.merge(
-        %{
-          event: event,
-          handoff: capability.name,
-          name: capability.name,
-          target: inspect(capability.target),
-          request_id: Map.get(context, Jidoka.Handoff.request_id_key()),
-          agent_id: Map.get(context, Jidoka.Trace.agent_id_key()) || Map.get(context, Jidoka.Handoff.from_agent_key()),
-          conversation_id: context_value(context, Jidoka.Handoff.context_key()) || context_value(context, :conversation)
-        },
-        metadata
-      ),
+      Jidoka.Trace.correlation_refs(context)
+      |> Map.merge(%{
+        event: event,
+        handoff: capability.name,
+        name: capability.name,
+        target: inspect(capability.target),
+        request_id: Map.get(context, Jidoka.Handoff.request_id_key()),
+        agent_id: Map.get(context, Jidoka.Trace.agent_id_key()) || Map.get(context, Jidoka.Handoff.from_agent_key()),
+        conversation_id: context_value(context, Jidoka.Handoff.context_key()) || context_value(context, :conversation)
+      })
+      |> Map.merge(metadata),
       measurements
     )
   end

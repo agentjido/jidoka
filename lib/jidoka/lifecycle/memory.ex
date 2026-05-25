@@ -84,7 +84,8 @@ defmodule Jidoka.Memory do
         record_count: length(records),
         inject: config.inject,
         capture: config.capture,
-        context_keys: context_keys(context)
+        context_keys: context_keys(context),
+        context: context
       })
 
       {:ok, agent, {:ai_react_start, params}}
@@ -92,7 +93,8 @@ defmodule Jidoka.Memory do
       {:error, reason} when is_binary(request_id) ->
         error = memory_error(:retrieve, reason, agent, request_id, config)
         Logger.warning("Jidoka memory retrieval failed: #{Jidoka.Error.format(error)}")
-        trace_memory(agent, request_id, :error, %{phase: :retrieve, error: Jidoka.Error.format(error)})
+
+        trace_memory(agent, request_id, :error, %{phase: :retrieve, error: Jidoka.Error.format(error), context: context})
 
         failed_agent =
           agent
@@ -105,7 +107,8 @@ defmodule Jidoka.Memory do
       {:error, reason} ->
         error = memory_error(:retrieve, reason, agent, request_id, config)
         Logger.warning("Jidoka memory retrieval failed: #{Jidoka.Error.format(error)}")
-        trace_memory(agent, request_id, :error, %{phase: :retrieve, error: Jidoka.Error.format(error)})
+
+        trace_memory(agent, request_id, :error, %{phase: :retrieve, error: Jidoka.Error.format(error), context: context})
 
         {:ok, agent, {:ai_react_request_error, %{request_id: request_id, reason: :memory_failed, message: query}}}
     end
@@ -137,7 +140,13 @@ defmodule Jidoka.Memory do
   def on_after_cmd(agent, _action, directives, _config), do: {:ok, agent, directives}
 
   defp capture_conversation(agent, request_id, directives, %{capture: :off}, meta) do
-    trace_memory(agent, request_id, :capture, %{namespace: meta.namespace, captured?: false, reason: :off})
+    trace_memory(agent, request_id, :capture, %{
+      namespace: meta.namespace,
+      captured?: false,
+      reason: :off,
+      context: meta.context
+    })
+
     {:ok, put_request_memory_meta(agent, request_id, Map.put(meta, :captured?, false)), directives}
   end
 
@@ -157,7 +166,8 @@ defmodule Jidoka.Memory do
                  meta.namespace,
                  assistant_record(agent, meta, request_id, result)
                ) do
-          trace_memory(agent, request_id, :capture, %{namespace: meta.namespace, captured?: true})
+          trace_memory(agent, request_id, :capture, %{namespace: meta.namespace, captured?: true, context: meta.context})
+
           {:ok, put_request_memory_meta(agent, request_id, Map.put(meta, :captured?, true)), directives}
         else
           {:error, reason} ->
@@ -168,7 +178,8 @@ defmodule Jidoka.Memory do
               phase: :capture,
               namespace: meta.namespace,
               captured?: false,
-              error: Jidoka.Error.format(error)
+              error: Jidoka.Error.format(error),
+              context: meta.context
             })
 
             {:ok,
