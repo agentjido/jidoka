@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T00:33:25Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E7: Errors, debugging, and inspection\n\nSource task 6/8 from MILESTONE_V3.md:\n\n- Ensure errors include enough context for debugging without leaking prompts,\n  raw provider responses, or secrets.\n\nEpic closure criteria:\n- users can answer what happened in a turn without reading logs\n- errors are normalized, readable, and safe to display\n- debugging output is structured, bounded, and safe by default\n",
   "id": "jidoka-3di.8.6",
@@ -14,8 +15,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E7: Ensure errors include enough context for debugging without leaking prompts, raw...",
   "type": "task",
-  "updated_at": "2026-05-25T00:33:20Z"
+  "updated_at": "2026-05-25T00:33:25Z"
 }
