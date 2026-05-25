@@ -431,11 +431,8 @@ mix docs --warnings-as-errors
 mix doctor --raise
 ```
 
-For the recommended provider-free testing progression, see
-[Testing Jidoka Agents](testing.md).
-
-The runnable examples under `examples/` follow the same order as the feature
-map and stay provider-free by default.
+The runnable examples under `examples/` show the provider-free testing
+progression and stay deterministic by default.
 
 The teaching Livebooks under `livebook/` mirror that same order for
 interactive exploration.

@@ -1,32 +1,22 @@
-# Jidoka: Your First Agent
-
-## Section
-
-This notebook teaches the smallest useful Jidoka loop: define an agent, give a
-conversation a session, run one turn, and inspect what happened.
-
-You will learn:
-
-* an agent is the compiled behavior
-* a session is the conversation address and context carrier
-* `Jidoka.chat/3` is the single turn primitive
-
-## Setup
-
-This notebook installs Jidoka from GitHub until the package ships on Hex. The
-`:fast` model alias is configured here the same way you would configure it in
-`config/config.exs` in an application.
+# Jidoka 01 · Your First Agent
 
 ```elixir
-jidoka_dep = {:jidoka, github: "agentjido/jidoka", ref: "d394bfd"}
+# Pin Jidoka to a specific Git revision so this notebook resolves the same
+# code every time. After Jidoka ships on Hex you can swap this for the
+# commented Hex line below.
+jidoka_dep = {:jidoka, github: "agentjido/jidoka", ref: "729afdc"}
 
-# After Jidoka ships on Hex:
 # jidoka_dep = {:jidoka, "~> 1.0"}
 
 Mix.install(
-  [jidoka_dep],
+  [
+    jidoka_dep,
+    {:kino, "~> 0.13"}
+  ],
   config: [
     jidoka: [
+      # `:fast` is the shared example alias used across Jidoka notebooks.
+      # Define it once here and every cell can write `model :fast`.
       model_aliases: %{
         fast: "anthropic:claude-haiku-4-5"
       }
@@ -34,27 +24,92 @@ Mix.install(
   ],
   consolidate_protocols: false
 )
-
-setup = Jidoka.Kino.setup_notebook(provider: :anthropic)
-live_provider? = setup.live_provider?
-:ok
 ```
 
-## Define An Agent
+## What You Will Learn
 
-An agent has a stable id, a model, and instructions. That is enough to compile a
-runtime module and run turns.
+This is the first notebook in the Jidoka teaching track and the template every
+later notebook follows. By the end you will have:
+
+* defined an agent with the compile-time DSL,
+* started a conversation with a stable session,
+* run a turn without needing a model key, and
+* used the built-in `Jidoka.Kino` helpers to inspect and debug what happened.
+
+**Three concepts to internalize:**
+
+1. **Agent** — a compiled module describing identity, model, and instructions.
+2. **Session** — the conversation address that carries runtime `context`.
+3. **Turn** — one call to `Jidoka.chat/3`, traceable end-to-end.
+
+> 💡 Every cell in this notebook is safe to re-evaluate. The provider-free
+> sections work without any API key. The optional live cell at the end only
+> runs if an Anthropic key is available.
+
+## Setup · Install Jidoka And A Provider Key
+
+The `Mix.install/2` cell at the top installs Jidoka from GitHub (until it
+ships on Hex) and registers the `:fast` model alias so the rest of the
+notebook can write `model :fast` instead of a full provider string.
+
+### Adding your Anthropic key (optional)
+
+To run the optional live cell at the end, give the notebook access to an
+Anthropic key in one of two ways:
+
+1. **Livebook Secret (recommended).**
+   In the left sidebar click the 🔒 *Secrets* icon and add a secret named
+   `ANTHROPIC_API_KEY` with your `sk-ant-…` value. Then click *Toggle* next
+   to it for this notebook session. Livebook will expose it as the env
+   variable `LB_ANTHROPIC_API_KEY` and the setup helper copies it into
+   `ANTHROPIC_API_KEY` automatically.
+2. **Shell env.** Set `ANTHROPIC_API_KEY=sk-ant-…` before launching Livebook.
+
+If neither is set, the notebook still teaches the concept — it just skips
+the single live cell.
+
+### Calling the setup helper
+
+`Jidoka.Kino.setup_notebook/1` does four small things so notebook cells stay
+focused on the agent code:
+
+* quiets Jidoka's raw runtime logs (use `show_raw_logs: true` to flip back on),
+* bridges Livebook's `LB_ANTHROPIC_API_KEY` secret into `ANTHROPIC_API_KEY`,
+* renders a compact setup table so you can see provider/model status, and
+* returns a summary map with a `:live_provider?` flag you can branch on.
+
+```elixir
+setup = Jidoka.Kino.setup_notebook(provider: :anthropic)
+
+# Bind the provider-ready flag so later cells can decide whether to skip.
+live_provider? = setup.live_provider?
+```
+
+## Define Your First Agent
+
+A Jidoka agent is just a module that uses the DSL. The minimum useful agent
+needs three things:
+
+* a **stable id** (`:first_agent`) — Jidoka uses it to name runtime
+  processes, sessions, and trace events,
+* a **model** — `:fast` resolves through the alias registered in setup, and
+* **instructions** — the system prompt the model sees.
 
 ```elixir
 defmodule Demo.Assistant do
   use Jidoka.Agent
 
-  agent :first_agent_assistant do
+  agent :first_agent do
     model :fast
     instructions "Answer clearly and concisely."
   end
 end
+```
 
+That module now has accessor functions for every part of the declared shape.
+The next cell shows the most useful ones at a glance.
+
+```elixir
 %{
   id: Demo.Assistant.id(),
   model: Demo.Assistant.configured_model(),
@@ -63,10 +118,35 @@ end
 }
 ```
 
-## Give The Conversation A Session
+### Inspect the compiled surface with Kino
 
-A session is data, not a process. It names the conversation, carries runtime
-context, and tells Jidoka which runtime agent should handle the turn.
+`Jidoka.Kino.debug_agent/1` renders the same information as three small
+Kino tables: identity, capabilities, and lifecycle. This is the recommended
+view for "what did the DSL actually produce?".
+
+```elixir
+{:ok, _inspection} = Jidoka.Kino.debug_agent(Demo.Assistant)
+```
+
+### Visualize it as a Mermaid diagram
+
+`agent_diagram/1` renders a flowchart of the agent's model, context,
+lifecycle, and tools. Even on a tiny agent it's a useful sanity check —
+once you start adding tools, workflows, and subagents you'll see them
+appear here.
+
+```elixir
+{:ok, _markdown} = Jidoka.Kino.agent_diagram(Demo.Assistant)
+```
+
+## Start A Conversation With A Session
+
+A `Jidoka.Session` is **data, not a process**. It pins:
+
+* an `agent_id` — which agent should handle the turn,
+* a `conversation_id` — a stable name for this thread of messages, and
+* a `context` map — caller-supplied runtime facts (actor id, tenant id,
+  ticket id, …) that flow into prompts, tools, controls, and traces.
 
 ```elixir
 session =
@@ -76,50 +156,27 @@ session =
 %{
   session_id: session.id,
   agent_id: session.agent_id,
-  conversation_id: session.conversation_id,
-  context: session.context,
-  chat_opts: Jidoka.Session.chat_opts(session)
+  conversation_id: session.conversation_id
 }
 ```
 
-## Try A Live Turn
+### Inspect the context the agent will see
 
-If `ANTHROPIC_API_KEY` is available, this cell makes a real model call now. If
-not, it skips cleanly and the rest of the notebook still works.
-
-```elixir
-if live_provider? do
-  Jidoka.Kino.chat("First response", fn ->
-    Jidoka.chat(session, "In one sentence, explain what a Jidoka session is.")
-  end)
-else
-  {:skipped, "Add the ANTHROPIC_API_KEY Livebook secret to run this cell."}
-end
-```
-
-## Inspect The Compiled Surface
-
-Inspection is useful before a model ever runs. It shows the public agent shape
-that Jidoka generated from the DSL.
+`Jidoka.Kino.context/2` separates public application keys from Jidoka's
+internal bookkeeping so you can spot at a glance what the model and tools
+actually get.
 
 ```elixir
-{:ok, inspection} = Jidoka.inspect_agent(Demo.Assistant)
-
-%{
-  id: inspection.id,
-  tools: inspection.tools,
-  controls: Demo.Assistant.controls(),
-  result: inspection.result,
-  schedules: Demo.Assistant.schedules()
-}
+Jidoka.Kino.context("Session context", session.context)
 ```
 
 ## Run A Provider-Free Turn
 
-For a deterministic teaching run, use an input control that interrupts before the
-provider call. This proves the normal chat path starts the runtime agent, merges
-session context, creates a request, and records trace data without requiring an
-API key.
+You can prove the full chat pipeline runs — start the runtime, merge
+context, create a request, record trace events — **without spending a
+single token**. The trick is an `input` control that interrupts before the
+provider call. Jidoka returns an `{:interrupt, …}` result that contains the
+exact request the model would have been called with.
 
 ```elixir
 stop_before_provider = fn input ->
@@ -132,7 +189,9 @@ stop_before_provider = fn input ->
 end
 
 {:interrupt, interrupt} =
-  Jidoka.chat(session, "Summarize this ticket.", controls: [input: stop_before_provider])
+  Jidoka.chat(session, "In one sentence, explain what a Jidoka session is.",
+    controls: [input: stop_before_provider]
+  )
 
 %{
   kind: interrupt.kind,
@@ -144,33 +203,69 @@ end
 
 ## Debug The Turn
 
-The same session can address inspection, trace, and AgentView helpers. This is
-the core debugging loop: run a turn, inspect the request, inspect the trace, then
-project the conversation state.
+The same session is the address for every debugging helper. After any turn
+(even an interrupted one), you can inspect:
+
+* the **request** — what would have been sent to the model,
+* the **trace** — ordered events showing what ran when, and
+* the **call graph** — a Mermaid view of capability calls.
 
 ```elixir
-{:ok, request} = Jidoka.inspect_request(session)
-{:ok, trace} = Jidoka.inspect_trace(session)
-{:ok, view} = Jidoka.Session.snapshot(session)
-
-%{
-  request: %{
-    id: request.request_id,
-    status: request.status,
-    input_message: request.input_message
-  },
-  trace_events: Enum.map(trace.events, &{&1.category, &1.event}),
-  view: %{
-    kind: view.kind,
-    agent_id: view.agent_id,
-    context_ref: view.context_ref,
-    message_count: length(view.visible_messages)
-  }
-}
+{:ok, _request} = Jidoka.Kino.debug_request(session)
 ```
 
-## What Changed
+The trace helpers look traces up by agent — pass `session.agent_id` (or a
+running pid, or a `Jidoka.Trace` struct):
 
-Jidoka owned the agent DSL, the session address, the chat turn, and the debugging
-projection. Your application still owns the real user id, tenant id, provider
-credentials, supervision decisions, and durable storage policy.
+```elixir
+{:ok, _trace} = Jidoka.Kino.timeline(session.agent_id)
+```
+
+```elixir
+{:ok, _graph} = Jidoka.Kino.call_graph(session.agent_id)
+```
+
+> ℹ️ Use `Jidoka.Kino.trace_table/1` when you want the raw structured
+> events with their metadata instead of the compact timeline view.
+
+## Optional · A Live Provider Turn
+
+If the setup table showed Anthropic as *ready*, the cell below will make a
+real one-shot call. Otherwise it skips cleanly so this notebook stays
+runnable end-to-end without credentials.
+
+`Jidoka.Kino.chat/2` wraps `Jidoka.chat/3`: it captures runtime log events,
+extracts the plain text reply, and renders a small result table.
+
+```elixir
+if live_provider? do
+  live_session =
+    Demo.Assistant
+    |> Jidoka.session("live-user", context: %{actor_id: "user_123"})
+
+  Jidoka.Kino.chat("first live turn", fn ->
+    Jidoka.chat(live_session, "In one sentence, what is a Jidoka session?")
+  end)
+else
+  {:skipped, "Add an ANTHROPIC_API_KEY (env or Livebook secret) to run this cell."}
+end
+```
+
+## What Jidoka Owned · What You Still Own
+
+Jidoka owned the agent DSL, the session address, the turn lifecycle, and
+the debugging projection. Your application is still responsible for:
+
+* the real `actor_id` / `tenant` / business ids you pass into context,
+* provider credentials and how they reach the Livebook or runtime,
+* supervision when you graduate the agent into a long-running app, and
+* durable storage if conversations must survive process restarts.
+
+## Next
+
+Continue with the broader walkthrough in
+[`getting_started.livemd`](getting_started.livemd), which builds on this
+same template to cover typed results, actions, controls, workflows,
+schedules, and delegation.
+
+<!-- livebook:{"offset":8601,"stamp":{"token":"XCP.JJxPjQDBfSbJVx_HH4TLDN4ZZV9J6xKUe8nvf5WfGMDRGdMb1gvxsiWcBLgW1zEcqoJ25aarz6017Qdp-DEcobi5pmoplC6Ah-HiD3ayYpnd3_eMC0HCOWy7rhk","version":2}} -->

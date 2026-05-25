@@ -1,8 +1,8 @@
 # Jidoka Examples
 
-These examples follow the same teaching order as `FEATURES.md` and the README:
-start with one agent, then add sessions, context, typed results, actions,
-controls, debugging, schedules, workflows, delegation, and portability.
+These examples follow the same teaching order as the README: start with one
+agent, then add sessions, context, typed results, actions, controls, debugging,
+schedules, workflows, delegation, and portability.
 
 The scripts are provider-free by default. They exercise Jidoka contracts,
 runtime descriptors, deterministic actions, controls, schedules, traces, and

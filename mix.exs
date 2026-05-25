@@ -123,7 +123,6 @@ defmodule Jidoka.MixProject do
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "LICENSE",
-        "testing.md",
         "usage-rules.md"
       ],
       build_tools: ["mix"],
@@ -147,13 +146,9 @@ defmodule Jidoka.MixProject do
         "CHANGELOG.md",
         "CONTRIBUTING.md",
         "LICENSE",
-        "testing.md",
         "usage-rules.md"
       ],
       groups_for_extras: [
-        Guides: [
-          "testing.md"
-        ],
         Reference: [
           "usage-rules.md",
           "CHANGELOG.md",
