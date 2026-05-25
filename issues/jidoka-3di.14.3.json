@@ -7,9 +7,15 @@
   "id": "jidoka-3di.14.3",
   "labels": [],
   "parent": "jidoka-3di.14",
+  "comments": [
+    {
+      "text": "Audited subagent and handoff failure coverage. Added missing unloaded-child validation plus normalized handoff invalid-payload and failed auto-start coverage. Existing suite already covers child interrupt, invalid return, forwarding modes, and reset. Full gate passed.",
+      "timestamp": "2026-05-25T03:11:11Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E13: Add tests for missing child agent, failed child start, child interrupt, invalid...",
   "type": "task",
-  "updated_at": "2026-05-25T03:08:45Z"
+  "updated_at": "2026-05-25T03:11:11Z"
 }
