@@ -8,6 +8,12 @@ defmodule JidokaTest.PublicAPITest do
     use Jido, otp_app: :jidoka
   end
 
+  defmodule DurableGraduationRuntime do
+    use Jido,
+      otp_app: :jidoka,
+      storage: {Jido.Storage.File, path: Path.expand("../../tmp/jidoka-durable-graduation", __DIR__)}
+  end
+
   test "top-level runtime entrypoints are exported" do
     Code.ensure_loaded!(Jidoka)
     Code.ensure_loaded!(Jidoka.Session)
@@ -95,6 +101,23 @@ defmodule JidokaTest.PublicAPITest do
     assert Process.alive?(pid)
 
     assert :ok = GraduationRuntime.stop_agent(pid)
+  end
+
+  test "generated runtime module can hibernate and thaw through app-owned durable storage" do
+    {Jido.Storage.File, storage_opts} = DurableGraduationRuntime.__jido_storage__()
+    storage_path = Keyword.fetch!(storage_opts, :path)
+    File.rm_rf!(storage_path)
+
+    on_exit(fn -> File.rm_rf!(storage_path) end)
+
+    runtime_module = JidokaTest.ChatAgent.runtime_module()
+    id = "durable-runtime-agent-#{System.unique_integer([:positive])}"
+    agent = runtime_module.new(id: id)
+
+    assert :ok = DurableGraduationRuntime.hibernate(agent)
+    assert {:ok, thawed} = DurableGraduationRuntime.thaw(runtime_module, id)
+    assert thawed.id == id
+    assert thawed.agent_module == runtime_module
   end
 
   test "workflow inspection omits raw Runic graph internals" do
