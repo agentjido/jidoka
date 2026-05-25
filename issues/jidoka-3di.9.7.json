@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T01:07:19Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E8: Observability standards\n\nSource task 7/7 from MILESTONE_V3.md:\n\n- Add an integration smoke test that can run without external services.\n\nEpic closure criteria:\n- local Jidoka traces and production telemetry share correlation fields\n- observability docs remain standards-friendly and dependency-light\n",
   "id": "jidoka-3di.9.7",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E8: Add an integration smoke test that can run without external services",
   "type": "task",
   "updated_at": "2026-05-25T01:07:19Z"
