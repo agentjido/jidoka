@@ -523,7 +523,7 @@ Tasks:
 Done when:
 
 - workflows are deterministic and testable without model calls
-- workflow-as-action execution is documented and verified
+- workflow operation execution is documented and verified
 
 ### E13: Subagents And Handoffs
 
@@ -808,7 +808,7 @@ task should be the final child task for every epic.
   deterministic process, while `capabilities do workflow MyWorkflow end` exposes
   that process to an agent as a generated action-backed operation. `tools do`
   stays reserved for direct action modules, and `Agent.tools/0` remains the
-  expanded provider-visible operation surface.
+  expanded model-callable operation surface.
 - Workflow syntax stays separate from `Jidoka.Action` syntax because workflows
   own ordered steps, refs, and final output selection. Inside `steps do`, direct
   action-backed steps are spelled `action :name, MyAction` so `tool` stays a
@@ -822,6 +822,9 @@ task should be the final child task for every epic.
 - Dependency and failure coverage includes compile-time cycles and missing refs,
   ordered dependent-step traces, context key metadata, and action-step failure
   details with workflow id, step name, kind, target, and cause.
+- Beginner terminology treats workflows as deterministic processes and exposed
+  workflows as model-callable workflow operations. Avoid "workflow capability"
+  and raw execution-graph terms in user-facing docs.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

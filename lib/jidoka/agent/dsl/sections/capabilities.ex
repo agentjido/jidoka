@@ -238,7 +238,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     %Spark.Dsl.Entity{
       name: :workflow,
       describe: """
-      Register a deterministic Jidoka workflow as a provider-visible agent capability.
+      Expose a deterministic Jidoka workflow as an agent operation.
       """,
       target: Workflow,
       args: [:workflow],
@@ -251,12 +251,12 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
         as: [
           type: :any,
           required: false,
-          doc: "Optional published tool name override for this workflow."
+          doc: "Optional published operation name override for this workflow."
         ],
         description: [
           type: :string,
           required: false,
-          doc: "Optional tool description override for this workflow."
+          doc: "Optional operation description override for this workflow."
         ],
         timeout: [
           type: :any,

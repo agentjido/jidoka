@@ -34,7 +34,7 @@ defmodule JidokaTest.WorkflowCapabilityTest do
              tool.run(%{topic: "schemas"}, %{suffix: "done", secret: "hidden"})
   end
 
-  test "workflow capability returns Jidoka validation errors for missing context refs" do
+  test "workflow operation returns Jidoka validation errors for missing context refs" do
     tool = workflow_tool(ContextAgent, "context_echo")
 
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
@@ -44,7 +44,7 @@ defmodule JidokaTest.WorkflowCapabilityTest do
     assert Jidoka.format_error(error) =~ "Missing workflow context key `suffix`"
   end
 
-  test "workflow capability returns Jidoka validation errors for invalid input" do
+  test "workflow operation returns Jidoka validation errors for invalid input" do
     tool = workflow_tool(MathAgent, "run_math")
 
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
@@ -53,7 +53,7 @@ defmodule JidokaTest.WorkflowCapabilityTest do
     assert error.message =~ "Invalid workflow input"
   end
 
-  test "workflow capability returns Jidoka execution errors for step failures" do
+  test "workflow operation returns Jidoka execution errors for step failures" do
     tool = workflow_tool(FailingAgent, "fail_workflow")
 
     assert {:error, %Jidoka.Error.ExecutionError{} = error} =
@@ -63,7 +63,7 @@ defmodule JidokaTest.WorkflowCapabilityTest do
     assert error.details.step == :fail
   end
 
-  test "workflow capability records request metadata when request context is present" do
+  test "workflow operation records request metadata when request context is present" do
     tool = workflow_tool(MathAgent, "run_math")
     request_id = "workflow-capability-#{System.unique_integer([:positive])}"
 
@@ -122,7 +122,7 @@ defmodule JidokaTest.WorkflowCapabilityTest do
              Jidoka.Debug.request_summary(updated_agent, request_id)
   end
 
-  test "workflow capability names conflict with other operation capabilities" do
+  test "workflow operation names conflict with other operations" do
     assert_raise Spark.Error.DslError, ~r/duplicate operation names.*workflow_capability_math/s, fn ->
       compile_agent("""
       defmodule JidokaTest.WorkflowCapability.DuplicateWorkflowToolAgent do

@@ -258,7 +258,7 @@ defmodule Jidoka.ImportedAgent.Spec.Validator do
   defp validate_workflows(%{} = spec, available_workflows) when is_map(available_workflows) do
     cond do
       not workflows_unique?(spec.workflows) ->
-        {:error, "workflow capability names must be unique"}
+        {:error, "workflow operation names must be unique"}
 
       spec.workflows == [] ->
         {:ok, spec}

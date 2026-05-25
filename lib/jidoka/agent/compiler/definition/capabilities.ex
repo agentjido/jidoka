@@ -163,7 +163,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
             raise Jidoka.Agent.Dsl.Error.exception(
                     message: message,
                     path: [:capabilities, :workflow],
-                    hint: "Give each workflow capability a unique published tool name.",
+                    hint: "Give each workflow operation a unique published operation name.",
                     module: owner_module
                   )
         end
@@ -172,7 +172,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
                 path: [:capabilities, :workflow],
-                hint: "Declare workflows inside `capabilities` with a Jidoka workflow module.",
+                hint: "Declare workflow operations inside `capabilities` with a Jidoka workflow module.",
                 module: owner_module
               )
     end

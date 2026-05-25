@@ -19,9 +19,9 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 
 - Use `tools do` only for direct action modules.
 - Use `capabilities do` for Ash resources, MCP sync, web access, skills,
-  plugins, subagents, workflow capabilities, and handoffs.
+  plugins, subagents, workflow operations, and handoffs.
 - Treat generated `tools/0` and `tool_names/0` callbacks as the expanded
-  provider-visible operation surface. They include direct actions plus generated
+  model-callable operation surface. They include direct actions plus generated
   action-backed tools from capabilities.
 - Use `controls do` for input, operation, and result policy.
 - Use `lifecycle do` for runtime behavior such as memory, compaction, and
@@ -33,10 +33,10 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 - Use `subagent` for manager-pattern delegation inside an agent turn. Do not
   model handoffs or workflow graphs as subagents.
 - Use `workflow` inside `capabilities do` when an agent should choose a known
-  deterministic process as a provider-visible operation.
+  deterministic process as a model-callable operation.
 - Keep workflow declarations out of `tools do`. The workflow module owns the
-  deterministic process; the agent capability owns how that process is exposed
-  as a model-callable operation.
+  deterministic process; the agent workflow entry owns how that process is
+  exposed as a model-callable operation.
 - Use `handoff` inside `capabilities do` when an agent should transfer future
   conversation ownership to another agent for the same `conversation:`.
 
@@ -55,10 +55,10 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
   Use agents for open-ended LLM turns and subagents for delegated capabilities
   inside one agent turn.
 - Workflows may call agents as bounded steps, and agents may expose workflows
-  as provider-visible operations. Keep the boundary explicit: agents decide
+  as model-callable operations. Keep the boundary explicit: agents decide
   intent; workflows run fixed processes.
-- Keep raw Runic concepts out of public Jidoka code. Do not expose facts,
-  directives, strategy state, or Runic nodes in user-authored workflows.
+- Keep raw execution-graph concepts out of public Jidoka code. Do not expose
+  facts, directives, strategy state, or graph nodes in user-authored workflows.
 
 ## Imported Agents
 

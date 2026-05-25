@@ -102,7 +102,7 @@ defmodule JidokaTest.WorkflowCapability.DuplicateNameTool do
 
   use Jidoka.Action,
     name: "workflow_capability_math",
-    description: "Conflicts with the default workflow capability name.",
+    description: "Conflicts with the default workflow operation name.",
     schema: Zoi.object(%{value: Zoi.integer()})
 
   @impl true

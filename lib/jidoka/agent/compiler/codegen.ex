@@ -255,7 +255,7 @@ defmodule Jidoka.Agent.Codegen do
       def skill_names, do: unquote(Macro.escape(definition.skill_names))
 
       @doc """
-      Returns provider-visible action-backed tool modules after expansion.
+      Returns model-callable action-backed tool modules after expansion.
 
       This includes direct `tools do action ... end` entries plus generated
       modules for integrations such as plugins, web tools, subagents,
@@ -265,7 +265,7 @@ defmodule Jidoka.Agent.Codegen do
       def tools, do: unquote(Macro.escape(definition.tools))
 
       @doc """
-      Returns provider-visible operation names after expansion.
+      Returns model-callable operation names after expansion.
       """
       @spec tool_names() :: [String.t()]
       def tool_names, do: unquote(Macro.escape(definition.tool_names))
@@ -301,7 +301,7 @@ defmodule Jidoka.Agent.Codegen do
       def subagent_names, do: unquote(Macro.escape(definition.subagent_names))
 
       @doc """
-      Returns workflow capability declarations from `capabilities do workflow ... end`.
+      Returns workflow operations declared with `capabilities do workflow ... end`.
 
       Each entry is exposed to the model as a generated action-backed tool in
       `tools/0`.

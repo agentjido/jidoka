@@ -312,7 +312,7 @@ defmodule JidokaTest.ImportedAgentValidationTest do
                available_workflows: [WorkflowCapability.MathWorkflow, WorkflowCapability.ContextWorkflow]
              )
 
-    assert reason =~ "workflow capability names must be unique"
+    assert reason =~ "workflow operation names must be unique"
   end
 
   test "rejects imported workflows with invalid timeout" do
@@ -324,7 +324,7 @@ defmodule JidokaTest.ImportedAgentValidationTest do
                available_workflows: [WorkflowCapability.MathWorkflow]
              )
 
-    assert reason =~ "workflow capability timeout must be a positive integer"
+    assert reason =~ "workflow operation timeout must be a positive integer"
   end
 
   test "rejects imported workflows with invalid forward_context" do
@@ -343,7 +343,7 @@ defmodule JidokaTest.ImportedAgentValidationTest do
                available_workflows: [WorkflowCapability.MathWorkflow]
              )
 
-    assert reason =~ "workflow capability forward_context keys must be a list"
+    assert reason =~ "workflow operation forward_context keys must be a list"
   end
 
   test "rejects raw module strings as imported workflow refs" do

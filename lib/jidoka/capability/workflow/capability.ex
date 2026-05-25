@@ -42,7 +42,7 @@ defmodule Jidoka.Workflow.Capability do
     end
   end
 
-  def new(_workflow_module, _opts), do: {:error, "workflow capability options must be a keyword list"}
+  def new(_workflow_module, _opts), do: {:error, "workflow operation options must be a keyword list"}
 
   @doc false
   @spec workflow_name(module()) :: {:ok, name()} | {:error, String.t()}
@@ -60,7 +60,7 @@ defmodule Jidoka.Workflow.Capability do
     if Enum.uniq(names) == names do
       {:ok, names}
     else
-      {:error, "workflow capability names must be unique within a Jidoka agent"}
+      {:error, "workflow operation names must be unique within a Jidoka agent"}
     end
   end
 
@@ -173,12 +173,12 @@ defmodule Jidoka.Workflow.Capability do
       {:ok, trimmed}
     else
       {:error,
-       "workflow capability names must start with a lowercase letter and contain only lowercase letters, numbers, and underscores"}
+       "workflow operation names must start with a lowercase letter and contain only lowercase letters, numbers, and underscores"}
     end
   end
 
   defp normalize_name(other, _default_name),
-    do: {:error, "workflow capability name must be an atom or string, got: #{inspect(other)}"}
+    do: {:error, "workflow operation name must be an atom or string, got: #{inspect(other)}"}
 
   defp normalize_description(nil, %{id: id, description: description}) do
     description =
@@ -193,24 +193,24 @@ defmodule Jidoka.Workflow.Capability do
 
   defp normalize_description(description, _definition) when is_binary(description) do
     case String.trim(description) do
-      "" -> {:error, "workflow capability descriptions must not be empty"}
+      "" -> {:error, "workflow operation descriptions must not be empty"}
       trimmed -> {:ok, trimmed}
     end
   end
 
   defp normalize_description(other, _definition),
-    do: {:error, "workflow capability descriptions must be strings, got: #{inspect(other)}"}
+    do: {:error, "workflow operation descriptions must be strings, got: #{inspect(other)}"}
 
   defp normalize_result(result) when result in [:output, "output"], do: {:ok, :output}
   defp normalize_result(result) when result in [:structured, "structured"], do: {:ok, :structured}
 
   defp normalize_result(other),
-    do: {:error, "workflow capability result must be :output or :structured, got: #{inspect(other)}"}
+    do: {:error, "workflow operation result must be :output or :structured, got: #{inspect(other)}"}
 
   defp normalize_timeout(timeout) do
     case Jidoka.Subagent.normalize_timeout(timeout) do
       {:ok, timeout} -> {:ok, timeout}
-      {:error, message} -> {:error, String.replace(message, "subagent timeout", "workflow capability timeout")}
+      {:error, message} -> {:error, String.replace(message, "subagent timeout", "workflow operation timeout")}
     end
   end
 
@@ -220,7 +220,7 @@ defmodule Jidoka.Workflow.Capability do
         {:ok, forward_context}
 
       {:error, message} ->
-        {:error, String.replace(message, "subagent forward_context", "workflow capability forward_context")}
+        {:error, String.replace(message, "subagent forward_context", "workflow operation forward_context")}
     end
   end
 
