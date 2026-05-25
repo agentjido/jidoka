@@ -7,9 +7,15 @@
   "id": "jidoka-3di.9.7",
   "labels": [],
   "parent": "jidoka-3di.9",
+  "comments": [
+    {
+      "text": "Added a no-provider observability smoke test that runs a real session chat turn, interrupts before provider execution, captures emitted lifecycle telemetry, inspects the request summary, and verifies the retained structured trace. Hardened hook and guardrail trace metadata to lift correlation refs from runtime inputs so session/conversation IDs are present on lifecycle events. Verified with format, compile, full tests, docs warnings-as-errors, doctor, and diff checks.",
+      "timestamp": "2026-05-25T01:07:19Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E8: Add an integration smoke test that can run without external services",
   "type": "task",
-  "updated_at": "2026-05-25T01:03:15Z"
+  "updated_at": "2026-05-25T01:07:19Z"
 }
