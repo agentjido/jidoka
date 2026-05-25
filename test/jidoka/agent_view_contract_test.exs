@@ -110,6 +110,31 @@ defmodule JidokaTest.AgentViewContractTest do
     assert Jidoka.AgentView.ui_hooks() == [:before_turn, :after_turn, :snapshot]
   end
 
+  test "AgentView state is projection-only, not persistence" do
+    view =
+      Jidoka.AgentView.new(
+        agent_id: "contract-agent",
+        conversation_id: "case_123",
+        visible_messages: [%{role: :assistant, content: "Projected"}],
+        metadata: %{projection: %{thread_id: "thread-123"}}
+      )
+
+    attrs = Map.from_struct(view)
+
+    refute Map.has_key?(attrs, :pid)
+    refute Map.has_key?(attrs, :thread)
+    refute Map.has_key?(attrs, :transcript)
+    refute Map.has_key?(attrs, :requests)
+    refute Map.has_key?(attrs, :storage)
+    refute Map.has_key?(attrs, :repo)
+
+    updated = DefaultView.before_turn(view, "Need help")
+
+    assert view.visible_messages == [%{role: :assistant, content: "Projected"}]
+    assert [%{role: :assistant}, %{role: :user, pending?: true}] = updated.visible_messages
+    refute Map.has_key?(Map.from_struct(updated), :transcript)
+  end
+
   test "custom AgentView callbacks define the application surface" do
     input = %{conversation: "VIP Refund", account_id: "acct_123"}
 

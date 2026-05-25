@@ -23,7 +23,8 @@ defmodule Jidoka.AgentView do
   projection, and any in-flight run handle in socket assigns; let the running
   agent process and `Jido.Thread` remain the canonical state. Refresh this
   projection from the runtime after turns complete instead of treating it as a
-  transcript store or persistence layer.
+  transcript store or persistence layer. `AgentView` intentionally stores no
+  process pid, thread, request map, storage adapter, or durable transcript.
   """
 
   alias Jido.AI.Request

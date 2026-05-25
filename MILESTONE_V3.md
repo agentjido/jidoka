@@ -781,6 +781,9 @@ task should be the final child task for every epic.
 - Keep `AgentView` as the V3 module name, but teach the beginner concept as
   "UI projection". `AgentView` is concrete app-facing adapter code; it is not a
   Phoenix view, renderer, transcript store, or persistence layer.
+- `AgentView` structs must remain projection-only: no pid, thread, transcript,
+  request map, repo, storage adapter, or durable session data belongs in the
+  view state.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`
