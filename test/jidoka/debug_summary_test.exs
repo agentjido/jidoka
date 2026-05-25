@@ -62,6 +62,13 @@ defmodule JidokaTest.DebugSummaryTest do
     assert summary.system_prompt ==
              "You are a concise assistant. Reply with only the final answer."
 
+    assert summary.prompt_preview == %{
+             system_prompt: "You are a concise assistant. Reply with only the final answer.",
+             user_message: "Use the add_numbers tool to add 17 and 25. Reply with only the sum.",
+             message_count: 2,
+             tool_names: ["add_numbers"]
+           }
+
     assert summary.tool_names == ["add_numbers"]
     assert summary.context_preview == ["session=\"cli\"", "tenant=\"demo\""]
     assert summary.message_count == 2
@@ -115,6 +122,9 @@ defmodule JidokaTest.DebugSummaryTest do
       assert summary.request_id == request_id
       assert summary.status == :pending
       assert summary.system_prompt == "You are a concise assistant. Use the add_numbers tool."
+      assert summary.prompt_preview.system_prompt == "You are a concise assistant. Use the add_numbers tool."
+      assert summary.prompt_preview.user_message == "live prompt"
+      assert summary.prompt_preview.message_count == 1
       assert summary.tool_names == ["add_numbers"]
       assert summary.message_count == 1
       assert summary.input_message == "live prompt"

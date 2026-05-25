@@ -12,6 +12,7 @@ defmodule Jidoka.Debug do
           input_message: String.t() | nil,
           user_message: String.t() | nil,
           system_prompt: String.t() | nil,
+          prompt_preview: map() | nil,
           skills: [String.t()],
           tool_names: [String.t()],
           mcp_tools: [String.t()],
@@ -109,6 +110,10 @@ defmodule Jidoka.Debug do
     guardrail_meta = Map.get(request_meta, :jidoka_guardrails, %{})
     memory_meta = Map.get(request_meta, :jidoka_memory, %{})
     compaction_meta = Map.get(request_meta, :jidoka_compaction, %{})
+    user_message = normalize_text(request_message(request, hook_meta, guardrail_meta))
+    system_prompt = normalize_text(system_prompt(debug_meta, agent))
+    tool_names = effective_tool_names(agent, debug_meta, hook_meta, guardrail_meta)
+    message_count = Map.get(debug_meta, :message_count)
 
     interrupt =
       case request.error do
@@ -121,10 +126,11 @@ defmodule Jidoka.Debug do
       status: Map.get(request, :status),
       model: resolved_model(agent),
       input_message: normalize_text(Map.get(request, :query)),
-      user_message: normalize_text(request_message(request, hook_meta, guardrail_meta)),
-      system_prompt: normalize_text(system_prompt(debug_meta, agent)),
+      user_message: user_message,
+      system_prompt: system_prompt,
+      prompt_preview: prompt_preview(system_prompt, user_message, message_count, tool_names),
       skills: normalize_string_list(debug_meta[:skills]),
-      tool_names: effective_tool_names(agent, debug_meta, hook_meta, guardrail_meta),
+      tool_names: tool_names,
       mcp_tools: normalize_string_list(debug_meta[:mcp_tools]),
       mcp_errors: normalize_mcp_errors(debug_meta[:mcp_errors]),
       context_preview: context_preview(hook_meta, guardrail_meta, memory_meta),
@@ -137,7 +143,7 @@ defmodule Jidoka.Debug do
       duration_ms: duration_ms(request),
       interrupt: interrupt,
       error: request.error,
-      message_count: Map.get(debug_meta, :message_count)
+      message_count: message_count
     }
   end
 
@@ -257,6 +263,29 @@ defmodule Jidoka.Debug do
   end
 
   defp compaction_summary(_), do: nil
+
+  defp prompt_preview(system_prompt, user_message, message_count, tool_names) do
+    %{
+      system_prompt: text_preview(system_prompt),
+      user_message: text_preview(user_message),
+      message_count: message_count,
+      tool_names: tool_names
+    }
+    |> Enum.reject(fn
+      {_key, nil} -> true
+      {_key, []} -> true
+      {_key, value} when value == %{} -> true
+      _entry -> false
+    end)
+    |> Map.new()
+    |> case do
+      empty when empty == %{} -> nil
+      preview -> preview
+    end
+  end
+
+  defp text_preview(nil), do: nil
+  defp text_preview(text), do: Jidoka.Sanitize.preview(text, 240)
 
   defp usage_summary(%{} = usage) do
     %{
