@@ -7,9 +7,15 @@
   "id": "jidoka-3di.8.6",
   "labels": [],
   "parent": "jidoka-3di.8",
+  "comments": [
+    {
+      "text": "Tightened display-safe error context by routing public error formatting through the sanitizer, adding string/tuple/struct sanitization, and covering raw prompt/raw response/secret redaction while preserving request and agent debugging identifiers. Verified with focused error tests plus full format, compile, test, docs, doctor, and diff checks.",
+      "timestamp": "2026-05-25T00:33:20Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E7: Ensure errors include enough context for debugging without leaking prompts, raw...",
   "type": "task",
-  "updated_at": "2026-05-25T00:28:45Z"
+  "updated_at": "2026-05-25T00:33:20Z"
 }
