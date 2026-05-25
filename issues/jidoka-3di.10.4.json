@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T01:24:12Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E9: Memory and compaction\n\nSource task 4/6 from MILESTONE_V3.md:\n\n- Verify memory recalls facts while compaction manages prompt-window pressure.\n\nEpic closure criteria:\n- memory and compaction have separate, crisp docs and tests\n- compaction does not mutate the canonical transcript\n",
   "id": "jidoka-3di.10.4",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E9: Verify memory recalls facts while compaction manages prompt-window pressure",
   "type": "task",
   "updated_at": "2026-05-25T01:24:12Z"
