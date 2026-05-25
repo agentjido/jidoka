@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T00:09:32Z",
   "created": "2026-05-24T20:35:40Z",
   "description": "Parent epic: V3 E7: Errors, debugging, and inspection\n\nSource task 1/8 from MILESTONE_V3.md:\n\n- Audit `Jidoka.Error` categories and ensure user-facing errors are normalized.\n\nEpic closure criteria:\n- users can answer what happened in a turn without reading logs\n- errors are normalized, readable, and safe to display\n- debugging output is structured, bounded, and safe by default\n",
   "id": "jidoka-3di.8.1",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E7: Audit Jidoka.Error categories and ensure user-facing errors are normalized",
   "type": "task",
   "updated_at": "2026-05-25T00:09:32Z"
