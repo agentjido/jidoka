@@ -7,9 +7,15 @@
   "id": "jidoka-3di.13.5",
   "labels": [],
   "parent": "jidoka-3di.13",
+  "comments": [
+    {
+      "text": "Added workflow trace assertions for ordered step events and context metadata, strengthened failure metadata checks, and cleaned the remaining workflow validation naming around action-backed steps.",
+      "timestamp": "2026-05-25T02:49:09Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E12: Add tests for dependency ordering, cycles, missing refs, partial failures, cont...",
   "type": "task",
-  "updated_at": "2026-05-25T02:45:37Z"
+  "updated_at": "2026-05-25T02:49:09Z"
 }
