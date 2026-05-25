@@ -11,9 +11,15 @@
   "id": "jidoka-3di.11",
   "labels": [],
   "parent": "jidoka-3di",
+  "comments": [
+    {
+      "text": "E10 complete: streaming supports caller-owned request streams with await/failure/cancellation coverage; AgentView is positioned as UI projection, preserves session semantics, and is projection-only. Full gate passed on each child.",
+      "timestamp": "2026-05-25T02:05:18Z"
+    }
+  ],
   "priority": 2,
   "status": "open",
   "title": "V3 E10: Streaming and AgentView",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:49Z"
+  "updated_at": "2026-05-25T02:05:18Z"
 }
