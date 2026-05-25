@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-25T15:31:04Z",
@@ -7,7 +7,7 @@
   "id": "jidoka-9ci",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Use provider key for Livebook live cells",
   "type": "task",
   "updated_at": "2026-05-25T15:31:04Z"
