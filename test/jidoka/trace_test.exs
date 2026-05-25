@@ -76,6 +76,94 @@ defmodule JidokaTest.TraceTest do
     assert Enum.any?(spans, &(&1.category == :tool and &1.name == "add_numbers"))
   end
 
+  test "keeps correlation fields stable across trace event surfaces" do
+    agent_id = unique_id("trace-correlation-agent")
+    request_id = unique_id("req-correlation")
+    run_id = unique_id("run-correlation")
+    trace_id = unique_id("trace-correlation")
+    span_id = unique_id("span-correlation")
+    parent_span_id = unique_id("span-parent")
+    conversation_id = unique_id("conversation")
+    session_id = unique_id("session")
+
+    common = %{
+      agent_id: agent_id,
+      request_id: request_id,
+      run_id: run_id,
+      trace_id: trace_id,
+      span_id: span_id,
+      parent_span_id: parent_span_id,
+      conversation_id: conversation_id,
+      session_id: session_id
+    }
+
+    :telemetry.execute(
+      [:jido, :ai, :request, :start],
+      %{},
+      Map.merge(common, %{query: "chat prompt"})
+    )
+
+    :telemetry.execute(
+      [:jido, :ai, :tool, :complete],
+      %{duration_ms: 4},
+      Map.merge(common, %{tool_name: "lookup_ticket", tool_call_id: "tool-call-1"})
+    )
+
+    [
+      {:action, %{event: :complete, action: "lookup_ticket"}},
+      {:control, %{event: :allow, control: "limit_delegation"}},
+      {:workflow, %{event: :start, workflow: "ticket_workflow"}},
+      {:subagent, %{event: :stop, subagent: "research_agent", child_request_id: "child-req-1"}},
+      {:handoff, %{event: :stop, handoff: "billing_agent"}},
+      {:schedule, %{event: :start, schedule_id: "daily_digest"}},
+      {:memory, %{event: :retrieve, namespace: "agent:#{agent_id}"}},
+      {:compaction, %{event: :summarized, compaction: "summary"}}
+    ]
+    |> Enum.each(fn {category, metadata} ->
+      Jidoka.Trace.emit(category, Map.merge(common, metadata), %{duration_ms: 1})
+    end)
+
+    assert {:ok, trace} = Trace.for_request(agent_id, request_id)
+
+    categories = Enum.map(trace.events, & &1.category)
+
+    for category <- [
+          :request,
+          :tool,
+          :action,
+          :control,
+          :workflow,
+          :subagent,
+          :handoff,
+          :schedule,
+          :memory,
+          :compaction
+        ] do
+      assert category in categories
+    end
+
+    for event <- trace.events do
+      assert event.request_id == request_id
+      assert event.run_id == run_id
+      assert event.trace_id == trace_id
+      assert event.span_id == span_id
+      assert event.parent_span_id == parent_span_id
+      assert event.metadata.agent_id == agent_id
+      assert event.metadata.conversation_id == conversation_id
+      assert event.metadata.session_id == session_id
+    end
+
+    assert trace.summary.action_events == 1
+    assert trace.summary.control_events == 1
+    assert trace.summary.tool_events == 1
+    assert trace.summary.workflow_events == 1
+    assert trace.summary.subagent_events == 1
+    assert trace.summary.handoff_events == 1
+    assert trace.summary.schedule_events == 1
+    assert trace.summary.memory_events == 1
+    assert trace.summary.compaction_events == 1
+  end
+
   test "returns latest and list traces for an agent id" do
     agent_id = unique_id("trace-list-agent")
     request_id = unique_id("req")

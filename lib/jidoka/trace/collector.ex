@@ -29,9 +29,12 @@ defmodule Jidoka.Trace.Collector do
   ]
 
   @jidoka_events [
+    [:jidoka, :action, :event],
+    [:jidoka, :control, :event],
     [:jidoka, :hook, :event],
     [:jidoka, :guardrail, :event],
     [:jidoka, :memory, :event],
+    [:jidoka, :compaction, :event],
     [:jidoka, :workflow, :event],
     [:jidoka, :subagent, :event],
     [:jidoka, :handoff, :event],
@@ -262,6 +265,8 @@ defmodule Jidoka.Trace.Collector do
   defp event_name_label(:request, metadata), do: string_value(metadata, :agent_id)
   defp event_name_label(:model, metadata), do: string_value(metadata, :model)
   defp event_name_label(:tool, metadata), do: string_value(metadata, :tool_name)
+  defp event_name_label(:action, metadata), do: string_value(metadata, :action) || string_value(metadata, :name)
+  defp event_name_label(:control, metadata), do: string_value(metadata, :control) || string_value(metadata, :label)
   defp event_name_label(:workflow, metadata), do: string_value(metadata, :workflow) || string_value(metadata, :name)
   defp event_name_label(:subagent, metadata), do: string_value(metadata, :subagent) || string_value(metadata, :name)
   defp event_name_label(:handoff, metadata), do: string_value(metadata, :handoff) || string_value(metadata, :name)
@@ -353,6 +358,8 @@ defmodule Jidoka.Trace.Collector do
     %{
       status: status,
       event_count: length(events),
+      action_events: count_category(events, :action),
+      control_events: count_category(events, :control),
       model_events: count_category(events, :model),
       tool_events: count_category(events, :tool),
       workflow_events: count_category(events, :workflow),
@@ -452,6 +459,7 @@ defmodule Jidoka.Trace.Collector do
 
   defp string_value(map, key) do
     case get_value(map, key) do
+      nil -> nil
       value when is_binary(value) and value != "" -> value
       value when is_atom(value) -> Atom.to_string(value)
       value when is_integer(value) -> Integer.to_string(value)
