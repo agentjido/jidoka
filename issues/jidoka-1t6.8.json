@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T23:12:06Z",
+  "description": "Replace hard-coded hook/control runner timeouts with per-agent or per-stage configuration while preserving safe defaults. Add tests for configured timeouts and timeout failures.",
+  "id": "jidoka-1t6.8",
+  "labels": [],
+  "parent": "jidoka-1t6",
+  "priority": 1,
+  "status": "open",
+  "title": "Make hook and control timeouts configurable",
+  "type": "task",
+  "updated_at": "2026-05-25T23:12:06Z"
+}
