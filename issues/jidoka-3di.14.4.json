@@ -7,9 +7,15 @@
   "id": "jidoka-3di.14.4",
   "labels": [],
   "parent": "jidoka-3di.14",
+  "comments": [
+    {
+      "text": "Implemented operation-control kind propagation for subagent and handoff operations. Added provider-free human-in-the-loop tests proving controls can interrupt before subagent execution or handoff ownership transfer. Full gate passed.",
+      "timestamp": "2026-05-25T03:21:03Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E13: Add tests for human-in-the-loop interactions across subagent and handoff bounda...",
   "type": "task",
-  "updated_at": "2026-05-25T03:11:33Z"
+  "updated_at": "2026-05-25T03:21:03Z"
 }
