@@ -100,6 +100,8 @@ defmodule Jidoka.Error do
     end
   end
 
+  @type category :: :validation | :configuration | :execution | :internal | :unknown
+
   @doc """
   Builds a validation error with a consistent Jidoka shape.
   """
@@ -221,6 +223,92 @@ defmodule Jidoka.Error do
     )
   end
 
+  @doc """
+  Returns the public Jidoka error category for an error term.
+
+  The category is intentionally smaller than the internal module hierarchy so
+  CLI, Livebook, and UI surfaces can branch on validation, configuration,
+  execution, internal, or unknown failures without pattern matching on structs.
+  """
+  @spec category(term()) :: category()
+  def category(%ValidationError{}), do: :validation
+  def category(%Invalid{}), do: :validation
+  def category(%ConfigError{}), do: :configuration
+  def category(%Config{}), do: :configuration
+  def category(%ExecutionError{}), do: :execution
+  def category(%Execution{}), do: :execution
+  def category(%Internal.UnknownError{}), do: :internal
+  def category(%Internal{}), do: :internal
+
+  def category(%struct{errors: errors}) when is_list(errors) do
+    if function_exported?(struct, :error_class?, 0) and struct.error_class?() do
+      errors
+      |> flatten_class_errors()
+      |> Enum.map(&category/1)
+      |> Enum.reject(&(&1 == :unknown))
+      |> primary_category()
+    else
+      :unknown
+    end
+  end
+
+  def category(_error), do: :unknown
+
+  @doc """
+  Returns true when the value is one of Jidoka's normalized error structs.
+  """
+  @spec normalized?(term()) :: boolean()
+  def normalized?(error), do: category(error) != :unknown
+
+  @doc """
+  Converts an error into a bounded, display-oriented map.
+
+  This is intended for debugging and user-facing surfaces. It keeps the public
+  category and formatted message, and includes sanitized fields/details when the
+  error is a normalized Jidoka error.
+  """
+  @spec to_map(term()) :: map()
+  def to_map(%ValidationError{} = error) do
+    error
+    |> base_error_map()
+    |> put_present(:field, error.field)
+    |> put_present(:value, sanitized(error.value))
+    |> put_present(:details, sanitized(error.details))
+  end
+
+  def to_map(%ConfigError{} = error) do
+    error
+    |> base_error_map()
+    |> put_present(:field, error.field)
+    |> put_present(:value, sanitized(error.value))
+    |> put_present(:details, sanitized(error.details))
+  end
+
+  def to_map(%ExecutionError{} = error) do
+    error
+    |> base_error_map()
+    |> put_present(:phase, error.phase)
+    |> put_present(:details, sanitized(error.details))
+  end
+
+  def to_map(%Internal.UnknownError{} = error) do
+    error
+    |> base_error_map()
+    |> put_present(:details, sanitized(error.details))
+  end
+
+  def to_map(%struct{errors: errors} = error) when is_list(errors) do
+    if function_exported?(struct, :error_class?, 0) and struct.error_class?() do
+      error
+      |> base_error_map()
+      |> Map.put(:errors, Enum.map(flatten_class_errors(errors), &to_map/1))
+    else
+      fallback_error_map(error)
+    end
+  end
+
+  def to_map(error), do: fallback_error_map(error)
+
   defp put_details(details, message) when is_map(details) do
     details
     |> Map.put(:message, message)
@@ -278,6 +366,21 @@ defmodule Jidoka.Error do
         [error]
     end)
   end
+
+  defp primary_category([]), do: :unknown
+  defp primary_category([category | _categories]), do: category
+
+  defp base_error_map(error), do: %{category: category(error), message: format(error)}
+
+  defp fallback_error_map(error), do: %{category: :unknown, message: format(error)}
+
+  defp sanitized(nil), do: nil
+  defp sanitized(value), do: Jidoka.Sanitize.payload(value)
+
+  defp put_present(map, _key, nil), do: map
+  defp put_present(map, _key, %{} = value) when map_size(value) == 0, do: map
+  defp put_present(map, _key, []), do: map
+  defp put_present(map, key, value), do: Map.put(map, key, value)
 
   defp schema_error_message(errors) do
     case format_schema_errors(errors) do

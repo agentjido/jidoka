@@ -145,4 +145,36 @@ defmodule JidokaTest.ErrorNormalizeUnitTest do
     assert %Error.ConfigError{field: :debug, details: %{reason: :debug_not_enabled}} =
              Normalize.debug_error(:debug_not_enabled)
   end
+
+  test "error summaries expose stable categories and sanitized debugging metadata" do
+    validation =
+      Error.validation_error("Invalid input.",
+        field: :context,
+        value: %{api_key: "raw-secret", tenant: "acme"},
+        details: %{reason: :raw_credential_value, context: %{tenant: "acme"}}
+      )
+
+    assert Error.category(validation) == :validation
+    assert Error.normalized?(validation)
+
+    assert Error.to_map(validation) == %{
+             category: :validation,
+             message: "Invalid input.",
+             field: :context,
+             value: %{api_key: "[REDACTED]", tenant: "acme"},
+             details: %{reason: :raw_credential_value, context: "[OMITTED]"}
+           }
+
+    execution = Error.execution_error("Turn failed.", phase: :chat, details: %{request_id: "req_123"})
+
+    assert Error.to_map(execution) == %{
+             category: :execution,
+             message: "Turn failed.",
+             phase: :chat,
+             details: %{request_id: "req_123"}
+           }
+
+    refute Error.normalized?(RuntimeError.exception("boom"))
+    assert Error.to_map(RuntimeError.exception("boom")) == %{category: :unknown, message: "boom"}
+  end
 end
