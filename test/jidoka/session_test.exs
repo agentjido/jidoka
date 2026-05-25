@@ -33,6 +33,28 @@ defmodule JidokaTest.SessionTest do
            }
   end
 
+  test "session context merging preserves credential references without raw secrets" do
+    credential =
+      Jidoka.Credential.new!(
+        provider: "github",
+        account: "acct_123",
+        scopes: ["repo"],
+        lease_id: "lease_123"
+      )
+
+    session = session!("credential-context", context: %{tenant: "acme", credential_ref: credential})
+    opts = Session.chat_opts(session, context: %{channel: "support"})
+
+    assert opts[:context].tenant == "acme"
+    assert opts[:context].channel == "support"
+    assert opts[:context].credential_ref == credential
+    assert Jidoka.Credential.references(opts[:context]) == [credential]
+    assert :ok = Jidoka.Credential.reject_raw_secrets(opts[:context], field: :context)
+
+    assert {:ok, chat_opts} = Jidoka.Agent.prepare_chat_opts([context: opts[:context]], nil)
+    assert Keyword.fetch!(chat_opts, :tool_context).credential_ref == credential
+  end
+
   test "Jidoka.session builds a pipe-friendly session descriptor" do
     assert %Session{} =
              session =

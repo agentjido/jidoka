@@ -79,6 +79,22 @@ defmodule JidokaTest.CredentialTest do
              })
   end
 
+  test "credential metadata redacts audit fields for trace and inspection surfaces" do
+    credential =
+      Credential.new!(
+        provider: "github",
+        lease_id: "lease_123",
+        audit_metadata: %{api_key: "raw-secret", request_id: "req_123"}
+      )
+
+    assert Credential.metadata(credential).audit_metadata == %{
+             api_key: "[REDACTED]",
+             request_id: "req_123"
+           }
+
+    refute inspect(Credential.metadata(credential)) =~ "raw-secret"
+  end
+
   test "public chat context rejects raw secrets before provider prompts or tools" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Jidoka.Agent.prepare_chat_opts([context: %{tenant: "acme", api_key: "raw-secret"}], nil)
