@@ -54,6 +54,14 @@ Jidoka should keep state-like words narrow:
 - **Compaction** reduces the provider-facing transcript window by summarizing
   older conversation context. It does not delete the original thread and should
   not be taught as memory.
+- **Compaction configuration** is agent-owned runtime behavior. V3 keeps the
+  strategy narrow: `:auto` compacts before a long turn crosses the message
+  threshold, `:manual` compacts only through `Jidoka.compact/2`, and `:off`
+  disables the feature. The public manual surface is intentionally read/write
+  small: `Jidoka.compact/2` creates a new summary snapshot and
+  `Jidoka.inspect_compaction/2` reads the latest snapshot. Request
+  transformation uses that snapshot to trim the provider-facing window while
+  preserving the canonical thread.
 - **Result** is the app-facing final value from a turn. Typed results validate
   that value before callers receive it.
 - Public DSL/docs should say **result**. Internal modules may retain `Output`

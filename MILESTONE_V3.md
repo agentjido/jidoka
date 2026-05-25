@@ -760,6 +760,11 @@ task should be the final child task for every epic.
   metadata, request/agent inspection, and trace events. Manual memory writes,
   deletes, and semantic searches belong to the configured memory store or the
   lower-level runtime boundary.
+- Compaction remains a Jidoka-owned manual API because it is a deterministic
+  runtime maintenance operation over the agent transcript. V3 keeps
+  `Jidoka.compact/2` and `Jidoka.inspect_compaction/2`; automatic compaction
+  stays fail-open and must only trim provider-facing messages, never the
+  canonical thread.
 - Credential brokering must prove the no-secret-leak invariant before shipping
   execution behavior.
 - Durability is a graduation path unless a separate persistence implementation
