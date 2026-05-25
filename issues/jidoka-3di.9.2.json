@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T00:56:47Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E8: Observability standards\n\nSource task 2/7 from MILESTONE_V3.md:\n\n- Verify correlation IDs: session, conversation, request, run, trace, span.\n\nEpic closure criteria:\n- local Jidoka traces and production telemetry share correlation fields\n- observability docs remain standards-friendly and dependency-light\n",
   "id": "jidoka-3di.9.2",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E8: Verify correlation IDs: session, conversation, request, run, trace, span",
   "type": "task",
   "updated_at": "2026-05-25T00:56:47Z"
