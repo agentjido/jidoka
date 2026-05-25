@@ -405,6 +405,79 @@ defmodule JidokaTest.CompactionTest do
     refute Enum.any?(messages, &(Map.get(&1, :content) == "old user"))
   end
 
+  test "memory recall and compaction trimming coexist in the runtime context" do
+    compaction = %Compaction{
+      id: "memory-compaction-test",
+      status: :summarized,
+      strategy: :summary,
+      summary: "Earlier turns established the user is asking about durable preferences.",
+      summary_preview: "Earlier turns established the user is asking about durable preferences.",
+      source_message_count: 3,
+      retained_message_count: 2
+    }
+
+    memory = %{
+      namespace: "agent:memory_agent:context:session:memory-compaction",
+      records: [
+        %{kind: :user_turn, text: "Remember that my favorite color is blue."}
+      ],
+      prompt: "Relevant memory:\n- User: Remember that my favorite color is blue."
+    }
+
+    runtime_context = %{
+      Compaction.context_key() => %{
+        compaction: compaction,
+        summary: compaction.summary,
+        keep_last: 2
+      },
+      Jidoka.Memory.context_key() => memory
+    }
+
+    source_messages = [
+      %{role: :system, content: "old system"},
+      %{role: :user, content: "old preference setup"},
+      %{role: :assistant, content: "old preference response"},
+      %{role: :user, content: "What is my favorite color?"},
+      %{role: :assistant, content: "You said it was blue."}
+    ]
+
+    assert Jidoka.Memory.prompt_text(runtime_context) == memory.prompt
+    assert Compaction.prompt_text(runtime_context) =~ compaction.summary
+
+    assert [
+             %{role: :user, content: "What is my favorite color?"},
+             %{role: :assistant, content: "You said it was blue."}
+           ] = Compaction.apply_to_messages(source_messages, runtime_context)
+
+    assert Enum.map(source_messages, & &1.content) == [
+             "old system",
+             "old preference setup",
+             "old preference response",
+             "What is my favorite color?",
+             "You said it was blue."
+           ]
+
+    assert {:ok, %{messages: messages}} =
+             CompactionAgent.request_transformer().transform_request(
+               react_request(source_messages),
+               react_state(),
+               react_config(CompactionAgent.request_transformer()),
+               runtime_context
+             )
+
+    assert [
+             %{role: :system, content: system_prompt},
+             %{role: :user, content: "What is my favorite color?"},
+             %{role: :assistant, content: "You said it was blue."}
+           ] = messages
+
+    assert system_prompt =~ "Compacted conversation summary:"
+    assert system_prompt =~ "Earlier turns established the user is asking about durable preferences."
+    assert system_prompt =~ "Relevant memory:"
+    assert system_prompt =~ "favorite color is blue"
+    refute Enum.any?(messages, &(Map.get(&1, :content) == "old preference setup"))
+  end
+
   test "message trimming preserves tool call and tool result adjacency" do
     context = %{
       Compaction.context_key() => %{
