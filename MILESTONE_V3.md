@@ -813,6 +813,9 @@ task should be the final child task for every epic.
   own ordered steps, refs, and final output selection. Inside `steps do`, direct
   action-backed steps are spelled `action :name, MyAction` so `tool` stays a
   provider/model-facing term.
+- Workflow execution is verified without model calls: dependent steps run after
+  their declared inputs are produced, and `capabilities do workflow ... end`
+  exposes the workflow as a valid generated `Jidoka.Action` module.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

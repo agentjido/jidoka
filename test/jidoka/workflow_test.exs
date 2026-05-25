@@ -9,6 +9,7 @@ defmodule JidokaTest.WorkflowTest do
     FailingWorkflow,
     FunctionWorkflow,
     ImportedAgentWorkflow,
+    OrderedWorkflow,
     ToolOnlyWorkflow
   }
 
@@ -23,6 +24,15 @@ defmodule JidokaTest.WorkflowTest do
   test "runs a function workflow with runtime context refs" do
     assert {:ok, "schemas:done"} =
              FunctionWorkflow.run(%{topic: "schemas"}, context: %{suffix: "done"})
+  end
+
+  test "runs dependent workflow steps in order without model calls" do
+    assert {:ok, %{value: 7}} =
+             OrderedWorkflow.run(%{value: 5}, context: %{notify_pid: self()})
+
+    assert_receive {:workflow_step, :first, 5}
+    assert_receive {:workflow_step, :second, 6}
+    refute_receive {:workflow_step, _label, _value}
   end
 
   test "returns a validation error for missing context refs" do

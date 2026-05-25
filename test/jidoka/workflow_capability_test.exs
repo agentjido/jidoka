@@ -15,6 +15,8 @@ defmodule JidokaTest.WorkflowCapabilityTest do
 
     tool = workflow_tool(MathAgent, "run_math")
 
+    assert Jidoka.Action.validate_module(tool) == :ok
+    assert tool.name() == "run_math"
     assert tool.schema() == MathWorkflow.input_schema()
 
     assert {:ok, %{output: %{value: 12}, workflow: metadata}} =

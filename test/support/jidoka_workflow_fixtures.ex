@@ -54,6 +54,11 @@ defmodule JidokaTest.Workflow.Fns do
   def build_prompt(%{topic: topic}, _context) do
     {:ok, %{prompt: "draft #{topic}"}}
   end
+
+  def record_step(%{label: label, value: value, notify_pid: notify_pid}, _context) do
+    send(notify_pid, {:workflow_step, label, value})
+    {:ok, %{value: value + 1}}
+  end
 end
 
 defmodule JidokaTest.Workflow.EchoAgent do
@@ -101,6 +106,35 @@ defmodule JidokaTest.Workflow.ToolOnlyWorkflow do
   end
 
   output from(:double)
+end
+
+defmodule JidokaTest.Workflow.OrderedWorkflow do
+  @moduledoc false
+
+  use Jidoka.Workflow
+
+  workflow do
+    id :ordered_workflow
+    input Zoi.object(%{value: Zoi.integer()})
+  end
+
+  steps do
+    function :first, {JidokaTest.Workflow.Fns, :record_step, 2},
+      input: %{
+        label: value(:first),
+        value: input(:value),
+        notify_pid: context(:notify_pid)
+      }
+
+    function :second, {JidokaTest.Workflow.Fns, :record_step, 2},
+      input: %{
+        label: value(:second),
+        value: from(:first, :value),
+        notify_pid: context(:notify_pid)
+      }
+  end
+
+  output from(:second)
 end
 
 defmodule JidokaTest.Workflow.FunctionWorkflow do
