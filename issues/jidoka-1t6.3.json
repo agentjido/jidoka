@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T23:12:05Z",
+  "description": "Keep lifecycle internal-only and build on  by extracting hard-coded before/after phase declarations into feature-owned internal specs. Preserve existing phase order and tests.",
+  "id": "jidoka-1t6.3",
+  "labels": [],
+  "parent": "jidoka-1t6",
+  "priority": 0,
+  "status": "open",
+  "title": "Extend internal Runic lifecycle toward feature-owned phase specs",
+  "type": "task",
+  "updated_at": "2026-05-25T23:12:05Z"
+}
