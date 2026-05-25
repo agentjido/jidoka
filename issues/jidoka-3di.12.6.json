@@ -7,9 +7,15 @@
   "id": "jidoka-3di.12.6",
   "labels": [],
   "parent": "jidoka-3di.12",
+  "comments": [
+    {
+      "text": "Clarified that the V3 schedule manager is intentionally in-memory/non-durable, documented the boot re-registration boundary, and added a test proving manager state and run history are process-local.",
+      "timestamp": "2026-05-25T02:27:05Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E11: Review whether schedule manager state needs durability hooks or explicit non-du...",
   "type": "task",
-  "updated_at": "2026-05-25T02:23:25Z"
+  "updated_at": "2026-05-25T02:27:05Z"
 }
