@@ -4,8 +4,14 @@ defmodule JidokaTest.PublicAPITest do
   alias Jidoka.ImportedAgent
   alias JidokaTest.Workflow.ToolOnlyWorkflow
 
+  defmodule GraduationRuntime do
+    use Jido, otp_app: :jidoka
+  end
+
   test "top-level runtime entrypoints are exported" do
     Code.ensure_loaded!(Jidoka)
+    Code.ensure_loaded!(Jidoka.Session)
+
     assert %{fast: _model} = Jidoka.model_aliases()
 
     assert function_exported?(Jidoka, :chat, 3)
@@ -66,10 +72,29 @@ defmodule JidokaTest.PublicAPITest do
     assert function_exported?(JidokaTest.ChatAgent, :start_link, 1)
     assert function_exported?(JidokaTest.ChatAgent, :chat, 3)
     assert function_exported?(JidokaTest.ChatAgent, :id, 0)
+    assert function_exported?(JidokaTest.ChatAgent, :runtime_module, 0)
+
+    runtime_module = JidokaTest.ChatAgent.runtime_module()
+    Code.ensure_loaded!(runtime_module)
+    assert function_exported?(runtime_module, :new, 1)
 
     assert ToolOnlyWorkflow.id() == "tool_only_workflow"
     assert function_exported?(ToolOnlyWorkflow, :run, 2)
     assert function_exported?(ToolOnlyWorkflow, :id, 0)
+  end
+
+  test "generated runtime module can start under an app-owned runtime" do
+    start_supervised!(GraduationRuntime)
+
+    id = "graduated-runtime-agent-#{System.unique_integer([:positive])}"
+    runtime_module = JidokaTest.ChatAgent.runtime_module()
+
+    assert {:ok, pid} = GraduationRuntime.start_agent(runtime_module, id: id)
+    assert GraduationRuntime.whereis(id) == pid
+    assert Jidoka.whereis(id) == nil
+    assert Process.alive?(pid)
+
+    assert :ok = GraduationRuntime.stop_agent(pid)
   end
 
   test "workflow inspection omits raw Runic graph internals" do
