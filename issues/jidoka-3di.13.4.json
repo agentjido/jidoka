@@ -7,9 +7,15 @@
   "id": "jidoka-3di.13.4",
   "labels": [],
   "parent": "jidoka-3di.13",
+  "comments": [
+    {
+      "text": "Expanded workflow coverage for keyword input normalization, string-key context refs, action-step input validation, and documented the existing coverage across action/function/agent/imported-agent steps and normalized failures.",
+      "timestamp": "2026-05-25T02:45:07Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E12: Verify functions, tools, agents, imported agents, context, inputs, outputs, and...",
   "type": "task",
-  "updated_at": "2026-05-25T02:42:28Z"
+  "updated_at": "2026-05-25T02:45:07Z"
 }
