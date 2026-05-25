@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T00:49:07Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E8: Observability standards\n\nSource task 6/7 from MILESTONE_V3.md:\n\n- Add tests that correlation fields are stable across chat, action, control,\n  workflow, subagent, handoff, schedule, memory, and compaction events.\n\nEpic closure criteria:\n- local Jidoka traces and production telemetry share correlation fields\n- observability docs remain standards-friendly and dependency-light\n",
   "id": "jidoka-3di.9.6",
@@ -14,8 +15,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E8: Add tests that correlation fields are stable across chat, action, control, work...",
   "type": "task",
-  "updated_at": "2026-05-25T00:49:01Z"
+  "updated_at": "2026-05-25T00:49:07Z"
 }
