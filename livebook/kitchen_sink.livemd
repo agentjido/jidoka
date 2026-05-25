@@ -22,7 +22,7 @@ Mix.install(
 ## Build The Pieces First
 
 ```elixir
-defmodule LivebookDemo.KitchenSink.LoadTicket do
+defmodule SupportDesk.LoadTicket do
   use Jidoka.Action,
     name: "load_ticket",
     description: "Loads a ticket from the host application.",
@@ -41,7 +41,7 @@ defmodule LivebookDemo.KitchenSink.LoadTicket do
   end
 end
 
-defmodule LivebookDemo.KitchenSink.ScoreRisk do
+defmodule SupportDesk.ScoreRisk do
   use Jidoka.Action,
     name: "score_risk",
     description: "Scores ticket risk from priority and account context.",
@@ -52,7 +52,7 @@ defmodule LivebookDemo.KitchenSink.ScoreRisk do
   def run(_params, _context), do: {:ok, %{risk: :normal, escalation_required: false}}
 end
 
-defmodule LivebookDemo.KitchenSink.FetchPolicy do
+defmodule SupportDesk.FetchPolicy do
   use Jidoka.Action,
     name: "fetch_policy",
     description: "Returns the policy summary for a support topic.",
@@ -63,7 +63,7 @@ defmodule LivebookDemo.KitchenSink.FetchPolicy do
   def run(%{topic: topic}, _context), do: {:ok, %{policy: "No special policy for #{topic}."}}
 end
 
-defmodule LivebookDemo.KitchenSink.TriageWorkflow do
+defmodule SupportDesk.TriageWorkflow do
   use Jidoka.Workflow
 
   workflow do
@@ -73,13 +73,13 @@ defmodule LivebookDemo.KitchenSink.TriageWorkflow do
   end
 
   steps do
-    action :load_ticket, LivebookDemo.KitchenSink.LoadTicket,
+    action :load_ticket, SupportDesk.LoadTicket,
       input: %{id: input(:ticket_id)}
 
-    action :score_risk, LivebookDemo.KitchenSink.ScoreRisk,
+    action :score_risk, SupportDesk.ScoreRisk,
       input: %{priority: from(:load_ticket, :priority)}
 
-    action :fetch_policy, LivebookDemo.KitchenSink.FetchPolicy,
+    action :fetch_policy, SupportDesk.FetchPolicy,
       input: %{topic: input(:topic)}
   end
 
@@ -94,7 +94,7 @@ end
 ## Controls And Specialists
 
 ```elixir
-defmodule LivebookDemo.KitchenSink.BlockSecrets do
+defmodule SupportDesk.BlockSecrets do
   use Jidoka.Control, name: "block_secrets"
 
   @impl true
@@ -107,7 +107,7 @@ defmodule LivebookDemo.KitchenSink.BlockSecrets do
   end
 end
 
-defmodule LivebookDemo.KitchenSink.RequireCredentialApproval do
+defmodule SupportDesk.RequireCredentialApproval do
   use Jidoka.Control, name: "require_credential_approval"
 
   @impl true
@@ -122,7 +122,7 @@ defmodule LivebookDemo.KitchenSink.RequireCredentialApproval do
   end
 end
 
-defmodule LivebookDemo.KitchenSink.ReviewHighRiskResult do
+defmodule SupportDesk.ReviewHighRiskResult do
   use Jidoka.Control, name: "review_high_risk_result"
 
   @impl true
@@ -133,7 +133,7 @@ defmodule LivebookDemo.KitchenSink.ReviewHighRiskResult do
   def call(%Jidoka.Guardrails.Output{}), do: :cont
 end
 
-defmodule LivebookDemo.KitchenSink.ResearchSpecialist do
+defmodule SupportDesk.ResearchSpecialist do
   defmodule Runtime do
     use Jido.Agent,
       name: "kitchen_sink_research_runtime",
@@ -154,7 +154,7 @@ end
 ## Compile The Agent
 
 ```elixir
-defmodule LivebookDemo.KitchenSink.SupportDeskAgent do
+defmodule SupportDesk.Agent do
   use Jidoka.Agent
 
   @result_schema Zoi.object(%{
@@ -194,15 +194,15 @@ defmodule LivebookDemo.KitchenSink.SupportDeskAgent do
   end
 
   tools do
-    action LivebookDemo.KitchenSink.LoadTicket
+    action SupportDesk.LoadTicket
   end
 
   capabilities do
-    workflow LivebookDemo.KitchenSink.TriageWorkflow,
+    workflow SupportDesk.TriageWorkflow,
       as: :triage_ticket,
       result: :structured
 
-    subagent LivebookDemo.KitchenSink.ResearchSpecialist,
+    subagent SupportDesk.ResearchSpecialist,
       as: "research_specialist",
       description: "Ask the specialist for focused background."
   end
@@ -227,26 +227,26 @@ defmodule LivebookDemo.KitchenSink.SupportDeskAgent do
   end
 
   controls do
-    input LivebookDemo.KitchenSink.BlockSecrets
+    input SupportDesk.BlockSecrets
 
-    operation LivebookDemo.KitchenSink.RequireCredentialApproval,
+    operation SupportDesk.RequireCredentialApproval,
       when: [kind: :action]
 
-    result LivebookDemo.KitchenSink.ReviewHighRiskResult
+    result SupportDesk.ReviewHighRiskResult
   end
 end
 
-alias LivebookDemo.KitchenSink.SupportDeskAgent
+alias SupportDesk.Agent, as: SupportAgent
 
-{:ok, definition} = Jidoka.inspect_agent(SupportDeskAgent)
+{:ok, definition} = Jidoka.inspect_agent(SupportAgent)
 
 %{
-  id: SupportDeskAgent.id(),
-  tools: SupportDeskAgent.tool_names(),
-  workflows: Enum.map(SupportDeskAgent.workflows(), & &1.name),
-  subagents: Enum.map(SupportDeskAgent.subagents(), & &1.name),
-  schedules: Enum.map(SupportDeskAgent.schedules(), & &1.id),
-  controls: Map.new(SupportDeskAgent.controls(), fn {stage, controls} -> {stage, length(controls)} end),
+  id: SupportAgent.id(),
+  tools: SupportAgent.tool_names(),
+  workflows: Enum.map(SupportAgent.workflows(), & &1.name),
+  subagents: Enum.map(SupportAgent.subagents(), & &1.name),
+  schedules: Enum.map(SupportAgent.schedules(), & &1.id),
+  controls: Map.new(SupportAgent.controls(), fn {stage, controls} -> {stage, length(controls)} end),
   memory: definition.memory != nil,
   compaction: definition.compaction != nil
 }
@@ -262,15 +262,15 @@ context = %{
   session: "ticket-123"
 }
 
-{:ok, ticket} = LivebookDemo.KitchenSink.LoadTicket.run(%{id: "ticket-123"}, context)
+{:ok, ticket} = SupportDesk.LoadTicket.run(%{id: "ticket-123"}, context)
 
 {:ok, workflow_result} =
-  LivebookDemo.KitchenSink.TriageWorkflow.run(%{ticket_id: "ticket-123", topic: "billing"},
+  SupportDesk.TriageWorkflow.run(%{ticket_id: "ticket-123", topic: "billing"},
     context: context
   )
 
 {:ok, typed_result} =
-  LivebookDemo.KitchenSink.SupportDeskAgent.result()
+  SupportDesk.Agent.result()
   |> Jidoka.Output.parse(
     ~s({"category":"billing","risk":"high","next_step":"Escalate to account owner.","escalation_required":true})
   )
@@ -293,7 +293,7 @@ context = %{
 }
 
 session =
-  LivebookDemo.KitchenSink.SupportDeskAgent
+  SupportDesk.Agent
   |> Jidoka.session("ticket-123", context: context)
 
 stop_before_provider = fn input ->
@@ -335,7 +335,7 @@ context = %{
 schedule_id = "kitchen-sink-triage-#{System.unique_integer([:positive])}"
 
 {:ok, _schedule} =
-  Jidoka.schedule_workflow(LivebookDemo.KitchenSink.TriageWorkflow,
+  Jidoka.schedule_workflow(SupportDesk.TriageWorkflow,
     id: schedule_id,
     cron: "0 9 * * *",
     input: %{ticket_id: "ticket-123", topic: "billing"},
@@ -358,9 +358,9 @@ import_spec = %{
 
 {:ok, imported} =
   Jidoka.import_agent(import_spec,
-    available_tools: [LivebookDemo.KitchenSink.LoadTicket],
-    available_workflows: %{"kitchen_sink_triage" => LivebookDemo.KitchenSink.TriageWorkflow},
-    available_subagents: %{"research_specialist" => LivebookDemo.KitchenSink.ResearchSpecialist}
+    available_tools: [SupportDesk.LoadTicket],
+    available_workflows: %{"kitchen_sink_triage" => SupportDesk.TriageWorkflow},
+    available_subagents: %{"research_specialist" => SupportDesk.ResearchSpecialist}
   )
 
 %{

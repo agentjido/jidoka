@@ -22,7 +22,7 @@ Mix.install(
 ## 1. Your First Agent
 
 ```elixir
-defmodule LivebookDemo.GettingStarted.AssistantAgent do
+defmodule Demo.Assistant do
   use Jidoka.Agent
 
   agent :livebook_assistant do
@@ -31,15 +31,15 @@ defmodule LivebookDemo.GettingStarted.AssistantAgent do
   end
 end
 
-alias LivebookDemo.GettingStarted.AssistantAgent
+alias Demo.Assistant
 
 session =
-  AssistantAgent
+  Assistant
   |> Jidoka.session("user-123", context: %{actor_id: "user_123"})
 
 %{
-  agent_id: AssistantAgent.id(),
-  instructions: AssistantAgent.instructions(),
+  agent_id: Assistant.id(),
+  instructions: Assistant.instructions(),
   session_id: session.id,
   conversation_id: session.conversation_id,
   context: session.context
@@ -49,7 +49,7 @@ session =
 ## 2. Context And Typed Results
 
 ```elixir
-defmodule LivebookDemo.GettingStarted.TicketClassifier do
+defmodule Demo.TicketClassifier do
   use Jidoka.Agent
 
   @result_schema Zoi.object(%{
@@ -76,7 +76,7 @@ defmodule LivebookDemo.GettingStarted.TicketClassifier do
   end
 end
 
-alias LivebookDemo.GettingStarted.TicketClassifier
+alias Demo.TicketClassifier
 
 ticket_session =
   TicketClassifier
@@ -98,7 +98,7 @@ ticket_session =
 ## 3. Actions, Controls, And Credentials
 
 ```elixir
-defmodule LivebookDemo.GettingStarted.LoadTicket do
+defmodule Demo.LoadTicket do
   use Jidoka.Action,
     name: "load_ticket",
     description: "Loads a support ticket from the application database.",
@@ -116,7 +116,7 @@ defmodule LivebookDemo.GettingStarted.LoadTicket do
   end
 end
 
-defmodule LivebookDemo.GettingStarted.RequireApproval do
+defmodule Demo.RequireApproval do
   use Jidoka.Control, name: "require_approval"
 
   @impl true
@@ -131,7 +131,7 @@ defmodule LivebookDemo.GettingStarted.RequireApproval do
   end
 end
 
-defmodule LivebookDemo.GettingStarted.SupportAgent do
+defmodule Demo.SupportAgent do
   use Jidoka.Agent
 
   agent :livebook_support_agent do
@@ -148,17 +148,17 @@ defmodule LivebookDemo.GettingStarted.SupportAgent do
   end
 
   tools do
-    action LivebookDemo.GettingStarted.LoadTicket
+    action Demo.LoadTicket
   end
 
   controls do
-    operation(LivebookDemo.GettingStarted.RequireApproval,
+    operation(Demo.RequireApproval,
       when: [kind: :action, name: :load_ticket]
     )
   end
 end
 
-alias LivebookDemo.GettingStarted.{LoadTicket, RequireApproval}
+alias Demo.{LoadTicket, RequireApproval}
 
 credential =
   Jidoka.Credential.new!(
@@ -198,7 +198,7 @@ approval =
 ## 4. Debugging And Tracing
 
 ```elixir
-defmodule LivebookDemo.GettingStarted.DebugAgent do
+defmodule Demo.DebugAgent do
   use Jidoka.Agent
 
   agent :livebook_debug_agent do
@@ -207,7 +207,7 @@ defmodule LivebookDemo.GettingStarted.DebugAgent do
   end
 end
 
-alias LivebookDemo.GettingStarted.DebugAgent
+alias Demo.DebugAgent
 
 debug_session =
   DebugAgent
@@ -242,7 +242,7 @@ end
 ## 5. Workflows And Schedules
 
 ```elixir
-defmodule LivebookDemo.GettingStarted.AddOne do
+defmodule Demo.AddOne do
   use Jidoka.Action,
     name: "livebook_add_one",
     description: "Adds one to the input value.",
@@ -252,7 +252,7 @@ defmodule LivebookDemo.GettingStarted.AddOne do
   def run(%{value: value}, _context), do: {:ok, %{value: value + 1}}
 end
 
-defmodule LivebookDemo.GettingStarted.DoubleValue do
+defmodule Demo.DoubleValue do
   use Jidoka.Action,
     name: "livebook_double_value",
     description: "Doubles the input value.",
@@ -262,7 +262,7 @@ defmodule LivebookDemo.GettingStarted.DoubleValue do
   def run(%{value: value}, _context), do: {:ok, %{value: value * 2}}
 end
 
-defmodule LivebookDemo.GettingStarted.MathWorkflow do
+defmodule Demo.MathWorkflow do
   use Jidoka.Workflow
 
   workflow do
@@ -272,14 +272,14 @@ defmodule LivebookDemo.GettingStarted.MathWorkflow do
   end
 
   steps do
-    action :add_one, LivebookDemo.GettingStarted.AddOne, input: %{value: input(:value)}
-    action :double, LivebookDemo.GettingStarted.DoubleValue, input: from(:add_one)
+    action :add_one, Demo.AddOne, input: %{value: input(:value)}
+    action :double, Demo.DoubleValue, input: from(:add_one)
   end
 
   output from(:double)
 end
 
-defmodule LivebookDemo.GettingStarted.MathAgent do
+defmodule Demo.MathAgent do
   use Jidoka.Agent
 
   agent :livebook_workflow_agent do
@@ -288,13 +288,13 @@ defmodule LivebookDemo.GettingStarted.MathAgent do
   end
 
   capabilities do
-    workflow LivebookDemo.GettingStarted.MathWorkflow,
+    workflow Demo.MathWorkflow,
       as: :run_math,
       result: :structured
   end
 end
 
-alias LivebookDemo.GettingStarted.{MathAgent, MathWorkflow}
+alias Demo.{MathAgent, MathWorkflow}
 
 {:ok, workflow_result} = MathWorkflow.run(%{value: 3})
 
@@ -321,7 +321,7 @@ Jidoka.cancel_schedule(schedule_id)
 ## 6. Delegation And Imported Specs
 
 ```elixir
-defmodule LivebookDemo.GettingStarted.SearchCatalog do
+defmodule Demo.SearchCatalog do
   use Jidoka.Action,
     name: "search_catalog",
     description: "Searches a small internal knowledge catalog.",
@@ -333,7 +333,7 @@ defmodule LivebookDemo.GettingStarted.SearchCatalog do
   end
 end
 
-defmodule LivebookDemo.GettingStarted.ResearchSpecialist do
+defmodule Demo.ResearchSpecialist do
   defmodule Runtime do
     use Jido.Agent,
       name: "livebook_research_specialist_runtime",
@@ -350,7 +350,7 @@ defmodule LivebookDemo.GettingStarted.ResearchSpecialist do
   end
 end
 
-defmodule LivebookDemo.GettingStarted.Orchestrator do
+defmodule Demo.Orchestrator do
   use Jidoka.Agent
 
   agent :livebook_orchestrator do
@@ -359,17 +359,17 @@ defmodule LivebookDemo.GettingStarted.Orchestrator do
   end
 
   tools do
-    action LivebookDemo.GettingStarted.SearchCatalog
+    action Demo.SearchCatalog
   end
 
   capabilities do
-    subagent LivebookDemo.GettingStarted.ResearchSpecialist,
+    subagent Demo.ResearchSpecialist,
       as: "research_specialist",
       description: "Ask a focused research specialist."
   end
 end
 
-alias LivebookDemo.GettingStarted.{Orchestrator, SearchCatalog}
+alias Demo.{Orchestrator, SearchCatalog}
 
 spec = %{
   "agent" => %{"id" => "portable_catalog_agent"},
@@ -393,7 +393,7 @@ spec = %{
 ```elixir
 if System.get_env("RUN_JIDOKA_LIVEBOOK_LIVE") == "1" && System.get_env("ANTHROPIC_API_KEY") do
   live_session =
-    LivebookDemo.GettingStarted.AssistantAgent
+    Demo.Assistant
     |> Jidoka.session("live-user", context: %{actor_id: "user_123"})
 
   Jidoka.chat(

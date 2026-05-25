@@ -60,7 +60,8 @@ Use this structure for each concept notebook in `livebook/`.
 - Every code cell should be safe to reevaluate.
 - Avoid hidden dependency on prior notebook state unless the previous cell
   defines the visible concept being taught.
-- Keep module names under `LivebookDemo.<NotebookName>`.
+- Use short, concept-shaped module names such as `Demo.Assistant` or
+  `SupportDesk.Agent`. Avoid long teaching-only prefixes.
 - Keep context maps small and concrete.
 - Prefer `Jidoka.session/3` and `Jidoka.chat/3` for beginner-facing turns.
 - Use `Jidoka.format_error/1` when printing errors.

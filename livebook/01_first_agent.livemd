@@ -42,7 +42,7 @@ An agent has a stable id, a model, and instructions. That is enough to compile a
 runtime module and run turns.
 
 ```elixir
-defmodule LivebookDemo.FirstAgent.Assistant do
+defmodule Demo.Assistant do
   use Jidoka.Agent
 
   agent :first_agent_assistant do
@@ -52,10 +52,10 @@ defmodule LivebookDemo.FirstAgent.Assistant do
 end
 
 %{
-  id: LivebookDemo.FirstAgent.Assistant.id(),
-  model: LivebookDemo.FirstAgent.Assistant.configured_model(),
-  instructions: LivebookDemo.FirstAgent.Assistant.instructions(),
-  runtime_module: LivebookDemo.FirstAgent.Assistant.runtime_module()
+  id: Demo.Assistant.id(),
+  model: Demo.Assistant.configured_model(),
+  instructions: Demo.Assistant.instructions(),
+  runtime_module: Demo.Assistant.runtime_module()
 }
 ```
 
@@ -66,7 +66,7 @@ context, and tells Jidoka which runtime agent should handle the turn.
 
 ```elixir
 session =
-  LivebookDemo.FirstAgent.Assistant
+  Demo.Assistant
   |> Jidoka.session("user-123", context: %{actor_id: "user_123", tenant: "demo"})
 
 %{
@@ -84,14 +84,14 @@ Inspection is useful before a model ever runs. It shows the public agent shape
 that Jidoka generated from the DSL.
 
 ```elixir
-{:ok, inspection} = Jidoka.inspect_agent(LivebookDemo.FirstAgent.Assistant)
+{:ok, inspection} = Jidoka.inspect_agent(Demo.Assistant)
 
 %{
   id: inspection.id,
   tools: inspection.tools,
-  controls: LivebookDemo.FirstAgent.Assistant.controls(),
+  controls: Demo.Assistant.controls(),
   result: inspection.result,
-  schedules: LivebookDemo.FirstAgent.Assistant.schedules()
+  schedules: Demo.Assistant.schedules()
 }
 ```
 
@@ -159,7 +159,7 @@ cells above are the default teaching path.
 ```elixir
 if System.get_env("RUN_JIDOKA_LIVEBOOK_LIVE") == "1" do
   live_session =
-    LivebookDemo.FirstAgent.Assistant
+    Demo.Assistant
     |> Jidoka.session("live-user-123", context: %{actor_id: "user_123", tenant: "demo"})
 
   Jidoka.chat(live_session, "In one sentence, explain what a Jidoka session is.")
