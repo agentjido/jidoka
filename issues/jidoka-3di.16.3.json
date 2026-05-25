@@ -2,14 +2,16 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T03:56:28Z",
+  "close_reason": "Added a direct registry-mapping test covering explicit action, subagent, workflow, handoff, and JSON Schema output resolution into generated runtime definitions.",
   "created": "2026-05-24T20:35:44Z",
   "description": "Parent epic: V3 E15: Imported agents\n\nSource task 3/6 from MILESTONE_V3.md:\n\n- Verify registry mapping for actions, subagents, workflows, handoffs, and\n  output schemas.\n\nEpic closure criteria:\n- JSON and YAML import/export preserve the supported contract\n- registries are explicit, safe, and collision-resistant\n",
   "id": "jidoka-3di.16.3",
   "labels": [],
   "parent": "jidoka-3di.16",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "E15: Verify registry mapping for actions, subagents, workflows, handoffs, and output...",
   "type": "task",
-  "updated_at": "2026-05-24T20:35:44Z"
+  "updated_at": "2026-05-25T03:56:28Z"
 }
