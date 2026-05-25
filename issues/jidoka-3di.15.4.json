@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T03:38:14Z",
+  "close_reason": "Added provider-free hardening tests for URL fail-closed behavior, MCP request metadata, skill load path normalization, plugin registries, and adapter callback failures.",
   "created": "2026-05-24T20:35:44Z",
   "description": "Parent epic: V3 E14: Tool integrations\n\nSource task 4/6 from MILESTONE_V3.md:\n\n- Add tests for safe URL handling, MCP sync metadata, skill load paths, plugin\n  registration, and adapter failure.\n\nEpic closure criteria:\n- core integrations are tested and safe by default\n- large catalog support has a clear extension boundary\n- anything that should move to a companion package has an issue or explicit\n  contract\n",
   "id": "jidoka-3di.15.4",
   "labels": [],
   "parent": "jidoka-3di.15",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E14: Add tests for safe URL handling, MCP sync metadata, skill load paths, plugin re...",
   "type": "task",
-  "updated_at": "2026-05-25T03:33:52Z"
+  "updated_at": "2026-05-25T03:38:14Z"
 }
