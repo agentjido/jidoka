@@ -7,9 +7,15 @@
   "id": "jidoka-3di.11.6",
   "labels": [],
   "parent": "jidoka-3di.11",
+  "comments": [
+    {
+      "text": "Locked AgentView projection-only boundary with docs and a contract test: no pid/thread/transcript/requests/storage/repo fields in view state, and optimistic updates do not mutate canonical projection state. Full gate passed.",
+      "timestamp": "2026-05-25T02:04:38Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E10: Ensure AgentView is projection-only and not a second persistence layer",
   "type": "task",
-  "updated_at": "2026-05-25T02:02:44Z"
+  "updated_at": "2026-05-25T02:04:38Z"
 }
