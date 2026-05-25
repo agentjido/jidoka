@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T03:51:33Z",
+  "close_reason": "Verified JSON/YAML imported agent codec round-trips every supported contract surface, including capabilities, lifecycle, output, and registry-backed references.",
   "created": "2026-05-24T20:35:44Z",
   "description": "Parent epic: V3 E15: Imported agents\n\nSource task 1/6 from MILESTONE_V3.md:\n\n- Verify JSON/YAML codec round-trips every supported feature.\n\nEpic closure criteria:\n- JSON and YAML import/export preserve the supported contract\n- registries are explicit, safe, and collision-resistant\n",
   "id": "jidoka-3di.16.1",
   "labels": [],
   "parent": "jidoka-3di.16",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E15: Verify JSON/YAML codec round-trips every supported feature",
   "type": "task",
-  "updated_at": "2026-05-25T03:43:36Z"
+  "updated_at": "2026-05-25T03:51:33Z"
 }
