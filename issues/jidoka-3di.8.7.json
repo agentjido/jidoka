@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T00:22:04Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E7: Errors, debugging, and inspection\n\nSource task 7/8 from MILESTONE_V3.md:\n\n- Add tests for missing agents, running agents, completed requests, interrupted\n  requests, failed requests, and redaction.\n\nEpic closure criteria:\n- users can answer what happened in a turn without reading logs\n- errors are normalized, readable, and safe to display\n- debugging output is structured, bounded, and safe by default\n",
   "id": "jidoka-3di.8.7",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E7: Add tests for missing agents, running agents, completed requests, interrupted r...",
   "type": "task",
   "updated_at": "2026-05-25T00:22:04Z"
