@@ -22,7 +22,8 @@ groups:
   credential after the LLM/tool-planning boundary, so raw secrets stay out of
   prompts, transcripts, tool arguments, traces, and model logs.
 - **State helpers:** memory, compaction, and a clear durability graduation path.
-- **Orchestration:** workflows, subagents, handoffs.
+- **Orchestration:** workflows, bounded subagent delegation, and conversation
+  handoffs.
 - **Runtime integration:** shared runtime, app-owned runtime, UI projections
   through `AgentView`, and Phoenix integration.
 - **Operations:** structured errors, first-class debugging, local inspection,
@@ -73,6 +74,12 @@ Jidoka should keep state-like words narrow:
   that value before callers receive it.
 - Public DSL/docs should say **result**. Internal modules may retain `Output`
   where they bridge raw model/provider output into that app-facing result.
+- **Subagent** means bounded delegation: the parent agent asks a specialist
+  agent to handle one task and receives a result back in the same turn. Future
+  turns still belong to the parent conversation owner.
+- **Handoff** means conversation ownership transfer: the current agent routes
+  future turns for a conversation to another agent until the handoff is reset.
+  It is not just a longer subagent call.
 
 ## Operation Boundary
 
@@ -123,9 +130,9 @@ graph TD
     M --> U["Workflows"]
     U --> V["Workflow As Agent Tool"]
 
-    M --> W["Subagents"]
+    M --> W["Subagents (bounded delegation)"]
     C --> W
-    W --> X["Handoffs"]
+    W --> X["Handoffs (ownership transfer)"]
     C --> X
 
     C --> Y["Schedules"]
@@ -174,7 +181,8 @@ graph TD
 13. **Streaming + UI Projection:** build UI-facing agents with `AgentView`.
 14. **Schedules:** run agents without a user prompt.
 15. **Workflows:** deterministic multi-step processes.
-16. **Subagents + Handoffs:** delegation and ownership transfer.
+16. **Subagents + Handoffs:** bounded specialist delegation, then conversation
+    ownership transfer.
 17. **Tool Integrations:** Ash, web, MCP, skills, plugins, catalogs.
 18. **Imported Agents:** portable specs and registries.
 19. **Durability + Graduation:** move from Jidoka session addressing to durable
@@ -338,7 +346,7 @@ Sources:
 | Streaming and UI projections | Strong around UI packages and LiveView-specific tooling. | Teach the beginner concept as a UI projection; keep `AgentView` as the concrete adapter from agent runtime to Phoenix/UI surfaces, with streaming as a prerequisite concept. |
 | Schedules | Common in long-running personal/ops agents, less central in libraries. | Keep first-class schedules; they are valuable for OTP-native agents. |
 | Workflows | Very strong in graph/workflow packages. | Jidoka should keep workflows deterministic and app-owned; do not make every beginner learn graphs. |
-| Subagents and handoffs | Strong in multi-agent frameworks and protocol packages. | Teach after workflows/tools; handoff is conversation ownership, not just delegation. |
+| Subagents and handoffs | Strong in multi-agent frameworks and protocol packages. | Teach after workflows/tools; subagents return control to the parent, while handoffs route future turns to a new owner. |
 | Tool integrations | Strong and growing. MCP, Ash, browser, catalogs appear repeatedly. | Use catalogs/connect as the scalable integration story; avoid listing 100 tool modules in prompts. |
 | Imported agents | Less common as JSON/YAML specs; protocols cover remote agents. | Keep imported agents as portability, with allowlisted registries as a safety boundary. |
 | Durability | Strong in lower-level runtimes and graph systems via checkpoints, journals, persistence, and resume. | Do not pretend `Jidoka.Session` is durable; teach the graduation path into durable runtime storage and instance managers. |

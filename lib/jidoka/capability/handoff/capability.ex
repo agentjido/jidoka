@@ -172,7 +172,7 @@ defmodule Jidoka.Handoff.Capability do
         agent_module.__jidoka__()[:description]
       end
 
-    {:ok, description || "Transfer conversation to #{name}."}
+    {:ok, description || "Transfer conversation ownership to #{name}."}
   end
 
   defp normalize_description(description, _agent_module, _name) when is_binary(description) do

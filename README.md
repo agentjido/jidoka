@@ -116,8 +116,10 @@ From there, add only what the agent actually needs:
 - `compaction` when long conversations need smaller model context
 - `schedule` when the agent should run without a user prompt
 - `workflow` when a deterministic multi-step process belongs outside the model
-- `subagent` or `handoff` when another agent should handle a bounded job or own
-  future turns
+- `subagent` when the parent should delegate one bounded specialist task and
+  receive the result back
+- `handoff` when another agent should become the conversation owner for future
+  turns
 - `catalog` when the agent needs to discover tools from a larger integration
   surface
 
@@ -329,8 +331,10 @@ metadata; the actual secret stays with the system that owns the integration.
 - **Schedules:** run agent turns or workflows on a clock with an in-memory
   manager that apps re-register on boot.
 - **Workflows:** keep deterministic multi-step processes outside the model.
-- **Subagents and handoffs:** delegate specialist work or transfer conversation
-  ownership.
+- **Subagents:** delegate a bounded specialist task while the parent remains
+  responsible for the turn.
+- **Handoffs:** transfer conversation ownership so future turns route to the
+  receiving agent until reset.
 - **Tool integrations:** connect Ash actions, web tools, MCP tools, skills,
   plugins, and catalogs.
 - **Imported agents:** load constrained JSON/YAML specs through allowlisted

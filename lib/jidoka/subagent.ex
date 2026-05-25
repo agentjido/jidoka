@@ -3,7 +3,9 @@ defmodule Jidoka.Subagent do
   Registry and runtime helpers for Jidoka manager-pattern subagents.
 
   Subagents are exposed to a parent agent as tool-like specialists. The parent
-  remains in control of the turn and delegates a single task to the child agent.
+  remains in control of the turn, delegates a single bounded task to the child,
+  and receives a result back. A subagent call does not change the conversation
+  owner; use a handoff when future turns should route to another agent.
   """
 
   alias Jidoka.Subagent.{Definition, Runtime, Tool}

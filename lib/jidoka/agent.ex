@@ -48,10 +48,14 @@ defmodule Jidoka.Agent do
   `Jidoka.Action` modules. The `capabilities` block is for higher-level
   integrations that expand into action-backed tools, such as Ash resources,
   MCP tools, skills, plugins, subagents, workflows, and handoffs.
-  Subagent entries compile specialist agents into model-callable delegation
-  capabilities while keeping the parent agent in control. Subagent entries can
-  tune child `timeout`, public `forward_context`, and parent-visible `result`
-  shape without introducing handoffs or workflow graphs.
+  Subagent entries compile specialist agents into model-callable bounded
+  delegation capabilities. The parent asks a child to handle one task, receives
+  the result, and keeps ownership of future turns. Subagent entries can tune
+  child `timeout`, public `forward_context`, and parent-visible `result` shape
+  without introducing handoffs or workflow graphs.
+  Handoff entries compile conversation ownership transfers. A successful
+  handoff routes future turns for the conversation to the receiving agent until
+  the owner is reset.
   Workflow entries expose deterministic `Jidoka.Workflow` modules as generated
   action-backed tools while keeping ordered business processes in the workflow
   runtime.

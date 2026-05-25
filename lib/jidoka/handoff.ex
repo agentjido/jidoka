@@ -1,6 +1,10 @@
 defmodule Jidoka.Handoff do
   @moduledoc """
   First-class conversation ownership transfer returned by Jidoka agents.
+
+  A handoff is distinct from a subagent call. Subagents are bounded delegation
+  for one task inside the current turn; handoffs assign future turns for a
+  conversation to another agent until the owner is reset.
   """
 
   @context_key :__jidoka_conversation__

@@ -182,7 +182,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     %Spark.Dsl.Entity{
       name: :subagent,
       describe: """
-      Register a Jidoka subagent specialist for this agent.
+      Register a bounded-delegation specialist for this agent.
       """,
       target: Subagent,
       args: [:agent],
@@ -190,7 +190,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
         agent: [
           type: :atom,
           required: true,
-          doc: "A Jidoka-compatible agent module that can be delegated to."
+          doc: "A Jidoka-compatible agent module that can handle one delegated specialist task."
         ],
         as: [
           type: :string,
@@ -215,7 +215,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
           type: :any,
           required: false,
           default: 30_000,
-          doc: "Child delegation timeout in milliseconds."
+          doc: "Bounded child-task timeout in milliseconds."
         ],
         forward_context: [
           type: :any,
@@ -285,7 +285,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
     %Spark.Dsl.Entity{
       name: :handoff,
       describe: """
-      Register a Jidoka handoff target that can take conversation ownership.
+      Register a Jidoka handoff target that can become conversation owner.
       """,
       target: Handoff,
       args: [:agent],
@@ -293,7 +293,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Capabilities do
         agent: [
           type: :atom,
           required: true,
-          doc: "A Jidoka-compatible agent module that can receive conversation ownership."
+          doc: "A Jidoka-compatible agent module that can receive future turns for a conversation."
         ],
         as: [
           type: :any,
