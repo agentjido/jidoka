@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T04:39:31Z",
+  "close_reason": "Added an advanced provider-free kitchen sink Livebook and evaluated all code cells.",
   "created": "2026-05-24T20:35:46Z",
   "description": "Parent epic: V3 E17: Testing, examples, and docs\n\nSource task 6/7 from MILESTONE_V3.md:\n\n- Add one advanced \"kitchen sink\" Livebook after all feature docs are stable.\n\nEpic closure criteria:\n- docs, examples, and Livebooks teach the same progression\n- every shipped example has an automated smoke test\n",
   "id": "jidoka-3di.18.6",
   "labels": [],
   "parent": "jidoka-3di.18",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E17: Add one advanced \"kitchen sink\" Livebook after all feature docs are stable",
   "type": "task",
-  "updated_at": "2026-05-25T04:35:36Z"
+  "updated_at": "2026-05-25T04:39:31Z"
 }
