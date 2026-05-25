@@ -33,6 +33,10 @@ defmodule Jidoka.ImportedAgent.RuntimeCompiler do
       ) do
     runtime_plugins = runtime_plugins(plugin_modules, spec.memory)
 
+    # Imported runtimes are content-addressed modules. We intentionally reuse an
+    # already-loaded module for identical spec/registry inputs rather than trying
+    # to unload generated code; the BEAM does not have a safe per-caller cleanup
+    # story for modules that may still be referenced by running agents.
     runtime_module =
       generated_module(
         spec,

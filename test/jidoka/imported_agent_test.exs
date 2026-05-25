@@ -352,7 +352,7 @@ defmodule JidokaTest.ImportedAgentTest do
              Jido.AI.Request.get_result(runtime_agent, request_id)
   end
 
-  test "generated imported capability tool modules include resolved registry identity" do
+  test "generated imported capability modules are content addressed by registry identity" do
     spec =
       imported_spec("collision_parent_agent",
         instructions: "Delegate when useful.",
@@ -365,10 +365,17 @@ defmodule JidokaTest.ImportedAgentTest do
     assert {:ok, %ImportedAgent{} = second} =
              Jidoka.import_agent(spec, available_subagents: %{"collision_child" => ImportedCollisionB})
 
+    assert {:ok, %ImportedAgent{} = first_again} =
+             Jidoka.import_agent(spec, available_subagents: %{"collision_child" => ImportedCollisionA})
+
     assert first.runtime_module != second.runtime_module
     assert first.tool_modules != second.tool_modules
+    assert first_again.runtime_module == first.runtime_module
+    assert first_again.tool_modules == first.tool_modules
     assert [%Jidoka.Subagent{agent: ImportedCollisionA}] = first.subagents
     assert [%Jidoka.Subagent{agent: ImportedCollisionB}] = second.subagents
+    assert Code.ensure_loaded?(first.runtime_module)
+    assert Enum.all?(first.tool_modules, &Code.ensure_loaded?/1)
   end
 
   test "imports inline character maps" do
