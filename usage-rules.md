@@ -43,8 +43,11 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 ## Workflow DSL
 
 - Define deterministic workflows with `use Jidoka.Workflow`.
+- Keep workflows as a separate `use Jidoka.Workflow` surface. Do not model a
+  multi-step workflow as a single action unless the sequence is intentionally
+  opaque to Jidoka.
 - Put stable workflow identity and input schema inside `workflow do ... end`.
-- Use `steps do` for `tool`, `function`, and `agent` steps.
+- Use `steps do` for `action`, `function`, and `agent` steps.
 - Use `output from(:step)` at module top level.
 - Prefer explicit refs: `input(:key)`, `from(:step)`, `from(:step, :field)`,
   `context(:key)`, and `value(term)`.

@@ -1,4 +1,4 @@
-defmodule Jidoka.Workflow.Dsl.ToolStep do
+defmodule Jidoka.Workflow.Dsl.ActionStep do
   @moduledoc false
 
   defstruct [:name, :module, :input, :after, :__spark_metadata__]

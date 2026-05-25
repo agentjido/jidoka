@@ -52,8 +52,8 @@ defmodule JidokaTest.WorkflowCapability.MathWorkflow do
   end
 
   steps do
-    tool :add, JidokaTest.WorkflowCapability.AddOne, input: %{value: input(:value)}
-    tool :double, JidokaTest.WorkflowCapability.DoubleValue, input: from(:add)
+    action(:add, JidokaTest.WorkflowCapability.AddOne, input: %{value: input(:value)})
+    action(:double, JidokaTest.WorkflowCapability.DoubleValue, input: from(:add))
   end
 
   output from(:double)
@@ -91,7 +91,7 @@ defmodule JidokaTest.WorkflowCapability.FailingWorkflow do
   end
 
   steps do
-    tool :fail, JidokaTest.WorkflowCapability.Fail, input: %{reason: input(:reason)}
+    action(:fail, JidokaTest.WorkflowCapability.Fail, input: %{reason: input(:reason)})
   end
 
   output from(:fail)

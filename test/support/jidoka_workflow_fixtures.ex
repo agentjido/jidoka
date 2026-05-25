@@ -90,13 +90,14 @@ defmodule JidokaTest.Workflow.ToolOnlyWorkflow do
   end
 
   steps do
-    tool :add, AddAmount,
+    action(:add, AddAmount,
       input: %{
         value: input(:value),
         amount: value(1)
       }
+    )
 
-    tool :double, DoubleValue, input: from(:add)
+    action(:double, DoubleValue, input: from(:add))
   end
 
   output from(:double)
@@ -174,7 +175,7 @@ defmodule JidokaTest.Workflow.FailingWorkflow do
   end
 
   steps do
-    tool :fail, JidokaTest.Workflow.Fail, input: %{reason: input(:reason)}
+    action(:fail, JidokaTest.Workflow.Fail, input: %{reason: input(:reason)})
   end
 
   output from(:fail)

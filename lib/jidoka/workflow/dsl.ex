@@ -1,7 +1,7 @@
 defmodule Jidoka.Workflow.Dsl do
   @moduledoc false
 
-  alias Jidoka.Workflow.Dsl.{AgentStep, FunctionStep, ToolStep}
+  alias Jidoka.Workflow.Dsl.{ActionStep, AgentStep, FunctionStep}
 
   @workflow_section %Spark.Dsl.Section{
     name: :workflow,
@@ -27,10 +27,10 @@ defmodule Jidoka.Workflow.Dsl do
     ]
   }
 
-  @tool_step_entity %Spark.Dsl.Entity{
-    name: :tool,
-    describe: "Run a Jido Action-backed tool as a workflow step.",
-    target: ToolStep,
+  @action_step_entity %Spark.Dsl.Entity{
+    name: :action,
+    describe: "Run a Jidoka or Jido action module as a workflow step.",
+    target: ActionStep,
     imports: [Jidoka.Workflow.Ref],
     args: [:name, :module, :input],
     schema: [
@@ -42,7 +42,7 @@ defmodule Jidoka.Workflow.Dsl do
       module: [
         type: :atom,
         required: true,
-        doc: "A `Jidoka.Action` or generic Jido Action-backed module."
+        doc: "A `Jidoka.Action` or generic Jido action-backed module."
       ],
       input: [
         type: :any,
@@ -135,7 +135,7 @@ defmodule Jidoka.Workflow.Dsl do
     Configure workflow steps.
     """,
     entities: [
-      @tool_step_entity,
+      @action_step_entity,
       @function_step_entity,
       @agent_step_entity
     ]

@@ -12,11 +12,11 @@ defmodule JidokaTest.WorkflowTest do
     ToolOnlyWorkflow
   }
 
-  test "runs a tool-only workflow through the public module API" do
+  test "runs an action-only workflow through the public module API" do
     assert {:ok, %{value: 12}} = ToolOnlyWorkflow.run(%{value: 5})
   end
 
-  test "runs a tool-only workflow through the top-level API" do
+  test "runs an action-only workflow through the top-level API" do
     assert {:ok, %{value: 12}} = Jidoka.Workflow.run(ToolOnlyWorkflow, %{value: 5})
   end
 
@@ -91,6 +91,7 @@ defmodule JidokaTest.WorkflowTest do
     assert inspection.kind == :workflow_definition
     assert inspection.id == "tool_only_workflow"
     assert Enum.map(inspection.steps, & &1.name) == [:add, :double]
+    assert Enum.map(inspection.steps, & &1.kind) == [:action, :action]
     assert inspection.dependencies.double == [:add]
     refute Map.has_key?(inspection, :graph)
     refute Map.has_key?(inspection, :node_map)

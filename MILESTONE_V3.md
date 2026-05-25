@@ -809,6 +809,10 @@ task should be the final child task for every epic.
   that process to an agent as a generated action-backed operation. `tools do`
   stays reserved for direct action modules, and `Agent.tools/0` remains the
   expanded provider-visible operation surface.
+- Workflow syntax stays separate from `Jidoka.Action` syntax because workflows
+  own ordered steps, refs, and final output selection. Inside `steps do`, direct
+  action-backed steps are spelled `action :name, MyAction` so `tool` stays a
+  provider/model-facing term.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

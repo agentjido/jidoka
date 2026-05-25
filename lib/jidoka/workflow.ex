@@ -11,6 +11,10 @@ defmodule Jidoka.Workflow do
   operation with `capabilities do workflow MyWorkflow end`. In that agent case
   Jidoka generates an action-backed tool module for the workflow, so the model
   sees one operation while the workflow runtime owns the ordered steps.
+
+  Workflow authoring stays separate from `Jidoka.Action`. Use actions for one
+  deterministic operation. Use workflows when Jidoka should understand the
+  ordered steps, data dependencies, context refs, and final output selection.
   """
 
   @doc """

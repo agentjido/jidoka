@@ -1,6 +1,22 @@
 defmodule JidokaTest.WorkflowValidationTest do
   use JidokaTest.Support.Case, async: false
 
+  test "keeps workflow authoring separate from action-style using options" do
+    module = Module.concat(JidokaTest.DynamicWorkflowDsl, "BadActionStyle#{System.unique_integer([:positive])}")
+
+    source = """
+    defmodule #{inspect(module)} do
+      use Jidoka.Workflow,
+        name: "bad_action_style",
+        schema: Zoi.object(%{topic: Zoi.string()})
+    end
+    """
+
+    assert_raise CompileError,
+                 ~r/Jidoka.Workflow uses a Spark DSL.*workflow do/s,
+                 fn -> Code.compile_string(source) end
+  end
+
   test "requires workflow id" do
     assert_workflow_dsl_error(~r/workflow.id.*required/s, """
     workflow do
@@ -65,8 +81,8 @@ defmodule JidokaTest.WorkflowValidationTest do
     end
 
     steps do
-      tool :same, JidokaTest.Workflow.AddAmount, input: %{value: input(:value)}
-      tool :same, JidokaTest.Workflow.DoubleValue, input: from(:same)
+      action :same, JidokaTest.Workflow.AddAmount, input: %{value: input(:value)}
+      action :same, JidokaTest.Workflow.DoubleValue, input: from(:same)
     end
 
     output from(:same)
@@ -81,7 +97,7 @@ defmodule JidokaTest.WorkflowValidationTest do
     end
 
     steps do
-      tool :double, JidokaTest.Workflow.DoubleValue, input: from(:missing)
+      action :double, JidokaTest.Workflow.DoubleValue, input: from(:missing)
     end
 
     output from(:double)
@@ -96,8 +112,8 @@ defmodule JidokaTest.WorkflowValidationTest do
     end
 
     steps do
-      tool :first, JidokaTest.Workflow.AddAmount, input: from(:second)
-      tool :second, JidokaTest.Workflow.DoubleValue, input: from(:first)
+      action :first, JidokaTest.Workflow.AddAmount, input: from(:second)
+      action :second, JidokaTest.Workflow.DoubleValue, input: from(:first)
     end
 
     output from(:second)
@@ -112,7 +128,7 @@ defmodule JidokaTest.WorkflowValidationTest do
     end
 
     steps do
-      tool :add, JidokaTest.Workflow.AddAmount, input: %{value: input(:value)}
+      action :add, JidokaTest.Workflow.AddAmount, input: %{value: input(:value)}
     end
 
     output from(:missing)
@@ -127,7 +143,7 @@ defmodule JidokaTest.WorkflowValidationTest do
     end
 
     steps do
-      tool :bad, String, input: %{value: input(:value)}
+      action :bad, String, input: %{value: input(:value)}
     end
 
     output from(:bad)

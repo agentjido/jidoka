@@ -4,9 +4,9 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   alias Jidoka.Workflow.Runtime.Value
 
   @spec execute_step(map(), map(), map()) :: {:ok, map()} | {:error, term()}
-  def execute_step(_definition, %{kind: :tool} = step, state) do
+  def execute_step(_definition, %{kind: :action} = step, state) do
     with {:ok, params} <- Value.resolve_value(step.input, state),
-         {:ok, params} <- ensure_map(params, :tool_input) do
+         {:ok, params} <- ensure_map(params, :action_input) do
       Jido.Exec.run(step.target, params, state.context,
         timeout: state.timeout,
         log_level: :warning,

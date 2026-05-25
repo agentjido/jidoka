@@ -141,7 +141,7 @@ defmodule Jidoka.Workflow.Definition do
       "A Jidoka workflow must declare at least one step.",
       [:steps],
       [],
-      "Add a `steps do ... end` block with at least one `tool`, `function`, or `agent` step."
+      "Add a `steps do ... end` block with at least one `action`, `function`, or `agent` step."
     )
   end
 
@@ -151,12 +151,12 @@ defmodule Jidoka.Workflow.Definition do
     steps
   end
 
-  defp normalize_step!(%Jidoka.Workflow.Dsl.ToolStep{} = step, owner_module) do
-    validate_step_name!(owner_module, step.name, [:steps, :tool])
-    validate_tool_target!(owner_module, step)
+  defp normalize_step!(%Jidoka.Workflow.Dsl.ActionStep{} = step, owner_module) do
+    validate_step_name!(owner_module, step.name, [:steps, :action])
+    validate_action_target!(owner_module, step)
 
     %{
-      kind: :tool,
+      kind: :action,
       name: step.name,
       target: step.module,
       input: step.input || %{},
@@ -215,7 +215,7 @@ defmodule Jidoka.Workflow.Definition do
     )
   end
 
-  defp validate_tool_target!(owner_module, step) do
+  defp validate_action_target!(owner_module, step) do
     case Jidoka.Action.Adapter.validate_action_module(step.module) do
       :ok ->
         :ok
@@ -224,7 +224,7 @@ defmodule Jidoka.Workflow.Definition do
         raise_error!(
           owner_module,
           message,
-          [:steps, step.name, :tool],
+          [:steps, step.name, :action],
           step.module,
           "Use a module defined with `use Jidoka.Action` or any valid Jido Action-backed module."
         )
@@ -334,7 +334,7 @@ defmodule Jidoka.Workflow.Definition do
     end)
   end
 
-  defp step_ref_terms(%{kind: :tool} = step), do: [step.input]
+  defp step_ref_terms(%{kind: :action} = step), do: [step.input]
   defp step_ref_terms(%{kind: :function} = step), do: [step.input]
   defp step_ref_terms(%{kind: :agent} = step), do: [step.prompt, step.context]
 
