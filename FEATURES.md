@@ -23,8 +23,8 @@ groups:
   prompts, transcripts, tool arguments, traces, and model logs.
 - **State helpers:** memory, compaction, and a clear durability graduation path.
 - **Orchestration:** workflows, subagents, handoffs.
-- **Runtime integration:** shared runtime, app-owned runtime,
-  AgentView/Phoenix integration.
+- **Runtime integration:** shared runtime, app-owned runtime, UI projections
+  through `AgentView`, and Phoenix integration.
 - **Operations:** structured errors, first-class debugging, local inspection,
   tracing, observability standards, and Kino/Livebook views.
 - **Portability:** imported JSON/YAML agents.
@@ -140,7 +140,7 @@ graph TD
     AO --> AP["GenAI / OTLP Backends"]
     AB --> AC["Kino / Livebook Debugging"]
 
-    C --> AD["AgentView"]
+    C --> AD["UI Projection (AgentView)"]
     E --> AD
     AD --> AE["Phoenix / UI Integration"]
 
@@ -171,7 +171,7 @@ graph TD
     GenAI-compatible backends.
 11. **Memory:** recall useful prior facts.
 12. **Compaction:** keep long sessions usable.
-13. **Streaming + AgentView:** build UI-facing agents.
+13. **Streaming + UI Projection:** build UI-facing agents with `AgentView`.
 14. **Schedules:** run agents without a user prompt.
 15. **Workflows:** deterministic multi-step processes.
 16. **Subagents + Handoffs:** delegation and ownership transfer.
@@ -198,7 +198,7 @@ sets:
 10. Debugging
 11. Observability standards
 12. Memory and compaction
-13. Streaming and AgentView
+13. Streaming and UI projections
 14. Schedules
 15. Workflows
 16. Subagents and handoffs
@@ -335,7 +335,7 @@ Sources:
 | Debugging | Strong need across LiveView/debugger packages, but often tool-specific. | Treat debugging as a first-class local developer loop: inspect request, prompt, trace, state, and view projections. |
 | Observability standards | Strong. The foundation already emits structured telemetry and can project model calls into OpenTelemetry GenAI spans. | Position Jidoka traces as the local debugging view over standards-friendly telemetry, not a competing standard. |
 | Memory and compaction | Strong but fragmented. Many packages focus on memory; fewer pair it with prompt-window compaction. | Preserve both as separate concepts: memory recalls facts, compaction manages provider-facing context. |
-| Streaming and AgentView | Strong around UI packages and LiveView-specific tooling. | AgentView should be the onramp from agent runtime to Phoenix UI, with streaming as a prerequisite concept. |
+| Streaming and UI projections | Strong around UI packages and LiveView-specific tooling. | Teach the beginner concept as a UI projection; keep `AgentView` as the concrete adapter from agent runtime to Phoenix/UI surfaces, with streaming as a prerequisite concept. |
 | Schedules | Common in long-running personal/ops agents, less central in libraries. | Keep first-class schedules; they are valuable for OTP-native agents. |
 | Workflows | Very strong in graph/workflow packages. | Jidoka should keep workflows deterministic and app-owned; do not make every beginner learn graphs. |
 | Subagents and handoffs | Strong in multi-agent frameworks and protocol packages. | Teach after workflows/tools; handoff is conversation ownership, not just delegation. |

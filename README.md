@@ -324,7 +324,8 @@ metadata; the actual secret stays with the system that owns the integration.
   GenAI-compatible backends.
 - **Memory and compaction:** preserve useful facts and keep long sessions within
   model context limits.
-- **Streaming and AgentView:** build UI-facing agents and project visible state.
+- **Streaming and UI projections:** build UI-facing agents with `AgentView`
+  state for LiveView, controllers, CLIs, tests, and jobs.
 - **Schedules:** run agent turns or workflows on a clock.
 - **Workflows:** keep deterministic multi-step processes outside the model.
 - **Subagents and handoffs:** delegate specialist work or transfer conversation

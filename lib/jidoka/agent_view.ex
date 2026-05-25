@@ -1,6 +1,6 @@
 defmodule Jidoka.AgentView do
   @moduledoc """
-  Least-common-denominator view contract for a Jidoka agent.
+  Surface-neutral UI projection contract for a Jidoka agent.
 
   An `AgentView` is not a Phoenix view and does not render UI. It is the
   application-facing adapter between an agent runtime and any interaction
