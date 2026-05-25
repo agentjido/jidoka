@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T05:00:21Z",
+  "close_reason": "Reviewed Hex readiness separately from feature readiness. Confirmed all package dependencies resolve as Hex packages, ran package unpack dry runs, aligned the package description/homepage/install constraint with 1.0.0-beta.1, and refreshed changelog scope for the beta package.",
   "created": "2026-05-24T20:35:46Z",
   "description": "Parent epic: V3 E18: Final hardening\n\nSource task 9/9 from MILESTONE_V3.md:\n\n- Review package metadata and Hex readiness separately from feature readiness.\n\nEpic closure criteria:\n- all verification passes\n- remaining known gaps are documented as post-V3 work\n- the package has one coherent V3 story from README to tests\n",
   "id": "jidoka-3di.19.9",
   "labels": [],
   "parent": "jidoka-3di.19",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E18: Review package metadata and Hex readiness separately from feature readiness",
   "type": "task",
-  "updated_at": "2026-05-25T04:59:17Z"
+  "updated_at": "2026-05-25T05:00:21Z"
 }
