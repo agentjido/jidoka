@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-25T23:12:06Z",
-  "description": "Reduce  coupling by introducing internal feature resolver contracts for DSL resolution, generated modules, runtime config, import mapping, and trace/debug metadata.",
+  "description": "Reduce Jidoka.Agent.Definition.build!/1 coupling by introducing internal feature resolver contracts for DSL resolution, generated modules, runtime config, import mapping, and trace/debug metadata.",
   "id": "jidoka-1t6.6",
   "labels": [],
   "parent": "jidoka-1t6",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "Refactor Definition.build into feature-owned resolvers",
   "type": "task",
-  "updated_at": "2026-05-25T23:12:06Z"
+  "updated_at": "2026-05-25T23:12:20Z"
 }
