@@ -11,7 +11,8 @@ Use this structure for each concept notebook in `livebook/`.
   skip unless `ANTHROPIC_API_KEY` or Livebook's `LB_ANTHROPIC_API_KEY` looks
   usable.
 - Use the standard Git-based `Mix.install/2` pattern until Jidoka ships on Hex.
-  Include the commented Hex replacement line.
+  Pin `ref:` to the latest published commit so Livebook does not reuse a stale
+  branch cache. Include the commented Hex replacement line.
 - Configure `:model_aliases` in the `Mix.install/2` config block so `model
   :fast` resolves consistently in every notebook.
 - Use `Jidoka.Kino.setup_notebook/1` after `Mix.install/2`; do not inline

@@ -18,7 +18,7 @@ This notebook installs Jidoka from GitHub until the package ships on Hex. The
 `config/config.exs` in an application.
 
 ```elixir
-jidoka_dep = {:jidoka, github: "agentjido/jidoka", branch: "main"}
+jidoka_dep = {:jidoka, github: "agentjido/jidoka", ref: "d394bfd"}
 
 # After Jidoka ships on Hex:
 # jidoka_dep = {:jidoka, "~> 1.0"}
