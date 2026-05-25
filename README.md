@@ -425,11 +425,13 @@ For the recommended provider-free testing progression, see
 The runnable examples under `examples/` follow the same order as the feature
 map and stay provider-free by default.
 
+The beginner Livebook under `livebook/` mirrors that same order for interactive
+exploration.
+
 ## Status
 
-The old guide, example, dev, and Livebook support trees are being replaced while
-the V2 DSL settles. The package source remains the source of truth during this
-cleanup pass.
+The old guide and dev support trees are being replaced while the V3 DSL settles.
+The package source remains the source of truth during this cleanup pass.
 
 ## License
 

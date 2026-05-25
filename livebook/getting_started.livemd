@@ -1,0 +1,398 @@
+# Jidoka Getting Started
+
+```elixir
+dep =
+  if File.exists?(Path.expand("../mix.exs", __DIR__)) do
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  else
+    {:jidoka, "~> 1.0"}
+  end
+
+Mix.install([dep], consolidate_protocols: false)
+```
+
+## 1. Your First Agent
+
+```elixir
+defmodule LivebookDemo.GettingStarted.AssistantAgent do
+  use Jidoka.Agent
+
+  agent :livebook_assistant do
+    model :fast
+    instructions "Answer clearly and concisely."
+  end
+end
+
+alias LivebookDemo.GettingStarted.AssistantAgent
+
+session =
+  AssistantAgent
+  |> Jidoka.session("user-123", context: %{actor_id: "user_123"})
+
+%{
+  agent_id: AssistantAgent.id(),
+  instructions: AssistantAgent.instructions(),
+  session_id: session.id,
+  conversation_id: session.conversation_id,
+  context: session.context
+}
+```
+
+## 2. Context And Typed Results
+
+```elixir
+defmodule LivebookDemo.GettingStarted.TicketClassifier do
+  use Jidoka.Agent
+
+  @result_schema Zoi.object(%{
+                   category: Zoi.enum([:billing, :technical, :account]),
+                   confidence: Zoi.float(),
+                   summary: Zoi.string()
+                 })
+
+  agent :livebook_ticket_classifier do
+    model :fast
+    instructions "Classify the ticket and return the configured result object."
+
+    context(
+      Zoi.object(%{
+        account_id: Zoi.string() |> Zoi.default("acct_demo"),
+        actor_id: Zoi.string() |> Zoi.default("system")
+      })
+    )
+
+    result @result_schema do
+      repair 1
+      on_validation_error :repair
+    end
+  end
+end
+
+alias LivebookDemo.GettingStarted.TicketClassifier
+
+ticket_session =
+  TicketClassifier
+  |> Jidoka.session("ticket-123",
+    context: %{account_id: "acct_123", actor_id: "user_123"}
+  )
+
+{:ok, parsed_result} =
+  TicketClassifier.result()
+  |> Jidoka.Output.parse(~s({"category":"billing","confidence":0.94,"summary":"Invoice question"}))
+
+%{
+  context: Jidoka.Session.chat_opts(ticket_session)[:context],
+  result_schema: Jidoka.Output.json_schema(TicketClassifier.result()),
+  parsed_result: parsed_result
+}
+```
+
+## 3. Actions, Controls, And Credentials
+
+```elixir
+defmodule LivebookDemo.GettingStarted.LoadTicket do
+  use Jidoka.Action,
+    name: "load_ticket",
+    description: "Loads a support ticket from the application database.",
+    schema: Zoi.object(%{id: Zoi.string()})
+
+  @impl true
+  def run(%{id: id}, context) do
+    {:ok,
+     %{
+       id: id,
+       account_id: Map.fetch!(context, :account_id),
+       status: :open,
+       subject: "Invoice question"
+     }}
+  end
+end
+
+defmodule LivebookDemo.GettingStarted.RequireApproval do
+  use Jidoka.Control, name: "require_approval"
+
+  @impl true
+  def call(%Jidoka.Guardrails.Tool{operation_kind: :action, tool_name: tool_name, context: context}) do
+    if Map.get(context, :credential_ref) && to_string(tool_name) == "load_ticket" do
+      Jidoka.Approval.request("Approve authenticated ticket access.",
+        data: %{tool: to_string(tool_name), account_id: context.account_id}
+      )
+    else
+      :cont
+    end
+  end
+end
+
+defmodule LivebookDemo.GettingStarted.SupportAgent do
+  use Jidoka.Agent
+
+  agent :livebook_support_agent do
+    model :fast
+    instructions "Use ticket data before recommending the next support step."
+
+    context(
+      Zoi.object(%{
+        account_id: Zoi.string() |> Zoi.default("acct_demo"),
+        actor_id: Zoi.string() |> Zoi.default("system"),
+        credential_ref: Zoi.any() |> Zoi.optional()
+      })
+    )
+  end
+
+  tools do
+    action LivebookDemo.GettingStarted.LoadTicket
+  end
+
+  controls do
+    operation(LivebookDemo.GettingStarted.RequireApproval,
+      when: [kind: :action, name: :load_ticket]
+    )
+  end
+end
+
+alias LivebookDemo.GettingStarted.{LoadTicket, RequireApproval}
+
+credential =
+  Jidoka.Credential.new!(
+    provider: :zendesk,
+    account: "acct_123",
+    actor: "user_123",
+    scopes: ["tickets:read"],
+    lease_id: "lease_123",
+    confirmation_required: true
+  )
+
+context = %{account_id: "acct_123", actor_id: "user_123", credential_ref: credential}
+
+{:ok, ticket} = LoadTicket.run(%{id: "ticket-123"}, context)
+
+approval =
+  RequireApproval.call(%Jidoka.Guardrails.Tool{
+    agent: %{id: "livebook_support_agent"},
+    server: self(),
+    request_id: "req-livebook",
+    tool_name: "load_ticket",
+    operation_kind: :action,
+    tool_call_id: "tool-call-livebook",
+    arguments: %{id: "ticket-123"},
+    context: context,
+    metadata: %{},
+    request_opts: %{}
+  })
+
+%{
+  ticket: ticket,
+  credential_metadata: Jidoka.Credential.metadata(credential),
+  approval: approval
+}
+```
+
+## 4. Debugging And Tracing
+
+```elixir
+defmodule LivebookDemo.GettingStarted.DebugAgent do
+  use Jidoka.Agent
+
+  agent :livebook_debug_agent do
+    model :fast
+    instructions "This agent is used to show request inspection and tracing."
+  end
+end
+
+alias LivebookDemo.GettingStarted.DebugAgent
+
+debug_session =
+  DebugAgent
+  |> Jidoka.session("debug-session", context: %{actor_id: "user_123"})
+
+stop_before_provider = fn input ->
+  Jidoka.Approval.request("Stop before the provider so this Livebook stays deterministic.",
+    data: %{message: input.message}
+  )
+end
+
+try do
+  {:interrupt, interrupt} =
+    Jidoka.chat(debug_session, "Show me the current runtime state.",
+      controls: [input: stop_before_provider]
+    )
+
+  {:ok, request} = Jidoka.inspect_request(debug_session)
+  {:ok, trace} = Jidoka.inspect_trace(debug_session)
+
+  %{
+    interrupt: Map.take(interrupt, [:kind, :message, :data]),
+    request_id: request.request_id,
+    input_message: request.input_message,
+    trace_categories: trace.events |> Enum.map(& &1.category) |> Enum.uniq()
+  }
+after
+  if pid = Jidoka.Session.whereis(debug_session), do: Jidoka.stop_agent(pid)
+end
+```
+
+## 5. Workflows And Schedules
+
+```elixir
+defmodule LivebookDemo.GettingStarted.AddOne do
+  use Jidoka.Action,
+    name: "livebook_add_one",
+    description: "Adds one to the input value.",
+    schema: Zoi.object(%{value: Zoi.integer()})
+
+  @impl true
+  def run(%{value: value}, _context), do: {:ok, %{value: value + 1}}
+end
+
+defmodule LivebookDemo.GettingStarted.DoubleValue do
+  use Jidoka.Action,
+    name: "livebook_double_value",
+    description: "Doubles the input value.",
+    schema: Zoi.object(%{value: Zoi.integer()})
+
+  @impl true
+  def run(%{value: value}, _context), do: {:ok, %{value: value * 2}}
+end
+
+defmodule LivebookDemo.GettingStarted.MathWorkflow do
+  use Jidoka.Workflow
+
+  workflow do
+    id :livebook_math_workflow
+    description "Adds one and doubles the result."
+    input Zoi.object(%{value: Zoi.integer()})
+  end
+
+  steps do
+    action :add_one, LivebookDemo.GettingStarted.AddOne, input: %{value: input(:value)}
+    action :double, LivebookDemo.GettingStarted.DoubleValue, input: from(:add_one)
+  end
+
+  output from(:double)
+end
+
+defmodule LivebookDemo.GettingStarted.MathAgent do
+  use Jidoka.Agent
+
+  agent :livebook_workflow_agent do
+    model :fast
+    instructions "Use the workflow tool when arithmetic needs deterministic execution."
+  end
+
+  capabilities do
+    workflow LivebookDemo.GettingStarted.MathWorkflow,
+      as: :run_math,
+      result: :structured
+  end
+end
+
+alias LivebookDemo.GettingStarted.{MathAgent, MathWorkflow}
+
+{:ok, workflow_result} = MathWorkflow.run(%{value: 3})
+
+schedule_id = "livebook-math-#{System.unique_integer([:positive])}"
+
+{:ok, _schedule} =
+  Jidoka.schedule_workflow(MathWorkflow,
+    id: schedule_id,
+    cron: "0 9 * * *",
+    input: %{value: 5},
+    enabled?: false
+  )
+
+{:ok, scheduled_run} = Jidoka.run_schedule(schedule_id)
+Jidoka.cancel_schedule(schedule_id)
+
+%{
+  workflow_result: workflow_result,
+  agent_tool_names: MathAgent.tool_names(),
+  scheduled_result: scheduled_run.result
+}
+```
+
+## 6. Delegation And Imported Specs
+
+```elixir
+defmodule LivebookDemo.GettingStarted.SearchCatalog do
+  use Jidoka.Action,
+    name: "search_catalog",
+    description: "Searches a small internal knowledge catalog.",
+    schema: Zoi.object(%{query: Zoi.string()})
+
+  @impl true
+  def run(%{query: query}, _context) do
+    {:ok, %{matches: [%{id: "kb_1", title: "Billing escalation", score: 0.92}], query: query}}
+  end
+end
+
+defmodule LivebookDemo.GettingStarted.ResearchSpecialist do
+  defmodule Runtime do
+    use Jido.Agent,
+      name: "livebook_research_specialist_runtime",
+      schema: Zoi.object(%{})
+  end
+
+  def name, do: "research_specialist"
+  def runtime_module, do: Runtime
+  def start_link(opts \\ []), do: Jidoka.start_agent(Runtime, opts)
+
+  def chat(_pid, message, opts \\ []) do
+    context = Keyword.get(opts, :context, %{})
+    {:ok, %{summary: "research: #{message}", tenant: Map.get(context, :tenant, "none")}}
+  end
+end
+
+defmodule LivebookDemo.GettingStarted.Orchestrator do
+  use Jidoka.Agent
+
+  agent :livebook_orchestrator do
+    model :fast
+    instructions "Use specialist operations when the task needs focused research."
+  end
+
+  tools do
+    action LivebookDemo.GettingStarted.SearchCatalog
+  end
+
+  capabilities do
+    subagent LivebookDemo.GettingStarted.ResearchSpecialist,
+      as: "research_specialist",
+      description: "Ask a focused research specialist."
+  end
+end
+
+alias LivebookDemo.GettingStarted.{Orchestrator, SearchCatalog}
+
+spec = %{
+  "agent" => %{"id" => "portable_catalog_agent"},
+  "defaults" => %{"instructions" => "Use the allowlisted catalog search tool."},
+  "capabilities" => %{"tools" => ["search_catalog"]}
+}
+
+{:ok, imported} = Jidoka.import_agent(spec, available_tools: [SearchCatalog])
+{:ok, encoded_json} = Jidoka.encode_agent(imported, format: :json)
+
+%{
+  orchestrator_tools: Orchestrator.tool_names(),
+  orchestrator_subagents: Enum.map(Orchestrator.subagents(), & &1.name),
+  imported_tools: Enum.map(imported.tool_modules, & &1.name()),
+  portable_spec_bytes: byte_size(encoded_json)
+}
+```
+
+## Optional Live Turn
+
+```elixir
+if System.get_env("RUN_JIDOKA_LIVEBOOK_LIVE") == "1" && System.get_env("ANTHROPIC_API_KEY") do
+  live_session =
+    LivebookDemo.GettingStarted.AssistantAgent
+    |> Jidoka.session("live-user", context: %{actor_id: "user_123"})
+
+  Jidoka.chat(
+    live_session,
+    "Based only on this fact, write one concise sentence: Jidoka is an Elixir package for building LLM agents with a small DSL, sessions, actions, controls, typed results, schedules, workflows, debugging, and tracing."
+  )
+else
+  {:skip, "Set RUN_JIDOKA_LIVEBOOK_LIVE=1 and ANTHROPIC_API_KEY to run a provider-backed turn."}
+end
+```
