@@ -6,14 +6,15 @@
   "blocks": [
     "jidoka-3di.18"
   ],
+  "closed_at": "2026-05-25T01:45:29Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Purpose: keep state helpers distinct and understandable.\n\nDone when:\n- memory and compaction have separate, crisp docs and tests\n- compaction does not mutate the canonical transcript\n",
   "id": "jidoka-3di.10",
   "labels": [],
   "parent": "jidoka-3di",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "V3 E9: Memory and compaction",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:48Z"
+  "updated_at": "2026-05-25T01:45:29Z"
 }
