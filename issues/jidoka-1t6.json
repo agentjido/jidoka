@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T23:11:48Z",
+  "description": "Track the smaller actionable P0/P1/P2 items from CRITIQUE.md as individual implementation or documentation tasks. Keep lifecycle/Runic work internal-only unless a later task explicitly promotes a public API.",
+  "id": "jidoka-1t6",
+  "labels": [],
+  "priority": 0,
+  "status": "open",
+  "title": "Address Jidoka critique priority issues",
+  "type": "epic",
+  "updated_at": "2026-05-25T23:11:48Z"
+}
