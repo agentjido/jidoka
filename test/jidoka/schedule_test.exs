@@ -136,6 +136,21 @@ defmodule JidokaTest.ScheduleTest do
     assert error.field == :cron
   end
 
+  test "validates enabled schedule timezones at registration time", %{manager: manager} do
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             Jidoka.schedule_workflow(ToolOnlyWorkflow,
+               id: "bad-timezone",
+               cron: "0 9 * * *",
+               timezone: "Mars/Olympus_Mons",
+               input: %{value: 5},
+               manager: manager
+             )
+
+    assert error.field == :cron
+    assert error.details.reason == :invalid_cron
+    assert error.details.timezone == "Mars/Olympus_Mons"
+  end
+
   test "starts a manager with initial schedules and supports list limits" do
     assert {:ok, schedule} =
              Schedule.new(ToolOnlyWorkflow,
@@ -221,6 +236,57 @@ defmodule JidokaTest.ScheduleTest do
     assert schedule.run_count == 1
     assert schedule.last_status == :failed
     assert schedule.last_error =~ "could not be found"
+  end
+
+  test "manual agent schedules deliver context through the normal chat path", %{manager: manager} do
+    test_pid = self()
+
+    guardrail = fn input ->
+      send(test_pid, {:scheduled_agent_context, input.context})
+      {:interrupt, %{kind: :approval, message: "Scheduled context stop", data: %{}}}
+    end
+
+    assert {:ok, %Schedule{agent_id: nil}} =
+             Jidoka.schedule_agent(ChatAgent,
+               id: "agent-context-schedule",
+               cron: "0 9 * * *",
+               prompt: "Check context.",
+               context: [tenant: "acme", channel: "schedule"],
+               opts: [guardrails: [input: guardrail]],
+               enabled?: false,
+               manager: manager
+             )
+
+    try do
+      assert {:ok, run} = Jidoka.run_schedule("agent-context-schedule", manager: manager)
+      assert run.status == :interrupted
+      assert {:interrupt, %Jidoka.Interrupt{message: "Scheduled context stop"}} = run.result
+      assert_receive {:scheduled_agent_context, %{tenant: "acme", channel: "schedule"}}
+    after
+      if pid = Jidoka.whereis("agent-context-schedule"), do: Jidoka.stop_agent(pid)
+    end
+  end
+
+  test "prompt callback validation failures are captured as failed runs", %{manager: manager} do
+    assert {:ok, %Schedule{id: "bad-prompt-callback"}} =
+             Jidoka.schedule_agent(ChatAgent,
+               id: "bad-prompt-callback",
+               cron: "0 9 * * *",
+               prompt: fn -> " " end,
+               enabled?: false,
+               manager: manager
+             )
+
+    assert {:ok, run} = Jidoka.run_schedule("bad-prompt-callback", manager: manager)
+
+    assert run.status == :failed
+    assert {:error, %Jidoka.Error.ValidationError{} = error} = run.result
+    assert error.field == :prompt
+    assert error.message =~ "must not be empty"
+
+    assert {:ok, [%Schedule{} = schedule]} = Jidoka.list_schedules(manager: manager)
+    assert schedule.last_status == :failed
+    assert schedule.last_error =~ "must not be empty"
   end
 
   test "generated agents expose declared schedules" do
