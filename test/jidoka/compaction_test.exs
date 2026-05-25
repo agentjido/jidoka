@@ -199,6 +199,50 @@ defmodule JidokaTest.CompactionTest do
              :summarized
   end
 
+  test "auto compaction uses dynamic prompt callbacks without mutating the canonical thread" do
+    test_pid = self()
+
+    Application.put_env(:jidoka, :compaction_summarizer, fn input ->
+      send(test_pid, {:dynamic_compaction_prompt, input.prompt})
+      {:ok, "dynamic summary"}
+    end)
+
+    runtime = CompactionAgent.runtime_module()
+
+    agent =
+      runtime
+      |> new_runtime_agent()
+      |> put_thread([
+        ai_message(:user, "old 1", request_id: "req-1"),
+        ai_message(:assistant, "old 2", request_id: "req-1"),
+        ai_message(:user, "old 3", request_id: "req-2"),
+        ai_message(:assistant, "old 4", request_id: "req-2"),
+        ai_message(:user, "recent 1", request_id: "req-3"),
+        ai_message(:assistant, "recent 2", request_id: "req-3")
+      ])
+
+    config = %{CompactionAgent.compaction() | prompt: CompactionPrompt}
+    original_thread_count = agent |> ThreadAgent.get() |> Thread.entry_count()
+
+    assert {:ok, updated_agent, {:ai_react_start, _params}} =
+             Compaction.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "next",
+                  request_id: "req-dynamic-compaction",
+                  tool_context: %{conversation_id: "conv-dynamic"}
+                }},
+               config,
+               %{}
+             )
+
+    assert_receive {:dynamic_compaction_prompt, "Custom compact 4 messages."}
+    assert updated_agent.state[Compaction.state_key()].summary == "dynamic summary"
+    assert agent |> ThreadAgent.get() |> Thread.entry_count() == original_thread_count
+    assert updated_agent |> ThreadAgent.get() |> Thread.entry_count() == original_thread_count
+  end
+
   test "automatic compaction skips below-threshold and manual modes without summarizing" do
     runtime = CompactionAgent.runtime_module()
 

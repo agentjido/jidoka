@@ -118,6 +118,30 @@ defmodule JidokaTest.MemoryTest do
     assert_raise ArgumentError, fn -> String.to_existing_atom(unsupported_mode) end
   end
 
+  test "validates imported memory namespace combinations" do
+    assert {:error, reason} =
+             Jidoka.Memory.normalize_imported(%{
+               "namespace" => "shared",
+               "shared_namespace" => " "
+             })
+
+    assert reason =~ "memory namespace must be :per_agent, :shared with shared_namespace"
+
+    assert {:error, reason} =
+             Jidoka.Memory.normalize_imported(%{
+               "namespace" => "context"
+             })
+
+    assert reason =~ "memory namespace must be :per_agent, :shared, or {:context, key}"
+
+    assert {:error, reason} =
+             Jidoka.Memory.normalize_imported(%{
+               "retrieve" => %{"limit" => 0}
+             })
+
+    assert reason =~ "memory retrieve limit must be a positive integer"
+  end
+
   test "builds memory plugin configs for disabled, per-agent, shared, and context namespaces" do
     assert Jidoka.Memory.default_plugins(nil) == %{__memory__: false}
 

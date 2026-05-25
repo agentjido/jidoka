@@ -147,7 +147,14 @@ defmodule Jidoka.Memory.Config do
 
   defp validate_namespace_entry(:per_agent), do: :ok
   defp validate_namespace_entry(:shared), do: :ok
-  defp validate_namespace_entry({:context, key}) when is_atom(key) or is_binary(key), do: :ok
+
+  defp validate_namespace_entry({:context, key}) do
+    if valid_namespace_key?(key) do
+      :ok
+    else
+      {:error, "memory namespace must be :per_agent, :shared, or {:context, key}, got: #{inspect({:context, key})}"}
+    end
+  end
 
   defp validate_namespace_entry(other) do
     {:error, "memory namespace must be :per_agent, :shared, or {:context, key}, got: #{inspect(other)}"}
@@ -165,9 +172,12 @@ defmodule Jidoka.Memory.Config do
     end
   end
 
-  defp validate_namespace({:context, key}, nil)
-       when is_atom(key) or is_binary(key) do
-    {:ok, {:context, key}}
+  defp validate_namespace({:context, key}, nil) do
+    if valid_namespace_key?(key) do
+      {:ok, {:context, key}}
+    else
+      {:error, "memory namespace must be :per_agent, :shared, or {:context, key}, got: #{inspect({:context, key})}"}
+    end
   end
 
   defp validate_namespace({:context, _key}, shared_namespace) do
@@ -178,6 +188,14 @@ defmodule Jidoka.Memory.Config do
     {:error,
      "memory namespace must be :per_agent, :shared with shared_namespace, or {:context, key}, got: #{inspect(other)}"}
   end
+
+  defp valid_namespace_key?(key) when is_atom(key), do: not is_nil(key)
+
+  defp valid_namespace_key?(key) when is_binary(key) do
+    String.trim(key) != ""
+  end
+
+  defp valid_namespace_key?(_key), do: false
 
   defp validate_shared_namespace(value) when is_binary(value) do
     if String.trim(value) == "" do
