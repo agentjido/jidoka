@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T01:51:48Z",
   "created": "2026-05-24T20:35:42Z",
   "description": "Parent epic: V3 E10: Streaming and AgentView\n\nSource task 1/6 from MILESTONE_V3.md:\n\n- Verify `chat_stream/3`, `stream: true`, stream await, and error behavior.\n\nEpic closure criteria:\n- streaming and AgentView support a clean UI story\n- projected state matches the canonical runtime state\n",
   "id": "jidoka-3di.11.1",
@@ -14,8 +15,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E10: Verify chatstream/3, stream: true, stream await, and error behavior",
   "type": "task",
-  "updated_at": "2026-05-25T01:51:47Z"
+  "updated_at": "2026-05-25T01:51:48Z"
 }
