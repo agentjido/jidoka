@@ -209,6 +209,62 @@ defmodule JidokaTest.ImportedAgentTest do
     end
   end
 
+  test "resolves registry-backed capabilities and output schemas into generated runtime definitions" do
+    output = %{
+      "schema" => %{
+        "type" => "object",
+        "required" => ["summary"],
+        "properties" => %{"summary" => %{"type" => "string"}}
+      },
+      "retries" => 1,
+      "on_validation_error" => "error"
+    }
+
+    spec =
+      imported_spec("mapped_registry_agent",
+        instructions: "Use mapped registry capabilities.",
+        capabilities: %{
+          "tools" => ["add_numbers"],
+          "subagents" => [%{"agent" => "research_agent", "as" => "research_delegate"}],
+          "workflows" => [%{"workflow" => "workflow_capability_math", "as" => "run_math"}],
+          "handoffs" => [%{"agent" => "billing_specialist", "as" => "billing_owner"}]
+        },
+        output: output
+      )
+
+    assert {:ok, %ImportedAgent{} = agent} =
+             Jidoka.import_agent(spec,
+               available_tools: %{"add_numbers" => AddNumbers},
+               available_subagents: %{"research_agent" => ResearchSpecialist},
+               available_workflows: %{"workflow_capability_math" => WorkflowCapability.MathWorkflow},
+               available_handoffs: %{"billing_specialist" => BillingHandoffSpecialist}
+             )
+
+    assert Enum.member?(agent.tool_modules, AddNumbers)
+    assert [%Jidoka.Subagent{agent: ResearchSpecialist, name: "research_delegate"}] = agent.subagents
+
+    assert [
+             %Jidoka.Workflow.Capability{
+               workflow: WorkflowCapability.MathWorkflow,
+               name: "run_math"
+             }
+           ] = agent.workflows
+
+    assert [
+             %Jidoka.Handoff.Capability{
+               agent: BillingHandoffSpecialist,
+               name: "billing_owner"
+             }
+           ] = agent.handoffs
+
+    assert %Jidoka.Output{schema_kind: :json_schema, retries: 1, on_validation_error: :error} = agent.spec.output
+
+    definition = agent.runtime_module.__jidoka_definition__()
+
+    assert definition.output == agent.spec.output
+    assert definition.tool_names == ["add_numbers", "research_delegate", "run_math", "billing_owner"]
+  end
+
   test "imports skills and mcp tool sync settings" do
     assert {:ok, %ImportedAgent{} = agent} =
              Jidoka.import_agent(
