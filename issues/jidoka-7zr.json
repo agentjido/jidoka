@@ -2,13 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T15:18:44Z",
+  "close_reason": "Reconciled duplicate Livebook folders by making singular livebook/ canonical. Moved the concept notebook and template into livebook/, deleted livebooks/, updated README, package files, formatter scope, Run in Livebook URLs, and dev endpoint examples. Verified code fences, Livebook dev endpoint open/sync, format, compile, tests, docs, doctor, credo, and package dry run.",
   "created": "2026-05-25T15:16:19Z",
   "description": "Collapse the new concept Livebook teaching surface into the existing singular livebook folder, remove duplicate livebooks package/formatter references, and retest via Livebook dev endpoints.",
   "id": "jidoka-7zr",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Reconcile Livebook folder naming",
   "type": "task",
-  "updated_at": "2026-05-25T15:16:19Z"
+  "updated_at": "2026-05-25T15:18:44Z"
 }
