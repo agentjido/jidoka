@@ -86,6 +86,12 @@ defmodule Jidoka.Inspection do
     end
   end
 
+  def inspect_request(%Jido.Agent{} = agent, request_id),
+    do: Jidoka.Debug.request_summary(agent, request_id)
+
+  def inspect_request(server_or_id, request_id) when is_pid(server_or_id) or is_binary(server_or_id),
+    do: request_summary_for_server(server_or_id, request_id)
+
   def inspect_request(server_or_agent, request_id),
     do: Jidoka.Debug.request_summary(server_or_agent, request_id)
 
@@ -97,13 +103,13 @@ defmodule Jidoka.Inspection do
     )
   end
 
-  defp request_summary_for_server(pid, request_id) when is_pid(pid) and is_binary(request_id) do
-    case Jido.AgentServer.state(pid) do
+  defp request_summary_for_server(server_or_id, request_id) when is_binary(request_id) do
+    case Jido.AgentServer.state(server_or_id) do
       {:ok, %{agent: %Jido.Agent{} = agent}} ->
         Jidoka.Debug.request_summary(agent, request_id)
 
       {:error, reason} ->
-        {:error, Jidoka.Error.Normalize.debug_error(reason, target: pid)}
+        {:error, Jidoka.Error.Normalize.debug_error(reason, target: server_or_id)}
     end
   end
 
