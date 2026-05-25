@@ -465,6 +465,7 @@ defmodule Jidoka.Compaction do
   defp normalize_summary(summary, max_chars) when is_binary(summary) do
     summary
     |> String.trim()
+    |> Jidoka.Sanitize.text()
     |> String.slice(0, max_chars)
   end
 

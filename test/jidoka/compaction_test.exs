@@ -359,6 +359,35 @@ defmodule JidokaTest.CompactionTest do
     assert error.details.reason == :compaction_not_configured
   end
 
+  test "compaction summaries and previews redact credential-looking text" do
+    secret = "sk-ant-secret12345678901234567890"
+    {:ok, pid} = ManualCompactionAgent.start_link(id: "manual-compaction-redaction-test")
+
+    :sys.replace_state(pid, fn state ->
+      agent =
+        put_thread(state.agent, [
+          ai_message(:user, "old secret setup", request_id: "req-1"),
+          ai_message(:assistant, "old secret response", request_id: "req-1"),
+          ai_message(:user, "recent redaction check", request_id: "req-2"),
+          ai_message(:assistant, "recent response", request_id: "req-2")
+        ])
+
+      Jido.AgentServer.State.update_agent(state, agent)
+    end)
+
+    try do
+      assert {:ok, %Compaction{} = compaction} =
+               Jidoka.compact(pid, summarizer: fn _input -> {:ok, "Earlier summary has api_key=#{secret}."} end)
+
+      assert compaction.summary == "Earlier summary has api_key=[REDACTED]"
+      assert compaction.summary_preview == "Earlier summary has api_key=[REDACTED]"
+      assert Compaction.prompt_text(%{Compaction.context_key() => compaction}) =~ "api_key=[REDACTED]"
+      refute inspect(compaction) =~ secret
+    after
+      :ok = Jidoka.stop_agent(pid)
+    end
+  end
+
   test "request transformer injects compaction summary and trims old messages" do
     compaction = %Compaction{
       id: "compaction-test",

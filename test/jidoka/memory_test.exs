@@ -36,6 +36,33 @@ defmodule JidokaTest.MemoryTest do
     def prune_expired(_opts), do: {:ok, 0}
   end
 
+  defmodule SecretMemoryStore do
+    @behaviour Jido.Memory.Store
+
+    @secret "sk-ant-secret12345678901234567890"
+
+    def validate_options(_opts), do: :ok
+    def ensure_ready(_opts), do: :ok
+    def put(record, _opts), do: {:ok, record}
+    def get(_key, _opts), do: :not_found
+    def delete(_key, _opts), do: :ok
+
+    def query(_query, _opts) do
+      {:ok,
+       [
+         Jido.Memory.Record.new!(%{
+           namespace: "agent:memory_agent:context:session:redaction",
+           class: :episodic,
+           kind: :user_turn,
+           text: "The recalled note has api_key=#{@secret}.",
+           content: %{message: "The recalled note has api_key=#{@secret}."}
+         })
+       ]}
+    end
+
+    def prune_expired(_opts), do: {:ok, 0}
+  end
+
   test "normalizes DSL memory entries, defaults, and duplicate entries" do
     assert Jidoka.Memory.normalize_dsl([]) == {:ok, nil}
 
@@ -206,6 +233,29 @@ defmodule JidokaTest.MemoryTest do
     assert Jidoka.Memory.prompt_text(%{
              Jidoka.Memory.context_key() => %{prompt: "Relevant memory:\n- User: hello"}
            }) == "Relevant memory:\n- User: hello"
+  end
+
+  test "redacts recalled memory in prompt text and request metadata" do
+    runtime = MemoryAgent.runtime_module()
+    agent = runtime |> new_runtime_agent() |> put_memory_store(SecretMemoryStore)
+
+    assert {:ok, agent, {:ai_react_start, params}} =
+             runtime.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "What do you remember?",
+                  request_id: "req-memory-redaction",
+                  tool_context: %{session: "redaction"}
+                }}
+             )
+
+    prompt = Jidoka.Memory.prompt_text(params.runtime_context)
+    memory_meta = get_in(agent.state, [:requests, "req-memory-redaction", :meta, :jidoka_memory])
+    rendered = inspect({prompt, memory_meta})
+
+    assert prompt =~ "api_key=[REDACTED]"
+    refute rendered =~ "sk-ant-secret"
   end
 
   defp put_memory_store(agent, store_module) do

@@ -769,6 +769,9 @@ task should be the final child task for every epic.
   `Jidoka.compact/2` and `Jidoka.inspect_compaction/2`; automatic compaction
   stays fail-open and must only trim provider-facing messages, never the
   canonical thread.
+- Memory prompt text, request metadata, compaction summaries, and compaction
+  previews must be sanitized before they are reused in prompts, traces, or
+  inspection surfaces.
 - Credential brokering must prove the no-secret-leak invariant before shipping
   execution behavior.
 - Durability is a graduation path unless a separate persistence implementation

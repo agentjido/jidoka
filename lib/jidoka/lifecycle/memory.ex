@@ -296,9 +296,9 @@ defmodule Jidoka.Memory do
     %{
       config: config,
       namespace: namespace,
-      records: records,
+      records: Jidoka.Sanitize.payload(records),
       message: message,
-      context: context,
+      context: safe_request_context(context),
       captured?: false
     }
   end
@@ -330,9 +330,17 @@ defmodule Jidoka.Memory do
 
     case record_text(record) do
       nil -> nil
-      text -> "- #{label}: #{text}"
+      text -> "- #{label}: #{Jidoka.Sanitize.preview(text, 1_000)}"
     end
   end
+
+  defp safe_request_context(context) when is_map(context) do
+    context
+    |> Jidoka.Context.strip_internal()
+    |> Jidoka.Sanitize.payload()
+  end
+
+  defp safe_request_context(_context), do: %{}
 
   defp remember_turn(agent, namespace, attrs) do
     case Jido.Memory.Runtime.remember(
@@ -386,7 +394,7 @@ defmodule Jidoka.Memory do
   end
 
   defp maybe_put_metadata(metadata, _key, nil), do: metadata
-  defp maybe_put_metadata(metadata, key, value), do: Map.put(metadata, key, value)
+  defp maybe_put_metadata(metadata, key, value), do: Map.put(metadata, key, Jidoka.Sanitize.payload(value))
 
   defp namespace_agent_key(%{name: name}) when is_binary(name), do: name
   defp namespace_agent_key(%{id: id}) when is_binary(id), do: id
