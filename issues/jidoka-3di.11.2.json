@@ -7,9 +7,15 @@
   "id": "jidoka-3di.11.2",
   "labels": [],
   "parent": "jidoka-3di.11",
+  "comments": [
+    {
+      "text": "Verified AgentView projections for session-owned pids, raw Jido agents, and custom view modules. Fixed AgentView.start_agent(session) to preserve session runtime/start semantics, including context_ref. Full gate passed.",
+      "timestamp": "2026-05-25T01:56:15Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E10: Verify AgentView default projections for sessions, pids, raw agents, and custom...",
   "type": "task",
-  "updated_at": "2026-05-25T01:52:03Z"
+  "updated_at": "2026-05-25T01:56:15Z"
 }
