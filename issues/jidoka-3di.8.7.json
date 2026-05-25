@@ -7,9 +7,15 @@
   "id": "jidoka-3di.8.7",
   "labels": [],
   "parent": "jidoka-3di.8",
+  "comments": [
+    {
+      "text": "Added request-summary coverage for missing agents, completed requests with redacted context, pending/running requests, interrupted requests, and failed requests. Normalized string-id debug lookup through Jidoka/Jido registry resolution.",
+      "timestamp": "2026-05-25T00:22:04Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E7: Add tests for missing agents, running agents, completed requests, interrupted r...",
   "type": "task",
-  "updated_at": "2026-05-25T00:17:58Z"
+  "updated_at": "2026-05-25T00:22:04Z"
 }
