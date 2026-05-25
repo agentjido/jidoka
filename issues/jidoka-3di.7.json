@@ -7,14 +7,15 @@
     "jidoka-3di.15",
     "jidoka-3di.18"
   ],
+  "closed_at": "2026-05-25T00:05:57Z",
   "created": "2026-05-24T20:35:40Z",
   "description": "Purpose: plan and implement the first secure credential boundary.\n\nDone when:\n- credential brokering has either a working minimal implementation or a\n  deliberately documented interface contract with follow-up issues\n- the security invariant is tested: no raw credential values leak\n",
   "id": "jidoka-3di.7",
   "labels": [],
   "parent": "jidoka-3di",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "V3 E6: Credential brokering",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:48Z"
+  "updated_at": "2026-05-25T00:05:57Z"
 }
