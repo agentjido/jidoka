@@ -101,6 +101,9 @@ defmodule JidokaTest.WorkflowTest do
 
     assert error.message =~ "Workflow failing_workflow step fail failed"
     assert error.details.step == :fail
+    assert error.details.kind == :action
+    assert error.details.workflow_id == "failing_workflow"
+    assert error.details.target == JidokaTest.Workflow.Fail
     assert error.details.reason == "boom"
   end
 

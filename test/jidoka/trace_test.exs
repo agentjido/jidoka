@@ -419,6 +419,19 @@ defmodule JidokaTest.TraceTest do
     assert Enum.any?(workflow_trace.events, &(&1.category == :workflow and &1.event == :stop))
     assert_lifecycle_refs(workflow_trace, :workflow)
 
+    workflow_start =
+      Enum.find(workflow_trace.events, &(&1.category == :workflow and &1.event == :start))
+
+    assert workflow_start.metadata.input_keys == ["value"]
+    assert workflow_start.metadata.context_keys == ["context_ref", "conversation_id", "session", "tenant"]
+
+    workflow_steps =
+      workflow_trace.events
+      |> Enum.filter(&(&1.category == :workflow and &1.event == :step))
+      |> Enum.map(& &1.metadata.step)
+
+    assert workflow_steps == ["add", "double"]
+
     subagent_request_id = unique_id("req-subagent")
     subagent_tool = find_tool(JidokaTest.OrchestratorAgent, "research_agent")
 

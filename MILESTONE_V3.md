@@ -819,6 +819,9 @@ task should be the final child task for every epic.
 - Workflow coverage spans action, function, agent, and imported-agent steps,
   input parsing from maps/keywords, atom/string context refs, output selection,
   and normalized validation/execution failures.
+- Dependency and failure coverage includes compile-time cycles and missing refs,
+  ordered dependent-step traces, context key metadata, and action-step failure
+  details with workflow id, step name, kind, target, and cause.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`
