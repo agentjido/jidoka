@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T23:36:28Z",
   "created": "2026-05-25T23:12:06Z",
   "description": "Make imported JSON/YAML agent parity explicit: supported native DSL equivalents, intentional gaps, validation differences, and how future features should document unsupported import cases.",
   "id": "jidoka-1t6.7",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Document imported-agent parity contract",
   "type": "task",
-  "updated_at": "2026-05-25T23:34:11Z"
+  "updated_at": "2026-05-25T23:36:28Z"
 }
