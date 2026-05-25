@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T23:18:09Z",
   "created": "2026-05-25T23:12:05Z",
   "description": "Document supported Jidoka.chat/3 targets: agent module, pid, runtime id, session, imported agent, and handoff-routed conversation id. Include lifetime, registry, auto-start, conversation ownership, and streaming caveats.",
   "id": "jidoka-1t6.2",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 0,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Document Jidoka.chat target matrix",
   "type": "task",
-  "updated_at": "2026-05-25T23:17:15Z"
+  "updated_at": "2026-05-25T23:18:09Z"
 }
