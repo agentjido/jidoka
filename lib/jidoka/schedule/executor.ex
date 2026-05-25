@@ -62,7 +62,7 @@ defmodule Jidoka.Schedule.Executor do
     with {:ok, prompt} <- resolve_prompt(schedule.prompt),
          {:ok, context} <- resolve_payload(schedule.context, :context) do
       chat_opts = chat_opts(schedule, context, request_id)
-      Jidoka.chat(session, prompt, chat_opts)
+      Jidoka.Chat.chat(session, prompt, chat_opts)
     end
   end
 
@@ -71,7 +71,7 @@ defmodule Jidoka.Schedule.Executor do
          {:ok, context} <- resolve_payload(schedule.context, :context),
          {:ok, pid} <- resolve_agent(schedule) do
       chat_opts = chat_opts(schedule, context, request_id)
-      Jidoka.chat(pid, prompt, chat_opts)
+      Jidoka.Chat.chat(pid, prompt, chat_opts)
     end
   end
 

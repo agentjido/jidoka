@@ -206,7 +206,7 @@ defmodule Jidoka.Trace.Collector do
     with {:ok, source, category, event} <- event_shape(event_name, metadata) do
       metadata =
         metadata
-        |> Jidoka.Trace.correlation_refs()
+        |> Jidoka.Trace.Correlation.refs()
         |> Map.merge(drop_nil_values(metadata))
 
       sanitized_measurements = Jidoka.Sanitize.payload(measurements)

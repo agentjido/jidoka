@@ -1,17 +1,16 @@
 defmodule Jidoka.Agent.Definition.ScheduleConfig do
   @moduledoc false
 
-  @spec resolve!(module()) :: [Jidoka.Schedule.t()]
-  def resolve!(owner_module) do
-    owner_module
-    |> Jidoka.Agent.Definition.agent_contract!()
+  @spec resolve!(module(), Jidoka.Agent.Dsl.Agent.t(), String.t()) :: [Jidoka.Schedule.t()]
+  def resolve!(owner_module, agent, agent_id) do
+    agent
     |> Map.get(:schedules, [])
     |> then(&(&1 || []))
-    |> Enum.map(&resolve_schedule!(owner_module, &1))
+    |> Enum.map(&resolve_schedule!(owner_module, agent_id, &1))
   end
 
-  defp resolve_schedule!(owner_module, %Jidoka.Agent.Dsl.Schedule{} = entity) do
-    schedule_id = "#{agent_id(owner_module)}:#{entity.name}"
+  defp resolve_schedule!(owner_module, agent_id, %Jidoka.Agent.Dsl.Schedule{} = entity) do
+    schedule_id = "#{agent_id}:#{entity.name}"
 
     opts = [
       id: schedule_id,
@@ -45,11 +44,4 @@ defmodule Jidoka.Agent.Definition.ScheduleConfig do
   defp normalize_agent_id(nil, schedule_id), do: schedule_id
   defp normalize_agent_id(agent_id, _schedule_id) when is_atom(agent_id), do: Atom.to_string(agent_id)
   defp normalize_agent_id(agent_id, _schedule_id), do: agent_id
-
-  defp agent_id(owner_module) do
-    owner_module
-    |> Jidoka.Agent.Definition.agent_contract!()
-    |> Map.fetch!(:id)
-    |> then(&Jidoka.Agent.Definition.Basics.resolve_agent_id!(owner_module, &1))
-  end
 end

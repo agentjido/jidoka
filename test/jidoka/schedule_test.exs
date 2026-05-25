@@ -323,7 +323,6 @@ defmodule JidokaTest.ScheduleTest do
 
   test "generated agents expose declared schedules" do
     assert [%Schedule{} = schedule] = JidokaTest.ScheduledAgent.schedules()
-    assert [%Schedule{} = resolved] = Jidoka.Agent.Definition.ScheduleConfig.resolve!(JidokaTest.ScheduledAgent)
 
     assert schedule.id == "scheduled_agent:daily_digest"
     assert schedule.agent_id == "scheduled_agent:daily_digest"
@@ -332,7 +331,6 @@ defmodule JidokaTest.ScheduleTest do
     assert schedule.timezone == "America/Chicago"
     assert schedule.conversation == "support-digest"
     assert schedule.overlap == :skip
-    assert resolved == schedule
   end
 
   test "generated schedule metadata is available through public and runtime definitions" do

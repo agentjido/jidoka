@@ -44,7 +44,7 @@ defmodule Jidoka.Agent.Definition do
 
     configured_context = ContextConfig.resolve_defaults!(owner_module, configured_context_schema)
     configured_output = OutputConfig.resolve!(owner_module, agent.result)
-    configured_schedules = ScheduleConfig.resolve!(owner_module)
+    configured_schedules = ScheduleConfig.resolve!(owner_module, agent, id)
     configured_compaction = CompactionConfig.resolve!(owner_module)
 
     capability_entities = Spark.Dsl.Extension.get_entities(owner_module, [:capabilities])
