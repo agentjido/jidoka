@@ -791,6 +791,9 @@ task should be the final child task for every epic.
 - Schedule declarations live inside `agent :id do ... end` in V3 because they
   describe agent-owned runtime behavior. `tools` and `capabilities` remain
   outside because they define the operation surface available to the agent.
+- Schedule behavior must be covered through both public manual runs and the
+  manager's recurring tick path. Recurring runs are asynchronous, preserve the
+  schedule registration, and record bounded history with `trigger: :scheduled`.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

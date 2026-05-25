@@ -166,6 +166,7 @@ defmodule JidokaTest.ScheduleTest do
 
     assert {:ok, run} = Jidoka.run_schedule("math-workflow", manager: manager)
     assert run.status == :completed
+    assert run.trigger == :manual
     assert run.result == {:ok, %{value: 12}}
     assert is_binary(run.request_id)
 
@@ -179,6 +180,27 @@ defmodule JidokaTest.ScheduleTest do
     assert {:ok, trace} = Jidoka.Trace.for_request(ToolOnlyWorkflow.id(), run.request_id)
     assert Enum.any?(trace.events, &(&1.category == :schedule and &1.event == :start))
     assert Enum.any?(trace.events, &(&1.category == :schedule and &1.event == :stop))
+  end
+
+  test "recurring schedule ticks run asynchronously and record scheduled history", %{manager: manager} do
+    assert {:ok, %Schedule{id: "recurring-workflow", scheduler_pid: scheduler_pid, status: :scheduled}} =
+             Jidoka.schedule_workflow(ToolOnlyWorkflow,
+               id: "recurring-workflow",
+               cron: "0 9 * * *",
+               input: %{value: 5},
+               manager: manager
+             )
+
+    assert is_pid(scheduler_pid)
+
+    send(manager, {:schedule_tick, "recurring-workflow"})
+
+    assert %Schedule{} = schedule = wait_for_schedule(manager, "recurring-workflow", &(&1.run_count == 1))
+    assert schedule.status == :scheduled
+    assert schedule.last_status == :completed
+    assert [%{trigger: :scheduled, status: :completed, result_preview: "{:ok, %{value: 12}}"}] = schedule.history
+
+    assert :ok = Jidoka.cancel_schedule("recurring-workflow", manager: manager)
   end
 
   test "manual agent schedule failures are captured as failed runs", %{manager: manager} do
@@ -293,5 +315,23 @@ defmodule JidokaTest.ScheduleTest do
 
     assert error.field == :agent_id
     assert error.details.reason == :session_agent_id_mismatch
+  end
+
+  defp wait_for_schedule(manager, id, predicate, attempts \\ 40)
+
+  defp wait_for_schedule(_manager, id, _predicate, 0) do
+    flunk("timed out waiting for schedule #{id}")
+  end
+
+  defp wait_for_schedule(manager, id, predicate, attempts) do
+    {:ok, schedules} = Jidoka.list_schedules(manager: manager)
+    schedule = Enum.find(schedules, &(&1.id == id))
+
+    if schedule && predicate.(schedule) do
+      schedule
+    else
+      Process.sleep(25)
+      wait_for_schedule(manager, id, predicate, attempts - 1)
+    end
   end
 end

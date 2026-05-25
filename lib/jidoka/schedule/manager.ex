@@ -158,6 +158,8 @@ defmodule Jidoka.Schedule.Manager do
         {:noreply, %{state | running: running}}
 
       {run_state, running} ->
+        run = Map.put_new(run, :trigger, run_state.trigger)
+
         state =
           state
           |> Map.put(:running, running)
