@@ -422,6 +422,9 @@ mix doctor --raise
 For the recommended provider-free testing progression, see
 [Testing Jidoka Agents](testing.md).
 
+The runnable examples under `examples/` follow the same order as the feature
+map and stay provider-free by default.
+
 ## Status
 
 The old guide, example, dev, and Livebook support trees are being replaced while

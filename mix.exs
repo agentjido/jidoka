@@ -115,6 +115,7 @@ defmodule Jidoka.MixProject do
       name: "jidoka",
       files: [
         "lib",
+        "examples",
         "mix.exs",
         "README.md",
         "CHANGELOG.md",
