@@ -215,6 +215,21 @@ defmodule JidokaTest.ScheduleTest do
     assert resolved == schedule
   end
 
+  test "generated schedule metadata is available through public and runtime definitions" do
+    assert [public_schedule] = JidokaTest.ScheduledAgent.schedules()
+    assert JidokaTest.ScheduledAgent.__jidoka__().schedules == [public_schedule]
+    assert JidokaTest.ScheduledAgent.runtime_module().__jidoka_definition__().schedules == [public_schedule]
+
+    assert public_schedule.kind == :agent
+    assert public_schedule.prompt == {JidokaTest.ScheduleCallbacks, :support_digest_prompt, []}
+    assert public_schedule.context == {JidokaTest.ScheduleCallbacks, :support_digest_context, []}
+    assert public_schedule.timeout == 30_000
+    assert public_schedule.enabled?
+    assert public_schedule.scheduler_pid == nil
+    assert public_schedule.run_count == 0
+    assert public_schedule.history == []
+  end
+
   test "runs a session target schedule through Jidoka.chat", %{manager: manager} do
     session =
       Session.new!(

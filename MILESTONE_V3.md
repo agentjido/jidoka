@@ -784,6 +784,10 @@ task should be the final child task for every epic.
 - `AgentView` structs must remain projection-only: no pid, thread, transcript,
   request map, repo, storage adapter, or durable session data belongs in the
   view state.
+- Schedule DSL entries must compile to inert metadata. Generated
+  `Agent.schedules/0`, `Agent.__jidoka__().schedules`, and
+  `Agent.runtime_module().__jidoka_definition__().schedules` should agree, and
+  registration/execution remains an application runtime choice.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`
