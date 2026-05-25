@@ -51,6 +51,13 @@ Jidoka should keep state-like words narrow:
   not grow separate `remember`/`recall` helpers; manual memory writes and
   searches belong to the configured memory store or lower-level runtime, while
   Jidoka exposes memory through agent metadata, request inspection, and traces.
+- **Memory execution** has two separate phases. Retrieval runs before the model
+  turn and can inject recalled records as prompt instructions or as runtime
+  context; a retrieval failure fails the request because the agent was
+  configured to depend on that memory. Capture runs after a completed turn and
+  records user/assistant turn facts; capture failures are surfaced in request
+  metadata and traces without changing the already completed result. Namespace
+  modes are `:per_agent`, `{:shared, name}`, and `{:context, key}`.
 - **Compaction** reduces the provider-facing transcript window by summarizing
   older conversation context. It does not delete the original thread and should
   not be taught as memory.
