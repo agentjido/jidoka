@@ -7,9 +7,15 @@
   "id": "jidoka-3di.12.4",
   "labels": [],
   "parent": "jidoka-3di.12",
+  "comments": [
+    {
+      "text": "Verified session-target schedules run through the normal session chat path and added trace assertions for session_id, conversation_id, and context_ref correlation metadata. Full gate passed.",
+      "timestamp": "2026-05-25T02:20:37Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E11: Verify schedules accept sessions as targets",
   "type": "task",
-  "updated_at": "2026-05-25T02:18:52Z"
+  "updated_at": "2026-05-25T02:20:37Z"
 }
