@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T23:12:06Z",
+  "description": "Move or split Ash, MCP, web, and Kino material out of the core agent guide so the basic agent mental model remains small while advanced capability docs stay discoverable.",
+  "id": "jidoka-1t6.12",
+  "labels": [],
+  "parent": "jidoka-1t6",
+  "priority": 2,
+  "status": "open",
+  "title": "Separate advanced capability docs from core guide",
+  "type": "task",
+  "updated_at": "2026-05-25T23:12:06Z"
+}
