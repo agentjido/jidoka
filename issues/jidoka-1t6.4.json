@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T23:12:05Z",
+  "description": "Clarify that handoff ownership and schedules are currently in-memory/runtime-local, what survives restart, what applications must persist, and recommended production patterns.",
+  "id": "jidoka-1t6.4",
+  "labels": [],
+  "parent": "jidoka-1t6",
+  "priority": 0,
+  "status": "open",
+  "title": "Document durability boundaries for handoffs and schedules",
+  "type": "task",
+  "updated_at": "2026-05-25T23:12:05Z"
+}
