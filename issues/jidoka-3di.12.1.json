@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T02:08:34Z",
   "created": "2026-05-24T20:35:42Z",
   "description": "Parent epic: V3 E11: Schedules\n\nSource task 1/6 from MILESTONE_V3.md:\n\n- Verify schedule DSL placement and generated schedule metadata.\n\nEpic closure criteria:\n- schedules are clearly first-class Jidoka features\n- tests cover agent targets, session targets, and workflow targets\n",
   "id": "jidoka-3di.12.1",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E11: Verify schedule DSL placement and generated schedule metadata",
   "type": "task",
   "updated_at": "2026-05-25T02:08:34Z"
