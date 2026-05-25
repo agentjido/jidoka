@@ -1,6 +1,6 @@
 # Jidoka Concept Livebook Template
 
-Use this structure for each concept notebook in `livebooks/`.
+Use this structure for each concept notebook in `livebook/`.
 
 ## Notebook Contract
 

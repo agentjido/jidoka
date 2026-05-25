@@ -118,7 +118,6 @@ defmodule Jidoka.MixProject do
         "lib",
         "examples",
         "livebook",
-        "livebooks",
         "mix.exs",
         "README.md",
         "CHANGELOG.md",
