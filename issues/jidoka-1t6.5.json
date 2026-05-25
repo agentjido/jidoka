@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T23:24:04Z",
   "created": "2026-05-25T23:12:06Z",
   "description": "Child agents with structured map results currently fail normalization unless they return a binary. Preserve structured maps through subagent execution and add regression tests.",
   "id": "jidoka-1t6.5",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 0,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Close subagent structured-result normalization gap",
   "type": "bug",
-  "updated_at": "2026-05-25T23:19:25Z"
+  "updated_at": "2026-05-25T23:24:04Z"
 }
