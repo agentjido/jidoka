@@ -118,7 +118,7 @@ defmodule JidokaTest.ChatStreamTest do
   test "stream enumerates runtime events and exposes delta helpers" do
     request = Request.Handle.new("req-stream-events", self(), "hello")
 
-    delta =
+    first_delta =
       Event.new(%{
         seq: 1,
         run_id: request.id,
@@ -128,9 +128,19 @@ defmodule JidokaTest.ChatStreamTest do
         data: %{chunk_type: :content, delta: "hel"}
       })
 
-    terminal =
+    second_delta =
       Event.new(%{
         seq: 2,
+        run_id: request.id,
+        request_id: request.id,
+        iteration: 1,
+        kind: :llm_delta,
+        data: %{chunk_type: :content, delta: "lo"}
+      })
+
+    terminal =
+      Event.new(%{
+        seq: 3,
         run_id: request.id,
         request_id: request.id,
         iteration: 1,
@@ -138,15 +148,62 @@ defmodule JidokaTest.ChatStreamTest do
         data: %{result: "hello"}
       })
 
-    send(self(), {RequestStream.message_tag(), delta})
+    send(self(), {RequestStream.message_tag(), first_delta})
+    send(self(), {RequestStream.message_tag(), second_delta})
     send(self(), {RequestStream.message_tag(), terminal})
 
     stream = ChatStream.new(request, ChatStream.events(request, stream_event_timeout_ms: 100))
 
-    assert Enum.to_list(stream) == [delta, terminal]
-    assert ChatStream.text_delta(delta) == "hel"
+    assert Enum.to_list(stream) == [first_delta, second_delta, terminal]
+    assert Enum.map([first_delta, second_delta], &ChatStream.text_delta/1) == ["hel", "lo"]
     assert ChatStream.text_delta(terminal) == nil
     assert ChatStream.terminal?(terminal)
+  end
+
+  test "stream halts on cancellation terminal events" do
+    request = Request.Handle.new("req-stream-cancelled", self(), "hello")
+
+    delta =
+      Event.new(%{
+        seq: 1,
+        run_id: request.id,
+        request_id: request.id,
+        iteration: 1,
+        kind: :llm_delta,
+        data: %{chunk_type: :content, delta: "partial"}
+      })
+
+    cancelled =
+      Event.new(%{
+        seq: 2,
+        run_id: request.id,
+        request_id: request.id,
+        iteration: 1,
+        kind: :request_cancelled,
+        data: %{reason: :user_cancelled}
+      })
+
+    late_event =
+      Event.new(%{
+        seq: 3,
+        run_id: request.id,
+        request_id: request.id,
+        iteration: 1,
+        kind: :request_completed,
+        data: %{result: "too late"}
+      })
+
+    send(self(), {RequestStream.message_tag(), delta})
+    send(self(), {RequestStream.message_tag(), cancelled})
+    send(self(), {RequestStream.message_tag(), late_event})
+
+    stream = ChatStream.new(request, ChatStream.events(request, stream_event_timeout_ms: 100))
+
+    assert Enum.to_list(stream) == [delta, cancelled]
+    assert ChatStream.terminal?(cancelled)
+
+    message_tag = RequestStream.message_tag()
+    assert_receive {^message_tag, ^late_event}
   end
 
   test "stream ignores mailbox events for unrelated requests" do

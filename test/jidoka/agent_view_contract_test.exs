@@ -3,6 +3,7 @@ defmodule JidokaTest.AgentViewContractTest do
 
   alias Jidoka.Session
   alias JidokaTest.ChatAgent
+  alias Jido.Thread.Agent, as: ThreadAgent
 
   defmodule ContractAgent do
     def id, do: "contract_agent"
@@ -174,6 +175,31 @@ defmodule JidokaTest.AgentViewContractTest do
            }
   end
 
+  test "AgentView snapshot stays consistent with the low-level thread projection" do
+    agent =
+      ChatAgent.runtime_module()
+      |> new_runtime_agent()
+      |> ThreadAgent.append([
+        ai_message(:user, "I need refund help.", request_id: "req-projection"),
+        ai_message(:assistant, "I can help with that.", request_id: "req-projection")
+      ])
+
+    assert {:ok, projection} = Jidoka.Agent.View.snapshot(agent)
+    assert {:ok, view} = RuntimeView.snapshot(agent, %{conversation_id: "Projection Case"})
+
+    assert view.visible_messages == projection.visible_messages
+    assert view.llm_context == projection.llm_context
+    assert view.streaming_message == projection.streaming_message
+    assert view.events == projection.events
+
+    assert view.metadata.projection == %{
+             context_ref: projection.context_ref,
+             thread_id: projection.thread_id,
+             thread_rev: projection.thread_rev,
+             entry_count: projection.entry_count
+           }
+  end
+
   test "before_turn adds optimistic user state without mutating rendered output concerns" do
     view = Jidoka.AgentView.new(agent_id: "contract-agent", conversation_id: "case_123")
 
@@ -308,6 +334,19 @@ defmodule JidokaTest.AgentViewContractTest do
   end
 
   defp unique_id(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+
+  defp ai_message(role, content, attrs) do
+    payload =
+      attrs
+      |> Map.new()
+      |> Map.merge(%{role: role, content: content, context_ref: Keyword.get(attrs, :context_ref, "default")})
+
+    %{
+      kind: :ai_message,
+      payload: payload,
+      refs: %{request_id: Map.get(payload, :request_id)}
+    }
+  end
 
   defp stop_session_agent(%Session{} = session) do
     case Session.whereis(session) do

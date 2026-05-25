@@ -785,6 +785,10 @@ task should be the final child task for every epic.
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`
   remains the normalized final-result boundary.
+- Streaming tests must cover chunk ordering and all terminal event classes:
+  completed, failed, and cancelled. `AgentView` projection tests should compare
+  app-facing view fields against the low-level thread projection for the same
+  runtime state.
 - Credential brokering must prove the no-secret-leak invariant before shipping
   execution behavior.
 - Durability is a graduation path unless a separate persistence implementation
