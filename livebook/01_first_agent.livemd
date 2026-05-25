@@ -34,6 +34,18 @@ Mix.install(
   ],
   consolidate_protocols: false
 )
+
+live_provider? =
+  "ANTHROPIC_API_KEY"
+  |> System.get_env("")
+  |> String.trim()
+  |> then(&(String.starts_with?(&1, "sk-ant-") and byte_size(&1) > 20))
+
+%{
+  jidoka_source: :github,
+  fast_model: "anthropic:claude-haiku-4-5",
+  live_provider: if(live_provider?, do: :ready, else: :missing_anthropic_api_key)
+}
 ```
 
 ## Define An Agent
@@ -152,19 +164,18 @@ project the conversation state.
 
 ## Optional Live Turn
 
-Set `RUN_JIDOKA_LIVEBOOK_LIVE=1` and your provider key, such as
-`ANTHROPIC_API_KEY`, when you want to make a real model call. The provider-free
-cells above are the default teaching path.
+This cell runs only when the setup cell detects a usable `ANTHROPIC_API_KEY`.
+The provider-free cells above are still the default teaching path.
 
 ```elixir
-if System.get_env("RUN_JIDOKA_LIVEBOOK_LIVE") == "1" do
+if live_provider? do
   live_session =
     Demo.Assistant
     |> Jidoka.session("live-user-123", context: %{actor_id: "user_123", tenant: "demo"})
 
   Jidoka.chat(live_session, "In one sentence, explain what a Jidoka session is.")
 else
-  {:skipped, "Set RUN_JIDOKA_LIVEBOOK_LIVE=1 to run the live provider cell."}
+  {:skipped, "Set ANTHROPIC_API_KEY to run the optional live provider cell."}
 end
 ```
 

@@ -17,6 +17,18 @@ Mix.install(
   ],
   consolidate_protocols: false
 )
+
+live_provider? =
+  "ANTHROPIC_API_KEY"
+  |> System.get_env("")
+  |> String.trim()
+  |> then(&(String.starts_with?(&1, "sk-ant-") and byte_size(&1) > 20))
+
+%{
+  jidoka_source: :github,
+  fast_model: "anthropic:claude-haiku-4-5",
+  live_provider: if(live_provider?, do: :ready, else: :missing_anthropic_api_key)
+}
 ```
 
 ## 1. Your First Agent
@@ -391,7 +403,7 @@ spec = %{
 ## Optional Live Turn
 
 ```elixir
-if System.get_env("RUN_JIDOKA_LIVEBOOK_LIVE") == "1" && System.get_env("ANTHROPIC_API_KEY") do
+if live_provider? do
   live_session =
     Demo.Assistant
     |> Jidoka.session("live-user", context: %{actor_id: "user_123"})
@@ -401,6 +413,6 @@ if System.get_env("RUN_JIDOKA_LIVEBOOK_LIVE") == "1" && System.get_env("ANTHROPI
     "Based only on this fact, write one concise sentence: Jidoka is an Elixir package for building LLM agents with a small DSL, sessions, actions, controls, typed results, schedules, workflows, debugging, and tracing."
   )
 else
-  {:skip, "Set RUN_JIDOKA_LIVEBOOK_LIVE=1 and ANTHROPIC_API_KEY to run a provider-backed turn."}
+  {:skip, "Set ANTHROPIC_API_KEY to run the optional live provider turn."}
 end
 ```

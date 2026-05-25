@@ -7,7 +7,8 @@ Use this structure for each concept notebook in `livebook/`.
 - File name: `NN_concept_name.livemd`.
 - Title: `# Jidoka: Concept Name`.
 - Default path: provider-free and deterministic.
-- Optional live-provider cells must be gated by env vars.
+- Optional live-provider cells must use the setup cell's provider-ready flag and
+  skip unless `ANTHROPIC_API_KEY` looks usable.
 - Use the standard Git-based `Mix.install/2` pattern until Jidoka ships on Hex.
   Include the commented Hex replacement line.
 - Configure `:model_aliases` in the `Mix.install/2` config block so `model
@@ -45,8 +46,8 @@ Use this structure for each concept notebook in `livebook/`.
    - Assert on structured data, not log text.
 
 7. **Optional Live Turn**
-   - Gate with `RUN_JIDOKA_LIVEBOOK_LIVE=1`.
-   - Mention the provider env var in prose.
+   - Gate with the setup-cell provider-ready flag.
+   - Mention `ANTHROPIC_API_KEY` in prose.
    - Keep assertions shape-oriented.
 
 8. **What Changed**
