@@ -91,13 +91,13 @@ defmodule Jidoka.Web.Runtime do
       String.ends_with?(normalized, ".localhost") or
       private_ipv4?(normalized) or
       private_ipv6?(normalized) or
-      resolved_private_host?(normalized)
+      unverified_or_private_host?(normalized)
   end
 
-  defp resolved_private_host?(host) do
+  defp unverified_or_private_host?(host) do
     case resolve_host_addresses(host) do
       {:ok, addresses} -> Enum.any?(addresses, &private_address?/1)
-      {:error, _reason} -> false
+      {:error, _reason} -> true
     end
   end
 

@@ -66,6 +66,22 @@ defmodule JidokaTest.ToolsPluginsTest do
     assert PluginAgent.tool_names() == ["multiply_numbers"]
   end
 
+  test "plugin registries normalize and reject mismatched names" do
+    assert {:ok, %{"math_plugin" => MathPlugin}} =
+             Jidoka.Plugin.normalize_available_plugins([MathPlugin])
+
+    assert {:ok, [MathPlugin]} =
+             Jidoka.Plugin.resolve_plugin_names(["math_plugin"], %{"math_plugin" => MathPlugin})
+
+    assert {:error, reason} =
+             Jidoka.Plugin.normalize_available_plugins(%{"wrong_name" => MathPlugin})
+
+    assert reason =~ "must match published plugin name"
+
+    assert {:error, "unknown plugin \"missing_plugin\""} =
+             Jidoka.Plugin.resolve_plugin_names(["missing_plugin"], %{"math_plugin" => MathPlugin})
+  end
+
   test "rejects duplicate direct action operation names" do
     assert_raise Spark.Error.DslError, ~r/duplicate operation names.*add_numbers/s, fn ->
       compile_agent("""
@@ -92,6 +108,24 @@ defmodule JidokaTest.ToolsPluginsTest do
       def run(params, _context), do: {:ok, params}
       """)
     end
+  end
+
+  test "action adapter normalizes callback failures without crashing registry validation" do
+    module = unique_module("BadNameAction")
+
+    Code.compile_string("""
+    defmodule #{inspect(module)} do
+      def run(params, _context), do: {:ok, params}
+      def name, do: raise("bad name")
+      def schema, do: Zoi.object(%{})
+      def output_schema, do: Zoi.object(%{})
+      def to_tool, do: %{name: "bad_name", parameters_schema: %{}}
+    end
+    """)
+
+    assert {:error, reason} = Jidoka.Action.Adapter.normalize_available_tools([module])
+    assert reason =~ "failed while reading name/0"
+    assert reason =~ "bad name"
   end
 
   test "action execution failures return errors without crashing the caller" do

@@ -1,6 +1,8 @@
 defmodule JidokaTest.SkillsMCPTest do
   use JidokaTest.Support.Case, async: false
 
+  alias Jido.AI.Request
+
   alias JidokaTest.{
     FailingMCPSync,
     FakeMCPSync,
@@ -85,6 +87,18 @@ defmodule JidokaTest.SkillsMCPTest do
     assert params.tool_context[Jidoka.Skill.context_key()].prompt =~ "Math Discipline"
   end
 
+  test "skill load paths are local, expanded, and de-duplicated" do
+    assert RuntimeSkillAgent.skills().load_paths == [
+             Path.expand("../fixtures/skills", "test/support")
+           ]
+
+    assert {:ok, %{refs: ["math-discipline"], load_paths: ["test/fixtures/skills"]}} =
+             Jidoka.Skill.normalize_imported(["math-discipline"], [
+               "test/fixtures/skills",
+               "test/fixtures/skills"
+             ])
+  end
+
   test "mcp sync runs once per endpoint per agent" do
     Application.put_env(:jidoka, :mcp_sync_module, FakeMCPSync)
 
@@ -107,6 +121,42 @@ defmodule JidokaTest.SkillsMCPTest do
              Jidoka.MCP.on_before_cmd(agent, {:ai_react_start, %{}}, MCPAgent.mcp_tools())
 
     refute_received {:mcp_sync_called, _}
+  end
+
+  test "mcp sync metadata is visible in request inspection without a live endpoint" do
+    Application.put_env(:jidoka, :mcp_sync_module, FakeMCPSync)
+
+    {:ok, pid} = MCPAgent.start_link(id: "mcp-metadata-agent-test")
+
+    try do
+      request_id = "req-mcp-metadata-1"
+
+      :sys.replace_state(pid, fn state ->
+        %{state | agent: Request.start_request(state.agent, request_id, "sync mcp")}
+      end)
+
+      {:ok, %{agent: agent}} = Jido.AgentServer.state(pid)
+
+      context = %{
+        Jidoka.Subagent.server_key() => pid,
+        Jidoka.Subagent.request_id_key() => request_id
+      }
+
+      assert {:ok, updated_agent, {:ai_react_start, _params}} =
+               Jidoka.MCP.on_before_cmd(
+                 agent,
+                 {:ai_react_start, %{tool_context: context}},
+                 MCPAgent.mcp_tools()
+               )
+
+      :sys.replace_state(pid, fn state -> %{state | agent: updated_agent} end)
+
+      assert {:ok, summary} = Jidoka.inspect_request(pid)
+      assert summary.mcp_tools == ["github:github_"]
+      assert summary.mcp_errors == []
+    after
+      :ok = Jidoka.stop_agent(pid)
+    end
   end
 
   test "runtime MCP endpoints can be registered without application config" do

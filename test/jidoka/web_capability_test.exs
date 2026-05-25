@@ -111,6 +111,20 @@ defmodule JidokaTest.WebCapabilityTest do
     end
   end
 
+  test "web runtime fails closed when DNS verification cannot prove the host is public" do
+    Application.put_env(:jidoka, :dns_resolver, fn
+      ~c"resolver-boom.example", _family -> raise "resolver unavailable"
+      ~c"missing.example", _family -> {:error, :nxdomain}
+      _host, :inet -> {:ok, [{93, 184, 216, 34}]}
+      _host, :inet6 -> {:error, :nxdomain}
+    end)
+
+    for url <- ["https://resolver-boom.example", "https://missing.example"] do
+      assert {:error, %Jidoka.Error.ValidationError{field: :url}} =
+               Jidoka.Web.Runtime.validate_public_url(url)
+    end
+  end
+
   test "read page validates format before delegating to browser" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              ReadPage.run(%{url: "https://example.com", format: "pdf"}, %{})
