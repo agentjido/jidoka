@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T02:04:38Z",
   "created": "2026-05-24T20:35:42Z",
   "description": "Parent epic: V3 E10: Streaming and AgentView\n\nSource task 6/6 from MILESTONE_V3.md:\n\n- Ensure AgentView is projection-only and not a second persistence layer.\n\nEpic closure criteria:\n- streaming and AgentView support a clean UI story\n- projected state matches the canonical runtime state\n",
   "id": "jidoka-3di.11.6",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E10: Ensure AgentView is projection-only and not a second persistence layer",
   "type": "task",
   "updated_at": "2026-05-25T02:04:38Z"
