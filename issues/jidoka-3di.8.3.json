@@ -7,9 +7,15 @@
   "id": "jidoka-3di.8.3",
   "labels": [],
   "parent": "jidoka-3di.8",
+  "comments": [
+    {
+      "text": "Added explicit prompt_preview data to request summaries, including bounded system/user prompt previews, message count, and tool names. Covered both completed and pending live request summaries.",
+      "timestamp": "2026-05-25T00:17:26Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E7: Add prompt-preview inspection if missing or incomplete",
   "type": "task",
-  "updated_at": "2026-05-25T00:15:21Z"
+  "updated_at": "2026-05-25T00:17:26Z"
 }
