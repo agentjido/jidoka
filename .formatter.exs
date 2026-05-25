@@ -57,7 +57,8 @@
   ],
   inputs: [
     "{mix,.formatter,.credo,.doctor}.exs",
-    "{config,examples,lib,test}/**/*.{ex,exs}"
+    "{config,examples,lib,test}/**/*.{ex,exs}",
+    "livebooks/**/*.livemd"
   ],
   line_length: 120
 ]

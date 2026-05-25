@@ -424,8 +424,8 @@ For the recommended provider-free testing progression, see
 The runnable examples under `examples/` follow the same order as the feature
 map and stay provider-free by default.
 
-The beginner Livebook under `livebook/` mirrors that same order for interactive
-exploration.
+The teaching Livebooks under `livebooks/` mirror that same order for
+interactive exploration.
 
 ## Status
 

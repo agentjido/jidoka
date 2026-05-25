@@ -1,0 +1,166 @@
+# Jidoka: Your First Agent
+
+## Section
+
+This notebook teaches the smallest useful Jidoka loop: define an agent, give a
+conversation a session, run one turn, and inspect what happened.
+
+You will learn:
+
+* an agent is the compiled behavior
+* a session is the conversation address and context carrier
+* `Jidoka.chat/3` is the single turn primitive
+
+## Setup
+
+This notebook uses the local checkout when opened from the repository. When run
+from GitHub or Hex, it installs the published beta package instead.
+
+```elixir
+dep =
+  if File.exists?(Path.expand("../mix.exs", __DIR__)) do
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  else
+    {:jidoka, "~> 1.0.0-beta.1"}
+  end
+
+Mix.install([dep], consolidate_protocols: false)
+```
+
+## Define An Agent
+
+An agent has a stable id, a model, and instructions. That is enough to compile a
+runtime module and run turns.
+
+```elixir
+defmodule LivebookDemo.FirstAgent.Assistant do
+  use Jidoka.Agent
+
+  agent :first_agent_assistant do
+    model :fast
+    instructions "Answer clearly and concisely."
+  end
+end
+
+%{
+  id: LivebookDemo.FirstAgent.Assistant.id(),
+  model: LivebookDemo.FirstAgent.Assistant.configured_model(),
+  instructions: LivebookDemo.FirstAgent.Assistant.instructions(),
+  runtime_module: LivebookDemo.FirstAgent.Assistant.runtime_module()
+}
+```
+
+## Give The Conversation A Session
+
+A session is data, not a process. It names the conversation, carries runtime
+context, and tells Jidoka which runtime agent should handle the turn.
+
+```elixir
+session =
+  LivebookDemo.FirstAgent.Assistant
+  |> Jidoka.session("user-123", context: %{actor_id: "user_123", tenant: "demo"})
+
+%{
+  session_id: session.id,
+  agent_id: session.agent_id,
+  conversation_id: session.conversation_id,
+  context: session.context,
+  chat_opts: Jidoka.Session.chat_opts(session)
+}
+```
+
+## Inspect The Compiled Surface
+
+Inspection is useful before a model ever runs. It shows the public agent shape
+that Jidoka generated from the DSL.
+
+```elixir
+{:ok, inspection} = Jidoka.inspect_agent(LivebookDemo.FirstAgent.Assistant)
+
+%{
+  id: inspection.id,
+  tools: inspection.tools,
+  controls: LivebookDemo.FirstAgent.Assistant.controls(),
+  result: inspection.result,
+  schedules: LivebookDemo.FirstAgent.Assistant.schedules()
+}
+```
+
+## Run A Provider-Free Turn
+
+For a deterministic teaching run, use an input control that interrupts before the
+provider call. This proves the normal chat path starts the runtime agent, merges
+session context, creates a request, and records trace data without requiring an
+API key.
+
+```elixir
+stop_before_provider = fn input ->
+  Jidoka.Approval.request("Stop before provider execution.",
+    data: %{
+      request_id: input.request_id,
+      context: Jidoka.Context.strip_internal(input.context)
+    }
+  )
+end
+
+{:interrupt, interrupt} =
+  Jidoka.chat(session, "Summarize this ticket.", controls: [input: stop_before_provider])
+
+%{
+  kind: interrupt.kind,
+  message: interrupt.message,
+  request_id: interrupt.data.request_id,
+  context_seen_by_control: interrupt.data.context
+}
+```
+
+## Debug The Turn
+
+The same session can address inspection, trace, and AgentView helpers. This is
+the core debugging loop: run a turn, inspect the request, inspect the trace, then
+project the conversation state.
+
+```elixir
+{:ok, request} = Jidoka.inspect_request(session)
+{:ok, trace} = Jidoka.inspect_trace(session)
+{:ok, view} = Jidoka.Session.snapshot(session)
+
+%{
+  request: %{
+    id: request.request_id,
+    status: request.status,
+    input_message: request.input_message
+  },
+  trace_events: Enum.map(trace.events, &{&1.category, &1.event}),
+  view: %{
+    kind: view.kind,
+    agent_id: view.agent_id,
+    context_ref: view.context_ref,
+    message_count: length(view.visible_messages)
+  }
+}
+```
+
+## Optional Live Turn
+
+Set `RUN_JIDOKA_LIVEBOOK_LIVE=1` and your provider key, such as
+`ANTHROPIC_API_KEY`, when you want to make a real model call. The provider-free
+cells above are the default teaching path.
+
+```elixir
+if System.get_env("RUN_JIDOKA_LIVEBOOK_LIVE") == "1" do
+  live_session =
+    LivebookDemo.FirstAgent.Assistant
+    |> Jidoka.session("live-user-123", context: %{actor_id: "user_123", tenant: "demo"})
+
+  Jidoka.chat(live_session, "In one sentence, explain what a Jidoka session is.")
+else
+  {:skipped, "Set RUN_JIDOKA_LIVEBOOK_LIVE=1 to run the live provider cell."}
+end
+```
+
+## What Changed
+
+Jidoka owned the agent DSL, the session address, the chat turn, and the debugging
+projection. Your application still owns the real user id, tenant id, provider
+credentials, supervision decisions, and durable storage policy.
