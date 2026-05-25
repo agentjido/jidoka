@@ -11,9 +11,15 @@
   "id": "jidoka-3di.9",
   "labels": [],
   "parent": "jidoka-3di",
+  "comments": [
+    {
+      "text": "Closed E8 observability standards. Local Jidoka traces now share stable correlation fields with production telemetry, Jidoka lifecycle events are sanitized before emission, foundation request/model/action events are projected into traces, no-provider integration smoke coverage exists, and README documents host-app exporter attachment without making it a beginner requirement.",
+      "timestamp": "2026-05-25T01:20:40Z"
+    }
+  ],
   "priority": 2,
   "status": "open",
   "title": "V3 E8: Observability standards",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:48Z"
+  "updated_at": "2026-05-25T01:20:40Z"
 }
