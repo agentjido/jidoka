@@ -7,9 +7,15 @@
   "id": "jidoka-3di.9.5",
   "labels": [],
   "parent": "jidoka-3di.9",
+  "comments": [
+    {
+      "text": "Added emitted-event redaction coverage and hardened Jidoka.Trace.emit/3 so Jidoka lifecycle telemetry is sanitized before external telemetry subscribers receive it, not only when retained by the local trace collector. Regression coverage asserts metadata and measurements redact/omit prompt, raw response, secret keys, token refs, and key-assignment strings in both the emitted telemetry payload and stored trace event. Verified with format, compile, full tests, docs warnings-as-errors, doctor, and diff checks.",
+      "timestamp": "2026-05-25T01:02:40Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E8: Add tests for emitted event metadata and redaction",
   "type": "task",
-  "updated_at": "2026-05-25T01:00:12Z"
+  "updated_at": "2026-05-25T01:02:40Z"
 }
