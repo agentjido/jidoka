@@ -31,6 +31,62 @@ defmodule JidokaTest.AgentViewTest do
            ] = projection.events
   end
 
+  test "projects debug events with bounded redacted payloads" do
+    secret = "sk-ant-secret12345678901234567890"
+    long_result = "token=#{secret} " <> String.duplicate("tool output ", 80)
+
+    thread =
+      Thread.new(id: "thread-debug-projection")
+      |> Thread.append([
+        ai_message(:assistant, "",
+          request_id: "req-safe",
+          tool_calls: [
+            %{
+              id: "call-safe",
+              name: "lookup_ticket",
+              arguments: %{api_key: secret, query: "raw prompt"}
+            }
+          ]
+        ),
+        ai_message(:tool, long_result,
+          request_id: "req-safe",
+          tool_call_id: "call-safe",
+          name: "lookup_ticket",
+          api_key: secret
+        ),
+        context_operation(
+          %{
+            context_ref: "default",
+            content: long_result,
+            raw_response: "raw provider body #{secret}",
+            api_key: secret
+          },
+          %{request_id: "req-safe", token: secret}
+        )
+      ])
+
+    projection = Jidoka.Agent.View.project(thread)
+
+    assert [
+             %{kind: :tool_call, payload: tool_call_payload},
+             %{kind: :tool_result, payload: tool_result_payload},
+             %{kind: :context_operation, payload: context_payload, refs: context_refs}
+           ] = projection.events
+
+    assert tool_call_payload.arguments == "[OMITTED]"
+    assert tool_result_payload.api_key == "[REDACTED]"
+    assert tool_result_payload.content =~ "token=[REDACTED]"
+    assert String.length(tool_result_payload.content) <= 240
+    assert context_payload.raw_response == "[OMITTED]"
+    assert context_payload.api_key == "[REDACTED]"
+    assert context_payload.content =~ "token=[REDACTED]"
+    assert context_refs.token == "[REDACTED]"
+
+    rendered = inspect(projection.events)
+    refute rendered =~ secret
+    refute rendered =~ "raw provider body"
+  end
+
   test "filters projections by context ref" do
     thread =
       Thread.new()
@@ -98,6 +154,14 @@ defmodule JidokaTest.AgentViewTest do
       kind: :ai_message,
       payload: payload,
       refs: %{request_id: Map.get(payload, :request_id)}
+    }
+  end
+
+  defp context_operation(payload, refs) do
+    %{
+      kind: :ai_context_operation,
+      payload: payload,
+      refs: refs
     }
   end
 end

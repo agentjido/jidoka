@@ -349,8 +349,8 @@ defmodule Jidoka.Agent.View do
             seq: entry_seq(entry),
             kind: :context_operation,
             label: "context operation",
-            payload: payload,
-            refs: entry_refs(entry)
+            payload: debug_payload(payload),
+            refs: debug_payload(entry_refs(entry))
           }
         ]
 
@@ -371,8 +371,8 @@ defmodule Jidoka.Agent.View do
             seq: entry_seq(entry),
             kind: :tool_call,
             label: tool_call_label(tool_call),
-            payload: normalize_map(tool_call),
-            refs: entry_refs(entry)
+            payload: debug_payload(normalize_map(tool_call)),
+            refs: debug_payload(entry_refs(entry))
           }
         end)
 
@@ -383,8 +383,8 @@ defmodule Jidoka.Agent.View do
             seq: entry_seq(entry),
             kind: :tool_result,
             label: tool_result_label(payload),
-            payload: payload,
-            refs: entry_refs(entry)
+            payload: debug_payload(payload),
+            refs: debug_payload(entry_refs(entry))
           }
         ]
 
@@ -457,6 +457,22 @@ defmodule Jidoka.Agent.View do
   end
 
   defp normalize_text(other), do: normalize_text(inspect(other))
+
+  defp debug_payload(%{} = payload) do
+    payload
+    |> Jidoka.Sanitize.payload()
+    |> preview_payload_content(:content)
+    |> preview_payload_content("content")
+  end
+
+  defp debug_payload(value), do: Jidoka.Sanitize.payload(value)
+
+  defp preview_payload_content(payload, key) do
+    case Map.get(payload, key) do
+      value when is_binary(value) -> Map.put(payload, key, Jidoka.Sanitize.preview(value, 240))
+      _value -> payload
+    end
+  end
 
   defp maybe_put(map, _key, ""), do: map
   defp maybe_put(map, _key, []), do: map
