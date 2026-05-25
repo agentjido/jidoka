@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T03:40:04Z",
+  "close_reason": "Defined catalog discovery contract: compact search operation, deterministic candidate ranking, bounded tool cards, controls/credential boundary, and tracing without prompt registry dumps.",
   "created": "2026-05-24T20:35:44Z",
   "description": "Parent epic: V3 E14: Tool integrations\n\nSource task 5/6 from MILESTONE_V3.md:\n\n- Define how catalogs scale tool discovery without loading every tool into the\n  prompt.\n\nEpic closure criteria:\n- core integrations are tested and safe by default\n- large catalog support has a clear extension boundary\n- anything that should move to a companion package has an issue or explicit\n  contract\n",
   "id": "jidoka-3di.15.5",
   "labels": [],
   "parent": "jidoka-3di.15",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E14: Define how catalogs scale tool discovery without loading every tool into the pr...",
   "type": "task",
-  "updated_at": "2026-05-25T03:38:36Z"
+  "updated_at": "2026-05-25T03:40:04Z"
 }
