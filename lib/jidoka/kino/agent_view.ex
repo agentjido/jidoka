@@ -17,6 +17,21 @@ defmodule Jidoka.Kino.AgentView do
     end
   end
 
+  @spec debug_request(Jidoka.Session.t() | pid() | String.t() | Jido.Agent.t() | map(), keyword()) ::
+          {:ok, map()} | {:error, String.t()}
+  def debug_request(target, opts \\ []) do
+    case inspect_request_target(target, opts) do
+      {:ok, summary} ->
+        render_request_debug(summary, opts)
+        {:ok, summary}
+
+      {:error, reason} ->
+        message = Jidoka.Error.format(reason)
+        Render.markdown("### Request Debug\n\n#{Render.escape_markdown(message)}")
+        {:error, message}
+    end
+  end
+
   @spec agent_diagram(module() | struct() | pid() | String.t() | map(), keyword()) ::
           {:ok, String.t()} | {:error, String.t()}
   def agent_diagram(target, opts \\ []) do
@@ -36,6 +51,15 @@ defmodule Jidoka.Kino.AgentView do
   defp inspect_agent_target(%{kind: _kind} = inspection), do: {:ok, inspection}
   defp inspect_agent_target(target), do: Jidoka.Inspection.inspect_agent(target)
 
+  defp inspect_request_target(%{request_id: _request_id} = summary, _opts), do: {:ok, summary}
+
+  defp inspect_request_target(target, opts) do
+    case Keyword.get(opts, :request_id) do
+      request_id when is_binary(request_id) -> Jidoka.inspect_request(target, request_id)
+      _ -> Jidoka.inspect_request(target)
+    end
+  end
+
   defp render_agent_debug(inspection, _opts) do
     Render.table("Agent summary", agent_summary_rows(inspection), keys: [:property, :value])
 
@@ -47,8 +71,16 @@ defmodule Jidoka.Kino.AgentView do
 
     case Map.get(inspection, :last_request) do
       nil -> :ok
-      request -> Render.table("Latest request", request_rows(request), keys: [:property, :value])
+      request -> render_request_debug(request, title: "Latest request")
     end
+  end
+
+  defp render_request_debug(request, opts) when is_map(request) do
+    title = Keyword.get(opts, :title, "Request debug")
+
+    Render.table(title, request_rows(request), keys: [:property, :value])
+    render_optional_table("Prompt preview", prompt_preview_rows(request), [:surface, :preview])
+    render_optional_table("Capability calls", request_call_rows(request), [:surface, :count, :summary])
   end
 
   defp agent_summary_rows(%{kind: :running_agent} = inspection) do
@@ -126,7 +158,8 @@ defmodule Jidoka.Kino.AgentView do
       %{property: "request id", value: Map.get(request, :request_id)},
       %{property: "status", value: Map.get(request, :status)},
       %{property: "model", value: Render.inspect_value(Map.get(request, :model))},
-      %{property: "input", value: Map.get(request, :input_message)},
+      %{property: "input", value: text_preview(Map.get(request, :input_message))},
+      %{property: "user message", value: text_preview(Map.get(request, :user_message))},
       %{property: "tools", value: Render.format_list(Map.get(request, :tool_names, []))},
       %{property: "mcp tools", value: Render.format_list(Map.get(request, :mcp_tools, []))},
       %{property: "context", value: Render.format_list(Map.get(request, :context_preview, []))},
@@ -135,13 +168,66 @@ defmodule Jidoka.Kino.AgentView do
       %{property: "workflows", value: length(Map.get(request, :workflows, []))},
       %{property: "handoffs", value: length(Map.get(request, :handoffs, []))},
       %{property: "interrupt", value: Render.inspect_value(Map.get(request, :interrupt))},
-      %{property: "error", value: Render.inspect_value(Map.get(request, :error))},
+      %{property: "error", value: request_error_preview(Map.get(request, :error))},
       %{property: "usage", value: Render.inspect_value(Map.get(request, :usage))},
       %{property: "duration ms", value: Map.get(request, :duration_ms)},
       %{property: "messages", value: Map.get(request, :message_count)}
     ]
     |> Render.reject_blank_rows()
   end
+
+  defp prompt_preview_rows(request) when is_map(request) do
+    preview = Map.get(request, :prompt_preview) || %{}
+
+    [
+      %{
+        surface: "system prompt",
+        preview: Map.get(preview, :system_prompt) || text_preview(Map.get(request, :system_prompt))
+      },
+      %{
+        surface: "user message",
+        preview: Map.get(preview, :user_message) || text_preview(Map.get(request, :user_message))
+      },
+      %{surface: "message count", preview: Map.get(preview, :message_count)},
+      %{surface: "tools offered", preview: Render.format_list(Map.get(preview, :tool_names, []))}
+    ]
+    |> Enum.reject(fn row -> Render.blank?(Map.get(row, :preview)) end)
+  end
+
+  defp request_call_rows(request) when is_map(request) do
+    [
+      request_call_row("subagents", Map.get(request, :subagents, [])),
+      request_call_row("workflows", Map.get(request, :workflows, [])),
+      request_call_row("handoffs", Map.get(request, :handoffs, [])),
+      request_call_row("memory", Map.get(request, :memory)),
+      request_call_row("compaction", Map.get(request, :compaction))
+    ]
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp request_call_row(_surface, []), do: nil
+  defp request_call_row(_surface, nil), do: nil
+
+  defp request_call_row(surface, calls) when is_list(calls) do
+    %{surface: surface, count: length(calls), summary: Render.inspect_value(calls, 8)}
+  end
+
+  defp request_call_row(surface, %{} = summary) do
+    %{surface: surface, count: 1, summary: Render.inspect_value(summary, 8)}
+  end
+
+  defp render_optional_table(_title, [], _keys), do: :ok
+
+  defp render_optional_table(title, rows, keys) do
+    Render.table(title, rows, keys: keys)
+  end
+
+  defp text_preview(nil), do: nil
+  defp text_preview(text) when is_binary(text), do: Jidoka.Sanitize.preview(text, 240)
+  defp text_preview(value), do: Jidoka.Sanitize.preview(value, 240)
+
+  defp request_error_preview(nil), do: nil
+  defp request_error_preview(error), do: error |> Jidoka.Error.to_map() |> Render.inspect_value(10)
 
   defp inspection_definition(value) when is_map(value) do
     cond do

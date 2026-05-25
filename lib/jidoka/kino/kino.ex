@@ -72,6 +72,15 @@ defmodule Jidoka.Kino do
   def debug_agent(target, opts \\ []), do: AgentView.debug_agent(target, opts)
 
   @doc """
+  Renders a bounded request summary for the latest turn or a specific request.
+
+  Pass `request_id: "..."` to inspect an older request on a running agent.
+  """
+  @spec debug_request(Jidoka.Session.t() | pid() | String.t() | Jido.Agent.t() | map(), keyword()) ::
+          {:ok, map()} | {:error, String.t()}
+  def debug_request(target, opts \\ []), do: AgentView.debug_request(target, opts)
+
+  @doc """
   Renders a Mermaid diagram of an agent's model, context, lifecycle, and tools.
   """
   @spec agent_diagram(module() | struct() | pid() | String.t() | map(), keyword()) ::

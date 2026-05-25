@@ -1,6 +1,8 @@
 defmodule JidokaTest.KinoTest do
   use JidokaTest.Support.Case, async: false
 
+  alias Jido.AI.Request
+
   require Logger
 
   test "trace returns the wrapped result without Kino loaded" do
@@ -120,6 +122,57 @@ defmodule JidokaTest.KinoTest do
 
     assert inspection.kind == :agent_definition
     assert inspection.tool_names == ["add_numbers"]
+  end
+
+  test "debug_request renders a request summary without Kino loaded" do
+    summary = %{
+      request_id: "req-kino-debug",
+      status: :failed,
+      model: {:anthropic, model: "claude-test"},
+      input_message: String.duplicate("summarize ", 80),
+      user_message: "summarize the ticket",
+      system_prompt: "Answer clearly.",
+      prompt_preview: %{
+        system_prompt: "Answer clearly.",
+        user_message: "summarize the ticket",
+        message_count: 2,
+        tool_names: ["lookup_ticket"]
+      },
+      tool_names: ["lookup_ticket"],
+      mcp_tools: [],
+      context_preview: ["tenant=\"demo\"", "api_key=\"[REDACTED]\""],
+      memory: %{retrieved: 2},
+      compaction: %{status: :summarized, retained_message_count: 12},
+      subagents: [%{name: "researcher", status: :completed}],
+      workflows: [],
+      handoffs: [],
+      interrupt: nil,
+      error: Jidoka.Error.execution_error("Provider failed.", phase: :model, details: %{api_key: "secret"}),
+      usage: %{input: 10, output: 5},
+      duration_ms: 42,
+      message_count: 2
+    }
+
+    assert {:ok, ^summary} = Jidoka.Kino.debug_request(summary)
+  end
+
+  test "debug_request inspects the latest running request without Kino loaded" do
+    {:ok, pid} = JidokaTest.ToolAgent.start_link(id: "kino-debug-request")
+
+    try do
+      request_id = "req-kino-debug-live"
+
+      :sys.replace_state(pid, fn state ->
+        %{state | agent: Request.start_request(state.agent, request_id, "live kino prompt")}
+      end)
+
+      assert {:ok, summary} = Jidoka.Kino.debug_request(pid)
+      assert summary.request_id == request_id
+      assert summary.status == :pending
+      assert summary.prompt_preview.user_message == "live kino prompt"
+    after
+      :ok = Jidoka.stop_agent(pid)
+    end
   end
 
   test "agent_diagram renders and returns Mermaid markdown without Kino loaded" do
