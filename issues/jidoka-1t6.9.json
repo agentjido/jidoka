@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T23:12:06Z",
+  "description": "Document or codify the trace event categories, names, statuses, correlation keys, redaction rules, and stability expectations for AgentView, Livebook, and external UI consumers.",
+  "id": "jidoka-1t6.9",
+  "labels": [],
+  "parent": "jidoka-1t6",
+  "priority": 1,
+  "status": "open",
+  "title": "Define trace event schema contract",
+  "type": "task",
+  "updated_at": "2026-05-25T23:12:06Z"
+}
