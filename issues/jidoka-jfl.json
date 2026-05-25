@@ -2,13 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T15:30:23Z",
+  "close_reason": "Shortened Livebook teaching module names, updated the concept template guidance, verified notebook code fences and synced Livebook dev endpoints.",
   "created": "2026-05-25T15:27:09Z",
   "description": "Clean up verbose LivebookDemo module names in Livebook examples while keeping notebooks deterministic and easy to read.",
   "id": "jidoka-jfl",
   "labels": [],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Simplify Livebook module names",
   "type": "task",
-  "updated_at": "2026-05-25T15:27:09Z"
+  "updated_at": "2026-05-25T15:30:23Z"
 }
