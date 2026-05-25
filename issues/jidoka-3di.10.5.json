@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T01:44:10Z",
   "created": "2026-05-24T20:35:42Z",
   "description": "Parent epic: V3 E9: Memory and compaction\n\nSource task 5/6 from MILESTONE_V3.md:\n\n- Add tests for memory capture/retrieve, namespace validation, compaction skip,\n  compaction summarize, retained tail, boundary safety, failure-open behavior,\n  and custom prompt behavior.\n\nEpic closure criteria:\n- memory and compaction have separate, crisp docs and tests\n- compaction does not mutate the canonical transcript\n",
   "id": "jidoka-3di.10.5",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E9: Add tests for memory capture/retrieve, namespace validation, compaction skip, c...",
   "type": "task",
   "updated_at": "2026-05-25T01:44:10Z"
