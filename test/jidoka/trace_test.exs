@@ -211,6 +211,71 @@ defmodule JidokaTest.TraceTest do
     assert event.metadata.extra_refs.session_id == session.id
   end
 
+  test "sanitizes emitted Jidoka telemetry metadata and measurements" do
+    agent_id = unique_id("trace-redaction-agent")
+    request_id = unique_id("req-redaction")
+    run_id = unique_id("run-redaction")
+    handler_id = :"jidoka-trace-redaction-#{System.unique_integer([:positive])}"
+    parent = self()
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        [:jidoka, :control, :event],
+        &__MODULE__.handle_trace_redaction_event/4,
+        parent
+      )
+
+    try do
+      Jidoka.Trace.emit(
+        :control,
+        %{
+          event: :allow,
+          control: "redact_secret",
+          agent_id: agent_id,
+          request_id: request_id,
+          run_id: run_id,
+          query: "do not export this prompt",
+          note: "api_key=super-secret-key",
+          nested: %{api_key: "nested-secret"},
+          extra_refs: %{session_id: "session-redaction", token: "raw-token"}
+        },
+        %{
+          duration_ms: 1,
+          raw_response: "provider-secret-response",
+          detail: "password=measurement-secret"
+        }
+      )
+
+      assert_receive {:jidoka_trace_event, [:jidoka, :control, :event], measurements, metadata}
+
+      assert metadata.query == "[OMITTED]"
+      assert metadata.note == "api_key=[REDACTED]"
+      assert metadata.nested.api_key == "[REDACTED]"
+      assert metadata.extra_refs.token == "[REDACTED]"
+      assert metadata.session_id == "session-redaction"
+      assert measurements.raw_response == "[OMITTED]"
+      assert measurements.detail == "password=[REDACTED]"
+
+      refute inspect(metadata) =~ "super-secret-key"
+      refute inspect(metadata) =~ "nested-secret"
+      refute inspect(metadata) =~ "raw-token"
+      refute inspect(measurements) =~ "provider-secret-response"
+      refute inspect(measurements) =~ "measurement-secret"
+
+      assert {:ok, trace} = Trace.for_request(agent_id, request_id)
+      assert [event] = trace.events
+      assert event.metadata.query == "[OMITTED]"
+      assert event.metadata.note == "api_key=[REDACTED]"
+      assert event.metadata.nested.api_key == "[REDACTED]"
+      assert event.metadata.extra_refs.token == "[REDACTED]"
+      assert event.measurements.raw_response == "[OMITTED]"
+      assert event.measurements.detail == "password=[REDACTED]"
+    after
+      :telemetry.detach(handler_id)
+    end
+  end
+
   test "returns latest and list traces for an agent id" do
     agent_id = unique_id("trace-list-agent")
     request_id = unique_id("req")
@@ -417,5 +482,9 @@ defmodule JidokaTest.TraceTest do
       nil -> :ok
       pid -> Jidoka.stop_agent(pid)
     end
+  end
+
+  def handle_trace_redaction_event(event_name, measurements, metadata, parent) do
+    send(parent, {:jidoka_trace_event, event_name, measurements, metadata})
   end
 end

@@ -49,8 +49,9 @@ defmodule Jidoka.Trace do
       |> merge_correlation_refs()
       |> Map.put_new(:category, category)
       |> Map.put_new(:source, :jidoka)
+      |> Jidoka.Sanitize.payload()
 
-    Jido.Observe.emit_event([:jidoka, category, :event], measurements, metadata)
+    Jido.Observe.emit_event([:jidoka, category, :event], Jidoka.Sanitize.payload(measurements), metadata)
   end
 
   @doc false
