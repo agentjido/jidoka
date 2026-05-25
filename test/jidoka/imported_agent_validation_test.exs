@@ -93,6 +93,101 @@ defmodule JidokaTest.ImportedAgentValidationTest do
     assert reason =~ "tools must be unique"
   end
 
+  test "rejects mismatched explicit imported capability registries" do
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("wrong_tool_registry", capabilities: %{"tools" => ["add_numbers"]}),
+               available_tools: %{"wrong_name" => AddNumbers}
+             )
+
+    assert reason =~ "tool registry key"
+    assert reason =~ "must match published tool name"
+
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("wrong_subagent_registry",
+                 capabilities: %{"subagents" => [%{"agent" => "research_agent"}]}
+               ),
+               available_subagents: %{"wrong_name" => ResearchSpecialist}
+             )
+
+    assert reason =~ "subagent registry key"
+    assert reason =~ "must match published agent name"
+
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("wrong_workflow_registry",
+                 capabilities: %{"workflows" => ["workflow_capability_math"]}
+               ),
+               available_workflows: %{"wrong_name" => WorkflowCapability.MathWorkflow}
+             )
+
+    assert reason =~ "workflow registry key"
+    assert reason =~ "must match published workflow id"
+
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("wrong_handoff_registry",
+                 capabilities: %{"handoffs" => ["billing_specialist"]}
+               ),
+               available_handoffs: %{"wrong_name" => BillingHandoffSpecialist}
+             )
+
+    assert reason =~ "handoff registry key"
+    assert reason =~ "must match published agent name"
+  end
+
+  test "rejects module-shaped refs in imported capability specs" do
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("raw_tool_module_import",
+                 capabilities: %{"tools" => ["JidokaTest.AddNumbers"]}
+               )
+             )
+
+    assert reason =~ "invalid format"
+
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("raw_subagent_module_import",
+                 capabilities: %{"subagents" => [%{"agent" => "JidokaTest.ResearchSpecialist"}]}
+               )
+             )
+
+    assert reason =~ "invalid format"
+  end
+
+  test "rejects unsupported structured output and compaction specs" do
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("bad_output_schema_agent",
+                 output: %{
+                   "schema" => %{"type" => "string"},
+                   "retries" => 1,
+                   "on_validation_error" => "error"
+                 }
+               )
+             )
+
+    assert reason =~ "output schema must be a Zoi object schema or imported JSON object schema"
+
+    assert {:error, reason} =
+             Jidoka.import_agent(
+               imported_spec("bad_compaction_agent",
+                 lifecycle: %{
+                   "compaction" => %{
+                     "mode" => "auto",
+                     "strategy" => "rolling",
+                     "max_messages" => 10,
+                     "keep_last" => 4
+                   }
+                 }
+               )
+             )
+
+    assert reason =~ "compaction strategy must be :summary"
+  end
+
   test "rejects unknown plugin names in imported agent specs" do
     assert {:error, reason} =
              Jidoka.import_agent(
