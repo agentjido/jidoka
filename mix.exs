@@ -3,7 +3,8 @@ defmodule Jidoka.MixProject do
 
   @version "1.0.0-beta.1"
   @source_url "https://github.com/agentjido/jidoka"
-  @description "Developer-friendly LLM agent harness built on Jido and Jido.AI."
+  @homepage_url "https://jido.run"
+  @description "Developer-friendly LLM agent harness for Elixir."
   @coverage_threshold 75
 
   def project do
@@ -18,7 +19,7 @@ defmodule Jidoka.MixProject do
       name: "Jidoka",
       description: @description,
       source_url: @source_url,
-      homepage_url: @source_url,
+      homepage_url: @homepage_url,
       package: package(),
       docs: docs(),
       test_coverage: [
@@ -132,7 +133,7 @@ defmodule Jidoka.MixProject do
         "GitHub" => @source_url,
         "Documentation" => "https://hexdocs.pm/jidoka",
         "Changelog" => "https://hexdocs.pm/jidoka/changelog.html",
-        "Website" => "https://jido.run"
+        "Website" => @homepage_url
       }
     ]
   end

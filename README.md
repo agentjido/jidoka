@@ -387,7 +387,7 @@ while the beta DSL settles.
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 1.0"}
+    {:jidoka, "~> 1.0.0-beta.1"}
   ]
 end
 ```
