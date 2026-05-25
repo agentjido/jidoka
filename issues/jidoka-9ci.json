@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T15:31:04Z",
+  "description": "Remove the extra RUN_JIDOKA_LIVEBOOK_LIVE toggle from Livebook examples and gate live provider cells on a usable ANTHROPIC_API_KEY checked near setup.",
+  "id": "jidoka-9ci",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Use provider key for Livebook live cells",
+  "type": "task",
+  "updated_at": "2026-05-25T15:31:04Z"
+}
