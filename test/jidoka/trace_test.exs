@@ -301,7 +301,6 @@ defmodule JidokaTest.TraceTest do
     assert event.metadata.extra_refs.session_id == session.id
   end
 
-  # credo:disable-for-next-line Jump.CredoChecks.TooManyAssertions
   test "sanitizes emitted Jidoka telemetry metadata and measurements" do
     agent_id = unique_id("trace-redaction-agent")
     request_id = unique_id("req-redaction")
@@ -402,7 +401,6 @@ defmodule JidokaTest.TraceTest do
     refute Enum.any?(traces, &(&1.request_id == "#{agent_id}-req-1"))
   end
 
-  # credo:disable-for-next-line Jump.CredoChecks.TooManyAssertions
   test "records Jidoka workflow, subagent, handoff, guardrail, and memory events without a provider" do
     agent_id = unique_id("trace-jidoka-agent")
 

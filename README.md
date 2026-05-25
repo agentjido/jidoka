@@ -427,8 +427,8 @@ Useful verification commands:
 
 ```bash
 mix compile --warnings-as-errors
+mix credo --strict --only warning
 mix docs --warnings-as-errors
-mix doctor --raise
 ```
 
 The runnable examples under `examples/` show the provider-free testing

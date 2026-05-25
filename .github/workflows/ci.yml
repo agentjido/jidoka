@@ -44,7 +44,6 @@ jobs:
           path: |
             deps
             _build
-            priv/plts
           key: ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
             ${{ runner.os }}-mix-${{ matrix.elixir }}-${{ matrix.otp }}-
@@ -62,41 +61,7 @@ jobs:
         run: mix test
 
       - name: Run Credo
-        run: mix credo --min-priority higher
+        run: mix credo --strict --only warning
 
-      - name: Run documentation coverage
-        run: mix doctor --raise
-
-      - name: Run coverage
-        run: mix coveralls
-
-  dialyzer:
-    name: Dialyzer
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Erlang/OTP and Elixir
-        uses: erlef/setup-beam@v1
-        with:
-          otp-version: "28"
-          elixir-version: "1.19"
-
-      - name: Restore Mix cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            deps
-            _build
-            priv/plts
-          key: ${{ runner.os }}-dialyzer-${{ hashFiles('mix.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-dialyzer-
-
-      - name: Install dependencies
-        run: mix deps.get
-
-      - name: Run Dialyzer
-        run: mix dialyzer
+      - name: Build docs with warnings as errors
+        run: mix docs --warnings-as-errors

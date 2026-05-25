@@ -179,7 +179,6 @@ defmodule JidokaTest.SessionTest do
     end
   end
 
-  # credo:disable-for-next-line Jump.CredoChecks.TooManyAssertions
   test "session chat reuses the runtime agent across repeated turns" do
     session = session!("multi-turn", context: %{tenant: "acme"})
     agent_id = session.agent_id

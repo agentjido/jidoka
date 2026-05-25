@@ -22,8 +22,7 @@ Jidoka follows the Jido package quality standards:
 - use conventional commits
 - keep examples outside shipped library internals
 - keep public modules documented or explicitly internal
-- run formatting, compile warnings, linting, dialyzer, and docs coverage through
-  `mix quality`
+- run formatting, compile warnings, tests, linting, and docs through `mix quality`
 - prefer Zoi for validation and Splode for package error types
 
 ## Pull Requests
@@ -32,8 +31,7 @@ Jidoka follows the Jido package quality standards:
 - Add or update tests with behavior changes.
 - Update `README.md` or `CHANGELOG.md` when a change affects package direction
   or user-facing workflows.
-- Do not commit secrets, `.env`, generated docs, coverage reports, or Dialyzer
-  PLTs.
+- Do not commit secrets, `.env`, generated docs, or coverage reports.
 
 ## Release Status
 

@@ -109,8 +109,8 @@ defmodule Jidoka.WorkflowSpikeTest do
       assert node_map.add_amount.action_mod == AddAmount
       assert node_map.add_amount.inputs == [value: [type: :integer, doc: "Current workflow value"]]
 
-      assert Enum.count(graph.nodes) == 2
-      assert Enum.count(graph.edges) >= 1
+      assert length(graph.nodes) == 2
+      assert Enum.any?(graph.edges)
       assert Enum.any?(graph.edges, &(&1.label in [:connects_to, :flow]))
 
       assert summary.total_nodes == 2

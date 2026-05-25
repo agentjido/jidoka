@@ -34,7 +34,6 @@ defmodule JidokaTest.AgentBasicsTest do
     assert ChatAgent.runtime_module() == JidokaTest.ChatAgent.Runtime
   end
 
-  # credo:disable-for-next-line Jump.CredoChecks.TooManyAssertions
   test "exposes the canonical V3 generated helper surface" do
     definition = ChatAgent.__jidoka__()
 

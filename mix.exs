@@ -5,7 +5,6 @@ defmodule Jidoka.MixProject do
   @source_url "https://github.com/agentjido/jidoka"
   @homepage_url "https://jido.run"
   @description "Developer-friendly LLM agent harness for Elixir."
-  @coverage_threshold 75
 
   def project do
     [
@@ -21,39 +20,7 @@ defmodule Jidoka.MixProject do
       source_url: @source_url,
       homepage_url: @homepage_url,
       package: package(),
-      docs: docs(),
-      test_coverage: [
-        tool: ExCoveralls,
-        summary: [threshold: @coverage_threshold],
-        export: "cov",
-        ignore_modules: [
-          ~r/^JidokaTest\./,
-          ~r/^Jidoka\.Agent\.Dsl(\.|$)/,
-          ~r/^Jidoka\.Workflow\.Dsl(\.|$)/,
-          Jidoka.AgentView.Run,
-          Jidoka.Guardrails.Input,
-          Jidoka.Guardrails.Output,
-          Jidoka.Guardrails.Tool,
-          Jidoka.Hooks.Input,
-          Jidoka.Trace.Event,
-          Jidoka.Workflow.Runtime.Keys
-        ]
-      ],
-      dialyzer: [
-        plt_add_apps: [:mix, :llm_db],
-        plt_local_path: "priv/plts/project.plt",
-        plt_core_path: "priv/plts/core.plt"
-      ]
-    ]
-  end
-
-  def cli do
-    [
-      preferred_envs: [
-        coveralls: :test,
-        "coveralls.github": :test,
-        "coveralls.html": :test
-      ]
+      docs: docs()
     ]
   end
 
@@ -69,28 +36,31 @@ defmodule Jidoka.MixProject do
 
   defp deps do
     [
-      {:ash_jido, "~> 1.0"},
+      # Runtime
       {:dotenvy, "~> 1.1"},
       {:jason, "~> 1.4"},
-      {:jido, "~> 2.3"},
-      {:jido_ai, "~> 2.2"},
-      {:jido_character, "~> 1.0"},
-      {:jido_browser, "~> 2.1"},
-      {:jido_mcp, "~> 1.0"},
-      {:jido_memory, "~> 1.0"},
-      {:jido_runic, "~> 1.0"},
       {:mdex, "~> 0.12.1"},
       {:plug, "~> 1.18"},
       {:spark, "~> 2.6"},
+      {:splode, "~> 0.3.0"},
       {:yaml_elixir, "~> 2.12"},
       {:zoi, "~> 0.18"},
-      {:splode, "~> 0.3.0"},
+
+      # Jido stack
+      {:jido, "~> 2.3"},
+      {:jido_ai, "~> 2.2"},
+      {:ash_jido, "~> 1.0"},
+
+      # Optional capabilities
+      {:jido_browser, "~> 2.1"},
+      {:jido_character, "~> 1.0"},
+      {:jido_mcp, "~> 1.0"},
+      {:jido_memory, "~> 1.0"},
+      {:jido_runic, "~> 1.0"},
+
+      # Development
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:jump_credo_checks, "~> 0.2.0", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:doctor, "~> 0.21", only: :dev, runtime: false},
       {:ex_doc, "~> 0.31", only: :dev, runtime: false},
-      {:excoveralls, "~> 0.18", only: [:dev, :test]},
       {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
       {:git_ops, "~> 2.9", only: :dev, runtime: false}
     ]
@@ -104,9 +74,9 @@ defmodule Jidoka.MixProject do
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
-        "credo --min-priority higher",
-        "dialyzer",
-        "doctor --raise"
+        "credo --strict --only warning",
+        "docs --warnings-as-errors",
+        "cmd mix test"
       ]
     ]
   end

@@ -52,13 +52,16 @@ defmodule Jidoka.Agent.Definition.Basics do
     Jidoka.Model.model(model)
   rescue
     error in [ArgumentError] ->
-      raise Jidoka.Agent.Dsl.Error.exception(
-              message: Exception.message(error),
-              path: [:agent, :model],
-              value: model,
-              hint: "Use a configured Jidoka model alias such as `:fast` or a Jido.AI-compatible model spec.",
-              module: owner_module
-            )
+      exception =
+        Jidoka.Agent.Dsl.Error.exception(
+          message: Exception.message(error),
+          path: [:agent, :model],
+          value: model,
+          hint: "Use a configured Jidoka model alias such as `:fast` or a Jido.AI-compatible model spec.",
+          module: owner_module
+        )
+
+      reraise exception, __STACKTRACE__
   end
 
   @spec resolve_instructions!(module(), term()) :: {:static, String.t()} | {:dynamic, term()}

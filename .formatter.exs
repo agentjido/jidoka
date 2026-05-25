@@ -56,7 +56,7 @@
     output: 1
   ],
   inputs: [
-    "{mix,.formatter,.credo,.doctor}.exs",
+    "{mix,.formatter}.exs",
     "{config,examples,lib,test}/**/*.{ex,exs}",
     "livebook/**/*.livemd"
   ],

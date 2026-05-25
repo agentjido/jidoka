@@ -1,7 +1,6 @@
 defmodule JidokaTest.WorkflowValidationTest do
   use JidokaTest.Support.Case, async: false
 
-  # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
   test "keeps workflow authoring separate from action-style using options" do
     module = Module.concat(JidokaTest.DynamicWorkflowDsl, "BadActionStyle#{System.unique_integer([:positive])}")
 
