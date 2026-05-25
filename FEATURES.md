@@ -46,6 +46,11 @@ Jidoka should keep state-like words narrow:
 - **Memory** recalls facts across turns or from an external store. It is not a
   replacement for required context; if a tool needs `account_id`, the caller
   should pass it explicitly.
+- **Memory configuration** belongs to the agent contract in the V3 DSL because
+  it describes how that agent keeps continuity. The public turn surface should
+  not grow separate `remember`/`recall` helpers; manual memory writes and
+  searches belong to the configured memory store or lower-level runtime, while
+  Jidoka exposes memory through agent metadata, request inspection, and traces.
 - **Compaction** reduces the provider-facing transcript window by summarizing
   older conversation context. It does not delete the original thread and should
   not be taught as memory.

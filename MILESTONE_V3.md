@@ -752,6 +752,14 @@ task should be the final child task for every epic.
 - `Jidoka.Session` is conversation addressing, not durable storage.
 - Controls are the intended public policy noun. Hooks and guardrails are
   candidates for deletion, renaming, or private implementation details.
+- Memory configuration belongs inside `agent :id do ... end` in the V3 DSL.
+  Memory is part of how an agent maintains continuity, not a generic lifecycle
+  callback block.
+- Jidoka should not add public manual `remember`/`recall` APIs for V3. The
+  public surface is declarative memory config, generated `Agent.memory/0`
+  metadata, request/agent inspection, and trace events. Manual memory writes,
+  deletes, and semantic searches belong to the configured memory store or the
+  lower-level runtime boundary.
 - Credential brokering must prove the no-secret-leak invariant before shipping
   execution behavior.
 - Durability is a graduation path unless a separate persistence implementation
