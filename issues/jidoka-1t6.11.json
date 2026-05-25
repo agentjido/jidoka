@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-25T23:12:06Z",
-  "description": "Move public docs, errors, trace/debug labels, and import-facing terminology toward  and ; keep  and  as internal compatibility names where needed.",
+  "description": "Move public docs, errors, trace/debug labels, and import-facing terminology toward result and controls; keep output and guardrail as internal compatibility names where needed.",
   "id": "jidoka-1t6.11",
   "labels": [],
   "parent": "jidoka-1t6",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "Continue result/controls vocabulary migration",
   "type": "task",
-  "updated_at": "2026-05-25T23:12:06Z"
+  "updated_at": "2026-05-25T23:12:20Z"
 }
