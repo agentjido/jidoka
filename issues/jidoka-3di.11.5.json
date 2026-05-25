@@ -7,9 +7,15 @@
   "id": "jidoka-3di.11.5",
   "labels": [],
   "parent": "jidoka-3di.11",
+  "comments": [
+    {
+      "text": "Clarified Phoenix/LiveView runtime ownership: sessions address the running agent, AgentView is an assignable projection, and UI state is not transcript persistence. Full gate passed.",
+      "timestamp": "2026-05-25T01:49:07Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E10: Review Phoenix/LiveView guidance for process ownership and UI state",
   "type": "task",
-  "updated_at": "2026-05-25T01:46:00Z"
+  "updated_at": "2026-05-25T01:49:07Z"
 }
