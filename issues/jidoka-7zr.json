@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-25T15:16:19Z",
@@ -7,7 +7,7 @@
   "id": "jidoka-7zr",
   "labels": [],
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "Reconcile Livebook folder naming",
   "type": "task",
   "updated_at": "2026-05-25T15:16:19Z"
