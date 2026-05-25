@@ -25,8 +25,8 @@ defmodule Jidoka.Debug do
           handoffs: [map()],
           usage: map() | nil,
           duration_ms: non_neg_integer() | nil,
-          interrupt: Jidoka.Interrupt.t() | nil,
-          error: term() | nil,
+          interrupt: map() | nil,
+          error: map() | nil,
           message_count: non_neg_integer() | nil
         }
 
@@ -134,9 +134,9 @@ defmodule Jidoka.Debug do
       request_id: request_id,
       status: Map.get(request, :status),
       model: resolved_model(agent),
-      input_message: normalize_text(Map.get(request, :query)),
-      user_message: user_message,
-      system_prompt: system_prompt,
+      input_message: text_preview(normalize_text(Map.get(request, :query))),
+      user_message: text_preview(user_message),
+      system_prompt: text_preview(system_prompt),
       prompt_preview: prompt_preview(system_prompt, user_message, message_count, tool_names),
       skills: normalize_string_list(debug_meta[:skills]),
       tool_names: tool_names,
@@ -150,8 +150,8 @@ defmodule Jidoka.Debug do
       handoffs: handoff_calls,
       usage: usage_summary(Map.get(request_meta, :usage)),
       duration_ms: duration_ms(request),
-      interrupt: interrupt,
-      error: request.error,
+      interrupt: interrupt_summary(interrupt),
+      error: error_summary(request.error),
       message_count: message_count
     }
   end
@@ -234,7 +234,7 @@ defmodule Jidoka.Debug do
     |> Enum.sort()
   end
 
-  defp memory_summary(%{error: reason}), do: %{error: reason}
+  defp memory_summary(%{error: reason}), do: %{error: error_summary(reason)}
 
   defp memory_summary(%{} = memory_meta) do
     %{
@@ -242,11 +242,12 @@ defmodule Jidoka.Debug do
       retrieved: length(Map.get(memory_meta, :records, [])),
       inject: get_in(memory_meta, [:config, :inject]),
       captured: memory_meta[:captured?],
-      capture_error: memory_meta[:capture_error],
-      capture_warning: memory_meta[:capture_warning]
+      capture_error: error_summary(memory_meta[:capture_error]),
+      capture_warning: Jidoka.Sanitize.payload(memory_meta[:capture_warning])
     }
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
+    |> Jidoka.Sanitize.payload()
   end
 
   defp memory_summary(_), do: nil
@@ -265,6 +266,7 @@ defmodule Jidoka.Debug do
     ])
     |> Enum.reject(fn {_key, value} -> is_nil(value) or value == %{} end)
     |> Map.new()
+    |> Jidoka.Sanitize.payload()
     |> case do
       empty when empty == %{} -> nil
       summary -> summary
@@ -295,6 +297,36 @@ defmodule Jidoka.Debug do
 
   defp text_preview(nil), do: nil
   defp text_preview(text), do: Jidoka.Sanitize.preview(text, 240)
+
+  defp interrupt_summary(nil), do: nil
+
+  defp interrupt_summary(%Jidoka.Interrupt{} = interrupt) do
+    %{
+      id: interrupt.id,
+      kind: interrupt.kind,
+      message: text_preview(interrupt.message),
+      data_keys: interrupt.data |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) or value == [] end)
+    |> Map.new()
+  end
+
+  defp interrupt_summary(interrupt), do: Jidoka.Sanitize.payload(interrupt)
+
+  defp error_summary(nil), do: nil
+
+  defp error_summary({:interrupt, %Jidoka.Interrupt{} = interrupt}) do
+    %{
+      category: :interrupt,
+      message: text_preview(interrupt.message),
+      id: interrupt.id,
+      kind: interrupt.kind
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
+  end
+
+  defp error_summary(error), do: Jidoka.Error.to_map(error)
 
   defp usage_summary(%{} = usage) do
     %{
@@ -458,7 +490,13 @@ defmodule Jidoka.Debug do
        when is_binary(value) or is_integer(value) or is_float(value) or is_boolean(value) or
               is_atom(value) do
     key = normalize_context_key(key)
-    value = if Jidoka.Sanitize.sensitive_key?(key), do: "[REDACTED]", else: value
+
+    value =
+      cond do
+        Jidoka.Sanitize.sensitive_key?(key) -> "[REDACTED]"
+        is_binary(value) -> Jidoka.Sanitize.preview(value, 120)
+        true -> value
+      end
 
     "#{key}=#{inspect(value)}"
   end

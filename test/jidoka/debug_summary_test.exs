@@ -164,8 +164,20 @@ defmodule JidokaTest.DebugSummaryTest do
     assert {:ok, interrupted} = Jidoka.Debug.request_summary(interrupted_agent, interrupted_request_id)
     assert interrupted.status == :failed
     assert interrupted.input_message == "needs approval"
-    assert interrupted.interrupt == interrupt
-    assert interrupted.error == {:interrupt, interrupt}
+
+    assert interrupted.interrupt == %{
+             id: "approval",
+             kind: :approval,
+             message: "Approval required",
+             data_keys: ["amount"]
+           }
+
+    assert interrupted.error == %{
+             category: :interrupt,
+             id: "approval",
+             kind: :approval,
+             message: "Approval required"
+           }
 
     failed_request_id = "req-debug-failed"
     failure = RuntimeError.exception("provider failed")
@@ -180,6 +192,68 @@ defmodule JidokaTest.DebugSummaryTest do
     assert failed.status == :failed
     assert failed.input_message == "will fail"
     assert failed.prompt_preview.user_message == "will fail"
-    assert failed.error == failure
+    assert failed.error == %{category: :unknown, message: "provider failed"}
+    refute inspect(failed) =~ inspect(failure)
+  end
+
+  test "bounds and redacts inspection text and error fields" do
+    secret = "sk-ant-secret12345678901234567890"
+    long_text = "api_key=#{secret} " <> String.duplicate("inspect safely ", 80)
+    request_id = "req-debug-redacted"
+
+    agent =
+      JidokaTest.ToolAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request(request_id, long_text)
+      |> Request.fail_request(
+        request_id,
+        Jidoka.Error.execution_error("provider token=#{secret} failed",
+          phase: :model,
+          details: %{
+            operation: :model,
+            request_id: request_id,
+            prompt: long_text,
+            raw_response: %{body: "raw provider body #{secret}"}
+          }
+        )
+      )
+      |> put_request_meta(request_id, %{
+        jidoka_debug: %{
+          system_prompt: long_text,
+          tool_names: ["add_numbers"],
+          message_count: 4
+        },
+        jidoka_hooks: %{
+          message: long_text,
+          context: %{tenant: "acme", api_key: secret, note: long_text}
+        }
+      })
+
+    assert {:ok, summary} = Jidoka.Debug.request_summary(agent, request_id)
+
+    assert String.length(summary.input_message) <= 240
+    assert String.length(summary.user_message) <= 240
+    assert String.length(summary.system_prompt) <= 240
+    assert summary.input_message =~ "api_key=[REDACTED]"
+    assert summary.user_message =~ "api_key=[REDACTED]"
+    assert summary.system_prompt =~ "api_key=[REDACTED]"
+
+    assert "api_key=\"[REDACTED]\"" in summary.context_preview
+    assert "tenant=\"acme\"" in summary.context_preview
+    assert note_preview = Enum.find(summary.context_preview, &String.starts_with?(&1, "note="))
+    assert note_preview =~ "api_key=[REDACTED]"
+    assert String.length(note_preview) <= 128
+
+    assert summary.error.message == "provider token=[REDACTED] failed"
+    assert summary.error.details.prompt == "[OMITTED]"
+    assert summary.error.details.raw_response == "[OMITTED]"
+
+    rendered = inspect(summary)
+    refute rendered =~ secret
+    refute rendered =~ "raw provider body"
+  end
+
+  defp put_request_meta(agent, request_id, meta) do
+    update_in(agent.state.requests[request_id], &Map.put(&1, :meta, meta))
   end
 end
