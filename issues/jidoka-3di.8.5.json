@@ -7,9 +7,15 @@
   "id": "jidoka-3di.8.5",
   "labels": [],
   "parent": "jidoka-3di.8",
+  "comments": [
+    {
+      "text": "Made request inspection summaries bounded and display-safe by truncating prompt/message fields, redacting context previews, summarizing interrupts/errors, and sanitizing memory/compaction metadata. Added regression coverage for long prompts, raw responses, secrets, and failed/interrupted request summaries. Verified with focused debug/inspection/Kino tests plus full format, compile, test, docs, doctor, and diff checks.",
+      "timestamp": "2026-05-25T00:39:12Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E7: Ensure inspection output is bounded and redacted",
   "type": "task",
-  "updated_at": "2026-05-25T00:34:11Z"
+  "updated_at": "2026-05-25T00:39:12Z"
 }
