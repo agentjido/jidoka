@@ -292,6 +292,29 @@ External references:
 - [21st Credential Vaults](https://21st.dev/community/blog/credential-vaults)
 - [Microsoft Entra Agent ID sidecar local development](https://learn.microsoft.com/en-us/entra/agent-id/sidecar-local-development)
 
+## Tool Integration Audit
+
+The V3 integration surface should stay boring: every integration either
+expands into named action-backed operations, contributes prompt/runtime metadata
+for those operations, or remains outside core Jidoka behind an explicit
+extension boundary.
+
+| Integration | Current Jidoka boundary | Safety and test posture | V3 decision |
+| --- | --- | --- | --- |
+| Direct actions | `tools do action MyAction end` registers deterministic `Jidoka.Action` or compatible action modules. | Compile-time schema/name validation and duplicate operation-name checks; provider-free action and inspection tests exist. | Core. This is the base operation contract all other integrations should reduce to. |
+| Ash resources | `ash_resource MyResource` expands AshJido-generated resource actions into normal operation modules. | Requires valid Ash resources, generated actions, one Ash domain, and actor context when needed; provider-free Ash expansion and context tests exist. | Core adapter, but keep it thin. Rich Ash policy/data behavior belongs to Ash and AshJido. |
+| Web tools | `web :search` and `web :read_only` expose a small read-only subset of browser-backed tools. | Blocks local/private URLs including DNS-resolved private hosts, clamps result sizes, truncates content, and rejects unsupported modes; provider-free URL/sizing/conflict tests exist. | Core, intentionally narrow. Interactive browsing, sessions, clicks, typing, and JS execution stay out of the Jidoka DSL. |
+| MCP tools | `mcp_tools endpoint: ...` syncs MCP server tools into a running agent before a turn. | Runtime endpoint registration is idempotent, conflict-aware, and failure-normalized; sync metadata and failures are observable without crashing the turn. | Core protocol bridge. Server lifecycle, auth, and remote tool implementation stay with the host app or MCP layer. |
+| Skills | `skill MySkill`, `skill "name"`, and `load_path "..."` add skill prompt text and narrow allowed tools. | Module skills are compile-time validated; runtime skills can be loaded from app-owned paths and can restrict `allowed_tools`; provider-free request-transformer tests exist. | Core, but load paths are an app boundary. Jidoka should not fetch arbitrary remote skill bundles. |
+| Plugins | `plugin MyPlugin` merges plugin-provided action-backed operations into the same tool registry. | Plugin names, required callbacks, tool modules, and duplicate operation names are validated; provider-free plugin tests exist. | Core extension point for small Jidoka-shaped bundles. Large service integrations should graduate to companion packages. |
+| Catalog / connect layer | No first-class core implementation yet; current docs describe the desired scalable discovery boundary. | Credential references and controls already provide the security vocabulary, but catalog search/ranking/execution is not in core. | Companion-package boundary for now. Jidoka should define the agent-facing contract later, not load hundreds of tools into every prompt. |
+
+Audit conclusion for E14: direct actions, Ash, web, MCP, skills, and plugins all
+fit the same mental model today. Catalog/connect is the one intentionally
+deferred surface: it should become a metadata-rich discovery and execution
+contract, likely backed by companion packages such as service integration
+libraries, rather than a large built-in registry inside Jidoka.
+
 ## Ecosystem Scan
 
 Scanned on 2026-05-24 from Hex package search for `agent`, `LLM`, and adjacent
