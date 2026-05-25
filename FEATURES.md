@@ -315,6 +315,21 @@ deferred surface: it should become a metadata-rich discovery and execution
 contract, likely backed by companion packages such as service integration
 libraries, rather than a large built-in registry inside Jidoka.
 
+### Integration Buckets
+
+Use these buckets when deciding whether a tool integration belongs in Jidoka:
+
+| Bucket | Definition | Current contents | Rule |
+| --- | --- | --- | --- |
+| Core | Small, safe-by-default adapters that compile or sync into normal named operations and can be tested without live services. | Direct actions, AshJido resource actions, read-only web tools, MCP sync bridge, skill prompt/tool narrowing, plugin wrapper, credential references. | Keep in Jidoka when the behavior is generic, narrow, and mostly dependency-light. |
+| Extension | App-owned or library-owned modules that use Jidoka contracts but are not baked into the base DSL. | Local `Jidoka.Action` modules, local `Jidoka.Plugin` modules, app MCP endpoint registrations, app skill load paths, imported-agent allowlist registries. | Jidoka validates and runs them; the app owns lifecycle, auth, deployment, and service semantics. |
+| External package | Broad integration families with their own dependency, credential, rate-limit, policy, or service lifecycle. | Service catalogs, `jido_connect` style connectors, OAuth/vault brokers, interactive browser automation, remote agent protocols, large dynamic tool registries. | Ship as companion packages or host-app code. Jidoka should expose a stable contract instead of absorbing the implementation. |
+
+This split keeps the beginner DSL small while preserving an upgrade path:
+developers can start with core operations, graduate repeated app patterns into
+extensions, and move broad service surfaces into external packages without
+changing the agent turn model.
+
 ## Ecosystem Scan
 
 Scanned on 2026-05-24 from Hex package search for `agent`, `LLM`, and adjacent

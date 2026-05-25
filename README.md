@@ -335,8 +335,9 @@ metadata; the actual secret stays with the system that owns the integration.
   responsible for the turn.
 - **Handoffs:** transfer conversation ownership so future turns route to the
   receiving agent until reset.
-- **Tool integrations:** connect Ash actions, web tools, MCP tools, skills,
-  plugins, and catalogs.
+- **Tool integrations:** connect core adapters such as Ash actions, web tools,
+  MCP tools, skills, and plugins; keep broad service catalogs in companion
+  packages.
 - **Imported agents:** load constrained JSON/YAML specs through allowlisted
   registries.
 - **Durability:** graduate to durable runtime storage, hibernate/thaw,
