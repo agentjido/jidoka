@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T02:49:10Z",
   "created": "2026-05-24T20:35:43Z",
   "description": "Parent epic: V3 E12: Workflows\n\nSource task 5/6 from MILESTONE_V3.md:\n\n- Add tests for dependency ordering, cycles, missing refs, partial failures,\n  context propagation, and trace events.\n\nEpic closure criteria:\n- workflows are deterministic and testable without model calls\n- workflow-as-action execution is documented and verified\n",
   "id": "jidoka-3di.13.5",
@@ -14,8 +15,8 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E12: Add tests for dependency ordering, cycles, missing refs, partial failures, cont...",
   "type": "task",
-  "updated_at": "2026-05-25T02:49:09Z"
+  "updated_at": "2026-05-25T02:49:10Z"
 }
