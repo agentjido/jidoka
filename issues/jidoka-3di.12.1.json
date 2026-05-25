@@ -7,9 +7,15 @@
   "id": "jidoka-3di.12.1",
   "labels": [],
   "parent": "jidoka-3di.12",
+  "comments": [
+    {
+      "text": "Verified schedule DSL placement compiles to inert generated metadata and added assertions that Agent.schedules/0, Agent.__jidoka__().schedules, and runtime definition schedules agree. Full gate passed.",
+      "timestamp": "2026-05-25T02:08:34Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E11: Verify schedule DSL placement and generated schedule metadata",
   "type": "task",
-  "updated_at": "2026-05-25T02:05:40Z"
+  "updated_at": "2026-05-25T02:08:34Z"
 }
