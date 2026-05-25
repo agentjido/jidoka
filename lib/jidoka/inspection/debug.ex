@@ -82,7 +82,16 @@ defmodule Jidoka.Debug do
   end
 
   defp latest_request_snapshot(server_or_id) do
-    case Jido.AgentServer.state(server_or_id) do
+    with {:ok, server} <- resolve_server(server_or_id) do
+      latest_request_snapshot_for_server(server)
+    else
+      :error ->
+        {:error, Jidoka.Error.Normalize.debug_error(:not_found, target: server_or_id)}
+    end
+  end
+
+  defp latest_request_snapshot_for_server(server) do
+    case Jido.AgentServer.state(server) do
       {:ok, %{agent: agent}} ->
         request_id = agent.state[:last_request_id]
 
@@ -91,10 +100,10 @@ defmodule Jidoka.Debug do
             {:error, Jidoka.Error.Normalize.debug_error(:request_not_found, request_id: request_id)}
 
           request ->
-            pending_meta = pending_runtime_meta(server_or_id, request_id)
-            subagent_calls = Jidoka.Subagent.request_calls(server_or_id, request_id)
-            workflow_calls = Jidoka.Workflow.Capability.request_calls(server_or_id, request_id)
-            handoff_calls = Jidoka.Handoff.Capability.request_calls(server_or_id, request_id)
+            pending_meta = pending_runtime_meta(server, request_id)
+            subagent_calls = Jidoka.Subagent.request_calls(server, request_id)
+            workflow_calls = Jidoka.Workflow.Capability.request_calls(server, request_id)
+            handoff_calls = Jidoka.Handoff.Capability.request_calls(server, request_id)
             {:ok, agent, request_id, request, pending_meta, subagent_calls, workflow_calls, handoff_calls}
         end
 
@@ -392,13 +401,21 @@ defmodule Jidoka.Debug do
   defp resolve_server(server) when is_pid(server), do: {:ok, server}
 
   defp resolve_server(server_id) when is_binary(server_id) do
-    case Jidoka.Runtime.whereis(server_id) do
+    case Jidoka.Runtime.whereis(server_id) || jido_registry_whereis(server_id) do
       nil -> :error
       pid -> {:ok, pid}
     end
   end
 
   defp resolve_server(_), do: :error
+
+  defp jido_registry_whereis(server_id) do
+    Jido.AgentServer.whereis(Jido.Registry, server_id)
+  rescue
+    _error -> nil
+  catch
+    :exit, _reason -> nil
+  end
 
   defp ensure_pending_table do
     case :ets.whereis(@pending_table) do

@@ -19,6 +19,7 @@ defmodule JidokaTest.DebugSummaryTest do
             message: "Use the add_numbers tool to add 17 and 25. Reply with only the sum.",
             context: %{
               Jidoka.Subagent.request_id_key() => "internal",
+              api_key: "raw-secret",
               session: "cli",
               tenant: "demo"
             }
@@ -70,7 +71,8 @@ defmodule JidokaTest.DebugSummaryTest do
            }
 
     assert summary.tool_names == ["add_numbers"]
-    assert summary.context_preview == ["session=\"cli\"", "tenant=\"demo\""]
+    assert summary.context_preview == ["api_key=\"[REDACTED]\"", "session=\"cli\"", "tenant=\"demo\""]
+    refute inspect(summary.context_preview) =~ "raw-secret"
     assert summary.message_count == 2
 
     assert summary.memory == %{
@@ -131,5 +133,53 @@ defmodule JidokaTest.DebugSummaryTest do
     after
       :ok = Jidoka.stop_agent(pid)
     end
+  end
+
+  test "normalizes missing-agent debug lookups" do
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             Jidoka.inspect_request("missing-debug-agent-#{System.unique_integer([:positive])}")
+
+    assert error.phase == :debug
+    assert error.details.operation == :debug
+    assert error.details.cause == :not_found
+  end
+
+  test "summarizes interrupted and failed requests" do
+    interrupt =
+      Jidoka.Interrupt.new(
+        id: "approval",
+        kind: :approval,
+        message: "Approval required",
+        data: %{amount: 100}
+      )
+
+    interrupted_request_id = "req-debug-interrupted"
+
+    interrupted_agent =
+      JidokaTest.ToolAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request(interrupted_request_id, "needs approval")
+      |> Request.fail_request(interrupted_request_id, {:interrupt, interrupt})
+
+    assert {:ok, interrupted} = Jidoka.Debug.request_summary(interrupted_agent, interrupted_request_id)
+    assert interrupted.status == :failed
+    assert interrupted.input_message == "needs approval"
+    assert interrupted.interrupt == interrupt
+    assert interrupted.error == {:interrupt, interrupt}
+
+    failed_request_id = "req-debug-failed"
+    failure = RuntimeError.exception("provider failed")
+
+    failed_agent =
+      JidokaTest.ToolAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request(failed_request_id, "will fail")
+      |> Request.fail_request(failed_request_id, failure)
+
+    assert {:ok, failed} = Jidoka.Debug.request_summary(failed_agent, failed_request_id)
+    assert failed.status == :failed
+    assert failed.input_message == "will fail"
+    assert failed.prompt_preview.user_message == "will fail"
+    assert failed.error == failure
   end
 end

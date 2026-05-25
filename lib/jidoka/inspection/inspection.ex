@@ -104,13 +104,41 @@ defmodule Jidoka.Inspection do
   end
 
   defp request_summary_for_server(server_or_id, request_id) when is_binary(request_id) do
-    case Jido.AgentServer.state(server_or_id) do
+    with {:ok, server} <- resolve_server(server_or_id) do
+      request_summary_for_resolved_server(server, request_id)
+    else
+      :error ->
+        {:error, Jidoka.Error.Normalize.debug_error(:not_found, target: server_or_id)}
+    end
+  end
+
+  defp request_summary_for_resolved_server(server, request_id) do
+    case Jido.AgentServer.state(server) do
       {:ok, %{agent: %Jido.Agent{} = agent}} ->
         Jidoka.Debug.request_summary(agent, request_id)
 
       {:error, reason} ->
-        {:error, Jidoka.Error.Normalize.debug_error(reason, target: server_or_id)}
+        {:error, Jidoka.Error.Normalize.debug_error(reason, target: server)}
     end
+  end
+
+  defp resolve_server(server) when is_pid(server), do: {:ok, server}
+
+  defp resolve_server(server_id) when is_binary(server_id) do
+    case Jidoka.Runtime.whereis(server_id) || jido_registry_whereis(server_id) do
+      pid when is_pid(pid) -> {:ok, pid}
+      _ -> :error
+    end
+  end
+
+  defp resolve_server(server), do: {:ok, server}
+
+  defp jido_registry_whereis(server_id) do
+    Jido.AgentServer.whereis(Jido.Registry, server_id)
+  rescue
+    _error -> nil
+  catch
+    :exit, _reason -> nil
   end
 
   defp request_count(%{state: %{requests: requests}}) when is_map(requests),
