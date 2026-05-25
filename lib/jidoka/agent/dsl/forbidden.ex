@@ -10,7 +10,8 @@ defmodule Jidoka.Agent.Dsl.Forbidden do
     handoffs: "Move handoff declarations inside `capabilities do ... end`.",
     hooks: "Use `controls do ... end` for policy and keep lifecycle callbacks inside `lifecycle do ... end`.",
     guardrails: "Use `controls do input/operation/result ... end`.",
-    output: "Use `result` inside `agent :id do ... end`."
+    output: "Use `result` inside `agent :id do ... end`.",
+    schedules: "Move `schedule :name do ... end` entries inside `agent :id do ... end`."
   }
 
   @call_messages %{

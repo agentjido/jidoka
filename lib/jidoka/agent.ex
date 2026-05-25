@@ -29,11 +29,11 @@ defmodule Jidoka.Agent do
   - `agent.model`
   - `agent.instructions` as a string, module callback, or MFA tuple
   - `agent.character` as an optional prompt/persona source
+  - `agent.schedule` for first-class recurring agent turns registered by the application
   - `tools` for deterministic action modules
   - `capabilities` for Ash resources, MCP tools, skills, plugins, subagents, and workflows
   - `controls` for input, operation, and result policy
   - `lifecycle` for runtime behavior such as memory, hooks, and compaction
-  - `schedules` for first-class recurring agent turns registered by the application
 
   Vocabulary:
 

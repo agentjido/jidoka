@@ -74,9 +74,7 @@ defmodule JidokaTest.ScheduledAgent do
   agent :scheduled_agent do
     model :fast
     instructions "You are a concise scheduled assistant."
-  end
 
-  schedules do
     schedule :daily_digest do
       cron("0 9 * * *")
       timezone("America/Chicago")

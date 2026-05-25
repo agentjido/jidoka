@@ -1,6 +1,8 @@
 defmodule Jidoka.Agent.Dsl.Sections.Contract do
   @moduledoc false
 
+  alias Jidoka.Agent.Dsl.Sections.Schedules
+
   @spec result_entity() :: Spark.Dsl.Entity.t()
   def result_entity do
     %Spark.Dsl.Entity{
@@ -89,7 +91,8 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
         ]
       ],
       entities: [
-        result: [result_entity()]
+        result: [result_entity()],
+        schedules: [Schedules.schedule_entity()]
       ]
     }
   end

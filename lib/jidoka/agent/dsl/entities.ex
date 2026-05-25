@@ -9,6 +9,7 @@ defmodule Jidoka.Agent.Dsl.Agent do
     :description,
     :context,
     :result,
+    :schedules,
     :__spark_metadata__
   ]
 end

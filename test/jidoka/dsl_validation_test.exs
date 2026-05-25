@@ -136,6 +136,14 @@ defmodule JidokaTest.DslValidationTest do
           repair(1)
           on_validation_error(:repair)
         end
+
+        schedule :daily_digest do
+          cron("0 9 * * *")
+          timezone("America/Chicago")
+          prompt("Prepare the daily digest.")
+          conversation("daily-digest")
+          overlap(:skip)
+        end
       end
 
       tools do
@@ -175,15 +183,6 @@ defmodule JidokaTest.DslValidationTest do
         result JidokaTest.SafeReplyGuardrail
       end
 
-      schedules do
-        schedule :daily_digest do
-          cron("0 9 * * *")
-          timezone("America/Chicago")
-          prompt("Prepare the daily digest.")
-          conversation("daily-digest")
-          overlap(:skip)
-        end
-      end
       """)
 
     assert module.id() == "full_section_agent"
@@ -219,7 +218,8 @@ defmodule JidokaTest.DslValidationTest do
           {"subagents", "subagent JidokaTest.ResearchSpecialist"},
           {"hooks", "before_turn JidokaTest.InjectTenantHook"},
           {"guardrails", "input JidokaTest.SafePromptGuardrail"},
-          {"output", "schema Zoi.object(%{answer: Zoi.string()})"}
+          {"output", "schema Zoi.object(%{answer: Zoi.string()})"},
+          {"schedules", "schedule :daily_digest do\n  cron(\"0 9 * * *\")\n  prompt(\"Daily digest\")\nend"}
         ] do
       assert_compile_error(~r/Top-level `#{section} do .*` is not valid/s, """
       agent :legacy_#{section}_agent do
@@ -427,9 +427,7 @@ defmodule JidokaTest.DslValidationTest do
     assert_dsl_error(~r/prompt.*required|required.*prompt/s, """
     agent :invalid_schedule_agent do
       instructions "This should fail."
-    end
 
-    schedules do
       schedule :missing_prompt do
         cron("0 9 * * *")
       end

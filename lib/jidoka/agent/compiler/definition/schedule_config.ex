@@ -4,7 +4,9 @@ defmodule Jidoka.Agent.Definition.ScheduleConfig do
   @spec resolve!(module()) :: [Jidoka.Schedule.t()]
   def resolve!(owner_module) do
     owner_module
-    |> Spark.Dsl.Extension.get_entities([:schedules])
+    |> Jidoka.Agent.Definition.agent_contract!()
+    |> Map.get(:schedules, [])
+    |> then(&(&1 || []))
     |> Enum.map(&resolve_schedule!(owner_module, &1))
   end
 
@@ -31,9 +33,9 @@ defmodule Jidoka.Agent.Definition.ScheduleConfig do
       {:error, reason} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: Jidoka.Error.format(reason),
-                path: [:schedules, :schedule],
+                path: [:jidoka, :agent, :schedule],
                 value: entity,
-                hint: "Use `schedule :name do cron \"0 9 * * *\" prompt \"...\" end` with a non-empty cron and prompt.",
+                hint: "Place `schedule :name do cron \"0 9 * * *\" prompt \"...\" end` inside `agent :id do ... end`.",
                 module: owner_module,
                 location: Map.get(entity.__spark_metadata__ || %{}, :anno)
               )

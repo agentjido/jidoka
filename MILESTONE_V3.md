@@ -788,6 +788,9 @@ task should be the final child task for every epic.
   `Agent.schedules/0`, `Agent.__jidoka__().schedules`, and
   `Agent.runtime_module().__jidoka_definition__().schedules` should agree, and
   registration/execution remains an application runtime choice.
+- Schedule declarations live inside `agent :id do ... end` in V3 because they
+  describe agent-owned runtime behavior. `tools` and `capabilities` remain
+  outside because they define the operation surface available to the agent.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`
