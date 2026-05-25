@@ -6,7 +6,11 @@ defmodule Jidoka.Session do
   runtime agent, conversation id, context lane, and default runtime context used
   for repeated turns through `Jidoka.chat/3`. The running Jido agent process
   still owns state, `Jido.Thread` remains the conversation log, and
-  `Jidoka.Agent.View` projects messages for UI and debugging surfaces.
+  `Jidoka.AgentView` projects messages for UI and debugging surfaces.
+
+  Session-owned data is intentionally small: addressing, startup options,
+  runtime context, and metadata. Inspection, tracing, and compaction snapshots
+  are projected from the running agent, not stored in the session struct.
   """
 
   alias Jidoka.ImportedAgent

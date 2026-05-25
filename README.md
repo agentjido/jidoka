@@ -160,6 +160,15 @@ Sessions are conversation addresses, not durable storage. They carry `agent_id`,
 jobs, schedules, and tests can all point at the same runtime boundary without a
 second chat API.
 
+This is the Jidoka-owned continuity layer:
+
+- session addressing gives a conversation a stable runtime target
+- runtime context carries caller-provided facts into prompts, tools, controls,
+  memory, schedules, and UI views
+- inspection and tracing explain what happened during recent turns
+- compaction snapshots summarize older provider-facing context without deleting
+  the underlying thread
+
 For lower-level OTP ownership, run generated agents under an app-owned runtime.
 The Jidoka-authored module stays the same; your app takes over registry,
 storage, supervision, deployment, auth, and persistence boundaries:

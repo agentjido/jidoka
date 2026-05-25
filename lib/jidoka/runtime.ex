@@ -36,6 +36,11 @@ defmodule Jidoka.Runtime do
   use Jido's instance-level registry, task supervisor, agent supervisor,
   scheduler, debug configuration, worker pools, partitions, and persistence
   primitives directly.
+
+  In the default runtime, Jidoka owns session addressing, runtime context,
+  request inspection, trace projection, and compaction snapshots. Applications
+  that need durable restore, checkpointing, journals, or storage adapters should
+  move the generated runtime module into an app-owned runtime boundary.
   """
 
   use Jido, otp_app: :jidoka
