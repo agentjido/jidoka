@@ -120,8 +120,8 @@ From there, add only what the agent actually needs:
   receive the result back
 - `handoff` when another agent should become the conversation owner for future
   turns
-- `catalog` when the agent needs to discover tools from a larger integration
-  surface
+- `catalog` when the agent needs to discover a few relevant tools from a larger
+  integration surface without loading the whole registry into the prompt
 
 ## Runtime Model
 

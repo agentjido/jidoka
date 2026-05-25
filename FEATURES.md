@@ -345,6 +345,52 @@ providers or third-party network services.
 | Plugins | Unit tests validate local plugin modules and merged plugin actions without live services. |
 | Catalog / connect layer | No core runtime yet. Future tests should use in-memory catalog fixtures and fake brokers before any service-backed connector tests. |
 
+### Catalog Discovery Contract
+
+Catalogs are the scalable answer for large tool surfaces. The key invariant is
+simple: do not put hundreds or thousands of tool schemas in the model prompt.
+Give the agent one small discovery operation, let deterministic catalog code
+find relevant candidates, then expose only a bounded selected set.
+
+Recommended V3 contract:
+
+1. **Prompt surface:** the agent sees a compact catalog-search operation and
+   instructions for when to use it. The full catalog is never rendered into the
+   system prompt.
+2. **Search input:** the model supplies a small query payload such as
+   `query`, `intent`, `domain`, `required_inputs`, `credential_provider`,
+   `risk`, and `max_results`.
+3. **Catalog engine:** app or companion-package code searches indexed action
+   metadata with deterministic filters and ranking. This can use keyword,
+   metadata, capability tags, embeddings, or service-specific indexes, but it
+   should not require an LLM to choose candidates.
+4. **Candidate output:** search returns a capped list of operation cards:
+   stable id, name, short description, capability tags, input schema summary,
+   auth/credential requirements, risk, version, and source package.
+5. **Execution:** the runtime either registers the selected candidates for the
+   current request or invokes one through a generic catalog executor with the
+   selected operation id and arguments.
+6. **Controls and credentials:** operation controls run after candidate
+   selection and before execution. Credential brokers resolve references inside
+   the application boundary, not in the model prompt.
+7. **Tracing:** traces record the search query summary, candidate ids, selected
+   operation id, credential reference metadata, and execution result metadata,
+   not full catalog payloads or secrets.
+
+Operational guardrails:
+
+- cap search results by default, for example 5 to 10 candidates
+- cap schema/detail size in returned cards
+- prefer stable operation ids over generated prompt names
+- require an allowlisted executor for imported or remote catalog entries
+- keep service-specific clients, auth, rate limits, and retries in companion
+  packages or host-app code
+
+This lets Jidoka support 100, 1,000, or 100,000 available operations without
+turning the system prompt into a registry dump. Jidoka's role is the agent-facing
+contract; the action/catalog package owns indexing and the integration package
+owns service execution.
+
 ## Ecosystem Scan
 
 Scanned on 2026-05-24 from Hex package search for `agent`, `LLM`, and adjacent
