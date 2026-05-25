@@ -8,14 +8,16 @@
     "jidoka-3di.16",
     "jidoka-3di.18"
   ],
+  "closed_at": "2026-05-25T03:26:17Z",
+  "close_reason": "E13 complete: verified subagent delegation, handoff routing, failure paths, HITL controls, and terminology separation.",
   "created": "2026-05-24T20:35:43Z",
   "description": "Purpose: finalize delegation and ownership transfer.\n\nDone when:\n- delegation and ownership transfer are separate concepts in code and docs\n- handoff routing works cleanly with sessions\n",
   "id": "jidoka-3di.14",
   "labels": [],
   "parent": "jidoka-3di",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "V3 E13: Subagents and handoffs",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:49Z"
+  "updated_at": "2026-05-25T03:26:17Z"
 }
