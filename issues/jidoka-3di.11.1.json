@@ -7,9 +7,15 @@
   "id": "jidoka-3di.11.1",
   "labels": [],
   "parent": "jidoka-3di.11",
+  "comments": [
+    {
+      "text": "Verified streaming contract with tests for stream:true parity, explicit chat_stream, session streaming, await errors, caller-owned sinks, missing targets, option validation, event filtering, polling, timeout, and delta helpers. Full gate passed.",
+      "timestamp": "2026-05-25T01:51:47Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E10: Verify chatstream/3, stream: true, stream await, and error behavior",
   "type": "task",
-  "updated_at": "2026-05-25T01:49:27Z"
+  "updated_at": "2026-05-25T01:51:47Z"
 }
