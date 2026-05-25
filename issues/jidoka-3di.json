@@ -2,13 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T05:01:22Z",
+  "close_reason": "Milestone V3 complete. Implemented the simplified DSL and feature closure plan across agents, sessions, typed results, controls, credentials, debugging/tracing, observability, memory/compaction, streaming/AgentView, schedules, workflows, subagents/handoffs, tool integrations, imported agents, durability guidance, examples, Livebooks, testing guidance, and final hardening. Final full verification passed on main.",
   "created": "2026-05-24T20:35:38Z",
   "description": "Root epic for Milestone V3.\n\nGoal: clean-break V3 surface for Jidoka's simplified DSL and feature closure.\n\nLoaded from MILESTONE_V3.md. The root document contains phase gates, the full DAG, operating rules, task details, and the risk register.\n",
   "id": "jidoka-3di",
   "labels": [],
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "V3: simplified DSL and feature closure",
   "type": "epic",
-  "updated_at": "2026-05-24T20:36:14Z"
+  "updated_at": "2026-05-25T05:01:22Z"
 }
