@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T02:31:43Z",
   "created": "2026-05-24T20:35:43Z",
   "description": "Parent epic: V3 E12: Workflows\n\nSource task 1/6 from MILESTONE_V3.md:\n\n- Audit workflow DSL and relationship to agent tools.\n\nEpic closure criteria:\n- workflows are deterministic and testable without model calls\n- workflow-as-action execution is documented and verified\n",
   "id": "jidoka-3di.13.1",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E12: Audit workflow DSL and relationship to agent tools",
   "type": "task",
   "updated_at": "2026-05-25T02:31:43Z"
