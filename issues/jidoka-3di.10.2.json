@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T01:29:29Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E9: Memory and compaction\n\nSource task 2/6 from MILESTONE_V3.md:\n\n- Audit compaction modes, thresholding, prompt override, manual compaction, and\n  provider-facing message trimming.\n\nEpic closure criteria:\n- memory and compaction have separate, crisp docs and tests\n- compaction does not mutate the canonical transcript\n",
   "id": "jidoka-3di.10.2",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E9: Audit compaction modes, thresholding, prompt override, manual compaction, and p...",
   "type": "task",
   "updated_at": "2026-05-25T01:29:29Z"
