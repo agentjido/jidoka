@@ -7,9 +7,15 @@
   "id": "jidoka-3di.9.2",
   "labels": [],
   "parent": "jidoka-3di.9",
+  "comments": [
+    {
+      "text": "Verified and hardened correlation ID handling by lifting session/conversation/context refs from nested extra_refs into emitted trace metadata while preserving request/run/trace/span fields. Added regression coverage using Jidoka.Session.chat_opts/2 and structured trace lookup. Verified with mix format --check-formatted, mix compile --warnings-as-errors, mix test, mix docs --warnings-as-errors, mix doctor --raise, and git diff --check.",
+      "timestamp": "2026-05-25T00:56:47Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E8: Verify correlation IDs: session, conversation, request, run, trace, span",
   "type": "task",
-  "updated_at": "2026-05-25T00:49:43Z"
+  "updated_at": "2026-05-25T00:56:47Z"
 }
