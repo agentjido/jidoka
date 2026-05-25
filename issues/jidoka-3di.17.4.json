@@ -2,14 +2,16 @@
   "assignee": "",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T04:12:18Z",
+  "close_reason": "Added a provider-free durable storage test proving a Jidoka-authored generated runtime can hibernate and thaw through an app-owned Jido runtime using Jido.Storage.File.",
   "created": "2026-05-24T20:35:45Z",
   "description": "Parent epic: V3 E16: Durability and graduation\n\nSource task 4/6 from MILESTONE_V3.md:\n\n- Add tests or examples that prove a Jidoka-authored agent can run in an\n  app-owned durable runtime.\n\nEpic closure criteria:\n- users understand when sessions stop being enough\n- the graduation path is tested or explicitly documented as a runtime concern\n- no public API implies session persistence unless it exists\n",
   "id": "jidoka-3di.17.4",
   "labels": [],
   "parent": "jidoka-3di.17",
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "E16: Add tests or examples that prove a Jidoka-authored agent can run in an app-owne...",
   "type": "task",
-  "updated_at": "2026-05-24T20:35:45Z"
+  "updated_at": "2026-05-25T04:12:18Z"
 }
