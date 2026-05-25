@@ -7,9 +7,15 @@
   "id": "jidoka-3di.9.1",
   "labels": [],
   "parent": "jidoka-3di.9",
+  "comments": [
+    {
+      "text": "Completed an emitted telemetry/trace metadata audit. Standardized lifecycle trace helpers to lift correlation refs from available runtime context while preserving explicit request/agent/conversation fields, including credentials, guardrails/hooks, memory, output, workflow, subagent, handoff, MCP, and session-backed schedules. Updated trace normalization to preserve non-nil top-level fields over nested refs. Added regression assertions for real lifecycle traces carrying session/conversation/context refs. Verified with format, compile, full tests, docs warnings-as-errors, doctor, and diff checks.",
+      "timestamp": "2026-05-25T01:20:02Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E8: Audit emitted telemetry and trace metadata",
   "type": "task",
-  "updated_at": "2026-05-25T01:11:29Z"
+  "updated_at": "2026-05-25T01:20:02Z"
 }
