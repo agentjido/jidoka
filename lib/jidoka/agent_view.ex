@@ -17,6 +17,13 @@ defmodule Jidoka.AgentView do
   - starting or reusing the agent
   - exposing visible messages, streaming drafts, LLM context, and debug events
   - mapping runtime results into a surface-neutral view state
+
+  In Phoenix applications, keep process ownership outside the view layer. Store
+  the `%Jidoka.Session{}` or runtime agent reference, the latest `%AgentView{}`
+  projection, and any in-flight run handle in socket assigns; let the running
+  agent process and `Jido.Thread` remain the canonical state. Refresh this
+  projection from the runtime after turns complete instead of treating it as a
+  transcript store or persistence layer.
   """
 
   alias Jido.AI.Request

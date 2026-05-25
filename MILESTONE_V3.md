@@ -772,6 +772,9 @@ task should be the final child task for every epic.
 - Memory prompt text, request metadata, compaction summaries, and compaction
   previews must be sanitized before they are reused in prompts, traces, or
   inspection surfaces.
+- Phoenix and LiveView own presentation state only. The running agent process
+  owns thread/request state, sessions address that runtime boundary, and
+  `AgentView` is a refreshable projection rather than persistence.
 - Credential brokering must prove the no-secret-leak invariant before shipping
   execution behavior.
 - Durability is a graduation path unless a separate persistence implementation

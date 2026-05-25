@@ -189,6 +189,39 @@ storage adapters, instance managers, and low-level signal/directive control.
 Jidoka is the on-ramp: start with the smaller DSL, then move the generated
 runtime module into the full runtime when production needs outgrow the wrapper.
 
+## Phoenix And UI State
+
+Phoenix and LiveView code should treat agents as runtime processes and
+`AgentView` as a projection for assigns. Keep the source of truth in the
+running agent and its thread; keep only the session, current view, and any
+in-flight run handle in UI state.
+
+```elixir
+defmodule MyAppWeb.SupportAgentView do
+  use Jidoka.AgentView, agent: MyApp.SupportAgent
+end
+
+def mount(%{"ticket_id" => ticket_id}, _session, socket) do
+  jidoka_session =
+    Jidoka.session(MyApp.SupportAgent, "ticket:#{ticket_id}",
+      context: %{actor_id: socket.assigns.current_user.id, ticket_id: ticket_id}
+    )
+
+  {:ok, pid} = MyAppWeb.SupportAgentView.start_agent(jidoka_session)
+  {:ok, view} = MyAppWeb.SupportAgentView.snapshot(pid, jidoka_session)
+
+  {:ok, assign(socket, jidoka_session: jidoka_session, agent_pid: pid, agent_view: view)}
+end
+```
+
+For a submit event, run a normal Jidoka turn with the session. Use
+`Jidoka.chat_stream/3` when the UI should render incremental model events. If
+the UI uses `AgentView.start_turn/4`, keep the returned run handle in assigns,
+refresh the projection while the turn is running, then call `after_turn/2` after
+the result arrives. Do not copy the transcript into LiveView assigns as a second
+store, and do not use `AgentView` as durability. If a conversation must survive
+process restarts, graduate the runtime to durable storage.
+
 ## Debugging And Observability
 
 Debugging is a first-class Jidoka concern. During development, use inspection,
