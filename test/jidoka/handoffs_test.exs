@@ -4,6 +4,7 @@ defmodule JidokaTest.HandoffsTest do
   alias JidokaTest.{
     BillingHandoffSpecialist,
     ContextPeerHandoffAgent,
+    ControlledHandoffRouterAgent,
     HandoffForwardExceptAgent,
     HandoffForwardNoneAgent,
     HandoffForwardOnlyAgent,
@@ -314,6 +315,48 @@ defmodule JidokaTest.HandoffsTest do
       reset_agent(session.agent_id)
       reset_agent(handoff_agent_id)
       Jidoka.reset_handoff(session)
+    end
+  end
+
+  test "operation controls can interrupt handoff before ownership transfer" do
+    runtime = ControlledHandoffRouterAgent.runtime_module()
+    agent = new_runtime_agent(runtime)
+    conversation_id = unique_id("handoff-hitl")
+    request_id = unique_id("req-handoff-hitl")
+
+    assert {:ok, _agent, {:ai_react_start, params}} =
+             runtime.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "transfer",
+                  request_id: request_id,
+                  tool_context: %{
+                    :notify_pid => self(),
+                    Jidoka.Handoff.context_key() => conversation_id,
+                    Jidoka.Handoff.from_agent_key() => ControlledHandoffRouterAgent.id()
+                  }
+                }}
+             )
+
+    tool = handoff_tool(ControlledHandoffRouterAgent, "controlled_billing_specialist")
+    handoff_agent_id = "jidoka_handoff_#{conversation_id}_controlled_billing_specialist"
+
+    try do
+      assert {:error, {:interrupt, %Jidoka.Interrupt{} = interrupt}} =
+               tool.run(%{message: "Please take over."}, params.tool_context)
+
+      assert interrupt.kind == :approval
+      assert interrupt.message == "Approve handoff controlled_billing_specialist."
+      assert interrupt.data.kind == :handoff
+
+      assert_receive {:delegation_interrupt, :approval, :handoff, :operation_control}
+      assert Jidoka.Handoff.Capability.request_calls(self(), request_id) == []
+      assert is_nil(Jidoka.handoff_owner(conversation_id))
+      assert is_nil(Jidoka.whereis(handoff_agent_id))
+    after
+      cleanup_conversation(conversation_id)
+      reset_agent(handoff_agent_id)
     end
   end
 

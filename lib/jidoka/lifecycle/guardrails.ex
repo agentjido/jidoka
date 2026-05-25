@@ -117,6 +117,28 @@ defmodule Jidoka.Guardrails do
     Config.combine(defaults, request_guardrails)
   end
 
+  @doc false
+  @spec run_operation_control(map(), map() | keyword()) ::
+          :ok | {:error, term()} | {:interrupt, Interrupt.t()}
+  def run_operation_control(context, attrs)
+      when is_map(context) and (is_map(attrs) or is_list(attrs)) do
+    attrs = if is_list(attrs), do: Map.new(attrs), else: attrs
+
+    case operation_control_callback(context) do
+      callback when is_function(callback, 1) ->
+        attrs
+        |> Map.put_new(:context, context)
+        |> callback.()
+
+      _other ->
+        :ok
+    end
+  rescue
+    error -> {:error, error}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
+
   defp maybe_attach_tool_guardrail_callback(context, tool_guardrails, agent, request_id)
        when is_map(context) and is_binary(request_id) do
     callback = fn %{
@@ -124,12 +146,13 @@ defmodule Jidoka.Guardrails do
                     tool_call_id: tool_call_id,
                     arguments: arguments,
                     context: runtime_context
-                  } ->
+                  } = attrs ->
       input = %Tool{
         agent: agent,
         server: self(),
         request_id: request_id,
         tool_name: tool_name,
+        operation_kind: operation_kind(attrs),
         tool_call_id: tool_call_id,
         arguments: arguments,
         context: runtime_context,
@@ -159,6 +182,27 @@ defmodule Jidoka.Guardrails do
 
   defp maybe_attach_tool_guardrail_callback(context, _tool_guardrails, _agent, _request_id),
     do: context
+
+  defp operation_control_callback(context) do
+    Map.get(context, Config.tool_guardrail_callback_key()) ||
+      Map.get(context, Atom.to_string(Config.tool_guardrail_callback_key()))
+  end
+
+  defp operation_kind(attrs) when is_map(attrs) do
+    case Map.get(
+           attrs,
+           :operation_kind,
+           Map.get(attrs, "operation_kind", Map.get(attrs, :kind, Map.get(attrs, "kind")))
+         ) do
+      kind when kind in [:action, :tool, :workflow, :subagent, :handoff] -> kind
+      "action" -> :action
+      "tool" -> :tool
+      "workflow" -> :workflow
+      "subagent" -> :subagent
+      "handoff" -> :handoff
+      _other -> nil
+    end
+  end
 
   defp trace_credential_refs(agent, request_id, tool_name, tool_call_id, arguments, context) do
     credentials = Jidoka.Credential.references([arguments, context])

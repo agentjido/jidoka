@@ -61,6 +61,35 @@ defmodule JidokaTest.PluginAgent do
   end
 end
 
+defmodule JidokaTest.ApproveDelegationControl do
+  use Jidoka.Control, name: "approve_delegation"
+
+  @impl true
+  def call(%Jidoka.Guardrails.Tool{operation_kind: kind, tool_name: name, context: context})
+      when kind in [:subagent, :handoff] do
+    notify_pid = Map.get(context, :notify_pid, Map.get(context, "notify_pid"))
+
+    Jidoka.Approval.request("Approve #{kind} #{name}.",
+      data: %{notify_pid: notify_pid, from: :operation_control, kind: kind, name: to_string(name)}
+    )
+  end
+
+  def call(%Jidoka.Guardrails.Tool{}), do: :ok
+end
+
+defmodule JidokaTest.NotifyDelegationInterruptHook do
+  use Jidoka.Hook, name: "notify_delegation_interrupt"
+
+  @impl true
+  def call(%Jidoka.Hooks.InterruptInput{interrupt: interrupt}) do
+    if pid = get_in(interrupt.data, [:notify_pid]) do
+      send(pid, {:delegation_interrupt, interrupt.kind, interrupt.data[:kind], interrupt.data[:from]})
+    end
+
+    :ok
+  end
+end
+
 defmodule JidokaTest.ResearchSpecialist do
   defmodule Runtime do
     use Jido.Agent,
@@ -219,6 +248,29 @@ defmodule JidokaTest.StructuredOrchestratorAgent do
 
   capabilities do
     subagent JidokaTest.ResearchSpecialist, result: :structured
+  end
+end
+
+defmodule JidokaTest.ControlledSubagentOrchestratorAgent do
+  use Jidoka.Agent
+
+  agent :controlled_subagent_orchestrator_agent do
+    model :fast
+    instructions "You require approval before delegating to subagents."
+  end
+
+  lifecycle do
+    on_interrupt JidokaTest.NotifyDelegationInterruptHook
+  end
+
+  controls do
+    operation(JidokaTest.ApproveDelegationControl,
+      when: [kind: :subagent]
+    )
+  end
+
+  capabilities do
+    subagent JidokaTest.ResearchSpecialist
   end
 end
 
@@ -521,6 +573,32 @@ defmodule JidokaTest.SessionHandoffRouterAgent do
     handoff(JidokaTest.SessionBillingHandoffAgent,
       as: :session_billing_specialist,
       description: "Transfer session ownership to the billing specialist."
+    )
+  end
+end
+
+defmodule JidokaTest.ControlledHandoffRouterAgent do
+  use Jidoka.Agent
+
+  agent :controlled_handoff_router_agent do
+    model :fast
+    instructions "You require approval before transferring conversation ownership."
+  end
+
+  lifecycle do
+    on_interrupt JidokaTest.NotifyDelegationInterruptHook
+  end
+
+  controls do
+    operation(JidokaTest.ApproveDelegationControl,
+      when: [kind: :handoff]
+    )
+  end
+
+  capabilities do
+    handoff(JidokaTest.SessionBillingHandoffAgent,
+      as: :controlled_billing_specialist,
+      description: "Transfer to billing after approval."
     )
   end
 end

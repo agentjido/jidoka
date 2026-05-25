@@ -4,6 +4,7 @@ defmodule JidokaTest.SubagentsTest do
   alias JidokaTest.{
     ContextPeerNoForwardOrchestratorAgent,
     ContextPeerOrchestratorAgent,
+    ControlledSubagentOrchestratorAgent,
     ForwardExceptOrchestratorAgent,
     ForwardNoneOrchestratorAgent,
     ForwardOnlyOrchestratorAgent,
@@ -149,6 +150,36 @@ defmodule JidokaTest.SubagentsTest do
     assert metadata.outcome == :ok
     assert metadata.result_preview == result
     assert "tenant" in metadata.context_keys
+  end
+
+  test "operation controls can interrupt subagent delegation before child execution" do
+    runtime = ControlledSubagentOrchestratorAgent.runtime_module()
+    agent = new_runtime_agent(runtime)
+    request_id = "req-subagent-hitl-1"
+
+    assert {:ok, _agent, {:ai_react_start, params}} =
+             runtime.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "delegate",
+                  request_id: request_id,
+                  tool_context: %{notify_pid: self()}
+                }}
+             )
+
+    research_tool = find_tool(ControlledSubagentOrchestratorAgent, "research_agent")
+
+    assert {:error, {:interrupt, %Jidoka.Interrupt{} = interrupt}} =
+             research_tool.run(%{task: "Needs approval"}, params.tool_context)
+
+    assert interrupt.kind == :approval
+    assert interrupt.message == "Approve subagent research_agent."
+    assert interrupt.data.kind == :subagent
+
+    assert_receive {:delegation_interrupt, :approval, :subagent, :operation_control}
+    refute_receive {:research_specialist_context, _forwarded_context}
+    assert Jidoka.Subagent.request_calls(self(), request_id) == []
   end
 
   test "supports persistent peer subagents with static ids" do

@@ -8,14 +8,16 @@ defmodule Jidoka.Handoff.Runtime do
   def run_handoff_tool(%{} = capability, params, context)
       when is_map(params) and is_map(context) do
     started_at = System.monotonic_time(:millisecond)
-    trace_handoff(context, capability, :start)
 
     with {:ok, payload} <- normalize_payload(params),
+         :ok <- run_operation_control(context, capability, params),
          {:ok, conversation_id} <- conversation_id(context, capability),
          forwarded_context <- forwarded_context(context, capability.forward_context),
          {:ok, to_agent_id} <- resolve_target(capability, conversation_id, context),
          {:ok, _pid} <- ensure_target_running(capability, to_agent_id),
          :ok <- verify_peer_runtime(capability.agent, to_agent_id) do
+      trace_handoff(context, capability, :start)
+
       handoff =
         Jidoka.Handoff.new(
           conversation_id: conversation_id,
@@ -40,6 +42,9 @@ defmodule Jidoka.Handoff.Runtime do
       trace_handoff(context, capability, :stop, trace_metadata(metadata))
       {:error, {:handoff, handoff}}
     else
+      {:interrupt, %Jidoka.Interrupt{} = interrupt} ->
+        {:error, {:interrupt, interrupt}}
+
       {:error, reason} ->
         error = normalize_handoff_error(capability, reason, context)
         metadata = error_metadata(capability, context, error, started_at)
@@ -217,6 +222,16 @@ defmodule Jidoka.Handoff.Runtime do
   defp normalize_start_result({:error, reason}), do: {:error, {:start_failed, reason}}
   defp normalize_start_result(:ignore), do: {:error, {:start_failed, :ignore}}
   defp normalize_start_result(other), do: {:error, {:start_failed, {:invalid_start_return, other}}}
+
+  defp run_operation_control(context, capability, params) do
+    Jidoka.Guardrails.run_operation_control(context, %{
+      operation_kind: :handoff,
+      tool_name: capability.name,
+      tool_call_id: nil,
+      arguments: params,
+      context: context
+    })
+  end
 
   defp trace_handoff(context, capability, event, metadata \\ %{}) do
     measurements =

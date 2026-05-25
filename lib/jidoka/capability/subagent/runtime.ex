@@ -40,36 +40,54 @@ defmodule Jidoka.Subagent.Runtime do
   @spec run_subagent_tool(map(), map(), map()) :: {:ok, map()} | {:error, term()}
   def run_subagent_tool(%{} = subagent, params, context)
       when is_map(params) and is_map(context) do
-    Trace.emit(context, subagent, :start, %{input_keys: Context.map_keys(params)})
+    case run_operation_control(context, subagent, params) do
+      :ok ->
+        Trace.emit(context, subagent, :start, %{input_keys: Context.map_keys(params)})
 
-    case Executor.execute(subagent, params, context) do
-      {:ok, result, metadata} ->
-        Calls.record_metadata(context, metadata)
-        Trace.emit(context, subagent, :stop, Trace.metadata(metadata))
-        {:ok, Result.visible_result(subagent, result, metadata)}
+        case Executor.execute(subagent, params, context) do
+          {:ok, result, metadata} ->
+            Calls.record_metadata(context, metadata)
+            Trace.emit(context, subagent, :stop, Trace.metadata(metadata))
+            {:ok, Result.visible_result(subagent, result, metadata)}
 
-      {:error, reason, metadata} ->
-        Calls.record_metadata(context, metadata)
-        Trace.emit(context, subagent, :error, Trace.metadata(metadata, %{error: Jidoka.Error.format(reason)}))
-        {:error, Result.normalize_error(subagent, reason, context, metadata)}
+          {:error, reason, metadata} ->
+            Calls.record_metadata(context, metadata)
+            Trace.emit(context, subagent, :error, Trace.metadata(metadata, %{error: Jidoka.Error.format(reason)}))
+            {:error, Result.normalize_error(subagent, reason, context, metadata)}
+        end
+
+      {:interrupt, interrupt} ->
+        {:error, {:interrupt, interrupt}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
   @spec run_subagent(map(), map(), map()) :: {:ok, String.t()} | {:error, term()}
   def run_subagent(%{} = subagent, params, context)
       when is_map(params) and is_map(context) do
-    Trace.emit(context, subagent, :start, %{input_keys: Context.map_keys(params)})
+    case run_operation_control(context, subagent, params) do
+      :ok ->
+        Trace.emit(context, subagent, :start, %{input_keys: Context.map_keys(params)})
 
-    case Executor.execute(subagent, params, context) do
-      {:ok, result, metadata} ->
-        Calls.record_metadata(context, metadata)
-        Trace.emit(context, subagent, :stop, Trace.metadata(metadata))
-        {:ok, result}
+        case Executor.execute(subagent, params, context) do
+          {:ok, result, metadata} ->
+            Calls.record_metadata(context, metadata)
+            Trace.emit(context, subagent, :stop, Trace.metadata(metadata))
+            {:ok, result}
 
-      {:error, reason, metadata} ->
-        Calls.record_metadata(context, metadata)
-        Trace.emit(context, subagent, :error, Trace.metadata(metadata, %{error: Jidoka.Error.format(reason)}))
-        {:error, Result.normalize_error(subagent, reason, context, metadata)}
+          {:error, reason, metadata} ->
+            Calls.record_metadata(context, metadata)
+            Trace.emit(context, subagent, :error, Trace.metadata(metadata, %{error: Jidoka.Error.format(reason)}))
+            {:error, Result.normalize_error(subagent, reason, context, metadata)}
+        end
+
+      {:interrupt, interrupt} ->
+        {:error, {:interrupt, interrupt}}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -81,6 +99,16 @@ defmodule Jidoka.Subagent.Runtime do
 
   @spec latest_request_calls(pid() | String.t()) :: [map()]
   defdelegate latest_request_calls(server_or_id), to: Calls
+
+  defp run_operation_control(context, subagent, params) do
+    Jidoka.Guardrails.run_operation_control(context, %{
+      operation_kind: :subagent,
+      tool_name: subagent.name,
+      tool_call_id: nil,
+      arguments: params,
+      context: context
+    })
+  end
 
   defp request_id_from_action({_action, params}), do: request_id_from_params(params)
   defp request_id_from_action(_action), do: nil

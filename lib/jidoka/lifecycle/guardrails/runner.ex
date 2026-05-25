@@ -237,12 +237,42 @@ defmodule Jidoka.Guardrails.Runner do
 
   defp match_tool?(match, input) when is_map(match) do
     Enum.all?(match, fn
-      {:kind, kind} -> kind in [:action, :tool]
+      {:kind, kind} -> operation_kind_matches?(input, kind)
       {:name, name} -> to_string(input.tool_name) == to_string(name)
       {:credential, credential_match} -> match_credentials?(credential_match, input)
       _other -> false
     end)
   end
+
+  defp operation_kind_matches?(%Tool{} = input, kind) do
+    normalized_kind = normalize_operation_kind(kind)
+    input_kind = normalize_operation_kind(input.operation_kind)
+
+    cond do
+      normalized_kind == :tool and is_nil(input_kind) ->
+        true
+
+      normalized_kind == :tool ->
+        input_kind == :tool
+
+      is_nil(input_kind) ->
+        normalized_kind == :action
+
+      normalized_kind == :action and input_kind == :tool ->
+        true
+
+      true ->
+        input_kind == normalized_kind
+    end
+  end
+
+  defp normalize_operation_kind(kind) when kind in [:action, :tool, :workflow, :subagent, :handoff], do: kind
+  defp normalize_operation_kind("action"), do: :action
+  defp normalize_operation_kind("tool"), do: :tool
+  defp normalize_operation_kind("workflow"), do: :workflow
+  defp normalize_operation_kind("subagent"), do: :subagent
+  defp normalize_operation_kind("handoff"), do: :handoff
+  defp normalize_operation_kind(_kind), do: nil
 
   defp match_credentials?(credential_match, %Tool{} = input) when is_map(credential_match) do
     input
