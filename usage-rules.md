@@ -17,9 +17,12 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 
 ## Extensions
 
-- Use `tools do` for direct action modules.
+- Use `tools do` only for direct action modules.
 - Use `capabilities do` for Ash resources, MCP sync, web access, skills,
   plugins, subagents, workflow capabilities, and handoffs.
+- Treat generated `tools/0` and `tool_names/0` callbacks as the expanded
+  provider-visible operation surface. They include direct actions plus generated
+  action-backed tools from capabilities.
 - Use `controls do` for input, operation, and result policy.
 - Use `lifecycle do` for runtime behavior such as memory, compaction, and
   lifecycle hooks. Do not put policy decisions there; use controls.
@@ -31,6 +34,9 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
   model handoffs or workflow graphs as subagents.
 - Use `workflow` inside `capabilities do` when an agent should choose a known
   deterministic process as a provider-visible operation.
+- Keep workflow declarations out of `tools do`. The workflow module owns the
+  deterministic process; the agent capability owns how that process is exposed
+  as a model-callable operation.
 - Use `handoff` inside `capabilities do` when an agent should transfer future
   conversation ownership to another agent for the same `conversation:`.
 

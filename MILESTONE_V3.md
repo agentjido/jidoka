@@ -804,6 +804,11 @@ task should be the final child task for every epic.
   tasks, scheduler pids, and bounded run history live in the manager process;
   applications re-register compiled schedule metadata on boot when they need
   schedules to come back after restart.
+- Workflow DSL ownership is explicit in V3: `use Jidoka.Workflow` defines the
+  deterministic process, while `capabilities do workflow MyWorkflow end` exposes
+  that process to an agent as a generated action-backed operation. `tools do`
+  stays reserved for direct action modules, and `Agent.tools/0` remains the
+  expanded provider-visible operation surface.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

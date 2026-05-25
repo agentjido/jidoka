@@ -255,13 +255,17 @@ defmodule Jidoka.Agent.Codegen do
       def skill_names, do: unquote(Macro.escape(definition.skill_names))
 
       @doc """
-      Returns the configured tool modules.
+      Returns provider-visible action-backed tool modules after expansion.
+
+      This includes direct `tools do action ... end` entries plus generated
+      modules for integrations such as plugins, web tools, subagents,
+      workflows, and handoffs.
       """
       @spec tools() :: [module()]
       def tools, do: unquote(Macro.escape(definition.tools))
 
       @doc """
-      Returns the configured published tool names.
+      Returns provider-visible operation names after expansion.
       """
       @spec tool_names() :: [String.t()]
       def tool_names, do: unquote(Macro.escape(definition.tool_names))
@@ -297,13 +301,16 @@ defmodule Jidoka.Agent.Codegen do
       def subagent_names, do: unquote(Macro.escape(definition.subagent_names))
 
       @doc """
-      Returns the configured workflow capabilities.
+      Returns workflow capability declarations from `capabilities do workflow ... end`.
+
+      Each entry is exposed to the model as a generated action-backed tool in
+      `tools/0`.
       """
       @spec workflows() :: [Jidoka.Workflow.Capability.t()]
       def workflows, do: unquote(Macro.escape(definition.workflows))
 
       @doc """
-      Returns the configured published workflow capability names.
+      Returns published workflow operation names.
       """
       @spec workflow_names() :: [String.t()]
       def workflow_names, do: unquote(Macro.escape(definition.workflow_names))

@@ -5,6 +5,12 @@ defmodule Jidoka.Workflow do
   `Jidoka.Workflow` compiles a small public workflow DSL into an internal
   `jido_runic` graph. Public code describes inputs, steps, and output wiring;
   Jidoka keeps Runic facts, directives, and strategy internals behind the runtime.
+
+  Workflows are deterministic application processes. They can be run directly
+  with `run/3`, used by schedules, or exposed to an agent as a provider-visible
+  operation with `capabilities do workflow MyWorkflow end`. In that agent case
+  Jidoka generates an action-backed tool module for the workflow, so the model
+  sees one operation while the workflow runtime owns the ordered steps.
   """
 
   @doc """

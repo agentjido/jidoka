@@ -44,7 +44,10 @@ defmodule JidokaTest.OperationSurfaceTest do
     assert "run_math" in MathAgent.tool_names()
 
     workflow_tool = find_tool(MathAgent, "run_math")
+    assert workflow_tool in MathAgent.tools()
+    refute MathWorkflow in MathAgent.tools()
     assert workflow_tool.schema() == MathWorkflow.input_schema()
+    assert [%Jidoka.Workflow.Capability{workflow: MathWorkflow, name: "run_math"}] = MathAgent.workflows()
   end
 
   test "imported specs merge allowlisted actions and plugins into the same provider tool surface" do

@@ -44,16 +44,17 @@ defmodule Jidoka.Agent do
   - result is the final app-facing value returned from a turn
 
   A nested runtime module is generated automatically and uses `Jido.AI.Agent`
-  with the configured action modules. The `tools` block supports explicit
-  `Jidoka.Action` modules, while `capabilities` handles integrations such as
-  `ash_resource` expansion via `AshJido`.
+  with the provider-visible operation modules. The `tools` block is for direct
+  `Jidoka.Action` modules. The `capabilities` block is for higher-level
+  integrations that expand into action-backed tools, such as Ash resources,
+  MCP tools, skills, plugins, subagents, workflows, and handoffs.
   Subagent entries compile specialist agents into provider-visible delegation
   capabilities while keeping the parent agent in control. Subagent entries can
   tune child `timeout`, public `forward_context`, and parent-visible `result`
   shape without introducing handoffs or workflow graphs.
-  Workflow entries compile deterministic `Jidoka.Workflow` modules into
-  provider-visible capabilities while keeping ordered business processes in the
-  workflow runtime.
+  Workflow entries expose deterministic `Jidoka.Workflow` modules as generated
+  action-backed tools while keeping ordered business processes in the workflow
+  runtime.
   Character entries render structured persona data into the effective system
   prompt before `instructions`; per-request `character:` overrides can be
   supplied through `Jidoka.chat/3` or the generated agent `chat/3` function.
