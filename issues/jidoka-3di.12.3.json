@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-24T20:35:42Z",
@@ -8,8 +8,8 @@
   "labels": [],
   "parent": "jidoka-3di.12",
   "priority": 2,
-  "status": "open",
+  "status": "in_progress",
   "title": "E11: Verify manual run, recurring run, cancellation, listing, history, and error han...",
   "type": "task",
-  "updated_at": "2026-05-24T20:35:42Z"
+  "updated_at": "2026-05-25T02:15:45Z"
 }
