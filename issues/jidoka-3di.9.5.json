@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T01:02:40Z",
   "created": "2026-05-24T20:35:41Z",
   "description": "Parent epic: V3 E8: Observability standards\n\nSource task 5/7 from MILESTONE_V3.md:\n\n- Add tests for emitted event metadata and redaction.\n\nEpic closure criteria:\n- local Jidoka traces and production telemetry share correlation fields\n- observability docs remain standards-friendly and dependency-light\n",
   "id": "jidoka-3di.9.5",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E8: Add tests for emitted event metadata and redaction",
   "type": "task",
   "updated_at": "2026-05-25T01:02:40Z"
