@@ -3,7 +3,7 @@
   "blocked_by": [],
   "blocks": [],
   "created": "2026-05-25T23:12:05Z",
-  "description": " accepts a retries option but  only performs one repair attempt. Implement the configured retry behavior or tighten the option semantics, with tests for success after multiple repairs and final failure.",
+  "description": "Jidoka.Output.Runtime accepts a retries option but maybe_repair/7 only performs one repair attempt. Implement the configured retry behavior or tighten the option semantics, with tests for success after multiple repairs and final failure.",
   "id": "jidoka-1t6.1",
   "labels": [],
   "parent": "jidoka-1t6",
@@ -11,5 +11,5 @@
   "status": "open",
   "title": "Fix structured result repair retries",
   "type": "bug",
-  "updated_at": "2026-05-25T23:12:05Z"
+  "updated_at": "2026-05-25T23:12:20Z"
 }
