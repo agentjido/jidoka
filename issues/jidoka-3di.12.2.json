@@ -7,9 +7,15 @@
   "id": "jidoka-3di.12.2",
   "labels": [],
   "parent": "jidoka-3di.12",
+  "comments": [
+    {
+      "text": "Decision implemented: V3 schedules live inside agent :id do ... end. Removed top-level schedules section from the Spark extension, added top-level schedules rejection, updated fixtures/docs/tests, and kept tools/capabilities outside. Full gate passed.",
+      "timestamp": "2026-05-25T02:15:11Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E11: Decide whether schedule definitions live inside agent :id do ... end in V3",
   "type": "task",
-  "updated_at": "2026-05-25T02:08:56Z"
+  "updated_at": "2026-05-25T02:15:11Z"
 }
