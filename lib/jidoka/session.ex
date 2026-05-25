@@ -11,6 +11,8 @@ defmodule Jidoka.Session do
   Session-owned data is intentionally small: addressing, startup options,
   runtime context, and metadata. Inspection, tracing, and compaction snapshots
   are projected from the running agent, not stored in the session struct.
+  Jidoka V3 does not own durable transcript storage; use an app-owned runtime
+  storage boundary when transcripts must survive process or node restarts.
   """
 
   alias Jidoka.ImportedAgent

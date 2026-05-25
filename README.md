@@ -211,6 +211,8 @@ runtime module into the full runtime when production needs outgrow the wrapper.
 V3 does not add a separate Jidoka durability adapter. The stable handoff point
 is `MyAgent.runtime_module()`, which keeps the persistence API owned by the
 runtime that actually supervises and stores the agent.
+Jidoka V3 does not own durable transcript storage; that belongs to an app-owned
+runtime or to a future durability epic if Jidoka later grows one.
 
 ## Phoenix And UI State
 
