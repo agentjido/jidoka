@@ -224,7 +224,7 @@ defmodule JidokaTest.OutputTest do
              validation_error: validation_error
            } = get_in(agent.state, [:requests, request_id, :meta, :jidoka_output])
 
-    assert is_binary(validation_error)
+    assert validation_error =~ "Invalid output"
   end
 
   test "output raw mode bypasses structured finalization" do

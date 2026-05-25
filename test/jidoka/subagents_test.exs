@@ -42,6 +42,7 @@ defmodule JidokaTest.SubagentsTest do
            end)
   end
 
+  # credo:disable-for-next-line Jump.CredoChecks.TooManyAssertions
   test "runs ephemeral subagents through generated tool modules and forwards public context only" do
     research_tool = find_tool(OrchestratorAgent, "research_agent")
     agent_id = "subagent-parent-ephemeral"

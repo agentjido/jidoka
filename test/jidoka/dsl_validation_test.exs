@@ -27,7 +27,7 @@ defmodule JidokaTest.DslValidationTest do
     assert module.id() == "primary_agent"
     assert module.configured_model() == :fast
     assert module.instructions() == "Answer clearly."
-    assert module.context_schema() != nil
+    assert %Zoi.Types.Map{} = module.context_schema()
   end
 
   test "keeps deterministic actions outside the agent block" do
@@ -187,7 +187,7 @@ defmodule JidokaTest.DslValidationTest do
 
     assert module.id() == "full_section_agent"
     assert module.context().tenant == "demo"
-    assert module.result_schema() != nil
+    assert %Zoi.Types.Map{} = module.result_schema()
     assert module.tool_names() == ["add_numbers", "multiply_numbers"]
     assert module.plugins() == [JidokaTest.MathPlugin]
     assert module.before_turn_hooks() == [JidokaTest.InjectTenantHook]

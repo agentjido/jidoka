@@ -13,7 +13,9 @@ defmodule JidokaTest.ScheduleTest do
     %{manager: manager}
   end
 
-  test "exports public schedule APIs" do
+  test "exports public schedule APIs", %{manager: manager} do
+    assert {:ok, []} = Jidoka.list_schedules(manager: manager)
+
     assert function_exported?(Jidoka, :schedule, 2)
     assert function_exported?(Jidoka, :schedule_agent, 2)
     assert function_exported?(Jidoka, :schedule_workflow, 2)
@@ -215,7 +217,7 @@ defmodule JidokaTest.ScheduleTest do
     assert run.status == :completed
     assert run.trigger == :manual
     assert run.result == {:ok, %{value: 12}}
-    assert is_binary(run.request_id)
+    assert String.starts_with?(run.request_id, "schedule-math-workflow-")
 
     assert {:ok, [%Schedule{} = schedule]} = Jidoka.list_schedules(manager: manager)
     assert schedule.run_count == 1

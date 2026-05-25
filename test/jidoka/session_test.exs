@@ -163,7 +163,7 @@ defmodule JidokaTest.SessionTest do
       assert_receive {:session_context, context}
       assert Jidoka.Context.strip_internal(context) == %{session: session.id, tenant: "acme", channel: "support"}
       assert {:ok, %{request_id: request_id}} = Jidoka.inspect_request(session)
-      assert is_binary(request_id)
+      assert byte_size(request_id) > 0
       assert {:ok, trace} = Jidoka.inspect_trace(session)
       assert trace.agent_id == session.agent_id
 
@@ -179,6 +179,7 @@ defmodule JidokaTest.SessionTest do
     end
   end
 
+  # credo:disable-for-next-line Jump.CredoChecks.TooManyAssertions
   test "session chat reuses the runtime agent across repeated turns" do
     session = session!("multi-turn", context: %{tenant: "acme"})
     agent_id = session.agent_id

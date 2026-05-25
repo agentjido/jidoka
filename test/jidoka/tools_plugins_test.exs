@@ -128,6 +128,7 @@ defmodule JidokaTest.ToolsPluginsTest do
     assert reason =~ "bad name"
   end
 
+  # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
   test "action execution failures return errors without crashing the caller" do
     assert {:error, %Jido.Action.Error.ExecutionFailureError{message: "boom"}} =
              Jido.Exec.run(FailingAction, %{reason: "boom"}, %{}, max_retries: 0, log_level: :warning)
