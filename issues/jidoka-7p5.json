@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-25T15:10:24Z",
+  "description": "Create a new top-level livebooks folder, establish a reusable teaching template for Jidoka concepts, build the first concept Livebook, and test it with Livebook dev endpoints where available.",
+  "id": "jidoka-7p5",
+  "labels": [],
+  "priority": 2,
+  "status": "open",
+  "title": "Build Livebook concept template",
+  "type": "task",
+  "updated_at": "2026-05-25T15:10:24Z"
+}
