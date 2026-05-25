@@ -177,4 +177,37 @@ defmodule JidokaTest.ErrorNormalizeUnitTest do
     refute Error.normalized?(RuntimeError.exception("boom"))
     assert Error.to_map(RuntimeError.exception("boom")) == %{category: :unknown, message: "boom"}
   end
+
+  test "error summaries keep debugging identifiers while omitting raw prompts, responses, and secrets" do
+    error =
+      Error.execution_error("Provider failed with api_key=sk-ant-secret1234567890",
+        phase: :chat,
+        details: %{
+          operation: :chat,
+          agent_id: "agent-1",
+          request_id: "req-1",
+          prompt: "raw user prompt with token=sk-ant-prompt1234567890",
+          raw_response: %{body: "raw provider body"},
+          cause: RuntimeError.exception("upstream token=sk-ant-cause1234567890 failed")
+        }
+      )
+
+    summary = Error.to_map(error)
+
+    assert summary.category == :execution
+    assert summary.message == "Provider failed with api_key=[REDACTED]"
+    assert summary.phase == :chat
+    assert summary.details.operation == :chat
+    assert summary.details.agent_id == "agent-1"
+    assert summary.details.request_id == "req-1"
+    assert summary.details.prompt == "[OMITTED]"
+    assert summary.details.raw_response == "[OMITTED]"
+
+    rendered = inspect(summary)
+    refute rendered =~ "sk-ant-secret"
+    refute rendered =~ "sk-ant-prompt"
+    refute rendered =~ "sk-ant-cause"
+    refute rendered =~ "raw user prompt"
+    refute rendered =~ "raw provider body"
+  end
 end

@@ -70,6 +70,25 @@ defmodule JidokaTest.ErrorFormatTest do
     assert Jidoka.format_error({:unhandled, :shape}) == "{:unhandled, :shape}"
   end
 
+  test "redacts unknown error payloads before formatting" do
+    formatted =
+      Jidoka.format_error(
+        {:provider_error,
+         %{
+           raw_response: "raw provider body",
+           api_key: "sk-ant-secret1234567890",
+           reason: "token=sk-ant-reason1234567890"
+         }}
+      )
+
+    assert formatted =~ ~s(raw_response: "[OMITTED]")
+    assert formatted =~ ~s(api_key: "[REDACTED]")
+    assert formatted =~ "token=[REDACTED]"
+    refute formatted =~ "raw provider body"
+    refute formatted =~ "sk-ant-secret"
+    refute formatted =~ "sk-ant-reason"
+  end
+
   test "formats Splode error classes in stable order" do
     error =
       Jidoka.Error.to_class([

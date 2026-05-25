@@ -333,9 +333,9 @@ defmodule Jidoka.Error do
     end
   end
 
-  def format(%{message: message}) when is_binary(message), do: message
-  def format(message) when is_binary(message), do: message
-  def format(other), do: inspect(other)
+  def format(%{message: message}) when is_binary(message), do: Jidoka.Sanitize.text(message)
+  def format(message) when is_binary(message), do: Jidoka.Sanitize.text(message)
+  def format(other), do: other |> Jidoka.Sanitize.payload() |> inspect()
 
   defp format_error_class(errors) do
     errors
