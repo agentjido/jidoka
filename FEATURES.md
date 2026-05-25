@@ -391,6 +391,31 @@ turning the system prompt into a registry dump. Jidoka's role is the agent-facin
 contract; the action/catalog package owns indexing and the integration package
 owns service execution.
 
+### Core Versus Companion Review
+
+Final E14 package boundary:
+
+| Keep in core Jidoka | Keep outside core Jidoka |
+| --- | --- |
+| `Jidoka.Action` wrapper and action registration | Large action catalog storage, indexing, ranking, and registry internals |
+| Thin AshJido action expansion | Rich Ash policy/data semantics beyond generated actions |
+| Read-only web search/read/snapshot tools with public URL validation | Interactive browser sessions, clicks, typing, JS execution, and browser state |
+| MCP endpoint registration/sync bridge | MCP server implementation, remote server auth, and long-lived client lifecycle |
+| Skill prompt/tool narrowing and app-owned local load paths | Remote skill marketplaces or arbitrary remote skill fetching |
+| `Jidoka.Plugin` wrapper and plugin validation | Broad service-specific tool packs and connector SDKs |
+| Credential reference struct, redaction, and control matching | Vault lookup, OAuth refresh, request signing, sidecars, and tenant connection routing |
+
+Companion-package / issue coverage:
+
+- Base action catalog metadata belongs below Jidoka in the action layer:
+  [agentjido/jido_action#170](https://github.com/agentjido/jido_action/issues/170).
+- Lazy model-facing catalog use belongs in the model/agent loop:
+  [agentjido/jido_ai#282](https://github.com/agentjido/jido_ai/issues/282).
+- Jidoka should own the DSL and UX layer for catalogs:
+  [agentjido/jidoka#3](https://github.com/agentjido/jidoka/issues/3).
+- Connector packages should expose catalog-ready operation metadata:
+  [agentjido/jido_connect#36](https://github.com/agentjido/jido_connect/issues/36).
+
 ## Ecosystem Scan
 
 Scanned on 2026-05-24 from Hex package search for `agent`, `LLM`, and adjacent
