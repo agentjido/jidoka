@@ -185,7 +185,7 @@ defmodule Jidoka.Trace do
   end
 
   defp nested_correlation_refs(%{} = source) do
-    [:extra_refs, :refs, :context, :tool_context, :runtime_context, :metadata, :request_opts]
+    [:extra_refs, :refs, :context, :tool_context, :runtime_context, :metadata, :request_opts, :jido]
     |> Enum.reduce(%{}, fn key, acc ->
       case get_value(source, key) do
         %{} = nested -> Map.merge(acc, correlation_refs(nested))

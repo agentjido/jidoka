@@ -18,6 +18,7 @@ defmodule Jidoka.Trace.Collector do
     [:jido, :ai, :request, :start],
     [:jido, :ai, :request, :complete],
     [:jido, :ai, :request, :failed],
+    [:jido, :ai, :request, :rejected],
     [:jido, :ai, :request, :cancelled],
     [:jido, :ai, :llm, :start],
     [:jido, :ai, :llm, :complete],
@@ -26,6 +27,12 @@ defmodule Jidoka.Trace.Collector do
     [:jido, :ai, :tool, :complete],
     [:jido, :ai, :tool, :error],
     [:jido, :ai, :tool, :timeout]
+  ]
+
+  @action_events [
+    [:jido, :action, :start],
+    [:jido, :action, :stop],
+    [:jido, :action, :exception]
   ]
 
   @jidoka_events [
@@ -148,7 +155,7 @@ defmodule Jidoka.Trace.Collector do
     :ok =
       :telemetry.attach_many(
         @handler_id,
-        @ai_events ++ @jidoka_events,
+        @ai_events ++ @action_events ++ @jidoka_events,
         &__MODULE__.handle_telemetry/4,
         nil
       )
@@ -197,6 +204,7 @@ defmodule Jidoka.Trace.Collector do
 
   defp normalize_event(seq, event_name, measurements, metadata) do
     with {:ok, source, category, event} <- event_shape(event_name, metadata) do
+      metadata = Map.merge(metadata, Jidoka.Trace.correlation_refs(metadata))
       sanitized_measurements = Jidoka.Sanitize.payload(measurements)
       sanitized_metadata = Jidoka.Sanitize.payload(metadata)
       request_id = string_value(metadata, :request_id)
@@ -229,6 +237,7 @@ defmodule Jidoka.Trace.Collector do
   defp event_shape([:jido, :ai, :request, event], _metadata), do: {:ok, :jido_ai, :request, event}
   defp event_shape([:jido, :ai, :llm, event], _metadata), do: {:ok, :jido_ai, :model, event}
   defp event_shape([:jido, :ai, :tool, event], _metadata), do: {:ok, :jido_ai, :tool, event}
+  defp event_shape([:jido, :action, event], _metadata), do: {:ok, :jido_action, :action, event}
 
   defp event_shape([:jidoka, category, :event], metadata) when is_atom(category) do
     {:ok, :jidoka, category, atom_value(metadata, :event) || :event}
@@ -286,6 +295,7 @@ defmodule Jidoka.Trace.Collector do
   defp event_status(:request, :start, _metadata), do: :running
   defp event_status(:request, :complete, _metadata), do: :completed
   defp event_status(:request, :failed, _metadata), do: :failed
+  defp event_status(:request, :rejected, _metadata), do: :failed
   defp event_status(:request, :cancelled, _metadata), do: :cancelled
   defp event_status(_category, event, _metadata) when event in [:start, :started], do: :running
 
@@ -294,7 +304,9 @@ defmodule Jidoka.Trace.Collector do
 
   defp event_status(:compaction, event, _metadata) when event in [:summarized, :skipped], do: :completed
 
-  defp event_status(_category, event, _metadata) when event in [:error, :failed, :timeout, :block], do: :failed
+  defp event_status(_category, event, _metadata) when event in [:error, :failed, :timeout, :block, :exception],
+    do: :failed
+
   defp event_status(_category, event, _metadata) when event in [:interrupt, :interrupted], do: :interrupted
 
   defp event_status(_category, _event, metadata),

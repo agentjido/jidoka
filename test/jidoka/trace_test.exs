@@ -76,6 +76,92 @@ defmodule JidokaTest.TraceTest do
     assert Enum.any?(spans, &(&1.category == :tool and &1.name == "add_numbers"))
   end
 
+  test "normalizes foundation request model and action telemetry into one trace" do
+    agent_id = unique_id("trace-foundation-agent")
+    request_id = unique_id("req-foundation")
+    run_id = unique_id("run-foundation")
+    trace_id = unique_id("trace-foundation")
+    span_id = unique_id("span-foundation")
+
+    common = %{
+      agent_id: agent_id,
+      request_id: request_id,
+      run_id: run_id,
+      jido_trace_id: trace_id,
+      jido_span_id: span_id
+    }
+
+    obs_cfg = %{emit_telemetry?: true, emit_llm_deltas?: false}
+
+    Jido.AI.Observe.emit(obs_cfg, Jido.AI.Observe.request(:start), %{duration_ms: 0}, common)
+
+    Jido.AI.Observe.emit(
+      obs_cfg,
+      Jido.AI.Observe.llm(:start),
+      %{duration_ms: 0},
+      Map.merge(common, %{model: "anthropic:test", llm_call_id: "llm-1"})
+    )
+
+    Jido.AI.Observe.emit(
+      obs_cfg,
+      Jido.AI.Observe.llm(:complete),
+      %{duration_ms: 12, input_tokens: 5, output_tokens: 7, total_tokens: 12},
+      Map.merge(common, %{model: "anthropic:test", llm_call_id: "llm-1"})
+    )
+
+    :telemetry.execute(
+      [:jido, :action, :start],
+      %{system_time: System.system_time()},
+      %{action: JidokaTest.AddNumbers, jido: common}
+    )
+
+    :telemetry.execute(
+      [:jido, :action, :stop],
+      %{duration: 2_000_000},
+      %{action: JidokaTest.AddNumbers, outcome: :ok, jido: common}
+    )
+
+    Jido.AI.Observe.emit(obs_cfg, Jido.AI.Observe.request(:complete), %{duration_ms: 20}, common)
+
+    assert {:ok, trace} = Trace.for_request(agent_id, request_id)
+
+    assert Enum.map(trace.events, &{&1.source, &1.category, &1.event, &1.status}) == [
+             {:jido_ai, :request, :start, :running},
+             {:jido_ai, :model, :start, :running},
+             {:jido_ai, :model, :complete, :completed},
+             {:jido_action, :action, :start, :running},
+             {:jido_action, :action, :stop, :completed},
+             {:jido_ai, :request, :complete, :completed}
+           ]
+
+    assert trace.status == :completed
+    assert trace.summary.model_events == 2
+    assert trace.summary.action_events == 2
+
+    action_event = Enum.find(trace.events, &(&1.category == :action and &1.event == :stop))
+    assert action_event.request_id == request_id
+    assert action_event.run_id == run_id
+    assert action_event.trace_id == trace_id
+    assert action_event.span_id == span_id
+    assert action_event.name =~ "JidokaTest.AddNumbers"
+  end
+
+  test "normalizes rejected request telemetry as a failed terminal event" do
+    agent_id = unique_id("trace-rejected-agent")
+    request_id = unique_id("req-rejected")
+
+    Jido.AI.Observe.emit(
+      %{emit_telemetry?: true},
+      Jido.AI.Observe.request(:rejected),
+      %{duration_ms: 1},
+      %{agent_id: agent_id, request_id: request_id, run_id: request_id, error_type: :validation}
+    )
+
+    assert {:ok, trace} = Trace.for_request(agent_id, request_id)
+    assert trace.status == :failed
+    assert [%{category: :request, event: :rejected, status: :failed}] = trace.events
+  end
+
   test "keeps correlation fields stable across trace event surfaces" do
     agent_id = unique_id("trace-correlation-agent")
     request_id = unique_id("req-correlation")
