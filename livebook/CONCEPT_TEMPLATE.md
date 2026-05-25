@@ -8,11 +8,14 @@ Use this structure for each concept notebook in `livebook/`.
 - Title: `# Jidoka: Concept Name`.
 - Default path: provider-free and deterministic.
 - Optional live-provider cells must use the setup cell's provider-ready flag and
-  skip unless `ANTHROPIC_API_KEY` looks usable.
+  skip unless `ANTHROPIC_API_KEY` or Livebook's `LB_ANTHROPIC_API_KEY` looks
+  usable.
 - Use the standard Git-based `Mix.install/2` pattern until Jidoka ships on Hex.
   Include the commented Hex replacement line.
 - Configure `:model_aliases` in the `Mix.install/2` config block so `model
   :fast` resolves consistently in every notebook.
+- Use `Jidoka.Kino.setup_notebook/1` after `Mix.install/2`; do not inline
+  secret/env plumbing in the notebook.
 - Prefer one concept per notebook. Link to the next concept instead of building a
   kitchen sink.
 - Do not put broad package explanations in every notebook. Keep each notebook
@@ -47,7 +50,8 @@ Use this structure for each concept notebook in `livebook/`.
 
 7. **Optional Live Turn**
    - Gate with the setup-cell provider-ready flag.
-   - Mention `ANTHROPIC_API_KEY` in prose.
+   - Mention `ANTHROPIC_API_KEY` and Livebook's `LB_ANTHROPIC_API_KEY` secret
+     env var in prose.
    - Keep assertions shape-oriented.
 
 8. **What Changed**

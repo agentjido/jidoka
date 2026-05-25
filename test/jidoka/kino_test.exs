@@ -31,6 +31,46 @@ defmodule JidokaTest.KinoTest do
     end
   end
 
+  test "setup_notebook returns setup status and mirrors Livebook secrets" do
+    previous_anthropic = System.get_env("ANTHROPIC_API_KEY")
+    previous_livebook = System.get_env("LB_ANTHROPIC_API_KEY")
+
+    System.delete_env("ANTHROPIC_API_KEY")
+    System.put_env("LB_ANTHROPIC_API_KEY", "livebook-secret")
+
+    try do
+      setup = Jidoka.Kino.setup_notebook(render?: false)
+
+      assert setup.live_provider?
+      assert setup.secret_source == :livebook_secret
+      assert setup.model_alias == :fast
+      assert setup.model == "anthropic:claude-haiku-4-5"
+      assert System.get_env("ANTHROPIC_API_KEY") == "livebook-secret"
+    after
+      restore_env("ANTHROPIC_API_KEY", previous_anthropic)
+      restore_env("LB_ANTHROPIC_API_KEY", previous_livebook)
+    end
+  end
+
+  test "setup_notebook reports missing provider credentials" do
+    previous_anthropic = System.get_env("ANTHROPIC_API_KEY")
+    previous_livebook = System.get_env("LB_ANTHROPIC_API_KEY")
+
+    System.delete_env("ANTHROPIC_API_KEY")
+    System.delete_env("LB_ANTHROPIC_API_KEY")
+
+    try do
+      setup = Jidoka.Kino.setup_notebook(render?: false)
+
+      refute setup.live_provider?
+      assert setup.secret_source == nil
+      assert setup.provider == :anthropic
+    after
+      restore_env("ANTHROPIC_API_KEY", previous_anthropic)
+      restore_env("LB_ANTHROPIC_API_KEY", previous_livebook)
+    end
+  end
+
   test "start_or_reuse starts once and reuses a registered agent" do
     id = "kino-reuse-#{System.unique_integer([:positive])}"
     test_pid = self()

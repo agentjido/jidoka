@@ -23,6 +23,16 @@ defmodule Jidoka.Kino do
   def setup(opts \\ []), do: RuntimeSetup.setup(opts)
 
   @doc """
+  Configures a notebook and renders a compact setup status.
+
+  This is the preferred setup helper for entry-level Livebooks. It keeps the
+  notebook cell focused on Jidoka while this helper handles quiet logs, Livebook
+  secret bridging, and a small Kino status table.
+  """
+  @spec setup_notebook(keyword()) :: map()
+  def setup_notebook(opts \\ []), do: RuntimeSetup.setup_notebook(opts)
+
+  @doc """
   Starts a Jidoka agent unless an agent with `id` is already running.
 
   This keeps Livebook cells repeatable. `start_fun` should be a zero-arity

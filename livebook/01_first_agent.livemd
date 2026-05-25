@@ -35,17 +35,9 @@ Mix.install(
   consolidate_protocols: false
 )
 
-live_provider? =
-  "ANTHROPIC_API_KEY"
-  |> System.get_env("")
-  |> String.trim()
-  |> then(&(String.starts_with?(&1, "sk-ant-") and byte_size(&1) > 20))
-
-%{
-  jidoka_source: :github,
-  fast_model: "anthropic:claude-haiku-4-5",
-  live_provider: if(live_provider?, do: :ready, else: :missing_anthropic_api_key)
-}
+setup = Jidoka.Kino.setup_notebook(provider: :anthropic)
+live_provider? = setup.live_provider?
+:ok
 ```
 
 ## Define An Agent
@@ -88,6 +80,21 @@ session =
   context: session.context,
   chat_opts: Jidoka.Session.chat_opts(session)
 }
+```
+
+## Try A Live Turn
+
+If `ANTHROPIC_API_KEY` is available, this cell makes a real model call now. If
+not, it skips cleanly and the rest of the notebook still works.
+
+```elixir
+if live_provider? do
+  Jidoka.Kino.chat("First response", fn ->
+    Jidoka.chat(session, "In one sentence, explain what a Jidoka session is.")
+  end)
+else
+  {:skipped, "Add the ANTHROPIC_API_KEY Livebook secret to run this cell."}
+end
 ```
 
 ## Inspect The Compiled Surface
@@ -160,23 +167,6 @@ project the conversation state.
     message_count: length(view.visible_messages)
   }
 }
-```
-
-## Optional Live Turn
-
-This cell runs only when the setup cell detects a usable `ANTHROPIC_API_KEY`.
-The provider-free cells above are still the default teaching path.
-
-```elixir
-if live_provider? do
-  live_session =
-    Demo.Assistant
-    |> Jidoka.session("live-user-123", context: %{actor_id: "user_123", tenant: "demo"})
-
-  Jidoka.chat(live_session, "In one sentence, explain what a Jidoka session is.")
-else
-  {:skipped, "Set ANTHROPIC_API_KEY to run the optional live provider cell."}
-end
 ```
 
 ## What Changed
