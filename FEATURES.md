@@ -330,6 +330,21 @@ developers can start with core operations, graduate repeated app patterns into
 extensions, and move broad service surfaces into external packages without
 changing the agent turn model.
 
+### Provider-Free Testability
+
+Every core integration should have a test path that does not require live LLM
+providers or third-party network services.
+
+| Integration | Provider-free verification path |
+| --- | --- |
+| Direct actions | Unit tests validate action metadata, schemas, duplicate names, inspection, and failure normalization with local action modules. |
+| Ash resources | Unit tests expand local AshJido fixtures and verify actor/domain context injection without external data stores. |
+| Web tools | Unit tests validate URL safety, DNS-private host rejection, result clamps, truncation, and capability conflicts without starting browser tools. |
+| MCP tools | Unit tests use fake sync modules for metadata/error paths and a local filesystem stdio endpoint for end-to-end sync. |
+| Skills | Unit tests validate module skills, runtime skill load paths from local fixtures, prompt injection, and `allowed_tools` narrowing. |
+| Plugins | Unit tests validate local plugin modules and merged plugin actions without live services. |
+| Catalog / connect layer | No core runtime yet. Future tests should use in-memory catalog fixtures and fake brokers before any service-backed connector tests. |
+
 ## Ecosystem Scan
 
 Scanned on 2026-05-24 from Hex package search for `agent`, `LLM`, and adjacent

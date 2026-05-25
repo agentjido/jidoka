@@ -245,8 +245,8 @@ defmodule JidokaTest.SkillsMCPTest do
     assert context == %{}
   end
 
-  @tag :mcp_live
-  test "live filesystem MCP endpoint syncs tools into a running Jidoka agent" do
+  @tag :mcp_local
+  test "local filesystem MCP endpoint syncs tools into a running Jidoka agent" do
     prepare_mcp_sandbox!()
 
     {:ok, pid} = LocalFSMCPAgent.start_link(id: "local-fs-mcp-agent-test")
