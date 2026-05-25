@@ -7,9 +7,15 @@
   "id": "jidoka-3di.9.6",
   "labels": [],
   "parent": "jidoka-3di.9",
+  "comments": [
+    {
+      "text": "Added cross-surface correlation coverage for request/chat, tool/action, controls, workflow, subagent, handoff, schedule, memory, and compaction trace events. Fixed trace normalization so nil upstream correlation values do not become the string \"nil\", attached compaction events, and added action/control category handling. Verified with focused trace tests plus full format, compile, test, docs, doctor, and diff checks.",
+      "timestamp": "2026-05-25T00:49:01Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E8: Add tests that correlation fields are stable across chat, action, control, work...",
   "type": "task",
-  "updated_at": "2026-05-25T00:44:03Z"
+  "updated_at": "2026-05-25T00:49:01Z"
 }
