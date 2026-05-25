@@ -28,7 +28,8 @@ groups:
   through `AgentView`, and Phoenix integration.
 - **Operations:** structured errors, first-class debugging, local inspection,
   tracing, observability standards, and Kino/Livebook views.
-- **Portability:** imported JSON/YAML agents.
+- **Portability:** experimental imported JSON/YAML agents for controlled
+  interchange.
 - **Automation:** schedules.
 - **Testing:** provider-free tests, action tests, result tests, workflow tests,
   live evals.
@@ -184,7 +185,7 @@ graph TD
 16. **Subagents + Handoffs:** bounded specialist delegation, then conversation
     ownership transfer.
 17. **Tool Integrations:** Ash, web, MCP, skills, plugins, catalogs.
-18. **Imported Agents:** portable specs and registries.
+18. **Imported Agents:** experimental portable specs and registries.
 19. **Durability + Graduation:** move from Jidoka session addressing to durable
     runtime storage, hibernate/thaw, checkpoints, and thread journals.
 20. **Testing:** contract, action, result, workflow, and live checks.
@@ -472,7 +473,7 @@ Sources:
 | Workflows | Very strong in graph/workflow packages. | Jidoka should keep workflows deterministic and app-owned; do not make every beginner learn graphs. |
 | Subagents and handoffs | Strong in multi-agent frameworks and protocol packages. | Teach after workflows/tools; subagents return control to the parent, while handoffs route future turns to a new owner. |
 | Tool integrations | Strong and growing. MCP, Ash, browser, catalogs appear repeatedly. | Use catalogs/connect as the scalable integration story; avoid listing 100 tool modules in prompts. |
-| Imported agents | Less common as JSON/YAML specs; protocols cover remote agents. | Keep imported agents as portability, with allowlisted registries as a safety boundary. |
+| Imported agents | Less common as JSON/YAML specs; protocols cover remote agents. | Keep imported agents experimental for V3. They are useful for portability tests and controlled interchange, but should not be treated as the stable authoring format until the DSL settles. |
 | Durability | Strong in lower-level runtimes and graph systems via checkpoints, journals, persistence, and resume. | Do not pretend `Jidoka.Session` is durable; teach the graduation path into durable runtime storage and instance managers. |
 | Testing | Present in eval packages, less often in agent DSLs. | Make testing a full onboarding topic: contract tests, action tests, workflow tests, trace assertions, optional evals. |
 

@@ -338,8 +338,8 @@ metadata; the actual secret stays with the system that owns the integration.
 - **Tool integrations:** connect core adapters such as Ash actions, web tools,
   MCP tools, skills, and plugins; keep broad service catalogs in companion
   packages.
-- **Imported agents:** load constrained JSON/YAML specs through allowlisted
-  registries.
+- **Imported agents:** experimentally load constrained JSON/YAML specs through
+  allowlisted registries for portability tests and controlled interchange.
 - **Durability:** graduate to durable runtime storage, hibernate/thaw,
   checkpoints, and thread journals when sessions need to survive process
   restarts.

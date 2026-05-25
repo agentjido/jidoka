@@ -51,6 +51,10 @@ defmodule Jidoka do
   @doc """
   Imports a constrained Jidoka agent from a map, JSON string, or YAML string.
 
+  This portability surface is experimental in the beta. It is intended for
+  controlled interchange, fixtures, and registry-backed portability tests while
+  the canonical Elixir DSL settles.
+
   The imported format mirrors the beta DSL sections: `agent`, `defaults`,
   `capabilities`, and `lifecycle`.
 

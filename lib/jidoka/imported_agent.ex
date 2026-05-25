@@ -2,6 +2,11 @@ defmodule Jidoka.ImportedAgent do
   @moduledoc """
   Runtime representation of a constrained JSON/YAML-authored Jidoka agent.
 
+  Imported agents are experimental in the beta. Use them for controlled
+  interchange, fixtures, and portability tests backed by explicit registries;
+  prefer the Elixir DSL as the canonical authoring surface while the DSL
+  settles.
+
   Most applications should call `Jidoka.import_agent/2` or
   `Jidoka.import_agent_file/2` rather than this module directly. The struct is
   still documented because public Jidoka APIs return it.
