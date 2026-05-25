@@ -1,10 +1,5 @@
 defmodule Jidoka.Trace.Collector do
-  @moduledoc """
-  Bounded in-memory trace collector for Jidoka and Jido.AI telemetry.
-
-  The collector is supervised by the Jidoka application supervisor and is
-  intentionally internal. Public callers should use `Jidoka.Trace`.
-  """
+  @moduledoc false
 
   use GenServer
 

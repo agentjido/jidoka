@@ -1,6 +1,18 @@
 defmodule Jidoka do
   @moduledoc """
-  Minimal runtime facade for starting and discovering Jidoka agents.
+  Public facade for working with Jidoka agents.
+
+  Most applications use this module for the high-level runtime path:
+
+  - create session descriptors with `session/3`
+  - run turns with `chat/3` or `chat_stream/3`
+  - start, stop, and find runtime agents
+  - inspect recent requests, traces, and compaction state
+  - schedule agent turns or workflows
+  - import constrained JSON/YAML agent specs when needed
+
+  The generated agent module remains the primary authoring surface; this module
+  is the small application-facing API for running those agents.
   """
 
   alias Jidoka.{ImportedAgent, Session}
@@ -59,13 +71,12 @@ defmodule Jidoka do
   strings in specs are rejected. Any module-backed capability must be made
   available through an explicit host-provided registry.
 
-  The imported format mirrors the beta DSL sections: `agent`, `defaults`,
-  `capabilities`, and `lifecycle`.
+  The imported format is a constrained interchange schema. It mirrors the same
+  agent capabilities, while preserving compatibility-oriented field names such
+  as `defaults` and lifecycle `guardrails` while the beta DSL settles.
 
-  Imported tools and plugins must be resolved through the explicit
-  `:available_tools`, `:available_subagents`, `:available_plugins`,
-  `:available_hooks`, and
-  `:available_guardrails` registries passed in `opts`.
+  Imported tools, plugins, hooks, controls, and delegation targets must be
+  resolved through explicit `available_*` registries passed in `opts`.
   """
   @spec import_agent(map() | binary(), keyword()) :: {:ok, ImportedAgent.t()} | {:error, term()}
   def import_agent(source, opts \\ []), do: ImportedAgent.import(source, opts)

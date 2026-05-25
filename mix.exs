@@ -161,22 +161,28 @@ defmodule Jidoka.MixProject do
         ]
       ],
       groups_for_modules: [
-        Agents: [
+        Authoring: [
+          Jidoka,
           Jidoka.Agent,
           Jidoka.Agent.SystemPrompt,
-          Jidoka.AgentView,
-          Jidoka.Agent.View,
-          Jidoka.ImportedAgent,
-          Jidoka.ImportedAgent.Subagent
-        ],
-        Workflows: [
-          Jidoka.Workflow
+          Jidoka.Action,
+          Jidoka.Workflow,
+          Jidoka.Workflow.Ref,
+          Jidoka.Control,
+          Jidoka.Controls,
+          Jidoka.Hook,
+          Jidoka.Plugin,
+          Jidoka.Character,
+          Jidoka.Output,
+          Jidoka.Credential
         ],
         Runtime: [
-          Jidoka,
           Jidoka.Session,
-          Jidoka.Kino,
           Jidoka.Runtime,
+          Jidoka.Chat.Stream,
+          Jidoka.AgentView,
+          Jidoka.AgentView.Run,
+          Jidoka.Agent.View,
           Jidoka.Schedule,
           Jidoka.Schedule.Manager,
           Jidoka.Compaction,
@@ -184,18 +190,22 @@ defmodule Jidoka.MixProject do
           Jidoka.Trace,
           Jidoka.Trace.Event,
           Jidoka.Interrupt,
-          Jidoka.Handoff
+          Jidoka.Handoff,
+          Jidoka.Approval
         ],
-        Extensions: [
-          Jidoka.Character,
-          Jidoka.Tool,
-          Jidoka.Plugin,
-          Jidoka.Hook,
-          Jidoka.Guardrail,
+        Capabilities: [
           Jidoka.Web,
+          Jidoka.Web.Tools.SearchWeb,
+          Jidoka.Web.Tools.ReadPage,
+          Jidoka.Web.Tools.SnapshotUrl,
+          Jidoka.MCP,
           Jidoka.Subagent,
-          Jidoka.Handoff.Capability,
-          Jidoka.MCP
+          Jidoka.ImportedAgent,
+          Jidoka.ImportedAgent.Subagent
+        ],
+        Livebook: [
+          Jidoka.Kino,
+          Jidoka.Kino.LoggerHandler
         ],
         Errors: [
           Jidoka.Error
