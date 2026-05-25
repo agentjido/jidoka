@@ -34,3 +34,19 @@ mix run examples/06_delegation_and_imports.exs
 
 The later guide and Livebook layers should reuse this order instead of
 inventing a separate progression.
+
+## Example Constraints
+
+Keep this tree intentionally small until the V3 DSL is stable:
+
+- one feature group per script
+- no example-specific modules under `lib/`
+- no shared demo framework, registry, or mix task until repeated code proves it
+  is worth extracting
+- no live provider calls in default examples
+- no fixture trees unless the example cannot explain the feature with inline
+  data
+- prefer one deterministic assertion path over a polished CLI
+
+When an example needs more than a small script, move the extra explanation to a
+guide or Livebook rather than growing a second application inside `examples/`.
