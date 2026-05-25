@@ -7,9 +7,15 @@
   "id": "jidoka-3di.10.4",
   "labels": [],
   "parent": "jidoka-3di.10",
+  "comments": [
+    {
+      "text": "Verified the memory/compaction boundary with a regression showing memory prompt recall and compaction prompt-window trimming can coexist in the same runtime context. The test proves compaction trims only provider-facing transcript messages while preserving memory payloads, original messages, and final system prompt injection for both summary and recall. Verified with mix format --check-formatted, mix compile --warnings-as-errors, mix test, mix docs --warnings-as-errors, mix doctor --raise, and git diff --check.",
+      "timestamp": "2026-05-25T01:24:12Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E9: Verify memory recalls facts while compaction manages prompt-window pressure",
   "type": "task",
-  "updated_at": "2026-05-25T01:21:04Z"
+  "updated_at": "2026-05-25T01:24:12Z"
 }
