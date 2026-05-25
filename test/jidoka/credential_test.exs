@@ -97,12 +97,21 @@ defmodule JidokaTest.CredentialTest do
 
   test "public chat context rejects raw secrets before provider prompts or tools" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
-             Jidoka.Agent.prepare_chat_opts([context: %{tenant: "acme", api_key: "raw-secret"}], nil)
+             Jidoka.Agent.prepare_chat_opts(
+               [
+                 context: %{
+                   tenant: "acme",
+                   nested: %{api_key: "super-secret-api-key"}
+                 }
+               ],
+               nil
+             )
 
     assert error.field == :context
     assert error.details.reason == :raw_credential_value
-    assert error.details.paths == ["api_key"]
+    assert error.details.paths == ["nested.api_key"]
     assert error.value == "[REDACTED]"
+    refute inspect(error) =~ "super-secret-api-key"
   end
 
   test "session context rejects raw secrets before runtime use" do
