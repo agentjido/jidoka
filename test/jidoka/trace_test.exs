@@ -164,6 +164,53 @@ defmodule JidokaTest.TraceTest do
     assert trace.summary.compaction_events == 1
   end
 
+  test "lifts session correlation refs into emitted trace metadata" do
+    session =
+      Jidoka.Session.new!(
+        agent: JidokaTest.ToolAgent,
+        id: "Trace Session 42",
+        conversation_id: "Support Conversation 42",
+        context_ref: "support-lane"
+      )
+
+    request_id = unique_id("req-session-correlation")
+    run_id = unique_id("run-session-correlation")
+    trace_id = unique_id("trace-session-correlation")
+    span_id = unique_id("span-session-correlation")
+    parent_span_id = unique_id("span-parent-session-correlation")
+
+    opts =
+      Jidoka.Session.chat_opts(session,
+        request_id: request_id,
+        extra_refs: %{
+          trace_id: trace_id,
+          span_id: span_id,
+          parent_span_id: parent_span_id
+        }
+      )
+
+    Jidoka.Trace.emit(:control, %{
+      event: :allow,
+      control: "session_control",
+      agent_id: session.agent_id,
+      request_id: request_id,
+      run_id: run_id,
+      extra_refs: Keyword.fetch!(opts, :extra_refs)
+    })
+
+    assert {:ok, trace} = Trace.for_request(session.agent_id, request_id)
+    assert [event] = trace.events
+    assert event.request_id == request_id
+    assert event.run_id == run_id
+    assert event.trace_id == trace_id
+    assert event.span_id == span_id
+    assert event.parent_span_id == parent_span_id
+    assert event.metadata.session_id == session.id
+    assert event.metadata.conversation_id == session.conversation_id
+    assert event.metadata.context_ref == session.context_ref
+    assert event.metadata.extra_refs.session_id == session.id
+  end
+
   test "returns latest and list traces for an agent id" do
     agent_id = unique_id("trace-list-agent")
     request_id = unique_id("req")
