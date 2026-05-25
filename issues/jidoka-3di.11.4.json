@@ -7,9 +7,15 @@
   "id": "jidoka-3di.11.4",
   "labels": [],
   "parent": "jidoka-3di.11",
+  "comments": [
+    {
+      "text": "Added streaming chunk-order, cancellation terminal, and AgentView-vs-thread projection consistency tests. Existing completion/failure tests remain covered. Full gate passed.",
+      "timestamp": "2026-05-25T02:02:19Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E10: Add tests for streaming chunks, completion, failure, cancellation, and projecti...",
   "type": "task",
-  "updated_at": "2026-05-25T01:59:19Z"
+  "updated_at": "2026-05-25T02:02:19Z"
 }
