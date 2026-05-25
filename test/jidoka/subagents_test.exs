@@ -43,12 +43,20 @@ defmodule JidokaTest.SubagentsTest do
 
   test "runs ephemeral subagents through generated tool modules and forwards public context only" do
     research_tool = find_tool(OrchestratorAgent, "research_agent")
+    agent_id = "subagent-parent-ephemeral"
+    request_id = "req-subagent-ephemeral-1"
 
     context = %{
       "tenant" => "acme",
       "notify_pid" => self(),
       "memory" => %{prompt: "should not forward"},
       :__jidoka_hooks__ => %{before_turn: [:demo]},
+      Jidoka.Subagent.server_key() => self(),
+      Jidoka.Subagent.request_id_key() => request_id,
+      Jidoka.Trace.agent_id_key() => agent_id,
+      :session => "session-subagent",
+      :conversation_id => "conv-subagent",
+      :context_ref => "default",
       Jidoka.Subagent.depth_key() => 0
     }
 
@@ -60,7 +68,29 @@ defmodule JidokaTest.SubagentsTest do
     assert forwarded_context["notify_pid"] == self()
     assert forwarded_context[Jidoka.Subagent.depth_key()] == 1
     refute Map.has_key?(forwarded_context, :memory)
+    refute Map.has_key?(forwarded_context, "memory")
     refute Map.has_key?(forwarded_context, :__jidoka_hooks__)
+
+    assert [%{name: "research_agent", mode: :ephemeral, outcome: :ok, child_id: child_id}] =
+             Jidoka.Subagent.request_calls(self(), request_id)
+
+    assert {:ok, trace} = Jidoka.Trace.for_request(agent_id, request_id)
+
+    assert [
+             %{event: :start, metadata: start_metadata},
+             %{event: :stop, status: :completed, metadata: stop_metadata}
+           ] = Enum.filter(trace.events, &(&1.category == :subagent))
+
+    assert start_metadata.input_keys == ["task"]
+    assert start_metadata.session_id == "session-subagent"
+    assert start_metadata.conversation_id == "conv-subagent"
+    assert start_metadata.context_ref == "default"
+
+    assert stop_metadata.child_id == child_id
+    assert stop_metadata.context_keys == ["context_ref", "conversation_id", "notify_pid", "session", "tenant"]
+    assert stop_metadata.mode == :ephemeral
+    assert stop_metadata.outcome == :ok
+    assert stop_metadata.result_preview == "research:Summarize the issue:tenant=acme:depth=1"
   end
 
   test "supports disabling context forwarding" do
@@ -123,14 +153,32 @@ defmodule JidokaTest.SubagentsTest do
 
   test "supports persistent peer subagents with static ids" do
     assert {:ok, pid} = ResearchSpecialist.start_link(id: "research-peer-test")
+    agent_id = "subagent-parent-peer"
+    request_id = "req-subagent-peer-1"
 
     try do
       research_tool = find_tool(PeerOrchestratorAgent, "research_agent")
 
       assert {:ok, %{result: "research:Investigate the bug:tenant=peer:depth=1"}} =
-               research_tool.run(%{task: "Investigate the bug"}, %{tenant: "peer"})
+               research_tool.run(
+                 %{task: "Investigate the bug"},
+                 %{
+                   :tenant => "peer",
+                   Jidoka.Subagent.server_key() => self(),
+                   Jidoka.Subagent.request_id_key() => request_id,
+                   Jidoka.Trace.agent_id_key() => agent_id
+                 }
+               )
 
       assert Jidoka.whereis("research-peer-test") == pid
+
+      assert [%{name: "research_agent", mode: :peer, child_id: "research-peer-test", outcome: :ok}] =
+               Jidoka.Subagent.request_calls(self(), request_id)
+
+      assert {:ok, trace} = Jidoka.Trace.for_request(agent_id, request_id)
+      stop_event = Enum.find(trace.events, &(&1.category == :subagent and &1.event == :stop))
+      assert stop_event.metadata.mode == :peer
+      assert stop_event.metadata.child_id == "research-peer-test"
     after
       :ok = Jidoka.stop_agent(pid)
     end
@@ -202,12 +250,14 @@ defmodule JidokaTest.SubagentsTest do
 
   test "normalizes timeout failures and stops ephemeral children" do
     slow_tool = find_tool(TimeoutOrchestratorAgent, "slow_agent")
+    agent_id = "subagent-parent-timeout"
     request_id = "req-subagent-timeout-1"
 
     assert {:error, %Jidoka.Error.ExecutionError{} = error} =
              slow_tool.run(%{task: "Too slow"}, %{
                Jidoka.Subagent.server_key() => self(),
-               Jidoka.Subagent.request_id_key() => request_id
+               Jidoka.Subagent.request_id_key() => request_id,
+               Jidoka.Trace.agent_id_key() => agent_id
              })
 
     assert error.message == "Subagent timed out."
@@ -220,6 +270,16 @@ defmodule JidokaTest.SubagentsTest do
              Jidoka.Subagent.request_calls(self(), request_id)
 
     refute_agent_running(child_id)
+
+    assert {:ok, trace} = Jidoka.Trace.for_request(agent_id, request_id)
+
+    assert [%{event: :start}, %{event: :error, status: :failed, metadata: metadata}] =
+             Enum.filter(trace.events, &(&1.category == :subagent))
+
+    assert metadata.child_id == child_id
+    assert metadata.mode == :ephemeral
+    assert metadata.outcome == {:error, {:timeout, 20}}
+    assert metadata.error =~ "timeout"
   end
 
   test "normalizes invalid child result failures" do
