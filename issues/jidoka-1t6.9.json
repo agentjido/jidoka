@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T23:43:57Z",
   "created": "2026-05-25T23:12:06Z",
   "description": "Document or codify the trace event categories, names, statuses, correlation keys, redaction rules, and stability expectations for AgentView, Livebook, and external UI consumers.",
   "id": "jidoka-1t6.9",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Define trace event schema contract",
   "type": "task",
-  "updated_at": "2026-05-25T23:36:42Z"
+  "updated_at": "2026-05-25T23:43:57Z"
 }
