@@ -6,6 +6,7 @@
   "blocks": [
     "jidoka-3di.18"
   ],
+  "closed_at": "2026-05-25T02:05:18Z",
   "created": "2026-05-24T20:35:42Z",
   "description": "Purpose: finalize UI-facing runtime projection.\n\nDone when:\n- streaming and AgentView support a clean UI story\n- projected state matches the canonical runtime state\n",
   "id": "jidoka-3di.11",
@@ -18,7 +19,7 @@
     }
   ],
   "priority": 2,
-  "status": "open",
+  "status": "closed",
   "title": "V3 E10: Streaming and AgentView",
   "type": "epic",
   "updated_at": "2026-05-25T02:05:18Z"
