@@ -8,8 +8,8 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 - Put core configuration inside `agent :id do ... end`.
 - Use `context Zoi.object(...)` for runtime context validation.
 - Prefer `context:` at runtime. Do not pass `tool_context:` to Jidoka public APIs.
-- Use `character` for structured persona/voice data backed by `jido_character`.
-  Use `instructions` for task, policy, and safety instructions.
+- Use `character` for structured persona/voice data. Use `instructions` for
+  task, policy, and safety instructions.
 - Use per-call `character:` only when a request should override the configured
   character for that turn.
 - Keep prompts explicit. Jidoka does not automatically inject context into model
@@ -63,12 +63,12 @@ Use these rules when generating Jidoka code or reviewing Jidoka examples.
 ## Imported Agents
 
 - Use `Jidoka.import_agent/2` or `Jidoka.import_agent_file/2` for JSON/YAML specs.
-- Resolve imported action refs, characters, hooks, guardrails, plugins, skills,
+- Resolve imported action refs, characters, hooks, controls, plugins, skills,
   subagents, workflows, and handoffs through explicit `available_*` registries.
   Imported `web` capabilities use built-in modes and do not need a registry.
-- Prefer inline `defaults.character` maps that parse through `Jido.Character`
-  for portable imported specs; use string character refs only when the
-  importing application provides `available_characters`.
+- Prefer inline character maps for portable imported specs; use string
+  character refs only when the importing application provides
+  `available_characters`.
 - Use `Jidoka.ImportedAgent.Subagent` when an Elixir manager agent delegates to a
   JSON/YAML-authored specialist.
 

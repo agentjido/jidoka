@@ -238,7 +238,7 @@ alias LivebookDemo.KitchenSink.SupportDeskAgent
   workflows: Enum.map(SupportDeskAgent.workflows(), & &1.name),
   subagents: Enum.map(SupportDeskAgent.subagents(), & &1.name),
   schedules: Enum.map(SupportDeskAgent.schedules(), & &1.id),
-  controls: Map.new(definition.guardrails, fn {stage, controls} -> {stage, length(controls)} end),
+  controls: Map.new(SupportDeskAgent.controls(), fn {stage, controls} -> {stage, length(controls)} end),
   memory: definition.memory != nil,
   compaction: definition.compaction != nil
 }

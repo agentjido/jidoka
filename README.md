@@ -169,9 +169,10 @@ This is the Jidoka-owned continuity layer:
 - compaction snapshots summarize older provider-facing context without deleting
   the underlying thread
 
-For lower-level OTP ownership, run generated agents under an app-owned runtime.
-The Jidoka-authored module stays the same; your app takes over registry,
-storage, supervision, deployment, auth, and persistence boundaries:
+When production needs grow past the small Jidoka wrapper, graduate the generated
+runtime module into an app-owned runtime. The Jidoka-authored module stays the
+same; your app takes over registry, storage, supervision, deployment, auth, and
+persistence boundaries:
 
 ```elixir
 defmodule MyApp.Jido do
@@ -195,8 +196,8 @@ Start the generated runtime module from that owner:
   )
 ```
 
-The durable runtime boundary owns the parts that must survive process restarts
-or support replay:
+That lower runtime boundary owns the parts that must survive process restarts or
+support replay:
 
 - process restore through hibernate/thaw
 - thread journals and durable transcript storage
@@ -206,13 +207,11 @@ or support replay:
   recovery policy
 - low-level signal/directive control when the application needs it
 
-Jidoka is the on-ramp: start with the smaller DSL, then move the generated
-runtime module into the full runtime when production needs outgrow the wrapper.
-V3 does not add a separate Jidoka durability adapter. The stable handoff point
-is `MyAgent.runtime_module()`, which keeps the persistence API owned by the
-runtime that actually supervises and stores the agent.
-Jidoka V3 does not own durable transcript storage; that belongs to an app-owned
-runtime or to a future durability epic if Jidoka later grows one.
+Jidoka is the on-ramp: start with the smaller DSL, then move
+`MyAgent.runtime_module()` into the full runtime when production needs outgrow
+the wrapper. V3 does not add a separate Jidoka durability adapter; durable
+transcript storage belongs to the runtime that actually supervises and stores
+the agent.
 
 ## Phoenix And UI State
 
@@ -251,8 +250,8 @@ process restarts, graduate the runtime to durable storage.
 
 Debugging is a first-class Jidoka concern. During development, use inspection,
 request summaries, traces, AgentView projections, and Kino/Livebook views to
-answer practical questions: what prompt was sent, what operations ran, what control
-interrupted, what result was returned, and what changed between turns.
+answer practical questions: what prompt was sent, what operations ran, what
+control interrupted, what result was returned, and what changed between turns.
 
 Production observability stays standards-friendly instead of becoming a
 Jidoka-only format. The foundation emits structured telemetry and correlation
@@ -373,11 +372,11 @@ metadata; the actual secret stays with the system that owns the integration.
 Imported agents are an experimental portability surface for controlled JSON/YAML
 interchange. They are not arbitrary code loading.
 
-An imported spec can name tools, plugins, subagents, workflows, handoffs, hooks,
-guardrails, skills, web capabilities, memory, compaction, and typed results, but
-names only resolve through registries supplied by the host application. Raw
-module strings are rejected; the app must explicitly decide which modules and
-local skill paths are available at import time.
+An imported spec can name actions, plugins, subagents, workflows, handoffs,
+lifecycle hooks, controls, skills, web capabilities, memory, compaction, and
+typed results, but names only resolve through registries supplied by the host
+application. Raw module strings are rejected; the app must explicitly decide
+which modules and local skill paths are available at import time.
 
 Use imported agents for fixtures, portability tests, generated specs, and
 controlled interchange. Use the Elixir DSL as the canonical authoring surface
@@ -430,8 +429,9 @@ exploration.
 
 ## Status
 
-The old guide and dev support trees are being replaced while the V3 DSL settles.
-The package source remains the source of truth during this cleanup pass.
+Jidoka is in beta. The V3 surface is being actively refined, trimmed, and
+simplified; APIs and features may change without notice before the stable 1.0
+release.
 
 ## License
 
