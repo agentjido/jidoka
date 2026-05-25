@@ -11,9 +11,15 @@
   "id": "jidoka-3di.8",
   "labels": [],
   "parent": "jidoka-3di",
+  "comments": [
+    {
+      "text": "E7 completed: normalized display-oriented error maps, safe public error formatting, bounded request inspection summaries, prompt previews, direct Kino request debugging, and sanitized AgentView debug event projections. Full verification passed on the closing child.",
+      "timestamp": "2026-05-25T00:43:40Z"
+    }
+  ],
   "priority": 2,
   "status": "open",
   "title": "V3 E7: Errors, debugging, and inspection",
   "type": "epic",
-  "updated_at": "2026-05-24T20:35:47Z"
+  "updated_at": "2026-05-25T00:43:40Z"
 }
