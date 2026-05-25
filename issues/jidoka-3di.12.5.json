@@ -7,9 +7,15 @@
   "id": "jidoka-3di.12.5",
   "labels": [],
   "parent": "jidoka-3di.12",
+  "comments": [
+    {
+      "text": "Expanded schedule option coverage: timezone registration failures, module-agent context delivery through chat, prompt callback validation failures, plus existing duplicate/disabled/failed-run coverage. Full gate passed.",
+      "timestamp": "2026-05-25T02:23:01Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E11: Add tests for prompt requirement, context merging, timezone handling, duplicate...",
   "type": "task",
-  "updated_at": "2026-05-25T02:21:25Z"
+  "updated_at": "2026-05-25T02:23:01Z"
 }
