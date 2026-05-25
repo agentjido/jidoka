@@ -500,6 +500,31 @@ defmodule JidokaTest.HandoffRouterAgent do
   end
 end
 
+defmodule JidokaTest.SessionBillingHandoffAgent do
+  use Jidoka.Agent
+
+  agent :session_billing_handoff_agent do
+    model :fast
+    instructions "Continue support conversations after billing ownership is transferred."
+  end
+end
+
+defmodule JidokaTest.SessionHandoffRouterAgent do
+  use Jidoka.Agent
+
+  agent :session_handoff_router_agent do
+    model :fast
+    instructions "Transfer session ownership when billing should continue the conversation."
+  end
+
+  capabilities do
+    handoff(JidokaTest.SessionBillingHandoffAgent,
+      as: :session_billing_specialist,
+      description: "Transfer session ownership to the billing specialist."
+    )
+  end
+end
+
 defmodule JidokaTest.HandoffForwardNoneAgent do
   use Jidoka.Agent
 

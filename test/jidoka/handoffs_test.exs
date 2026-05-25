@@ -11,6 +11,8 @@ defmodule JidokaTest.HandoffsTest do
     MissingPeerHandoffAgent,
     PeerHandoffAgent,
     ReviewHandoffSpecialist,
+    SessionBillingHandoffAgent,
+    SessionHandoffRouterAgent,
     WrongPeerHandoffAgent
   }
 
@@ -216,6 +218,76 @@ defmodule JidokaTest.HandoffsTest do
       assert is_nil(Jidoka.handoff_owner(conversation_id))
     after
       cleanup_conversation(conversation_id)
+    end
+  end
+
+  test "session future turns route to the handoff owner until reset" do
+    session =
+      Jidoka.Session.new!(
+        agent: SessionHandoffRouterAgent,
+        id: unique_id("handoff-session"),
+        context: %{tenant: "acme"}
+      )
+
+    tool = handoff_tool(SessionHandoffRouterAgent, "session_billing_specialist")
+    handoff_agent_id = "jidoka_handoff_#{session.conversation_id}_session_billing_specialist"
+    test_pid = self()
+
+    route_interrupt = fn input ->
+      send(test_pid, {
+        :routed_turn,
+        input.message,
+        input.agent.id,
+        input.server,
+        Jidoka.Context.strip_internal(input.context)
+      })
+
+      {:interrupt, %{kind: :approval, message: "Stopped #{input.message}", data: %{}}}
+    end
+
+    try do
+      assert {:error, {:handoff, %Jidoka.Handoff{} = handoff}} =
+               tool.run(
+                 %{
+                   message: "Please continue with billing.",
+                   summary: "Customer is asking about an invoice.",
+                   reason: "billing"
+                 },
+                 handoff_context(
+                   session.conversation_id,
+                   %{
+                     :tenant => "acme",
+                     Jidoka.Handoff.from_agent_key() => SessionHandoffRouterAgent.id(),
+                     Jidoka.Trace.agent_id_key() => session.agent_id
+                   }
+                 )
+               )
+
+      assert handoff.to_agent == SessionBillingHandoffAgent
+      assert handoff.to_agent_id == handoff_agent_id
+      assert %{agent: SessionBillingHandoffAgent, agent_id: ^handoff_agent_id} = Jidoka.handoff_owner(session)
+
+      assert {:interrupt, %Jidoka.Interrupt{message: "Stopped future turn"}} =
+               Jidoka.chat(session, "future turn", controls: [input: route_interrupt])
+
+      handoff_pid = Jidoka.whereis(handoff_agent_id)
+      assert_receive {:routed_turn, "future turn", ^handoff_agent_id, ^handoff_pid, future_context}
+      assert future_context == %{session: session.id, tenant: "acme"}
+
+      assert :ok = Jidoka.reset_handoff(session)
+      assert is_nil(Jidoka.handoff_owner(session))
+
+      assert {:interrupt, %Jidoka.Interrupt{message: "Stopped back to parent"}} =
+               Jidoka.chat(session, "back to parent", controls: [input: route_interrupt])
+
+      parent_pid = Jidoka.Session.whereis(session)
+      assert_receive {:routed_turn, "back to parent", agent_id, ^parent_pid, parent_context}
+      assert agent_id == session.agent_id
+      assert parent_context == %{session: session.id, tenant: "acme"}
+    after
+      reset_agent(session.agent_id)
+      reset_agent(handoff_agent_id)
+      Jidoka.reset_handoff(session)
     end
   end
 
