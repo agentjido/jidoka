@@ -141,8 +141,15 @@ defmodule JidokaTest.WorkflowRuntimeUnitTest do
     assert StepRunner.execute_step(definition, throw_step, state) == {:error, {:throw, :thrown_function}}
   end
 
-  test "step runner validates resolved tool and agent inputs" do
+  test "step runner validates resolved action, function, and agent inputs" do
     definition = %{id: "unit_workflow"}
+
+    assert {:error, {:expected_map, :action_input, "bad"}} =
+             StepRunner.execute_step(
+               definition,
+               %{kind: :action, target: JidokaTest.Workflow.AddAmount, input: "bad"},
+               @state
+             )
 
     assert {:error, {:expected_map, :function_input, "bad"}} =
              StepRunner.execute_step(

@@ -816,6 +816,9 @@ task should be the final child task for every epic.
 - Workflow execution is verified without model calls: dependent steps run after
   their declared inputs are produced, and `capabilities do workflow ... end`
   exposes the workflow as a valid generated `Jidoka.Action` module.
+- Workflow coverage spans action, function, agent, and imported-agent steps,
+  input parsing from maps/keywords, atom/string context refs, output selection,
+  and normalized validation/execution failures.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

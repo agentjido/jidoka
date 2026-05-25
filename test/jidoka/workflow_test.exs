@@ -21,9 +21,18 @@ defmodule JidokaTest.WorkflowTest do
     assert {:ok, %{value: 12}} = Jidoka.Workflow.run(ToolOnlyWorkflow, %{value: 5})
   end
 
+  test "normalizes keyword input through workflow schemas" do
+    assert {:ok, %{value: 12}} = ToolOnlyWorkflow.run(value: 5)
+  end
+
   test "runs a function workflow with runtime context refs" do
     assert {:ok, "schemas:done"} =
              FunctionWorkflow.run(%{topic: "schemas"}, context: %{suffix: "done"})
+  end
+
+  test "resolves string-key context refs" do
+    assert {:ok, "schemas:done"} =
+             FunctionWorkflow.run(%{topic: "schemas"}, context: %{"suffix" => "done"})
   end
 
   test "runs dependent workflow steps in order without model calls" do
