@@ -8,9 +8,15 @@ defmodule Jidoka.Schedule do
   same path as normal agent turns, including context validation, hooks,
   guardrails, structured output, tracing, and inspection.
 
-  The beta scheduler is intentionally in-memory. It is useful for app-local
-  recurring work and development ergonomics, but durable schedule persistence
-  belongs to Jidoka's later durability layer.
+  The beta scheduler is intentionally in-memory. Schedule declarations compile
+  to metadata, while registered schedules, scheduler processes, active runs,
+  and bounded run history live only in the running `Jidoka.Schedule.Manager`
+  process. Restarting the manager drops dynamic registrations and history
+  unless the application re-registers schedule metadata during boot.
+
+  Treat `history` as diagnostics, not an audit log. Durable schedule storage,
+  recovery, and run journals belong to a later durability layer or to the
+  application's runtime boundary.
   """
 
   @default_timezone "Etc/UTC"

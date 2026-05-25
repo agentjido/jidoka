@@ -326,7 +326,8 @@ metadata; the actual secret stays with the system that owns the integration.
   model context limits.
 - **Streaming and UI projections:** build UI-facing agents with `AgentView`
   state for LiveView, controllers, CLIs, tests, and jobs.
-- **Schedules:** run agent turns or workflows on a clock.
+- **Schedules:** run agent turns or workflows on a clock with an in-memory
+  manager that apps re-register on boot.
 - **Workflows:** keep deterministic multi-step processes outside the model.
 - **Subagents and handoffs:** delegate specialist work or transfer conversation
   ownership.

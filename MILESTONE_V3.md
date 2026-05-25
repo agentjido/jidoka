@@ -800,6 +800,10 @@ task should be the final child task for every epic.
 - Schedule option coverage includes prompt requirements, callback validation
   failures, context delivery through normal chat, timezone/cron registration
   failures, duplicate ids, disabled schedules, and failed runs.
+- `Jidoka.Schedule.Manager` is non-durable in V3. Registered schedules, running
+  tasks, scheduler pids, and bounded run history live in the manager process;
+  applications re-register compiled schedule metadata on boot when they need
+  schedules to come back after restart.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

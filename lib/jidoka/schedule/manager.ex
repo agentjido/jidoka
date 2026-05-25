@@ -6,6 +6,15 @@ defmodule Jidoka.Schedule.Manager do
   `Jidoka.Schedule.Manager`. Applications that need isolated schedule sets can
   start their own named manager and pass `manager: MyApp.ScheduleManager` to the
   public schedule APIs.
+
+  Manager state is process-local and non-durable by design. The registered
+  schedules, cron scheduler pids, currently running tasks, and bounded run
+  history are lost when the manager stops. To rebuild schedules on application
+  boot, pass compiled schedule metadata with `start_link(schedules: schedules)`
+  or register schedules from your application's startup code.
+
+  Run history is for short-lived diagnostics and UI feedback. It is not a
+  durable audit log, replay source, or recovery journal.
   """
 
   use GenServer

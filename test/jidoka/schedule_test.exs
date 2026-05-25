@@ -169,6 +169,38 @@ defmodule JidokaTest.ScheduleTest do
     assert {:error, :not_found} = Jidoka.cancel_schedule("missing", manager: manager)
   end
 
+  test "manager state is process-local and rehydrated only from supplied schedules" do
+    assert {:ok, schedule} =
+             Schedule.new(ToolOnlyWorkflow,
+               kind: :workflow,
+               id: "boot-registered",
+               cron: "0 9 * * *",
+               input: %{value: 5},
+               enabled?: false
+             )
+
+    first_manager = :"schedule_state_boundary_#{System.unique_integer([:positive])}"
+    empty_manager = :"schedule_state_boundary_#{System.unique_integer([:positive])}"
+    rehydrated_manager = :"schedule_state_boundary_#{System.unique_integer([:positive])}"
+
+    start_supervised!({Jidoka.Schedule.Manager, name: first_manager, id: first_manager, schedules: [schedule]})
+
+    assert {:ok, run} = Jidoka.run_schedule("boot-registered", manager: first_manager)
+    assert run.status == :completed
+
+    assert {:ok, [%Schedule{run_count: 1, history: [_]}]} = Jidoka.list_schedules(manager: first_manager)
+
+    start_supervised!({Jidoka.Schedule.Manager, name: empty_manager, id: empty_manager, schedules: []})
+    assert {:ok, []} = Jidoka.list_schedules(manager: empty_manager)
+
+    start_supervised!(
+      {Jidoka.Schedule.Manager, name: rehydrated_manager, id: rehydrated_manager, schedules: [schedule]}
+    )
+
+    assert {:ok, [%Schedule{id: "boot-registered", run_count: 0, history: []}]} =
+             Jidoka.list_schedules(manager: rehydrated_manager)
+  end
+
   test "runs a workflow schedule manually and records bounded history", %{manager: manager} do
     assert {:ok, %Schedule{id: "math-workflow"}} =
              Jidoka.schedule_workflow(ToolOnlyWorkflow,
