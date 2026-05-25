@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T04:54:34Z",
+  "close_reason": "Ran mix hex.build --unpack into tmp and inspected package contents. The package dry run builds jidoka 1.0.0-beta.1 and includes lib, examples, Livebooks, docs extras, README, changelog, license, and metadata without publishing.",
   "created": "2026-05-24T20:35:46Z",
   "description": "Parent epic: V3 E18: Final hardening\n\nSource task 6/9 from MILESTONE_V3.md:\n\n- Run a package build dry run if Hex/package metadata is in scope.\n\nEpic closure criteria:\n- all verification passes\n- remaining known gaps are documented as post-V3 work\n- the package has one coherent V3 story from README to tests\n",
   "id": "jidoka-3di.19.6",
   "labels": [],
   "parent": "jidoka-3di.19",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E18: Run a package build dry run if Hex/package metadata is in scope",
   "type": "task",
-  "updated_at": "2026-05-25T04:54:22Z"
+  "updated_at": "2026-05-25T04:54:34Z"
 }
