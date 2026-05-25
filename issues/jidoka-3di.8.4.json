@@ -7,9 +7,15 @@
   "id": "jidoka-3di.8.4",
   "labels": [],
   "parent": "jidoka-3di.8",
+  "comments": [
+    {
+      "text": "Completed the remaining projection hardening by making Agent.View debug event payloads and refs display-safe with bounded content previews, omitted large/raw fields, and redacted secrets. Added coverage for tool call, tool result, and context operation projections while existing timeline/call graph/request summary helpers remain covered. Verified with focused Agent.View tests plus full format, compile, test, docs, doctor, and diff checks.",
+      "timestamp": "2026-05-25T00:42:55Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E7: Add call graph, timeline, request summary, and state/context projections",
   "type": "task",
-  "updated_at": "2026-05-25T00:40:40Z"
+  "updated_at": "2026-05-25T00:42:55Z"
 }
