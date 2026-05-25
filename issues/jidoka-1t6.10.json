@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T23:54:47Z",
   "created": "2026-05-25T23:12:06Z",
   "description": "Add an inspection path that returns prompt sections and precedence before a request is sent, instead of requiring users to infer prompt order from post-request debug summaries.",
   "id": "jidoka-1t6.10",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Expose prompt section precedence preflight inspection",
   "type": "task",
-  "updated_at": "2026-05-25T23:44:33Z"
+  "updated_at": "2026-05-25T23:54:47Z"
 }
