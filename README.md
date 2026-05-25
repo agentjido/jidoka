@@ -205,6 +205,36 @@ Your host app still configures the telemetry exporter. Jidoka's job is to
 preserve session, conversation, request, run, and trace IDs so local debugging
 and production telemetry tell the same story.
 
+For production export, keep the exporter in your app's normal telemetry
+boundary. The useful event families are:
+
+- runtime request/model/tool events under `[:jido, :ai, ...]`
+- Jidoka lifecycle events under `[:jidoka, category, :event]`
+
+Attach your exporter, metrics collector, or tracing bridge in application code:
+
+```elixir
+:telemetry.attach_many(
+  "my-app-agent-observability",
+  [
+    [:jido, :ai, :request, :complete],
+    [:jido, :ai, :llm, :complete],
+    [:jido, :ai, :tool, :complete],
+    [:jidoka, :control, :event],
+    [:jidoka, :workflow, :event],
+    [:jidoka, :output, :event]
+  ],
+  &MyApp.AgentTelemetry.handle_event/4,
+  nil
+)
+```
+
+The handler should treat `metadata.session_id`, `metadata.conversation_id`,
+`metadata.request_id`, `metadata.run_id`, `metadata.trace_id`, and
+`metadata.span_id` as the join keys between local `Jidoka.Trace` inspection and
+your production backend. Use whichever exporter your app already standardizes
+on; Jidoka does not require an exporter dependency just to build agents.
+
 ## Credential Brokering
 
 Jidoka treats credentials as references, not secrets. Pass a
