@@ -2,6 +2,7 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-25T03:21:03Z",
   "created": "2026-05-24T20:35:43Z",
   "description": "Parent epic: V3 E13: Subagents and handoffs\n\nSource task 4/5 from MILESTONE_V3.md:\n\n- Add tests for human-in-the-loop interactions across subagent and handoff\n  boundaries.\n\nEpic closure criteria:\n- delegation and ownership transfer are separate concepts in code and docs\n- handoff routing works cleanly with sessions\n",
   "id": "jidoka-3di.14.4",
@@ -14,7 +15,7 @@
     }
   ],
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "E13: Add tests for human-in-the-loop interactions across subagent and handoff bounda...",
   "type": "task",
   "updated_at": "2026-05-25T03:21:03Z"
