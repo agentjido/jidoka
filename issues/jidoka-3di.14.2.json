@@ -7,9 +7,15 @@
   "id": "jidoka-3di.14.2",
   "labels": [],
   "parent": "jidoka-3di.14",
+  "comments": [
+    {
+      "text": "Verified handoff ownership, reset, session routing, and future-turn behavior with a provider-free session test. Full gate passed: format, compile warnings-as-errors, test, docs warnings-as-errors, doctor, diff check.",
+      "timestamp": "2026-05-25T03:08:21Z"
+    }
+  ],
   "priority": 2,
   "status": "in_progress",
   "title": "E13: Verify handoff ownership, reset, routing, session integration, and future-turn...",
   "type": "task",
-  "updated_at": "2026-05-25T03:04:08Z"
+  "updated_at": "2026-05-25T03:08:21Z"
 }
