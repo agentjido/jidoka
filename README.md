@@ -195,8 +195,17 @@ Start the generated runtime module from that owner:
   )
 ```
 
-The lower-level runtime owns hibernate/thaw, checkpointing, thread journals,
-storage adapters, instance managers, and low-level signal/directive control.
+The durable runtime boundary owns the parts that must survive process restarts
+or support replay:
+
+- process restore through hibernate/thaw
+- thread journals and durable transcript storage
+- checkpoints for long-running or resumable work
+- storage adapters and instance managers
+- deployment-specific registry, supervisor, partition, worker-pool, and
+  recovery policy
+- low-level signal/directive control when the application needs it
+
 Jidoka is the on-ramp: start with the smaller DSL, then move the generated
 runtime module into the full runtime when production needs outgrow the wrapper.
 

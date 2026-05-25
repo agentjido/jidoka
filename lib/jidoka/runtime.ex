@@ -41,6 +41,11 @@ defmodule Jidoka.Runtime do
   request inspection, trace projection, and compaction snapshots. Applications
   that need durable restore, checkpointing, journals, or storage adapters should
   move the generated runtime module into an app-owned runtime boundary.
+
+  Durable runtime storage owns process restore, hibernate/thaw, thread journals,
+  durable transcript storage, checkpoints, storage adapters, instance managers,
+  and deployment-specific recovery policy. Those concerns sit outside the
+  default Jidoka runtime so the beginner path stays small and honest.
   """
 
   use Jido, otp_app: :jidoka
