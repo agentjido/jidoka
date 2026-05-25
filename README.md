@@ -387,9 +387,22 @@ while the beta DSL settles.
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 1.0.0-beta.1"}
+    {:jidoka, github: "agentjido/jidoka", branch: "main"}
   ]
 end
+```
+
+After Jidoka ships on Hex, replace the Git dependency with
+`{:jidoka, "~> 1.0"}`.
+
+Configure a small model alias for examples and quick starts:
+
+```elixir
+# config/config.exs
+config :jidoka,
+  model_aliases: %{
+    fast: "anthropic:claude-haiku-4-5"
+  }
 ```
 
 Configure a provider for live LLM calls:

@@ -1,14 +1,22 @@
 # Jidoka Kitchen Sink
 
 ```elixir
-dep =
-  if File.exists?(Path.expand("../mix.exs", __DIR__)) do
-    {:jidoka, path: Path.expand("..", __DIR__)}
-  else
-    {:jidoka, "~> 1.0"}
-  end
+jidoka_dep = {:jidoka, github: "agentjido/jidoka", branch: "main"}
 
-Mix.install([dep], consolidate_protocols: false)
+# After Jidoka ships on Hex:
+# jidoka_dep = {:jidoka, "~> 1.0"}
+
+Mix.install(
+  [jidoka_dep],
+  config: [
+    jidoka: [
+      model_aliases: %{
+        fast: "anthropic:claude-haiku-4-5"
+      }
+    ]
+  ],
+  consolidate_protocols: false
+)
 ```
 
 ## Build The Pieces First

@@ -8,8 +8,10 @@ Use this structure for each concept notebook in `livebook/`.
 - Title: `# Jidoka: Concept Name`.
 - Default path: provider-free and deterministic.
 - Optional live-provider cells must be gated by env vars.
-- Use the local-path `Mix.install/2` pattern so notebooks work from a checkout
-  and from Hex.
+- Use the standard Git-based `Mix.install/2` pattern until Jidoka ships on Hex.
+  Include the commented Hex replacement line.
+- Configure `:model_aliases` in the `Mix.install/2` config block so `model
+  :fast` resolves consistently in every notebook.
 - Prefer one concept per notebook. Link to the next concept instead of building a
   kitchen sink.
 - Do not put broad package explanations in every notebook. Keep each notebook
