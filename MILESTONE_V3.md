@@ -775,6 +775,9 @@ task should be the final child task for every epic.
 - Phoenix and LiveView own presentation state only. The running agent process
   owns thread/request state, sessions address that runtime boundary, and
   `AgentView` is a refreshable projection rather than persistence.
+- `AgentView.start_agent/1` must preserve session semantics when given a
+  `%Jidoka.Session{}`: session runtime, start options, context ref, agent id,
+  and conversation id remain the source of truth.
 - Streaming is request-scoped and caller-owned. `chat(target, message,
   stream: true)` and `chat_stream/3` return the same stream shape, stream events
   are delivered to the caller mailbox only, and `Jidoka.Chat.Stream.await/2`

@@ -1,5 +1,8 @@
 defmodule JidokaTest.AgentViewContractTest do
-  use ExUnit.Case, async: true
+  use JidokaTest.Support.Case, async: false
+
+  alias Jidoka.Session
+  alias JidokaTest.ChatAgent
 
   defmodule ContractAgent do
     def id, do: "contract_agent"
@@ -19,6 +22,10 @@ defmodule JidokaTest.AgentViewContractTest do
 
   defmodule SessionView do
     use Jidoka.AgentView
+  end
+
+  defmodule RuntimeView do
+    use Jidoka.AgentView, agent: ChatAgent
   end
 
   defmodule StartableView do
@@ -110,6 +117,57 @@ defmodule JidokaTest.AgentViewContractTest do
     assert CustomView.agent_id(input) == "custom-agent-vip_refund"
 
     assert CustomView.runtime_context(input) == %{
+             channel: "test",
+             session: "vip_refund",
+             account_id: "acct_123"
+           }
+  end
+
+  test "AgentView starts and snapshots a session-owned runtime pid" do
+    session =
+      Session.new!(
+        agent: ChatAgent,
+        id: unique_id("agent-view-session"),
+        context_ref: "support",
+        context: %{tenant: "acme"}
+      )
+
+    try do
+      assert {:ok, pid} = SessionView.start_agent(session)
+      assert pid == Session.whereis(session)
+
+      assert {:ok, view} = SessionView.snapshot(pid, session)
+
+      assert view.agent_id == session.agent_id
+      assert view.conversation_id == session.conversation_id
+      assert view.runtime_context == %{session: session.id, tenant: "acme"}
+      assert view.metadata.projection.context_ref == "support"
+    after
+      stop_session_agent(session)
+    end
+  end
+
+  test "AgentView snapshots raw agents without requiring a running server" do
+    agent = new_runtime_agent(ChatAgent.runtime_module())
+
+    assert {:ok, view} = RuntimeView.snapshot(agent, %{conversation_id: "Raw Case!"})
+
+    assert view.agent_id == agent.id
+    assert view.conversation_id == "raw_case"
+    assert view.runtime_context == %{session: "raw_case"}
+    assert view.metadata.projection.entry_count == 0
+  end
+
+  test "custom AgentView snapshots keep custom identity and context projections" do
+    agent = new_runtime_agent(ChatAgent.runtime_module())
+    input = %{conversation: "VIP Refund", account_id: "acct_123"}
+
+    assert {:ok, view} = CustomView.snapshot(agent, input)
+
+    assert view.agent_id == agent.id
+    assert view.conversation_id == "vip_refund"
+
+    assert view.runtime_context == %{
              channel: "test",
              session: "vip_refund",
              account_id: "acct_123"
@@ -247,5 +305,14 @@ defmodule JidokaTest.AgentViewContractTest do
     assert Jidoka.AgentView.TurnState.running_visible_messages([%{pending?: true}], [%{role: :assistant}]) == [
              %{role: :assistant}
            ]
+  end
+
+  defp unique_id(prefix), do: "#{prefix}-#{System.unique_integer([:positive, :monotonic])}"
+
+  defp stop_session_agent(%Session{} = session) do
+    case Session.whereis(session) do
+      pid when is_pid(pid) -> Jidoka.stop_agent(pid)
+      nil -> :ok
+    end
   end
 end

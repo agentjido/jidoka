@@ -2,6 +2,17 @@ defmodule Jidoka.AgentView.Start do
   @moduledoc false
 
   @spec start_agent(module(), term()) :: {:ok, pid()} | {:error, term()}
+  def start_agent(view_module, %Jidoka.Session{} = session) when is_atom(view_module) do
+    with :ok <- prepare_view(view_module, session) do
+      agent_id = view_module.agent_id(session)
+      agent = view_module.agent_module(session)
+
+      with_start_lock(view_module, agent_id, fn ->
+        start_or_reuse_session_agent(session, agent, agent_id)
+      end)
+    end
+  end
+
   def start_agent(view_module, input) when is_atom(view_module) do
     with :ok <- prepare_view(view_module, input) do
       agent_id = view_module.agent_id(input)
@@ -46,6 +57,17 @@ defmodule Jidoka.AgentView.Start do
           pid when is_pid(pid) -> {:ok, pid}
           nil -> error
         end
+    end
+  end
+
+  defp start_or_reuse_session_agent(%Jidoka.Session{agent: agent, agent_id: agent_id} = session, agent, agent_id) do
+    Jidoka.Session.start_agent(session)
+  end
+
+  defp start_or_reuse_session_agent(_session, agent, agent_id) do
+    case Jidoka.Runtime.whereis(agent_id) do
+      nil -> start_or_reuse_agent(agent, agent_id)
+      pid -> {:ok, pid}
     end
   end
 
