@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-26T00:33:12Z",
   "created": "2026-05-25T23:12:06Z",
   "description": "Move public docs, errors, trace/debug labels, and import-facing terminology toward result and controls; keep output and guardrail as internal compatibility names where needed.",
   "id": "jidoka-1t6.11",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Continue result/controls vocabulary migration",
   "type": "task",
-  "updated_at": "2026-05-26T00:21:48Z"
+  "updated_at": "2026-05-26T00:33:12Z"
 }
