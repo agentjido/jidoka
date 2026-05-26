@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-26T00:46:59Z",
   "created": "2026-05-25T23:12:06Z",
   "description": "Add practical recipes for sessions, durable transcripts, supervised runtime startup, schedules, handoffs, multi-tenant context, and restart/recovery boundaries.",
   "id": "jidoka-1t6.13",
   "labels": [],
   "parent": "jidoka-1t6",
   "priority": 2,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Add production runtime recipes",
   "type": "task",
-  "updated_at": "2026-05-26T00:41:15Z"
+  "updated_at": "2026-05-26T00:46:59Z"
 }
