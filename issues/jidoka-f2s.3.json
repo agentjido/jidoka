@@ -3,7 +3,9 @@
   "blocked_by": [
     "jidoka-f2s.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-f2s.4"
+  ],
   "created": "2026-05-28T17:32:18Z",
   "description": "Clarify and harden operational boundaries around handoff ownership, schedules, memory failure policy, and runtime context behavior.",
   "id": "jidoka-f2s.3",
