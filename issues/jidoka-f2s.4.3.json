@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:20Z",
+  "description": "Keep or expand tests for phase order, halting, raw terminal returns, exception propagation, and no generated public lifecycle helper APIs during the feature-owned phase migration.",
+  "id": "jidoka-f2s.4.3",
+  "labels": [],
+  "parent": "jidoka-f2s.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Preserve Runic lifecycle tests through phase migration",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:20Z"
+}
