@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:18Z",
+  "description": "Update README and related docs so Jidoka is described as an opinionated agent orchestration layer on top of Jido/Jido.AI, not just a thin wrapper.",
+  "id": "jidoka-f2s.1.1",
+  "labels": [],
+  "parent": "jidoka-f2s.1",
+  "priority": 0,
+  "status": "open",
+  "title": "Replace thin-wrapper language in docs",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:18Z"
+}
