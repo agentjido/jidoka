@@ -2,14 +2,15 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-28T17:37:53Z",
   "created": "2026-05-28T17:32:18Z",
   "description": "Document what Jidoka owns, including lifecycle coordination, prompt assembly, memory, compaction, MCP, web safety, subagents, handoffs, workflows, schedules, imports, tracing, debugging, AgentView, and Kino. Document what remains Jido/Jido.AI owned, including model calls, ReAct execution, provider behavior, signals, threads, and durable runtime storage.",
   "id": "jidoka-f2s.1.2",
   "labels": [],
   "parent": "jidoka-f2s.1",
   "priority": 0,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Document Jidoka versus Jido ownership boundaries",
   "type": "task",
-  "updated_at": "2026-05-28T17:37:27Z"
+  "updated_at": "2026-05-28T17:37:53Z"
 }
