@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Document which trace and inspection fields are public contract versus debug-only diagnostics.",
+  "id": "jidoka-f2s.5.4",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 1,
+  "status": "open",
+  "title": "Define trace and inspection stability boundaries",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
