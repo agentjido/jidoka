@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:18Z",
+  "description": "Clarify and harden operational boundaries around handoff ownership, schedules, memory failure policy, and runtime context behavior.",
+  "id": "jidoka-f2s.3",
+  "labels": [],
+  "parent": "jidoka-f2s",
+  "priority": 0,
+  "status": "open",
+  "title": "Operational boundaries and durability",
+  "type": "epic",
+  "updated_at": "2026-05-28T17:32:18Z"
+}
