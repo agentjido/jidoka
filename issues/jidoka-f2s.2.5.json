@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:19Z",
+  "description": "Confirm structured map subagent results preserve current parent-visible metadata, result previews, interrupt handling, and invalid-result behavior for unsupported shapes.",
+  "id": "jidoka-f2s.2.5",
+  "labels": [],
+  "parent": "jidoka-f2s.2",
+  "priority": 1,
+  "status": "open",
+  "title": "Verify subagent result metadata compatibility",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:19Z"
+}
