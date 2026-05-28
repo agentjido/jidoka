@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Add schema/versioning notes for trace events if AgentView, Kino, Livebook, or external UIs depend on exact event shapes.",
+  "id": "jidoka-f2s.5.5",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 2,
+  "status": "open",
+  "title": "Add trace event schema or versioning notes",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
