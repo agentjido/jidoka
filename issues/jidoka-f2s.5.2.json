@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Decide and document vocabulary policy for result/output, controls/guardrails, and operation/tool across docs, errors, imports, traces, and internals.",
+  "id": "jidoka-f2s.5.2",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 1,
+  "status": "open",
+  "title": "Define vocabulary migration policy",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
