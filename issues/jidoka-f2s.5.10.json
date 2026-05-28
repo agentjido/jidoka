@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:22Z",
+  "description": "Document web tool DNS fail-closed behavior, blocked targets, allowed domains, and the app-owned override story for internal networks.",
+  "id": "jidoka-f2s.5.10",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 1,
+  "status": "open",
+  "title": "Document web DNS fail-closed behavior",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:22Z"
+}
