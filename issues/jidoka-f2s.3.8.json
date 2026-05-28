@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:20Z",
+  "description": "Consider central reserved-key registration so feature modules cannot forget to reserve Jidoka internal context keys.",
+  "id": "jidoka-f2s.3.8",
+  "labels": [],
+  "parent": "jidoka-f2s.3",
+  "priority": 2,
+  "status": "open",
+  "title": "Design reserved context key registration",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:20Z"
+}
