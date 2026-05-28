@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:18Z",
+  "description": "Keep the core getting-started path focused on agents, sessions, context, results, tools, and controls. Move Ash, MCP, web, Kino, and imported specs into integration-focused docs.",
+  "id": "jidoka-f2s.1.5",
+  "labels": [],
+  "parent": "jidoka-f2s.1",
+  "priority": 2,
+  "status": "open",
+  "title": "Separate core docs from integration docs",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:18Z"
+}
