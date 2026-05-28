@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:19Z",
+  "description": "Document that schedule run APIs may return {:ok, run} for recorded failed runs and callers must inspect run.status.",
+  "id": "jidoka-f2s.3.4",
+  "labels": [],
+  "parent": "jidoka-f2s.3",
+  "priority": 1,
+  "status": "open",
+  "title": "Document schedule run status semantics",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:19Z"
+}
