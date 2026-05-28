@@ -1,5 +1,5 @@
 {
-  "assignee": "",
+  "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [
     "jidoka-f2s.2",
@@ -12,8 +12,8 @@
   "labels": [],
   "parent": "jidoka-f2s",
   "priority": 0,
-  "status": "open",
+  "status": "in_progress",
   "title": "Architecture positioning and docs",
   "type": "epic",
-  "updated_at": "2026-05-28T17:32:22Z"
+  "updated_at": "2026-05-28T17:34:19Z"
 }
