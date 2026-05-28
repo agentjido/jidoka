@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:20Z",
+  "description": "Define an internal contract for feature-owned lifecycle phase specs that can compile into existing Jidoka.Lifecycle.Phase structs.",
+  "id": "jidoka-f2s.4.1",
+  "labels": [],
+  "parent": "jidoka-f2s.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Define lifecycle feature phase spec contract",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:20Z"
+}
