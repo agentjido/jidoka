@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:20Z",
+  "description": "Design an internal compiler resolver contract for feature-owned DSL resolution, generated modules, runtime hooks, public definition fields, imported spec mapping, and trace names.",
+  "id": "jidoka-f2s.4.4",
+  "labels": [],
+  "parent": "jidoka-f2s.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Define compiler feature resolver contract",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:20Z"
+}
