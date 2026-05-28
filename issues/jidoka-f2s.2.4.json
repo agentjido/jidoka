@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:19Z",
+  "description": "Add tests for parent agents receiving map results from child agents with structured result contracts.",
+  "id": "jidoka-f2s.2.4",
+  "labels": [],
+  "parent": "jidoka-f2s.2",
+  "priority": 0,
+  "status": "open",
+  "title": "Test structured map subagent results",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:19Z"
+}
