@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:22Z",
+  "description": "Consider an agent-level required mode for MCP endpoints that should fail a request if tools cannot sync.",
+  "id": "jidoka-f2s.5.9",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 2,
+  "status": "open",
+  "title": "Consider required MCP endpoint mode",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:22Z"
+}
