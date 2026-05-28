@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:18Z",
+  "description": "Make Jidoka.Output.Runtime honor retries \u003e 1 with a bounded repair loop. Preserve current default behavior and update metadata/trace attempt numbers.",
+  "id": "jidoka-f2s.2.1",
+  "labels": [],
+  "parent": "jidoka-f2s.2",
+  "priority": 0,
+  "status": "open",
+  "title": "Implement structured result repair retry loop",
+  "type": "bug",
+  "updated_at": "2026-05-28T17:32:18Z"
+}
