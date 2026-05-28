@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:18Z",
+  "description": "Add production recipes for app-owned runtime startup, sessions, durable transcript storage, schedule registration at boot, handoff routing, and multi-tenant context.",
+  "id": "jidoka-f2s.1.4",
+  "labels": [],
+  "parent": "jidoka-f2s.1",
+  "priority": 1,
+  "status": "open",
+  "title": "Add production runtime recipes",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:18Z"
+}
