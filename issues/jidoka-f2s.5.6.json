@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Decide whether Jidoka.start_chat_request/3 and Jidoka.await_chat_request/2 are intentional advanced public APIs or should move behind a narrower runtime module.",
+  "id": "jidoka-f2s.5.6",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 2,
+  "status": "open",
+  "title": "Decide public status of chat request helpers",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
