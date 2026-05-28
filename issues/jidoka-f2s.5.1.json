@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Add a compatibility matrix comparing native DSL and imported JSON/YAML specs, marking each feature supported, unsupported, deferred, or DSL-only.",
+  "id": "jidoka-f2s.5.1",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 1,
+  "status": "open",
+  "title": "Publish imported-agent parity matrix",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
