@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:20Z",
+  "description": "Refactor Jidoka.Agent.Definition.build!/1 so it orchestrates feature resolvers instead of directly resolving every capability.",
+  "id": "jidoka-f2s.4.5",
+  "labels": [],
+  "parent": "jidoka-f2s.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Split Agent.Definition.build into feature resolvers",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:20Z"
+}
