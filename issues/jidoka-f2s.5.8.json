@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:22Z",
+  "description": "Document that MCP sync failures are recorded in metadata/traces and the turn continues by default.",
+  "id": "jidoka-f2s.5.8",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 1,
+  "status": "open",
+  "title": "Document MCP fail-open behavior",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:22Z"
+}
