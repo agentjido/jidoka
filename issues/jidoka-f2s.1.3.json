@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:18Z",
+  "description": "Add a compact target matrix for Jidoka.chat/3 covering compiled modules, pids, registered ids, sessions, imported-agent sessions, handoff-routed conversations, and streaming targets. Include auto-start, lifetime owner, handoff behavior, context behavior, and recommended use.",
+  "id": "jidoka-f2s.1.3",
+  "labels": [],
+  "parent": "jidoka-f2s.1",
+  "priority": 1,
+  "status": "open",
+  "title": "Add Jidoka.chat target matrix",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:18Z"
+}
