@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Add a diagnostic preflight helper that returns ordered prompt sections with provenance before a request is sent.",
+  "id": "jidoka-f2s.4.7",
+  "labels": [],
+  "parent": "jidoka-f2s.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Add prompt preflight inspection",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
