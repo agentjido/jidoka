@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:19Z",
+  "description": "Document that default handoff ownership is process-local, in-memory, conversation-id based, non-durable, and not cluster-aware.",
+  "id": "jidoka-f2s.3.1",
+  "labels": [],
+  "parent": "jidoka-f2s.3",
+  "priority": 0,
+  "status": "open",
+  "title": "Document process-local handoff ownership",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:19Z"
+}
