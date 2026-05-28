@@ -131,7 +131,9 @@ defmodule JidokaTest.AgentBasicsTest do
     rendered = Macro.to_string(ast)
 
     assert rendered =~ "def on_before_cmd"
-    assert rendered =~ "Jidoka.Memory.on_before_cmd"
+    assert rendered =~ "@jidoka_lifecycle_config"
+    assert rendered =~ "Jidoka.Lifecycle.Runner.run_before"
+    assert rendered =~ "Jidoka.Lifecycle.Runner.run_after"
   end
 
   test "exposes configured skills and mcp settings" do

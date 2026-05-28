@@ -13,7 +13,7 @@ defmodule JidokaTest.SkillsMCPTest do
     SkillAgent
   }
 
-  @mcp_sandbox Path.expand("../../tmp/mcp-sandbox", __DIR__)
+  @mcp_sandbox Path.expand("tmp/mcp-sandbox")
 
   setup do
     previous_sync_module = Application.get_env(:jidoka, :mcp_sync_module)
