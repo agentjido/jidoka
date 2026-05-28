@@ -17,7 +17,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
           {:error, message} ->
             raise Jidoka.Agent.Dsl.Error.exception(
                     message: message,
-                    path: [:capabilities, :handoff],
+                    path: [:tools, :handoff],
                     value: entity.agent,
                     hint: "Use a compiled Jidoka agent module and valid handoff options.",
                     module: owner_module
@@ -32,7 +32,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :handoff],
+                path: [:tools, :handoff],
                 value: Enum.map(handoffs, & &1.name),
                 hint: "Give each handoff a unique `as:` name.",
                 module: owner_module
@@ -50,8 +50,8 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities],
-                hint: "Declare skills with `skill` or `load_path` inside `capabilities`.",
+                path: [:tools],
+                hint: "Declare skills with `skill` or `load_path` inside `tools`.",
                 module: owner_module
               )
     end
@@ -66,8 +66,8 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :mcp_tools],
-                hint: "Declare MCP endpoints as `mcp_tools endpoint: ...` inside `capabilities`.",
+                path: [:tools, :mcp_tools],
+                hint: "Declare MCP endpoints as `mcp_tools endpoint: ...` inside `tools`.",
                 module: owner_module
               )
     end
@@ -82,8 +82,8 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :web],
-                hint: "Declare `web :search` or `web :read_only` at most once inside `capabilities`.",
+                path: [:tools, :web],
+                hint: "Declare `web :search` or `web :read_only` at most once inside `tools`.",
                 module: owner_module
               )
     end
@@ -118,7 +118,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
           {:error, message} ->
             raise Jidoka.Agent.Dsl.Error.exception(
                     message: message,
-                    path: [:capabilities, :subagent],
+                    path: [:tools, :subagent],
                     hint: "Give each subagent a unique published tool name.",
                     module: owner_module
                   )
@@ -127,8 +127,8 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :subagent],
-                hint: "Declare subagents inside `capabilities` with a Jidoka-compatible module.",
+                path: [:tools, :subagent],
+                hint: "Declare subagents inside `tools` with a Jidoka-compatible module.",
                 module: owner_module
               )
     end
@@ -162,7 +162,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
           {:error, message} ->
             raise Jidoka.Agent.Dsl.Error.exception(
                     message: message,
-                    path: [:capabilities, :workflow],
+                    path: [:tools, :workflow],
                     hint: "Give each workflow operation a unique published operation name.",
                     module: owner_module
                   )
@@ -171,8 +171,8 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :workflow],
-                hint: "Declare workflow operations inside `capabilities` with a Jidoka workflow module.",
+                path: [:tools, :workflow],
+                hint: "Declare workflow operations inside `tools` with a Jidoka workflow module.",
                 module: owner_module
               )
     end
@@ -204,7 +204,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
         {:error, message} ->
           raise Jidoka.Agent.Dsl.Error.exception(
                   message: message,
-                  path: [:capabilities, :plugin],
+                  path: [:tools, :plugin],
                   hint: "Ensure each plugin module uses `Jidoka.Plugin` and declares a unique name.",
                   module: owner_module
                 )
@@ -218,7 +218,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
         {:error, message} ->
           raise Jidoka.Agent.Dsl.Error.exception(
                   message: message,
-                  path: [:capabilities, :plugin],
+                  path: [:tools, :plugin],
                   hint: "Ensure each plugin returns valid action-backed tool modules.",
                   module: owner_module
                 )
@@ -232,7 +232,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
         {:error, message} ->
           raise Jidoka.Agent.Dsl.Error.exception(
                   message: message,
-                  path: [:capabilities, :plugin],
+                  path: [:tools, :plugin],
                   hint: "Plugin-provided tools must publish valid unique tool names.",
                   module: owner_module
                 )
@@ -252,7 +252,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :web],
+                path: [:tools, :web],
                 hint: "Use a supported Jidoka web mode such as `web :search` or `web :read_only`.",
                 module: owner_module
               )
@@ -270,7 +270,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :skill],
+                path: [:tools, :skill],
                 hint: "Skill-provided tools must publish valid unique tool names.",
                 module: owner_module
               )
@@ -286,7 +286,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
       {:error, message} ->
         raise Jidoka.Agent.Dsl.Error.exception(
                 message: message,
-                path: [:capabilities, :ash_resource],
+                path: [:tools, :ash_resource],
                 hint: "Use an Ash resource extended with AshJido.",
                 module: owner_module
               )
@@ -305,7 +305,7 @@ defmodule Jidoka.Agent.Definition.Capabilities do
 
       raise Jidoka.Agent.Dsl.Error.exception(
               message: "duplicate operation names in Jidoka agent: #{Enum.join(duplicates, ", ")}",
-              path: [:capabilities],
+              path: [:tools],
               value: duplicates,
               hint:
                 "Rename or remove one of the conflicting operations across direct actions, Ash, MCP, skill, plugin, web, subagent, workflow, and handoff sources.",

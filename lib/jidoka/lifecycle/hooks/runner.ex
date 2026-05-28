@@ -6,15 +6,13 @@ defmodule Jidoka.Hooks.Runner do
   alias Jidoka.Hooks.{AfterTurn, BeforeTurn, InterruptInput}
   alias Jidoka.Interrupt
 
-  @hook_timeout_ms 5_000
-
-  @spec run_before_turn([term()], BeforeTurn.t()) ::
+  @spec run_before_turn([term()], BeforeTurn.t(), pos_integer()) ::
           {:ok, BeforeTurn.t()} | {:interrupt, Interrupt.t()} | {:error, term()}
-  def run_before_turn(hooks, %BeforeTurn{} = input) do
+  def run_before_turn(hooks, %BeforeTurn{} = input, timeout \\ Jidoka.Lifecycle.Timeouts.default_timeout_ms()) do
     Enum.reduce_while(hooks, {:ok, input}, fn hook, {:ok, input_acc} ->
       trace_hook(:before_turn, hook, :start, input_acc)
 
-      case invoke_hook(hook, input_acc) do
+      case invoke_hook(hook, input_acc, timeout) do
         {:ok, overrides} ->
           with {:ok, input_acc} <- apply_before_turn_overrides(input_acc, overrides) do
             trace_hook(:before_turn, hook, :stop, input_acc, %{outcome: :ok})
@@ -36,14 +34,15 @@ defmodule Jidoka.Hooks.Runner do
     end)
   end
 
-  @spec run_after_turn([term()], AfterTurn.t()) :: {:ok, AfterTurn.t()} | {:interrupt, Interrupt.t()} | {:error, term()}
-  def run_after_turn(hooks, %AfterTurn{} = input) do
+  @spec run_after_turn([term()], AfterTurn.t(), pos_integer()) ::
+          {:ok, AfterTurn.t()} | {:interrupt, Interrupt.t()} | {:error, term()}
+  def run_after_turn(hooks, %AfterTurn{} = input, timeout \\ Jidoka.Lifecycle.Timeouts.default_timeout_ms()) do
     hooks
     |> Enum.reverse()
     |> Enum.reduce_while({:ok, input}, fn hook, {:ok, input_acc} ->
       trace_hook(:after_turn, hook, :start, input_acc)
 
-      case invoke_hook(hook, input_acc) do
+      case invoke_hook(hook, input_acc, timeout) do
         {:ok, {:ok, _} = outcome} ->
           trace_hook(:after_turn, hook, :stop, input_acc, %{outcome: :ok})
           {:cont, {:ok, %{input_acc | outcome: outcome}}}
@@ -70,14 +69,18 @@ defmodule Jidoka.Hooks.Runner do
     end)
   end
 
-  @spec invoke_interrupt_hooks([term()], InterruptInput.t()) :: :ok
-  def invoke_interrupt_hooks(hooks, %InterruptInput{} = input) do
+  @spec invoke_interrupt_hooks([term()], InterruptInput.t(), pos_integer()) :: :ok
+  def invoke_interrupt_hooks(
+        hooks,
+        %InterruptInput{} = input,
+        timeout \\ Jidoka.Lifecycle.Timeouts.default_timeout_ms()
+      ) do
     hooks
     |> Enum.reverse()
     |> Enum.each(fn hook ->
       trace_hook(:on_interrupt, hook, :start, input)
 
-      case invoke_hook(hook, input) do
+      case invoke_hook(hook, input, timeout) do
         :ok ->
           trace_hook(:on_interrupt, hook, :stop, input, %{outcome: :ok})
           :ok
@@ -257,28 +260,31 @@ defmodule Jidoka.Hooks.Runner do
   defp normalize_interrupt(other),
     do: Interrupt.new(%{kind: :interrupt, message: inspect(other), data: %{raw_interrupt: other}})
 
-  defp invoke_hook(module, input) when is_atom(module) do
-    invoke_with_timeout(fn -> module.call(input) end)
+  defp invoke_hook(module, input, timeout) when is_atom(module) do
+    invoke_with_timeout(fn -> module.call(input) end, timeout)
   end
 
-  defp invoke_hook({module, function, args}, input) do
-    invoke_with_timeout(fn -> apply(module, function, [input | args]) end)
+  defp invoke_hook({module, function, args}, input, timeout) do
+    invoke_with_timeout(fn -> apply(module, function, [input | args]) end, timeout)
   end
 
-  defp invoke_hook(fun, input) when is_function(fun, 1) do
-    invoke_with_timeout(fn -> fun.(input) end)
+  defp invoke_hook(fun, input, timeout) when is_function(fun, 1) do
+    invoke_with_timeout(fn -> fun.(input) end, timeout)
   end
 
-  defp invoke_with_timeout(fun) do
+  defp invoke_with_timeout(fun, timeout) do
     task = Task.async(fn -> safe_invoke(fun) end)
 
-    case Task.yield(task, @hook_timeout_ms) || Task.shutdown(task, :brutal_kill) do
+    case Task.yield(task, normalize_timeout(timeout)) || Task.shutdown(task, :brutal_kill) do
       {:ok, {:ok, result}} -> result
       {:ok, {:error, reason}} -> {:error, reason}
       {:exit, reason} -> {:error, reason}
       nil -> {:error, :timeout}
     end
   end
+
+  defp normalize_timeout(timeout) when is_integer(timeout) and timeout > 0, do: timeout
+  defp normalize_timeout(_timeout), do: Jidoka.Lifecycle.Timeouts.default_timeout_ms()
 
   defp safe_invoke(fun) do
     {:ok, fun.()}

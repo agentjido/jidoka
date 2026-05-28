@@ -5,8 +5,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyGuardrails do
 
   @impl true
   def verify(dsl_state) do
-    (Spark.Dsl.Verifier.get_entities(dsl_state, [:lifecycle]) ++
-       Spark.Dsl.Verifier.get_entities(dsl_state, [:controls]))
+    Spark.Dsl.Verifier.get_entities(dsl_state, [:controls])
     |> Enum.filter(&guardrail_entity?/1)
     |> Enum.reduce_while({:ok, default_seen()}, fn
       control_ref, {:ok, seen} ->

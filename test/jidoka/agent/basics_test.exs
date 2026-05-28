@@ -56,6 +56,16 @@ defmodule JidokaTest.AgentBasicsTest do
 
     refute function_exported?(ChatAgent, :output, 0)
     refute function_exported?(ChatAgent, :output_schema, 0)
+    refute function_exported?(ChatAgent, :memory, 0)
+    refute function_exported?(ChatAgent, :compaction, 0)
+    refute function_exported?(ChatAgent, :schedules, 0)
+    refute function_exported?(ChatAgent, :hooks, 0)
+    refute function_exported?(ChatAgent, :before_turn_hooks, 0)
+    refute function_exported?(ChatAgent, :after_turn_hooks, 0)
+    refute function_exported?(ChatAgent, :interrupt_hooks, 0)
+    refute function_exported?(ChatAgent, :lifecycle_timeouts, 0)
+    refute function_exported?(ChatAgent, :hook_timeouts, 0)
+    refute function_exported?(ChatAgent, :control_timeouts, 0)
     refute function_exported?(ChatAgent, :contextschema, 0)
     refute function_exported?(ChatAgent, :outputschema, 0)
     refute function_exported?(ChatAgent, :guardrails, 0)
@@ -84,28 +94,12 @@ defmodule JidokaTest.AgentBasicsTest do
     assert %Zoi.Types.Map{} = RequiredContextAgent.context_schema()
   end
 
-  test "exposes the configured memory settings" do
-    assert MemoryAgent.memory() == %{
-             mode: :conversation,
-             namespace: {:context, :session},
-             capture: :conversation,
-             retrieve: %{limit: 4},
-             inject: :instructions
-           }
-
-    assert ChatAgent.memory() == nil
-  end
-
-  test "memory agents replace the default Jido memory plugin with jido_memory" do
+  test "agent DSL no longer enables memory plugins by default" do
     instances = MemoryAgent.runtime_module().plugin_instances()
     modules = Enum.map(instances, & &1.module)
-    memory_instance = Enum.find(instances, &(&1.module == Jido.Memory.BasicPlugin))
-    runtime_agent = MemoryAgent.runtime_module().new(id: "memory-default-slot")
 
-    assert Jido.Memory.BasicPlugin in modules
     refute Jido.Memory.Plugin in modules
-    assert memory_instance.state_key == :__memory__
-    assert runtime_agent.state[:__memory__].namespace == "agent:memory-default-slot"
+    refute Jido.Memory.BasicPlugin in modules
   end
 
   test "agents without Jidoka memory disable the default Jido memory plugin" do

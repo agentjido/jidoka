@@ -42,6 +42,46 @@ defmodule JidokaTest.InspectionTest do
     assert definition.runtime_module == agent.runtime_module
   end
 
+  test "preflights ordered prompt sections for a compiled agent" do
+    assert {:ok, preflight} =
+             Jidoka.prompt_preflight(
+               JidokaTest.StructuredOutputPlainAgent,
+               "Classify this ticket",
+               request_id: "req-prompt-preflight"
+             )
+
+    assert preflight.kind == :prompt_preflight
+    assert preflight.agent_id == "structured_output_plain_agent"
+    assert preflight.request_id == "req-prompt-preflight"
+
+    assert Enum.map(preflight.sections, & &1.name) == [:instructions, :result]
+    assert Enum.map(preflight.sections, & &1.order) == [1, 2]
+
+    assert hd(preflight.sections).source == :agent_instructions
+    assert hd(preflight.sections).provenance.feature == :instructions
+    assert hd(preflight.sections).content == "Classify the ticket and return the configured object."
+
+    result_section = List.last(preflight.sections)
+    assert result_section.source == :runtime_context
+    assert result_section.provenance.feature == :result
+    assert result_section.content =~ "category"
+
+    assert preflight.system_prompt =~ "Classify the ticket"
+    assert preflight.system_prompt =~ result_section.content
+
+    assert [%{role: :system, content: system_prompt}, %{role: :user, content: "Classify this ticket"}] =
+             preflight.messages
+
+    assert system_prompt == preflight.system_prompt
+  end
+
+  test "agent modules expose prompt preflight directly" do
+    assert {:ok, preflight} = JidokaTest.ChatAgent.prompt_preflight("hello")
+
+    assert Enum.map(preflight.sections, & &1.name) == [:instructions]
+    assert preflight.system_prompt == "You are a concise assistant."
+  end
+
   test "inspects a running Jidoka agent and includes the latest request summary" do
     {:ok, pid} = JidokaTest.ToolAgent.start_link(id: "inspect-running-tool-agent")
 
@@ -153,7 +193,10 @@ defmodule JidokaTest.InspectionTest do
       )
 
       assert {:ok, %Compaction{status: :summarized, summary: "inspection summary"}} =
-               Jidoka.compact(pid, summarizer: fn _input -> {:ok, "inspection summary"} end)
+               Jidoka.compact(pid,
+                 config: JidokaTest.ManualCompactionAgent.compaction_config(),
+                 summarizer: fn _input -> {:ok, "inspection summary"} end
+               )
 
       assert {:ok, agent_summary} = Jidoka.inspect_agent(pid)
       assert agent_summary.kind == :running_agent

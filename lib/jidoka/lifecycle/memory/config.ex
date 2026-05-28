@@ -13,16 +13,6 @@ defmodule Jidoka.Memory.Config do
   @spec default_config() :: Jidoka.Memory.config()
   def default_config, do: @default_config
 
-  @spec normalize_dsl([struct()]) :: {:ok, Jidoka.Memory.config() | nil} | {:error, String.t()}
-  def normalize_dsl([]), do: {:ok, nil}
-
-  def normalize_dsl(entries) when is_list(entries) do
-    with {:ok, attrs} <- reduce_dsl_entries(entries),
-         {:ok, normalized} <- normalize_map(attrs) do
-      {:ok, normalized}
-    end
-  end
-
   @spec normalize_imported(nil | map()) :: {:ok, Jidoka.Memory.config() | nil} | {:error, String.t()}
   def normalize_imported(nil), do: {:ok, nil}
 
@@ -46,75 +36,12 @@ defmodule Jidoka.Memory.Config do
   def normalize_imported(other),
     do: {:error, "memory must be a map, got: #{inspect(other)}"}
 
-  @spec validate_dsl_entry(struct()) :: :ok | {:error, String.t()}
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.MemoryMode{value: value}),
-    do: validate_mode(value)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.MemoryNamespace{value: value}),
-    do: validate_namespace_entry(value)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.MemorySharedNamespace{value: value}),
-    do: validate_shared_namespace(value)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.MemoryCapture{value: value}),
-    do: validate_capture(value)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.MemoryInject{value: value}),
-    do: validate_inject(value)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.MemoryRetrieve{limit: limit}),
-    do: validate_limit(limit)
-
   @spec default_plugins(Jidoka.Memory.config() | nil) :: map()
   def default_plugins(nil), do: %{__memory__: false}
 
   def default_plugins(%{} = config) do
     %{__memory__: {Jido.Memory.BasicPlugin, plugin_config(config)}}
   end
-
-  defp reduce_dsl_entries(entries) do
-    Enum.reduce_while(entries, {:ok, %{}}, fn entry, {:ok, acc} ->
-      with :ok <- ensure_unique_entry(entry, acc) do
-        {:cont, {:ok, put_entry(entry, acc)}}
-      else
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-  end
-
-  defp put_entry(%Jidoka.Agent.Dsl.MemoryMode{value: value}, acc), do: Map.put(acc, :mode, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.MemoryNamespace{value: value}, acc),
-    do: Map.put(acc, :namespace, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.MemorySharedNamespace{value: value}, acc),
-    do: Map.put(acc, :shared_namespace, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.MemoryCapture{value: value}, acc),
-    do: Map.put(acc, :capture, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.MemoryInject{value: value}, acc),
-    do: Map.put(acc, :inject, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.MemoryRetrieve{limit: limit}, acc),
-    do: Map.put(acc, :retrieve, %{limit: limit})
-
-  defp ensure_unique_entry(%module{} = entry, acc) do
-    key = dsl_entry_key(module)
-
-    if Map.has_key?(acc, key) do
-      {:error, "duplicate memory #{key} entry in Jidoka agent"}
-    else
-      validate_dsl_entry(entry)
-    end
-  end
-
-  defp dsl_entry_key(Jidoka.Agent.Dsl.MemoryMode), do: :mode
-  defp dsl_entry_key(Jidoka.Agent.Dsl.MemoryNamespace), do: :namespace
-  defp dsl_entry_key(Jidoka.Agent.Dsl.MemorySharedNamespace), do: :shared_namespace
-  defp dsl_entry_key(Jidoka.Agent.Dsl.MemoryCapture), do: :capture
-  defp dsl_entry_key(Jidoka.Agent.Dsl.MemoryInject), do: :inject
-  defp dsl_entry_key(Jidoka.Agent.Dsl.MemoryRetrieve), do: :retrieve
 
   defp normalize_map(attrs) when is_map(attrs) do
     mode = Map.get(attrs, :mode, @default_config.mode)
@@ -144,21 +71,6 @@ defmodule Jidoka.Memory.Config do
 
   defp validate_mode(other),
     do: {:error, "memory mode must be :conversation, got: #{inspect(other)}"}
-
-  defp validate_namespace_entry(:per_agent), do: :ok
-  defp validate_namespace_entry(:shared), do: :ok
-
-  defp validate_namespace_entry({:context, key}) do
-    if valid_namespace_key?(key) do
-      :ok
-    else
-      {:error, "memory namespace must be :per_agent, :shared, or {:context, key}, got: #{inspect({:context, key})}"}
-    end
-  end
-
-  defp validate_namespace_entry(other) do
-    {:error, "memory namespace must be :per_agent, :shared, or {:context, key}, got: #{inspect(other)}"}
-  end
 
   defp validate_namespace(:per_agent, nil), do: {:ok, :per_agent}
 

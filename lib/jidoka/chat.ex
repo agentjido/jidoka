@@ -247,7 +247,7 @@ defmodule Jidoka.Chat do
   defp route_conversation_owner(default_target, opts) do
     case Keyword.get(opts, :conversation) do
       conversation_id when is_binary(conversation_id) ->
-        case Jidoka.Handoff.Registry.owner(conversation_id) do
+        case Jidoka.Handoff.OwnerStore.owner(conversation_id) do
           %{agent_id: agent_id} when is_binary(agent_id) -> {:ok, agent_id}
           _ -> {:ok, default_target}
         end

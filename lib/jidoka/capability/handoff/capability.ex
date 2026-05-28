@@ -2,6 +2,7 @@ defmodule Jidoka.Handoff.Capability do
   @moduledoc false
 
   alias Jidoka.Handoff.{Runtime, Tool}
+  alias Jidoka.Lifecycle.PhaseSpec
 
   @enforce_keys [:agent, :name, :description, :target, :forward_context]
   defstruct [:agent, :name, :description, :target, :forward_context]
@@ -136,6 +137,22 @@ defmodule Jidoka.Handoff.Capability do
   @doc false
   @spec on_after_cmd(Jido.Agent.t(), term(), [term()]) :: {:ok, Jido.Agent.t(), [term()]}
   defdelegate on_after_cmd(agent, action, directives), to: Runtime
+
+  @doc false
+  @spec before_phase_specs() :: [PhaseSpec.t()]
+  def before_phase_specs do
+    [
+      PhaseSpec.before(:handoff_before, :handoff, &on_before_cmd/2)
+    ]
+  end
+
+  @doc false
+  @spec after_phase_specs() :: [PhaseSpec.t()]
+  def after_phase_specs do
+    [
+      PhaseSpec.after_phase(:handoff_after, :handoff, &on_after_cmd/3)
+    ]
+  end
 
   @doc false
   @spec get_request_meta(Jido.Agent.t(), String.t()) :: map() | nil

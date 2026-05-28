@@ -4,6 +4,50 @@ defmodule JidokaTest.SessionTest do
   alias Jidoka.Session
   alias JidokaTest.ChatAgent
 
+  defmodule ConfiguredHandoffOwnerStore do
+    @behaviour Jidoka.Handoff.OwnerStore
+
+    def start_link do
+      case Process.whereis(__MODULE__) do
+        nil ->
+          Agent.start_link(fn -> %{} end, name: __MODULE__)
+
+        pid ->
+          Agent.update(__MODULE__, fn _state -> %{} end)
+          {:ok, pid}
+      end
+    end
+
+    def stop do
+      case Process.whereis(__MODULE__) do
+        nil -> :ok
+        _pid -> Agent.stop(__MODULE__)
+      end
+    end
+
+    @impl true
+    def owner(conversation_id) do
+      Agent.get(__MODULE__, &Map.get(&1, conversation_id))
+    end
+
+    @impl true
+    def put_owner(conversation_id, %Jidoka.Handoff{} = handoff) do
+      owner = %{
+        agent: handoff.to_agent,
+        agent_id: handoff.to_agent_id,
+        handoff: handoff,
+        updated_at_ms: System.system_time(:millisecond)
+      }
+
+      Agent.update(__MODULE__, &Map.put(&1, conversation_id, owner))
+    end
+
+    @impl true
+    def reset(conversation_id) do
+      Agent.update(__MODULE__, &Map.delete(&1, conversation_id))
+    end
+  end
+
   test "builds stable session identity and chat options" do
     assert {:ok, %Session{} = session} =
              Session.new(
@@ -278,6 +322,42 @@ defmodule JidokaTest.SessionTest do
     after
       Jidoka.reset_handoff(session.conversation_id)
     end
+  end
+
+  test "handoff helpers use configured owner store" do
+    previous_store = Application.get_env(:jidoka, :handoff_owner_store)
+    {:ok, _pid} = ConfiguredHandoffOwnerStore.start_link()
+    Application.put_env(:jidoka, :handoff_owner_store, ConfiguredHandoffOwnerStore)
+
+    on_exit(fn ->
+      case previous_store do
+        nil -> Application.delete_env(:jidoka, :handoff_owner_store)
+        store -> Application.put_env(:jidoka, :handoff_owner_store, store)
+      end
+
+      ConfiguredHandoffOwnerStore.stop()
+    end)
+
+    session = session!("configured-handoff-store")
+
+    handoff =
+      Jidoka.Handoff.new(
+        conversation_id: session.conversation_id,
+        from_agent: session.agent,
+        to_agent: ChatAgent,
+        to_agent_id: "configured-specialist",
+        name: "configured_specialist",
+        message: "Transfer",
+        context: %{}
+      )
+
+    assert :ok = Jidoka.Handoff.OwnerStore.put_owner(session.conversation_id, handoff)
+    assert Jidoka.Handoff.Registry.owner(session.conversation_id) == nil
+
+    assert %{agent_id: "configured-specialist"} = Session.handoff_owner(session)
+    assert %{agent_id: "configured-specialist"} = Jidoka.handoff_owner(session)
+    assert :ok = Jidoka.reset_handoff(session)
+    assert Jidoka.handoff_owner(session) == nil
   end
 
   defp session!(id, opts \\ []) do

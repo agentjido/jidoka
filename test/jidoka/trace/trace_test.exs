@@ -71,6 +71,8 @@ defmodule JidokaTest.TraceTest do
     assert trace.run_id == run_id
     assert trace.status == :completed
     assert Enum.map(trace.events, & &1.category) == [:request, :model, :tool, :request]
+    assert Trace.Event.schema_version() == 1
+    assert Enum.all?(trace.events, &(&1.schema_version == Trace.Event.schema_version()))
 
     first = hd(trace.events)
     assert first.metadata.query == "[OMITTED]"
@@ -506,7 +508,7 @@ defmodule JidokaTest.TraceTest do
                     context_ref: @trace_context_ref
                   }
                 }},
-               JidokaTest.MemoryAgent.memory(),
+               JidokaTest.MemoryAgent.memory_config(),
                JidokaTest.MemoryAgent.context()
              )
 

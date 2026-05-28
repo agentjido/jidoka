@@ -3,7 +3,7 @@ defmodule Jidoka.Subagent.Tool do
 
   @task_schema Zoi.object(%{task: Zoi.string()})
   @text_output_schema Zoi.object(%{result: Zoi.string()})
-  @structured_output_schema Zoi.object(%{result: Zoi.string(), subagent: Zoi.map()})
+  @structured_output_schema Zoi.object(%{result: Zoi.any(), subagent: Zoi.map()})
 
   @spec task_schema() :: Zoi.schema()
   def task_schema, do: @task_schema

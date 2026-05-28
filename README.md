@@ -8,12 +8,53 @@
 
 Jidoka is an approachable Elixir package for building LLM agents.
 
-It gives developers a small, declarative agent DSL for common LLM agent
-workflows: chat, actions, typed results, human-in-the-loop controls, memory,
+It gives developers a small, declarative agent DSL for the durable authoring
+surface: agent identity, model, instructions, context, typed results, tools,
+and human-in-the-loop controls. Runtime APIs cover sessions, memory,
 compaction, schedules, subagents, workflows, handoffs, debugging, and tracing.
 
-Jidoka is intentionally thin. It gives you a friendly authoring layer on top of
-a solid runtime, execution, and model-calling foundation.
+Jidoka is an opinionated agent orchestration layer on top of Jido and Jido.AI.
+It owns the developer-facing DSL, prompt assembly, runtime context, controls,
+memory, compaction, delegation, schedules, inspection, and tracing while
+leaving provider calls, ReAct execution, threads, signals, and durable runtime
+storage with the underlying Jido/Jido.AI runtime.
+
+## Architecture Boundary
+
+Jidoka is the application-facing layer. It should make common agent work feel
+small, explicit, and Elixir-native without replacing the runtime that actually
+executes model turns.
+
+Jidoka owns:
+
+- Spark DSL compilation and source-aware validation
+- model aliases, instructions, character prompts, and prompt section assembly
+- runtime context normalization, reserved Jidoka context, and session metadata
+- typed result contracts, parsing, validation, repair, and result controls
+- tools, generated integration tools, operation controls, and credential
+  reference checks
+- lifecycle coordination around the Jido.AI ReAct loop
+- memory retrieval/capture and compaction prompt injection
+- integration adapters, registry-backed operation surfaces, skills, and plugins
+- subagent calls, handoff routing, workflow exposure, and schedule execution
+- debugging, local trace collection, AgentView projections, and notebook
+  surfaces
+- constrained interchange specs and registry-backed runtime compilation
+
+Jido and Jido.AI remain responsible for:
+
+- supervised runtime processes and lower-level agent state
+- provider/model calls, streaming provider events, and tool-call execution
+- the ReAct loop, request tracking, cancellation, and model/tool request state
+- `Jido.Thread` as the canonical conversation log
+- signals, directives, strategy internals, and low-level runtime plumbing
+- durable runtime storage, hibernate/thaw, checkpoints, replay, and deployment
+  recovery policy
+- storage adapters, instance managers, registries, supervisors, partitions, and
+  worker pools when an application graduates into an app-owned runtime
+
+That boundary is intentional. Jidoka narrows authoring and application
+integration; Jido/Jido.AI continue to own the runtime substrate.
 
 ## First Agent
 
@@ -110,11 +151,60 @@ Use these nouns consistently:
 - **result** is the final value returned to application code after Jidoka parses
   and validates the raw model answer when a typed result contract is declared
 
+Vocabulary policy for the beta:
+
+- Use **result** in public docs for the app-facing final value. `Jidoka.Output`
+  remains the internal implementation namespace and trace category while the
+  stable API settles.
+- Use **controls** for input, operation, and result policy. `guardrails` remains
+  accepted in request options, imported specs, and some compatibility metadata
+  until the migration is complete.
+- Use **operation** for policy boundaries around tool-like work. Actions,
+  subagents, workflows, handoffs, MCP tools, web tools, and Ash-generated tools
+  are operation kinds.
+- Error messages and new docs should prefer the public vocabulary. Existing
+  trace keys, imported field names, and implementation module names may keep
+  compatibility terms during the beta when changing them would break callers.
+
+## V3 DSL Contract
+
+The Elixir agent DSL has three top-level sections:
+
+- `agent` for identity, `model`, `instructions`, `character`, `context`, and
+  typed `result` contracts
+- `tools` for `action`, `ash_resource`, `mcp_tools`, `skill`, `load_path`,
+  `plugin`, `web`, `subagent`, `workflow`, and `handoff`
+- `controls` for `input`, `operation`, and `result` policy
+
+These names are not agent DSL sections anymore: `capabilities`, `lifecycle`,
+`memory`, `compaction`, `schedule`, `guardrails`, `hooks`, and `output`.
+Lifecycle hook calls such as `before_turn`, `after_turn`, `on_interrupt`, and
+`timeouts` are also outside the agent DSL.
+
+Use the runtime APIs instead:
+
+- move former `capabilities` entries into `tools`
+- move former `guardrails` entries into `controls`
+- configure memory and compaction through runtime/imported-agent configuration
+  or call `Jidoka.compact/2` explicitly
+- register clock-driven work with `Jidoka.schedule_agent/2` or
+  `Jidoka.schedule_workflow/2` from application boot code
+- attach request-scoped hooks and timeouts through runtime options when a turn
+  needs callbacks
+
+Imported JSON/YAML specs still use compatibility field names such as
+`capabilities` and `lifecycle` because those are data interchange fields, not
+the Elixir authoring DSL.
+
 From there, add only what the agent actually needs:
 
-- `memory` when useful facts should survive turns
-- `compaction` when long conversations need smaller model context
-- `schedule` when the agent should run without a user prompt
+- memory runtime configuration when useful facts should survive turns
+- compaction runtime configuration or `Jidoka.compact/2` when long
+  conversations need smaller model context
+- request-scoped hooks through `Jidoka.chat/3` options when a single turn needs
+  lifecycle callbacks
+- `Jidoka.schedule_agent/2` or `Jidoka.schedule_workflow/2` when work should run
+  without a user prompt
 - `workflow` when a deterministic multi-step process belongs outside the model
 - `subagent` when the parent should delegate one bounded specialist task and
   receive the result back
@@ -123,10 +213,51 @@ From there, add only what the agent actually needs:
 - `catalog` when the agent needs to discover a few relevant tools from a larger
   integration surface without loading the whole registry into the prompt
 
+For prompt diagnostics, call `MyAgent.prompt_preflight/2` or
+`Jidoka.prompt_preflight/3` to inspect the ordered system-prompt sections and
+their provenance before sending a model request.
+
+## Context Merge Semantics
+
+Jidoka context merges are shallow. Agent defaults, session context, and per-turn
+`context:` values merge at the top level; later values replace earlier values
+for the same key. Atom and string forms of the same key are treated as
+equivalent, so `%{tenant: "acme"}` is replaced by `%{"tenant" => "beta"}`.
+
+Nested maps are not deep-merged:
+
+```elixir
+session =
+  Jidoka.session(MyApp.SupportAgent, "ticket-123",
+    context: %{actor: %{id: "user-1", role: "admin"}}
+  )
+
+opts = Jidoka.Session.chat_opts(session, context: %{actor: %{id: "user-2"}})
+opts[:context].actor
+#=> %{id: "user-2"}
+```
+
+Put independently changing fields at the top level, or merge nested application
+data before passing it to Jidoka.
+
 ## Runtime Model
 
 Jidoka agents are normal supervised processes. The DSL defines the agent; your
 application still decides how long the process lives and who owns it.
+
+`Jidoka.chat/3` accepts several target shapes. They all use the same chat
+primitive, but they imply different ownership boundaries:
+
+| Target | Auto-starts? | Lifetime owner | Handoff routing | Context behavior | Use when |
+| --- | --- | --- | --- | --- | --- |
+| `MyAgent` compiled module | Yes, under `MyAgent.id/0` | Shared `Jidoka.Runtime` | Only if `conversation:` is passed | Per-call `context:` plus agent defaults | demos, tests, small single-agent apps |
+| PID | No | caller/application | Only if `conversation:` is passed | Per-call `context:` plus runtime config | the app already started the process |
+| registered id string | No | caller/application | Only if `conversation:` is passed | Per-call `context:` plus runtime config | looking up an existing runtime process |
+| `%Jidoka.Session{}` | Yes, under `session.agent_id` | session/runtime boundary | Yes, via `session.conversation_id` | session context merged with per-call context | production conversations and UI flows |
+| imported-agent session | Yes, under the imported runtime module | session/runtime boundary | Yes, via `session.conversation_id` | imported defaults plus session/per-call context | controlled JSON/YAML agent specs |
+| target plus `conversation:` | Depends on target | target owner | Yes, through handoff owner registry | normal target context plus conversation metadata | continuing a conversation that may be owned by another agent |
+| any target with `stream: true` or `chat_stream/3` | Depends on target | target owner | Same as non-streaming target | events deliver to the caller process | UI or CLI rendering of incremental model events |
+| any target with `start_chat_request/3` then `await_chat_request/2` | Depends on target | target owner | Same as non-streaming target | request handle is caller-owned | advanced UI/job orchestration that needs a non-blocking turn handle |
 
 For demos, tests, and small apps, a compiled agent module can be the chat target.
 Jidoka starts or reuses one shared runtime process under the agent's public id:
@@ -169,10 +300,10 @@ This is the Jidoka-owned continuity layer:
 - compaction snapshots summarize older provider-facing context without deleting
   the underlying thread
 
-When production needs grow past the small Jidoka wrapper, graduate the generated
-runtime module into an app-owned runtime. The Jidoka-authored module stays the
-same; your app takes over registry, storage, supervision, deployment, auth, and
-persistence boundaries:
+When production needs require lower-level runtime ownership, graduate the
+generated runtime module into an app-owned runtime. The Jidoka-authored module
+stays the same; your app takes over registry, storage, supervision, deployment,
+auth, and persistence boundaries:
 
 ```elixir
 defmodule MyApp.Jido do
@@ -208,10 +339,136 @@ support replay:
 - low-level signal/directive control when the application needs it
 
 Jidoka is the on-ramp: start with the smaller DSL, then move
-`MyAgent.runtime_module()` into the full runtime when production needs outgrow
-the wrapper. V3 does not add a separate Jidoka durability adapter; durable
-transcript storage belongs to the runtime that actually supervises and stores
-the agent.
+`MyAgent.runtime_module()` into the full runtime when production needs require
+direct control over storage, recovery, and deployment. V3 does not add a
+separate Jidoka durability adapter; durable transcript storage belongs to the
+runtime that actually supervises and stores the agent.
+
+### Production Runtime Recipes
+
+Use these patterns when a demo agent becomes an application-owned production
+boundary.
+
+Start the runtime from your supervision tree and keep the generated Jidoka agent
+as the authoring surface:
+
+```elixir
+defmodule MyApp.Jido do
+  use Jido,
+    otp_app: :my_app,
+    storage: {Jido.Storage.File, path: "priv/jido/storage"}
+end
+
+children = [
+  MyApp.Jido,
+  {Jidoka.Schedule.Manager, name: MyApp.ScheduleManager},
+  MyAppWeb.Endpoint
+]
+```
+
+Address user or account conversations with sessions. Store only the session
+ids, tenant ids, actor ids, and other application references you need to
+recreate the descriptor; the transcript remains in the runtime/thread storage
+owned by the runtime:
+
+```elixir
+session =
+  Jidoka.Session.new!(
+    agent: MyApp.SupportAgent,
+    id: "support:#{ticket.id}",
+    runtime: MyApp.Jido,
+    agent_id: "support:#{tenant.id}:#{ticket.id}",
+    conversation_id: "ticket:#{ticket.id}",
+    context: %{
+      tenant_id: tenant.id,
+      actor_id: current_user.id,
+      ticket_id: ticket.id
+    }
+  )
+
+{:ok, reply} = Jidoka.chat(session, user_message)
+```
+
+For durable transcript storage, configure the owning Jido runtime storage and
+recovery policy. Jidoka sessions, schedule history, traces, and views are
+runtime projections; use them for addressing, diagnostics, and UI state, not as
+the durable source of record.
+
+Register schedules from application boot code so in-memory scheduler state can
+be rebuilt after deploys or restarts. Prefer callback values for prompts and
+context when they depend on current application data:
+
+```elixir
+def register_agent_schedules! do
+  session =
+    Jidoka.Session.new!(
+      agent: MyApp.SupportDigestAgent,
+      id: "support-digest",
+      runtime: MyApp.Jido,
+      agent_id: "support-digest",
+      conversation_id: "support-digest",
+      context: %{tenant_id: "system", actor_id: "scheduler"}
+    )
+
+  {:ok, _schedule} =
+    Jidoka.schedule_agent(session,
+      id: "support-digest",
+      cron: "0 9 * * *",
+      timezone: "America/Chicago",
+      prompt: {MyApp.Prompts, :support_digest, []},
+      context: {MyApp.ScheduleContext, :support_digest, []},
+      manager: MyApp.ScheduleManager,
+      replace: true
+    )
+end
+```
+
+`Jidoka.run_schedule/2` returns `{:ok, run}` when the schedule manager records a
+run. It does not mean the scheduled agent turn or workflow succeeded. Inspect
+`run.status`; expected values include `:completed`, `:failed`, `:interrupted`,
+`:handoff`, and `:skipped`.
+
+For handoffs, pass a stable `conversation:` or use a session
+`conversation_id`. Future turns with the same conversation id consult the
+handoff owner registry and route to the current owner until
+`Jidoka.reset_handoff/1` is called:
+
+```elixir
+case Jidoka.chat(session, "I need billing help.") do
+  {:handoff, handoff} ->
+    log_handoff(handoff)
+    Jidoka.chat(session, handoff.message)
+
+  {:ok, reply} ->
+    {:ok, reply}
+end
+```
+
+The default handoff owner registry is process-local and in-memory. It is keyed
+by conversation id, is not durable, and is not cluster-aware; a process restart,
+node change, or deploy loses the current owner unless the application records it
+elsewhere. Run handoff participants inside the same runtime boundary, or treat
+cross-runtime and cross-node handoff ownership as an application integration
+boundary. Configure `:handoff_owner_store` with a module implementing
+`Jidoka.Handoff.OwnerStore` when the application needs durable or cluster-aware
+ownership.
+
+For multi-tenant applications, keep tenant, account, actor, request, and
+credential references in `context:`. Per-turn context merges over session
+context, so callers can add request-scoped facts without mutating the session:
+
+```elixir
+Jidoka.chat(session, "Draft the response.",
+  context: %{
+    request_id: request_id,
+    credential_ref: credential_ref,
+    locale: current_user.locale
+  }
+)
+```
+
+Do not put raw secrets in context; Jidoka rejects common raw secret shapes so
+tools and providers receive references instead of credentials.
 
 ## Phoenix And UI State
 
@@ -242,14 +499,17 @@ For a submit event, run a normal Jidoka turn with the session. Use
 `Jidoka.chat_stream/3` when the UI should render incremental model events. If
 the UI uses `AgentView.start_turn/4`, keep the returned run handle in assigns,
 refresh the projection while the turn is running, then call `after_turn/2` after
-the result arrives. Do not copy the transcript into LiveView assigns as a second
-store, and do not use `AgentView` as durability. If a conversation must survive
-process restarts, graduate the runtime to durable storage.
+the result arrives. `Jidoka.start_chat_request/3` and
+`Jidoka.await_chat_request/2` are the lower-level public helpers behind that
+pattern; reach for them only when the application owns a custom async UI or job
+flow. Do not copy the transcript into LiveView assigns as a second store, and do
+not use `AgentView` as durability. If a conversation must survive process
+restarts, graduate the runtime to durable storage.
 
 ## Debugging And Observability
 
 Debugging is a first-class Jidoka concern. During development, use inspection,
-request summaries, traces, AgentView projections, and Kino/Livebook views to
+request summaries, traces, AgentView projections, and notebook helper views to
 answer practical questions: what prompt was sent, what operations ran, what
 control interrupted, what result was returned, and what changed between turns.
 
@@ -292,6 +552,21 @@ The handler should treat `metadata.session_id`, `metadata.conversation_id`,
 your production backend. Use whichever exporter your app already standardizes
 on; Jidoka does not require an exporter dependency just to build agents.
 
+Trace and inspection stability boundary:
+
+- Stable enough for application code: request id, run id, session id,
+  conversation id, context ref, agent id, event category, event name, status,
+  duration, operation kind/name, and formatted errors.
+- Debug-only diagnostics: prompt previews, result previews, raw metadata maps,
+  child runtime internals, provider-specific usage maps, generated diagrams,
+  and event ordering beyond a single request timeline.
+- Trace event schema: normalized `Jidoka.Trace.Event` structs expose
+  `schema_version: 1` through `Jidoka.Trace.Event.schema_version/0`. External
+  UIs should depend on the top-level event fields, not exact `metadata` or
+  `measurements` shapes.
+- Beta compatibility: new stable fields may be added without a breaking
+  release; existing debug-only fields may be renamed or removed before 1.0.
+
 ## Credential Brokering
 
 Jidoka treats credentials as references, not secrets. Pass a
@@ -299,7 +574,7 @@ Jidoka treats credentials as references, not secrets. Pass a
 through session context or tool arguments. Jidoka preserves that metadata for
 controls, traces, and inspection, while rejecting raw secret-looking keys such
 as `api_key`, `token`, `password`, and `client_secret` before they can enter a
-prompt, transcript, trace, or tool call.
+prompt, transcript, trace, or operation call.
 
 ```elixir
 credential =
@@ -324,6 +599,22 @@ reference for the real credential inside your application boundary. That layer
 can look up a vault record, refresh OAuth, choose a tenant-specific connection,
 or sign the outbound request. The model sees only the operation and reference
 metadata; the actual secret stays with the system that owns the integration.
+
+## Memory Failure Policy
+
+Memory retrieval runs before the model turn. If namespace resolution or memory
+store retrieval fails, Jidoka treats that as a hard request failure: the request
+is marked failed with a structured memory error and the model turn does not
+continue.
+
+There is no per-agent fail-open retrieval mode in the current beta. If memory is
+optional for an agent, keep memory disabled for that agent or use an application
+store/namespace that can satisfy reads predictably.
+
+Memory capture runs after a completed request. If storing the user/assistant
+turn fails, Jidoka records `capture_error` and `capture_warning` on the request
+memory metadata and emits a memory error trace, but it does not change the
+completed request result into a failure.
 
 ## Feature Map
 
@@ -357,30 +648,19 @@ metadata; the actual secret stays with the system that owns the integration.
   responsible for the turn.
 - **Handoffs:** transfer conversation ownership so future turns route to the
   receiving agent until reset.
-- **Tool integrations:** connect core adapters such as Ash actions, web tools,
-  MCP tools, skills, and plugins; keep broad service catalogs in companion
-  packages.
-- **Imported agents:** experimentally load constrained JSON/YAML specs through
-  allowlisted registries for portability tests and controlled interchange.
+- **Integration adapters:** connect Ash resources, web tools, MCP tools,
+  skills, plugins, Kino/Livebook helpers, and imported JSON/YAML specs through
+  the [integration guide](docs/integrations.md).
 - **Durability:** graduate to durable runtime storage, hibernate/thaw,
   checkpoints, and thread journals when sessions need to survive process
   restarts.
 - **Testing:** verify contracts, actions, results, workflows, and live behavior.
 
-## Imported Agents
+## Integration Docs
 
-Imported agents are an experimental portability surface for controlled JSON/YAML
-interchange. They are not arbitrary code loading.
-
-An imported spec can name actions, plugins, subagents, workflows, handoffs,
-lifecycle hooks, controls, skills, web capabilities, memory, compaction, and
-typed results, but names only resolve through registries supplied by the host
-application. Raw module strings are rejected; the app must explicitly decide
-which modules and local skill paths are available at import time.
-
-Use imported agents for fixtures, portability tests, generated specs, and
-controlled interchange. Use the Elixir DSL as the canonical authoring surface
-while the beta DSL settles.
+The core README stays focused on authoring and running agents. See the
+[integration guide](docs/integrations.md) for Ash resources, MCP tools, web
+tools, skills, plugins, Kino/Livebook helpers, and imported JSON/YAML specs.
 
 ## Install
 
@@ -432,7 +712,20 @@ mix docs --warnings-as-errors
 ```
 
 The runnable examples under `examples/` show the provider-free testing
-progression and stay deterministic by default.
+progression and stay deterministic by default:
+
+```bash
+mix jidoka.example --list
+mix jidoka.example support_agent
+mix jidoka.example --all
+```
+
+Use `--live` when you want the same scenarios to make real model calls:
+
+```bash
+mix jidoka.example support_agent --live
+mix jidoka.example --all --live
+```
 
 The teaching Livebooks under `livebook/` mirror that same order for
 interactive exploration.

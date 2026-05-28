@@ -36,7 +36,7 @@ defmodule Jidoka.Handoff.Runtime do
           }
         )
 
-      Jidoka.Handoff.Registry.put_owner(conversation_id, handoff)
+      Jidoka.Handoff.OwnerStore.put_owner(conversation_id, handoff)
       metadata = call_metadata(capability, handoff, started_at, :handoff)
       maybe_record_metadata(context, metadata)
       trace_handoff(context, capability, :stop, trace_metadata(metadata))

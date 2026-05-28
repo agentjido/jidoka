@@ -324,6 +324,18 @@ defmodule JidokaTest.HandoffsTest do
     conversation_id = unique_id("handoff-hitl")
     request_id = unique_id("req-handoff-hitl")
 
+    hook_context =
+      %{
+        :notify_pid => self(),
+        Jidoka.Handoff.context_key() => conversation_id,
+        Jidoka.Handoff.from_agent_key() => ControlledHandoffRouterAgent.id()
+      }
+      |> Jidoka.Hooks.attach_request_hooks(%{
+        before_turn: [],
+        after_turn: [],
+        on_interrupt: [JidokaTest.NotifyDelegationInterruptHook]
+      })
+
     assert {:ok, _agent, {:ai_react_start, params}} =
              runtime.on_before_cmd(
                agent,
@@ -331,11 +343,7 @@ defmodule JidokaTest.HandoffsTest do
                 %{
                   query: "transfer",
                   request_id: request_id,
-                  tool_context: %{
-                    :notify_pid => self(),
-                    Jidoka.Handoff.context_key() => conversation_id,
-                    Jidoka.Handoff.from_agent_key() => ControlledHandoffRouterAgent.id()
-                  }
+                  tool_context: hook_context
                 }}
              )
 
@@ -387,7 +395,7 @@ defmodule JidokaTest.HandoffsTest do
           action JidokaTest.AddNumbers
         end
 
-        capabilities do
+        tools do
           handoff JidokaTest.BillingHandoffSpecialist, as: :add_numbers
         end
       end

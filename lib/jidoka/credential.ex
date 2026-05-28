@@ -197,6 +197,7 @@ defmodule Jidoka.Credential do
   defp format_expires_at(%DateTime{} = expires_at), do: DateTime.to_iso8601(expires_at)
 
   defp collect_references(%__MODULE__{} = credential), do: [credential]
+  defp collect_references(%_{}), do: []
 
   defp collect_references(%{} = map) do
     Enum.flat_map(map, fn {key, value} ->
@@ -212,6 +213,7 @@ defmodule Jidoka.Credential do
   defp collect_references(_value), do: []
 
   defp normalize_reference_values(%__MODULE__{} = credential), do: [credential]
+  defp normalize_reference_values(%_{}), do: []
   defp normalize_reference_values(values) when is_list(values), do: Enum.flat_map(values, &normalize_reference_values/1)
 
   defp normalize_reference_values(%{} = attrs) do
@@ -231,6 +233,7 @@ defmodule Jidoka.Credential do
   end
 
   defp raw_secret_paths(%__MODULE__{}, _path), do: []
+  defp raw_secret_paths(%_{}, _path), do: []
 
   defp raw_secret_paths(%{} = map, path) do
     Enum.flat_map(map, fn {key, value} ->

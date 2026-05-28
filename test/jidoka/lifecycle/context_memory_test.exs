@@ -114,6 +114,36 @@ defmodule JidokaTest.ContextMemoryTest do
     assert RequiredContextAgent.context() == %{tenant: "demo"}
   end
 
+  test "central reserved context keys cover feature runtime keys" do
+    feature_keys = [
+      Jidoka.Character.context_key(),
+      Jidoka.Compaction.context_key(),
+      Jidoka.Handoff.context_key(),
+      Jidoka.Memory.context_key(),
+      Jidoka.Output.context_key(),
+      Jidoka.Skill.context_key(),
+      Jidoka.Subagent.request_id_key(),
+      Jidoka.Subagent.server_key(),
+      Jidoka.Subagent.depth_key()
+    ]
+
+    assert Enum.all?(feature_keys, &Jidoka.Context.reserved_key?/1)
+    assert "__jidoka_character__" in Jidoka.Context.reserved_keys()
+    assert "__jidoka_compaction__" in Jidoka.Context.reserved_keys()
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} =
+             Jidoka.Context.normalize(%{Jidoka.Character.context_key() => %{name: "private"}})
+
+    assert error.details.reason == :reserved_context_key
+    assert error.details.key == "__jidoka_character__"
+
+    assert Jidoka.Context.strip_internal(%{
+             Jidoka.Character.context_key() => %{name: "private"},
+             Jidoka.Compaction.context_key() => %{summary: "private"},
+             tenant: "acme"
+           }) == %{tenant: "acme"}
+  end
+
   test "validates required runtime context while applying schema defaults" do
     config = %{
       context: RequiredContextAgent.context(),
@@ -187,19 +217,23 @@ defmodule JidokaTest.ContextMemoryTest do
   end
 
   test "retrieves and captures conversation memory across turns" do
-    runtime = MemoryAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+    agent = new_runtime_agent(MemoryAgent.runtime_module())
     session = "memory-session-#{System.unique_integer([:positive])}"
+    config = MemoryAgent.memory_config()
+
+    agent = start_ai_request(agent, "req-memory-1", "Remember that my favorite color is blue.")
 
     {:ok, agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Memory.on_before_cmd(
         agent,
         {:ai_react_start,
          %{
            query: "Remember that my favorite color is blue.",
            request_id: "req-memory-1",
            tool_context: %{session: session}
-         }}
+         }},
+        config,
+        MemoryAgent.context()
       )
 
     agent =
@@ -210,17 +244,21 @@ defmodule JidokaTest.ContextMemoryTest do
       )
 
     assert {:ok, agent, []} =
-             runtime.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-memory-1"}}, [])
+             Jidoka.Memory.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-memory-1"}}, [], config)
+
+    agent = start_ai_request(agent, "req-memory-2", "What is my favorite color?")
 
     assert {:ok, agent, {:ai_react_start, params}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
                {:ai_react_start,
                 %{
                   query: "What is my favorite color?",
                   request_id: "req-memory-2",
                   tool_context: %{session: session}
-                }}
+                }},
+               config,
+               MemoryAgent.context()
              )
 
     memory = params.tool_context[Jidoka.Memory.context_key()]
@@ -239,35 +277,43 @@ defmodule JidokaTest.ContextMemoryTest do
   end
 
   test "inject :context exposes retrieved memory on the runtime context" do
-    runtime = ContextMemoryAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+    agent = new_runtime_agent(ContextMemoryAgent.runtime_module())
     session = "context-memory-#{System.unique_integer([:positive])}"
+    config = ContextMemoryAgent.memory_config()
+
+    agent = start_ai_request(agent, "req-memory-ctx-1", "Remember that I prefer green tea.")
 
     {:ok, agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Memory.on_before_cmd(
         agent,
         {:ai_react_start,
          %{
            query: "Remember that I prefer green tea.",
            request_id: "req-memory-ctx-1",
            tool_context: %{session: session}
-         }}
+         }},
+        config,
+        ContextMemoryAgent.context()
       )
 
     agent = Jido.AI.Request.complete_request(agent, "req-memory-ctx-1", "I'll remember that.")
 
     assert {:ok, agent, []} =
-             runtime.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-memory-ctx-1"}}, [])
+             Jidoka.Memory.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-memory-ctx-1"}}, [], config)
+
+    agent = start_ai_request(agent, "req-memory-ctx-2", "What drink do I prefer?")
 
     assert {:ok, _agent, {:ai_react_start, params}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
                {:ai_react_start,
                 %{
                   query: "What drink do I prefer?",
                   request_id: "req-memory-ctx-2",
                   tool_context: %{session: session}
-                }}
+                }},
+               config,
+               ContextMemoryAgent.context()
              )
 
     assert ContextMemoryAgent.request_transformer() == JidokaTest.ContextMemoryAgent.RuntimeRequestTransformer
@@ -278,26 +324,36 @@ defmodule JidokaTest.ContextMemoryTest do
     runtime = SharedMemoryAgent.runtime_module()
     first_agent = new_runtime_agent(runtime)
     second_agent = new_runtime_agent(runtime)
+    config = SharedMemoryAgent.memory_config()
+
+    first_agent = start_ai_request(first_agent, "req-memory-shared-1", "Remember that the shared color is red.")
 
     {:ok, first_agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Memory.on_before_cmd(
         first_agent,
-        {:ai_react_start, %{query: "Remember that the shared color is red.", request_id: "req-memory-shared-1"}}
+        {:ai_react_start, %{query: "Remember that the shared color is red.", request_id: "req-memory-shared-1"}},
+        config,
+        SharedMemoryAgent.context()
       )
 
     first_agent = Jido.AI.Request.complete_request(first_agent, "req-memory-shared-1", "Stored.")
 
     assert {:ok, _first_agent, []} =
-             runtime.on_after_cmd(
+             Jidoka.Memory.on_after_cmd(
                first_agent,
                {:ai_react_start, %{request_id: "req-memory-shared-1"}},
-               []
+               [],
+               config
              )
 
+    second_agent = start_ai_request(second_agent, "req-memory-shared-2", "What is the shared color?")
+
     assert {:ok, _second_agent, {:ai_react_start, params}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                second_agent,
-               {:ai_react_start, %{query: "What is the shared color?", request_id: "req-memory-shared-2"}}
+               {:ai_react_start, %{query: "What is the shared color?", request_id: "req-memory-shared-2"}},
+               config,
+               SharedMemoryAgent.context()
              )
 
     assert params.tool_context[:memory].namespace == "shared:shared-demo"
@@ -309,35 +365,43 @@ defmodule JidokaTest.ContextMemoryTest do
   end
 
   test "capture :off skips conversation writes" do
-    runtime = NoCaptureMemoryAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+    agent = new_runtime_agent(NoCaptureMemoryAgent.runtime_module())
     session = "memory-off-#{System.unique_integer([:positive])}"
+    config = NoCaptureMemoryAgent.memory_config()
+
+    agent = start_ai_request(agent, "req-memory-off-1", "Remember that I like coffee.")
 
     {:ok, agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Memory.on_before_cmd(
         agent,
         {:ai_react_start,
          %{
            query: "Remember that I like coffee.",
            request_id: "req-memory-off-1",
            tool_context: %{session: session}
-         }}
+         }},
+        config,
+        NoCaptureMemoryAgent.context()
       )
 
     agent = Jido.AI.Request.complete_request(agent, "req-memory-off-1", "I will not store this.")
 
     assert {:ok, agent, []} =
-             runtime.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-memory-off-1"}}, [])
+             Jidoka.Memory.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-memory-off-1"}}, [], config)
+
+    agent = start_ai_request(agent, "req-memory-off-2", "What drink do I like?")
 
     assert {:ok, _agent, {:ai_react_start, params}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
                {:ai_react_start,
                 %{
                   query: "What drink do I like?",
                   request_id: "req-memory-off-2",
                   tool_context: %{session: session}
-                }}
+                }},
+               config,
+               NoCaptureMemoryAgent.context()
              )
 
     assert params.tool_context[:memory].records == []
@@ -366,5 +430,9 @@ defmodule JidokaTest.ContextMemoryTest do
     after
       :ok = Jidoka.stop_agent(pid)
     end
+  end
+
+  defp start_ai_request(agent, request_id, query) do
+    Jido.AI.Request.start_request(agent, request_id, query)
   end
 end

@@ -1,8 +1,6 @@
 defmodule Jidoka.Agent.Dsl.Sections.Contract do
   @moduledoc false
 
-  alias Jidoka.Agent.Dsl.Sections.Schedules
-
   @spec result_entity() :: Spark.Dsl.Entity.t()
   def result_entity do
     %Spark.Dsl.Entity{
@@ -29,7 +27,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
           type: {:in, [:repair, :error]},
           required: false,
           default: :repair,
-          doc: "Whether invalid model output should be repaired once or returned as an error."
+          doc: "Whether an invalid model result should be repaired or returned as an error."
         ]
       ]
     }
@@ -90,10 +88,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Contract do
           """
         ]
       ],
-      entities: [
-        result: [result_entity()],
-        schedules: [Schedules.schedule_entity()]
-      ]
+      entities: [result: [result_entity()]]
     }
   end
 

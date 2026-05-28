@@ -71,6 +71,7 @@ defmodule JidokaTest.DebugSummaryTest do
            }
 
     assert summary.tool_names == ["add_numbers"]
+    assert summary.operation_names == ["add_numbers"]
     assert summary.context_preview == ["api_key=\"[REDACTED]\"", "session=\"cli\"", "tenant=\"demo\""]
     refute inspect(summary.context_preview) =~ "raw-secret"
     assert summary.message_count == 2

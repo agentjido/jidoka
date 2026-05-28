@@ -17,19 +17,6 @@ defmodule Jidoka.Compaction.Config do
   def default_config, do: @default_config
 
   @doc false
-  @spec normalize_dsl([struct()], module() | nil) ::
-          {:ok, Jidoka.Compaction.config() | nil} | {:error, String.t()}
-  def normalize_dsl(entries, owner_module \\ nil)
-  def normalize_dsl([], _owner_module), do: {:ok, nil}
-
-  def normalize_dsl(entries, owner_module) when is_list(entries) do
-    with {:ok, attrs} <- reduce_dsl_entries(entries, owner_module),
-         {:ok, normalized} <- normalize_map(attrs) do
-      {:ok, normalized}
-    end
-  end
-
-  @doc false
   @spec normalize_imported(nil | map()) :: {:ok, Jidoka.Compaction.config() | nil} | {:error, String.t()}
   def normalize_imported(nil), do: {:ok, nil}
 
@@ -52,31 +39,6 @@ defmodule Jidoka.Compaction.Config do
     do: {:error, "compaction must be a map, got: #{inspect(other)}"}
 
   @doc false
-  @spec validate_dsl_entry(struct(), module() | nil) :: :ok | {:error, String.t()}
-  def validate_dsl_entry(entry, owner_module \\ nil)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.CompactionMode{value: value}, _owner_module),
-    do: validate_mode(value)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.CompactionStrategy{value: value}, _owner_module),
-    do: validate_strategy(value)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.CompactionMaxMessages{value: value}, _owner_module),
-    do: validate_positive_integer(value, :max_messages)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.CompactionKeepLast{value: value}, _owner_module),
-    do: validate_positive_integer(value, :keep_last)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.CompactionMaxSummaryChars{value: value}, _owner_module),
-    do: validate_positive_integer(value, :max_summary_chars)
-
-  def validate_dsl_entry(%Jidoka.Agent.Dsl.CompactionPrompt{value: value}, owner_module) do
-    with {:ok, _prompt} <- Prompt.normalize(owner_module, value, label: "compaction prompt") do
-      :ok
-    end
-  end
-
-  @doc false
   @spec externalize(Jidoka.Compaction.config() | nil) :: map() | nil
   def externalize(nil), do: nil
 
@@ -93,46 +55,6 @@ defmodule Jidoka.Compaction.Config do
 
   defp maybe_put_prompt(map, prompt) when is_binary(prompt), do: Map.put(map, "prompt", prompt)
   defp maybe_put_prompt(map, _prompt), do: map
-
-  defp reduce_dsl_entries(entries, owner_module) do
-    Enum.reduce_while(entries, {:ok, %{}}, fn entry, {:ok, acc} ->
-      with :ok <- ensure_unique_entry(entry, acc, owner_module) do
-        {:cont, {:ok, put_entry(entry, acc)}}
-      else
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-  end
-
-  defp put_entry(%Jidoka.Agent.Dsl.CompactionMode{value: value}, acc), do: Map.put(acc, :mode, value)
-  defp put_entry(%Jidoka.Agent.Dsl.CompactionStrategy{value: value}, acc), do: Map.put(acc, :strategy, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.CompactionMaxMessages{value: value}, acc),
-    do: Map.put(acc, :max_messages, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.CompactionKeepLast{value: value}, acc), do: Map.put(acc, :keep_last, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.CompactionMaxSummaryChars{value: value}, acc),
-    do: Map.put(acc, :max_summary_chars, value)
-
-  defp put_entry(%Jidoka.Agent.Dsl.CompactionPrompt{value: value}, acc), do: Map.put(acc, :prompt, value)
-
-  defp ensure_unique_entry(%module{} = entry, acc, owner_module) do
-    key = dsl_entry_key(module)
-
-    if Map.has_key?(acc, key) do
-      {:error, "duplicate compaction #{key} entry in Jidoka agent"}
-    else
-      validate_dsl_entry(entry, owner_module)
-    end
-  end
-
-  defp dsl_entry_key(Jidoka.Agent.Dsl.CompactionMode), do: :mode
-  defp dsl_entry_key(Jidoka.Agent.Dsl.CompactionStrategy), do: :strategy
-  defp dsl_entry_key(Jidoka.Agent.Dsl.CompactionMaxMessages), do: :max_messages
-  defp dsl_entry_key(Jidoka.Agent.Dsl.CompactionKeepLast), do: :keep_last
-  defp dsl_entry_key(Jidoka.Agent.Dsl.CompactionMaxSummaryChars), do: :max_summary_chars
-  defp dsl_entry_key(Jidoka.Agent.Dsl.CompactionPrompt), do: :prompt
 
   defp normalize_map(attrs) when is_map(attrs) do
     mode = Map.get(attrs, :mode, @default_config.mode)

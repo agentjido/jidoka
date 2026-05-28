@@ -4,6 +4,7 @@ defmodule Jidoka.Hooks do
   alias Jido.AI.Request
   alias Jidoka.{Handoff, Interrupt}
   alias Jidoka.Hooks.{AfterTurn, BeforeTurn}
+  alias Jidoka.Lifecycle.PhaseSpec
   alias Jidoka.Hooks.Runner
 
   @request_hooks_key :__jidoka_hooks__
@@ -50,10 +51,12 @@ defmodule Jidoka.Hooks do
   @spec notify_interrupt(Jido.Agent.t(), String.t(), Interrupt.t()) :: :ok
   def notify_interrupt(agent, request_id, %Interrupt{} = interrupt) when is_binary(request_id) do
     hook_meta = get_request_hook_meta(agent, request_id) || %{}
+    timeouts = hook_meta[:timeouts] || Jidoka.Lifecycle.Timeouts.default().hooks
 
     Runner.invoke_interrupt_hooks(
       get_in(hook_meta, [:hooks, :on_interrupt]) || [],
-      Runner.interrupt_input(agent, request_id, hook_meta, interrupt)
+      Runner.interrupt_input(agent, request_id, hook_meta, interrupt),
+      timeouts.on_interrupt
     )
   end
 
@@ -78,14 +81,24 @@ defmodule Jidoka.Hooks do
     maybe_attach_request_hooks(context, hooks)
   end
 
-  @spec on_before_cmd(module(), Jido.Agent.t(), term(), stage_map(), map()) ::
+  @spec on_before_cmd(module(), Jido.Agent.t(), term(), stage_map(), map(), map()) ::
           {:ok, Jido.Agent.t(), term()}
+  def on_before_cmd(
+        agent_module,
+        agent,
+        action,
+        defaults,
+        default_context,
+        timeouts \\ Jidoka.Lifecycle.Timeouts.default().hooks
+      )
+
   def on_before_cmd(
         _agent_module,
         agent,
         {:ai_react_start, %{query: query} = params},
         defaults,
-        default_context
+        default_context,
+        timeouts
       ) do
     request_id = params[:request_id] || agent.state[:last_request_id]
 
@@ -109,10 +122,11 @@ defmodule Jidoka.Hooks do
       request_opts: params
     }
 
-    with {:ok, input} <- Runner.run_before_turn(hooks.before_turn, input) do
+    with {:ok, input} <- Runner.run_before_turn(hooks.before_turn, input, timeouts.before_turn) do
       agent =
         put_request_hook_meta(agent, request_id, %{
           hooks: hooks,
+          timeouts: timeouts,
           metadata: input.metadata,
           request_opts: input.request_opts,
           message: input.message,
@@ -126,6 +140,7 @@ defmodule Jidoka.Hooks do
       {:interrupt, %Interrupt{} = interrupt} ->
         hook_meta = %{
           hooks: hooks,
+          timeouts: timeouts,
           metadata: input.metadata,
           request_opts: input.request_opts,
           message: input.message,
@@ -142,7 +157,8 @@ defmodule Jidoka.Hooks do
 
         Runner.invoke_interrupt_hooks(
           hooks.on_interrupt,
-          Runner.interrupt_input(agent, request_id, hook_meta, interrupt)
+          Runner.interrupt_input(agent, request_id, hook_meta, interrupt),
+          timeouts.on_interrupt
         )
 
         {:ok, agent, {:ai_react_request_error, %{request_id: request_id, reason: :interrupt, message: query}}}
@@ -155,6 +171,7 @@ defmodule Jidoka.Hooks do
           |> Request.fail_request(request_id, error)
           |> put_request_hook_meta(request_id, %{
             hooks: hooks,
+            timeouts: timeouts,
             metadata: input.metadata,
             request_opts: input.request_opts,
             message: input.message,
@@ -168,23 +185,55 @@ defmodule Jidoka.Hooks do
     end
   end
 
-  def on_before_cmd(_agent_module, agent, action, _defaults, _default_context),
+  def on_before_cmd(_agent_module, agent, action, _defaults, _default_context, _timeouts),
     do: {:ok, agent, action}
 
-  @spec on_after_cmd(module(), Jido.Agent.t(), term(), [term()], stage_map()) ::
+  @doc false
+  @spec before_phase_specs(module(), stage_map(), map(), map()) :: [PhaseSpec.t()]
+  def before_phase_specs(runtime_module, hooks, default_context, timeouts \\ Jidoka.Lifecycle.Timeouts.default().hooks)
+      when is_atom(runtime_module) and is_map(default_context) do
+    [
+      PhaseSpec.before(:hooks_before, :hooks, fn agent, action ->
+        on_before_cmd(runtime_module, agent, action, hooks, default_context, timeouts)
+      end)
+    ]
+  end
+
+  @spec on_after_cmd(module(), Jido.Agent.t(), term(), [term()], stage_map(), map()) ::
           {:ok, Jido.Agent.t(), [term()]}
+  def on_after_cmd(
+        agent_module,
+        agent,
+        action,
+        directives,
+        defaults,
+        timeouts \\ Jidoka.Lifecycle.Timeouts.default().hooks
+      )
+
   def on_after_cmd(
         _agent_module,
         agent,
         {:ai_react_start, %{request_id: request_id}},
         directives,
-        _defaults
+        _defaults,
+        timeouts
       ) do
-    run_after_turn_hooks(agent, request_id, directives)
+    run_after_turn_hooks(agent, request_id, directives, timeouts)
   end
 
-  def on_after_cmd(_agent_module, agent, _action, directives, _defaults) do
-    run_after_turn_hooks(agent, agent.state[:last_request_id], directives)
+  def on_after_cmd(_agent_module, agent, _action, directives, _defaults, timeouts) do
+    run_after_turn_hooks(agent, agent.state[:last_request_id], directives, timeouts)
+  end
+
+  @doc false
+  @spec after_phase_specs(module(), stage_map(), map()) :: [PhaseSpec.t()]
+  def after_phase_specs(runtime_module, hooks, timeouts \\ Jidoka.Lifecycle.Timeouts.default().hooks)
+      when is_atom(runtime_module) do
+    [
+      PhaseSpec.after_phase(:hooks_after, :hooks, fn agent, action, directives ->
+        on_after_cmd(runtime_module, agent, action, directives, hooks, timeouts)
+      end)
+    ]
   end
 
   @spec combine(stage_map(), stage_map()) :: stage_map()
@@ -282,7 +331,7 @@ defmodule Jidoka.Hooks do
     get_in(agent.state, [:requests, request_id, :meta, :jidoka_hooks])
   end
 
-  defp run_after_turn_hooks(agent, request_id, directives) when is_binary(request_id) do
+  defp run_after_turn_hooks(agent, request_id, directives, default_timeouts) when is_binary(request_id) do
     hook_meta = get_request_hook_meta(agent, request_id)
 
     case {hook_meta, current_outcome(agent, request_id)} do
@@ -290,6 +339,8 @@ defmodule Jidoka.Hooks do
         if Map.get(hook_meta, :after_turn_applied?, false) do
           {:ok, agent, directives}
         else
+          timeouts = hook_meta[:timeouts] || default_timeouts
+
           input = %AfterTurn{
             agent: agent,
             server: self(),
@@ -303,7 +354,7 @@ defmodule Jidoka.Hooks do
             outcome: outcome
           }
 
-          case Runner.run_after_turn(get_in(hook_meta, [:hooks, :after_turn]) || [], input) do
+          case Runner.run_after_turn(get_in(hook_meta, [:hooks, :after_turn]) || [], input, timeouts.after_turn) do
             {:ok, input} ->
               updated_hook_meta =
                 hook_meta
@@ -325,7 +376,8 @@ defmodule Jidoka.Hooks do
 
               Runner.invoke_interrupt_hooks(
                 get_in(hook_meta, [:hooks, :on_interrupt]) || [],
-                Runner.interrupt_input(agent, request_id, hook_meta, interrupt)
+                Runner.interrupt_input(agent, request_id, hook_meta, interrupt),
+                timeouts.on_interrupt
               )
 
               {:ok, agent, directives}
@@ -352,5 +404,5 @@ defmodule Jidoka.Hooks do
     end
   end
 
-  defp run_after_turn_hooks(agent, _request_id, directives), do: {:ok, agent, directives}
+  defp run_after_turn_hooks(agent, _request_id, directives, _default_timeouts), do: {:ok, agent, directives}
 end

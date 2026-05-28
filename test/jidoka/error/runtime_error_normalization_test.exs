@@ -174,14 +174,18 @@ defmodule JidokaTest.RuntimeErrorNormalizationTest do
   end
 
   test "memory retrieval failures are hard structured request errors" do
-    runtime = MemoryAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+    agent =
+      MemoryAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request("req-memory-normalized", "remember")
 
     assert {:ok, updated_agent,
             {:ai_react_request_error, %{request_id: "req-memory-normalized", reason: :memory_failed}}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
-               {:ai_react_start, %{query: "remember", request_id: "req-memory-normalized", tool_context: %{}}}
+               {:ai_react_start, %{query: "remember", request_id: "req-memory-normalized", tool_context: %{}}},
+               MemoryAgent.memory_config(),
+               MemoryAgent.context()
              )
 
     assert {:error, %Jidoka.Error.ValidationError{} = error} =

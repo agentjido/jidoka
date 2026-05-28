@@ -33,7 +33,8 @@ defmodule Jidoka.Agent.Codegen do
             definition.memory,
             definition.output,
             definition.skills,
-            definition.mcp_tools
+            definition.mcp_tools,
+            definition.lifecycle_timeouts
           )
         )
 
@@ -181,6 +182,14 @@ defmodule Jidoka.Agent.Codegen do
       @spec character() :: Jidoka.Character.source() | nil
       def character, do: unquote(Macro.escape(definition.configured_character))
 
+      @doc """
+      Returns ordered prompt sections for a turn without sending a model request.
+      """
+      @spec prompt_preflight(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
+      def prompt_preflight(message, opts \\ []) when is_binary(message) and is_list(opts) do
+        Jidoka.PromptPreflight.run(__MODULE__, message, opts)
+      end
+
       @doc false
       @spec request_transformer() :: module() | nil
       def request_transformer, do: unquote(definition.effective_request_transformer)
@@ -220,27 +229,6 @@ defmodule Jidoka.Agent.Codegen do
       """
       @spec result_schema() :: Zoi.schema() | map() | nil
       def result_schema, do: unquote(Macro.escape(result_schema(definition.result)))
-
-      @doc """
-      Returns first-class schedules declared for this agent.
-
-      Register these with `Jidoka.Schedule.Manager` or `Jidoka.schedule/2` from
-      your application supervision boundary.
-      """
-      @spec schedules() :: [Jidoka.Schedule.t()]
-      def schedules, do: unquote(Macro.escape(definition.schedules))
-
-      @doc """
-      Returns the configured compaction settings for this agent, if any.
-      """
-      @spec compaction() :: Jidoka.Compaction.config() | nil
-      def compaction, do: unquote(Macro.escape(definition.compaction))
-
-      @doc """
-      Returns the configured memory settings for this agent, if any.
-      """
-      @spec memory() :: Jidoka.Memory.config() | nil
-      def memory, do: unquote(Macro.escape(definition.memory))
 
       @doc """
       Returns the configured skill settings for this agent, if any.
@@ -301,7 +289,7 @@ defmodule Jidoka.Agent.Codegen do
       def subagent_names, do: unquote(Macro.escape(definition.subagent_names))
 
       @doc """
-      Returns workflow operations declared with `capabilities do workflow ... end`.
+      Returns workflow operations declared with `tools do workflow ... end`.
 
       Each entry is exposed to the model as a generated action-backed tool in
       `tools/0`.
@@ -338,30 +326,6 @@ defmodule Jidoka.Agent.Codegen do
       """
       @spec plugin_names() :: [String.t()]
       def plugin_names, do: unquote(Macro.escape(definition.plugin_names))
-
-      @doc """
-      Returns the configured hooks by stage.
-      """
-      @spec hooks() :: Jidoka.Hooks.stage_map()
-      def hooks, do: unquote(Macro.escape(definition.hooks))
-
-      @doc """
-      Returns the configured `before_turn` hooks.
-      """
-      @spec before_turn_hooks() :: [term()]
-      def before_turn_hooks, do: unquote(Macro.escape(definition.hooks.before_turn))
-
-      @doc """
-      Returns the configured `after_turn` hooks.
-      """
-      @spec after_turn_hooks() :: [term()]
-      def after_turn_hooks, do: unquote(Macro.escape(definition.hooks.after_turn))
-
-      @doc """
-      Returns the configured `on_interrupt` hooks.
-      """
-      @spec interrupt_hooks() :: [term()]
-      def interrupt_hooks, do: unquote(Macro.escape(definition.hooks.on_interrupt))
 
       @doc """
       Returns the configured controls by stage.

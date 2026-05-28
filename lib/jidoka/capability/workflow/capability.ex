@@ -1,6 +1,7 @@
 defmodule Jidoka.Workflow.Capability do
   @moduledoc false
 
+  alias Jidoka.Lifecycle.PhaseSpec
   alias Jidoka.Workflow.Capability.{Runtime, Tool}
 
   @enforce_keys [:workflow, :name, :description, :timeout, :forward_context, :result]
@@ -138,6 +139,14 @@ defmodule Jidoka.Workflow.Capability do
   @doc false
   @spec on_after_cmd(Jido.Agent.t(), term(), [term()]) :: {:ok, Jido.Agent.t(), [term()]}
   defdelegate on_after_cmd(agent, action, directives), to: Runtime
+
+  @doc false
+  @spec after_phase_specs() :: [PhaseSpec.t()]
+  def after_phase_specs do
+    [
+      PhaseSpec.after_phase(:workflow_after, :workflow, &on_after_cmd/3)
+    ]
+  end
 
   @doc false
   @spec get_request_meta(Jido.Agent.t(), String.t()) :: map() | nil

@@ -9,9 +9,9 @@ defmodule Jidoka.Workflow do
 
   Workflows are deterministic application processes. They can be run directly
   with `run/3`, used by schedules, or exposed to an agent as a model-callable
-  operation with `capabilities do workflow MyWorkflow end`. In that agent case
-  Jidoka generates an action-backed tool module for the workflow, so the model
-  sees one operation while the workflow runtime owns the ordered steps.
+  operation with `tools do workflow MyWorkflow end`. In that agent case Jidoka
+  generates an action-backed tool module for the workflow, so the model sees
+  one operation while the workflow runtime owns the ordered steps.
 
   Workflow authoring stays separate from `Jidoka.Action`. Use actions for one
   deterministic operation. Use workflows when Jidoka should understand the

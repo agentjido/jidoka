@@ -147,7 +147,7 @@ defmodule JidokaTest.WebCapabilityTest do
           action JidokaTest.DuplicateSearchWebTool
         end
 
-        capabilities do
+        tools do
           web :search
         end
       end
@@ -165,7 +165,7 @@ defmodule JidokaTest.WebCapabilityTest do
           instructions "This should fail."
         end
 
-        capabilities do
+        tools do
           web :interactive
         end
       end
@@ -183,7 +183,7 @@ defmodule JidokaTest.WebCapabilityTest do
           instructions "This should fail."
         end
 
-        capabilities do
+        tools do
           web :search
           web :read_only
         end

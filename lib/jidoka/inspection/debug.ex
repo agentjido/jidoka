@@ -13,8 +13,10 @@ defmodule Jidoka.Debug do
           user_message: String.t() | nil,
           system_prompt: String.t() | nil,
           prompt_preview: map() | nil,
+          prompt_sections: [map()],
           skills: [String.t()],
           tool_names: [String.t()],
+          operation_names: [String.t()],
           mcp_tools: [String.t()],
           mcp_errors: [map()],
           context_preview: [String.t()],
@@ -138,8 +140,10 @@ defmodule Jidoka.Debug do
       user_message: text_preview(user_message),
       system_prompt: text_preview(system_prompt),
       prompt_preview: prompt_preview(system_prompt, user_message, message_count, tool_names),
+      prompt_sections: prompt_sections(debug_meta),
       skills: normalize_string_list(debug_meta[:skills]),
       tool_names: tool_names,
+      operation_names: tool_names,
       mcp_tools: normalize_string_list(debug_meta[:mcp_tools]),
       mcp_errors: normalize_mcp_errors(debug_meta[:mcp_errors]),
       context_preview: context_preview(hook_meta, guardrail_meta, memory_meta),
@@ -294,6 +298,12 @@ defmodule Jidoka.Debug do
       preview -> preview
     end
   end
+
+  defp prompt_sections(%{prompt_sections: sections}) when is_list(sections) do
+    Enum.map(sections, &Jidoka.Sanitize.payload/1)
+  end
+
+  defp prompt_sections(_debug_meta), do: []
 
   defp text_preview(nil), do: nil
   defp text_preview(text), do: Jidoka.Sanitize.preview(text, 240)

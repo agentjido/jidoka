@@ -2,6 +2,7 @@ defmodule Jidoka.Handoff.Registry do
   @moduledoc false
 
   use GenServer
+  @behaviour Jidoka.Handoff.OwnerStore
 
   @type owner :: %{
           agent: module(),
@@ -18,6 +19,7 @@ defmodule Jidoka.Handoff.Registry do
 
   @doc false
   @spec owner(String.t()) :: owner() | nil
+  @impl Jidoka.Handoff.OwnerStore
   def owner(conversation_id) when is_binary(conversation_id) do
     GenServer.call(__MODULE__, {:owner, conversation_id})
   end
@@ -26,6 +28,7 @@ defmodule Jidoka.Handoff.Registry do
 
   @doc false
   @spec put_owner(String.t(), Jidoka.Handoff.t()) :: :ok
+  @impl Jidoka.Handoff.OwnerStore
   def put_owner(conversation_id, %Jidoka.Handoff{} = handoff) when is_binary(conversation_id) do
     GenServer.call(__MODULE__, {:put_owner, conversation_id, handoff})
   end
@@ -34,6 +37,7 @@ defmodule Jidoka.Handoff.Registry do
 
   @doc false
   @spec reset(String.t()) :: :ok
+  @impl Jidoka.Handoff.OwnerStore
   def reset(conversation_id) when is_binary(conversation_id) do
     GenServer.call(__MODULE__, {:reset, conversation_id})
   end

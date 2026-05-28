@@ -1,33 +1,11 @@
 defmodule Jidoka.Agent.Definition.LifecycleConfig do
   @moduledoc false
 
-  @spec resolve_hooks!([struct()], module()) :: map()
-  def resolve_hooks!(hook_entities, owner_module) when is_list(hook_entities) do
-    hook_entities
-    |> hooks_stage_map()
-    |> normalize_hooks!(owner_module)
-  end
-
   @spec resolve_guardrails!([struct()], module()) :: map()
   def resolve_guardrails!(guardrail_entities, owner_module) when is_list(guardrail_entities) do
     guardrail_entities
     |> guardrails_stage_map(owner_module)
     |> normalize_guardrails!(owner_module)
-  end
-
-  defp normalize_hooks!(hooks, owner_module) do
-    with :ok <- ensure_unique_stage_refs!(owner_module, hooks, "hook", [:lifecycle]),
-         {:ok, normalized} <- Jidoka.Hooks.normalize_dsl_hooks(hooks) do
-      normalized
-    else
-      {:error, message} ->
-        raise Jidoka.Agent.Dsl.Error.exception(
-                message: message,
-                path: [:lifecycle],
-                hint: "Declare hooks as `before_turn`, `after_turn`, or `on_interrupt` inside `lifecycle`.",
-                module: owner_module
-              )
-    end
   end
 
   defp normalize_guardrails!(guardrails, owner_module) do
@@ -71,19 +49,6 @@ defmodule Jidoka.Agent.Definition.LifecycleConfig do
                 module: owner_module
               )
     end
-  end
-
-  defp hooks_stage_map(hook_entities) do
-    Enum.reduce(hook_entities, Jidoka.Hooks.default_stage_map(), fn
-      %Jidoka.Agent.Dsl.BeforeTurnHook{hook: hook}, acc ->
-        Map.update!(acc, :before_turn, &(&1 ++ [hook]))
-
-      %Jidoka.Agent.Dsl.AfterTurnHook{hook: hook}, acc ->
-        Map.update!(acc, :after_turn, &(&1 ++ [hook]))
-
-      %Jidoka.Agent.Dsl.InterruptHook{hook: hook}, acc ->
-        Map.update!(acc, :on_interrupt, &(&1 ++ [hook]))
-    end)
   end
 
   defp guardrails_stage_map(guardrail_entities, owner_module) do

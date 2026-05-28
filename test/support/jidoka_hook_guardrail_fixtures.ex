@@ -105,6 +105,11 @@ defmodule JidokaTest.HookCallbacks do
 
     :ok
   end
+
+  def slow_before_turn(%Jidoka.Hooks.BeforeTurn{}, sleep_ms) do
+    Process.sleep(sleep_ms)
+    {:ok, %{}}
+  end
 end
 
 defmodule JidokaTest.SafePromptGuardrail do
@@ -191,6 +196,11 @@ defmodule JidokaTest.GuardrailCallbacks do
 
   def output(%Jidoka.Guardrails.Output{}, label), do: {:error, {:output_callback, label}}
   def tool(%Jidoka.Guardrails.Tool{}, label), do: {:error, {:tool_callback, label}}
+
+  def slow_input(%Jidoka.Guardrails.Input{}, sleep_ms) do
+    Process.sleep(sleep_ms)
+    :ok
+  end
 end
 
 defmodule JidokaTest.HookedAgent do
@@ -201,13 +211,33 @@ defmodule JidokaTest.HookedAgent do
     instructions "You have hooks."
   end
 
-  lifecycle do
-    before_turn JidokaTest.InjectTenantHook
-    before_turn {JidokaTest.HookCallbacks, :before_turn, ["dsl_mfa"]}
-    after_turn JidokaTest.NormalizeReplyHook
-    after_turn {JidokaTest.HookCallbacks, :after_turn, ["!"]}
-    on_interrupt JidokaTest.NotifyOpsHook
-    on_interrupt {JidokaTest.HookCallbacks, :notify_interrupt, ["dsl_mfa"]}
+  def hook_config do
+    %{
+      before_turn: [JidokaTest.InjectTenantHook, {JidokaTest.HookCallbacks, :before_turn, ["runtime_mfa"]}],
+      after_turn: [JidokaTest.NormalizeReplyHook, {JidokaTest.HookCallbacks, :after_turn, ["!"]}],
+      on_interrupt: [JidokaTest.NotifyOpsHook, {JidokaTest.HookCallbacks, :notify_interrupt, ["runtime_mfa"]}]
+    }
+  end
+end
+
+defmodule JidokaTest.TimeoutHookAgent do
+  use Jidoka.Agent
+
+  agent :timeout_hook_agent do
+    model :fast
+    instructions "You have a slow hook."
+  end
+
+  def hook_config do
+    %{
+      before_turn: [{JidokaTest.HookCallbacks, :slow_before_turn, [30]}],
+      after_turn: [],
+      on_interrupt: []
+    }
+  end
+
+  def hook_timeout_config do
+    %{Jidoka.Lifecycle.Timeouts.default().hooks | before_turn: 5}
   end
 end
 
@@ -223,14 +253,27 @@ defmodule JidokaTest.GuardrailedAgent do
     action(JidokaTest.AddNumbers)
   end
 
-  lifecycle do
-    on_interrupt JidokaTest.NotifyOpsHook
-  end
-
   controls do
     input JidokaTest.SafePromptGuardrail
     result(JidokaTest.SafeReplyGuardrail)
     operation(JidokaTest.ApproveLargeMathToolGuardrail)
+  end
+end
+
+defmodule JidokaTest.TimeoutControlAgent do
+  use Jidoka.Agent
+
+  agent :timeout_control_agent do
+    model :fast
+    instructions "You have a slow control."
+  end
+
+  controls do
+    input {JidokaTest.GuardrailCallbacks, :slow_input, [30]}
+  end
+
+  def control_timeout_config do
+    %{Jidoka.Lifecycle.Timeouts.default().controls | input: 5}
   end
 end
 
@@ -257,8 +300,11 @@ defmodule JidokaTest.InterruptingAgent do
     instructions "You may interrupt."
   end
 
-  lifecycle do
-    before_turn JidokaTest.InterruptBeforeHook
-    on_interrupt JidokaTest.NotifyOpsHook
+  def hook_config do
+    %{
+      before_turn: [JidokaTest.InterruptBeforeHook],
+      after_turn: [],
+      on_interrupt: [JidokaTest.NotifyOpsHook]
+    }
   end
 end

@@ -2,6 +2,7 @@ defmodule Jidoka.Skill do
   @moduledoc false
 
   alias Jido.AI.Skill
+  alias Jidoka.Lifecycle.PhaseSpec
 
   @context_key :__jidoka_skills__
   @state_key :__jidoka_skill_runtime__
@@ -260,6 +261,16 @@ defmodule Jidoka.Skill do
   end
 
   def on_before_cmd(agent, action, _config), do: {:ok, agent, action}
+
+  @doc false
+  @spec before_phase_specs(config() | nil) :: [PhaseSpec.t()]
+  def before_phase_specs(config) do
+    [
+      PhaseSpec.before(:skills_before, :skills, fn agent, action ->
+        on_before_cmd(agent, action, config)
+      end)
+    ]
+  end
 
   defp validate_skill_refs(refs) do
     refs

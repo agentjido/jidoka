@@ -1,52 +1,74 @@
 # Jidoka Examples
 
-These examples follow the same teaching order as the README: start with one
-agent, then add sessions, context, typed results, actions, controls, debugging,
-schedules, workflows, delegation, and portability.
+The examples are runnable agent scenarios. They are designed for two uses:
 
-The scripts are provider-free by default. They exercise Jidoka contracts,
-runtime descriptors, deterministic actions, controls, schedules, traces, and
-imported specs without requiring a live model key.
+- teaching new users what they can build with Jidoka
+- live integration checks that make real model calls when provider credentials
+  are configured
 
-Run them from the package root:
+Provider-free verification is the default:
 
 ```bash
-mix run examples/01_first_agent.exs
-mix run examples/02_context_and_results.exs
-mix run examples/03_actions_controls_credentials.exs
-mix run examples/04_debugging_and_tracing.exs
-mix run examples/05_workflows_and_schedules.exs
-mix run examples/06_delegation_and_imports.exs
+mix jidoka.example --list
+mix jidoka.example support_agent
+mix jidoka.example --all
 ```
 
-## Teaching Order
+Live runs use the same example modules but call `Jidoka.chat/3`:
 
-1. `01_first_agent.exs` covers agents, chat targets, and sessions.
-2. `02_context_and_results.exs` covers runtime context and typed results.
-3. `03_actions_controls_credentials.exs` covers actions, controls,
-   human-in-the-loop approvals, and credential references.
-4. `04_debugging_and_tracing.exs` covers request inspection and structured
-   traces without a provider call.
-5. `05_workflows_and_schedules.exs` covers deterministic workflows and manual
-   schedule execution.
-6. `06_delegation_and_imports.exs` covers subagent/tool portability boundaries
-   and constrained imported specs.
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+mix jidoka.example support_agent --live
+mix jidoka.example --all --live
+```
 
-The later guide and Livebook layers should reuse this order instead of
-inventing a separate progression.
+You can override the user prompt:
 
-## Example Constraints
+```bash
+mix jidoka.example ticket_classifier --live --prompt "Classify this renewal invoice complaint."
+```
 
-Keep this tree intentionally small until the V3 DSL is stable:
+## Examples
 
-- one feature group per script
-- no example-specific modules under `lib/`
-- no shared demo framework, registry, or mix task until repeated code proves it
-  is worth extracting
-- no live provider calls in default examples
-- no fixture trees unless the example cannot explain the feature with inline
-  data
-- prefer one deterministic assertion path over a polished CLI
+| Name | What It Covers |
+| --- | --- |
+| `first_agent` | minimal agent, model alias, instructions, session, prompt preflight |
+| `ticket_classifier` | context schema, structured result, validation repair |
+| `support_agent` | actions, operation controls, human approval, credential references |
+| `debug_agent` | provider-free interrupt, request inspection, trace inspection |
+| `workflow_agent` | workflow DSL, generated workflow tool, manual schedule run |
+| `delegation_agent` | subagent call, handoff ownership, imported agent spec |
+| `knowledge_agent` | skills, plugin tools, MCP tools, web tools |
+| `ash_agent` | Ash resource expansion, generated AshJido tools, actor/domain context |
 
-When an example needs more than a small script, move the extra explanation to a
-guide or Livebook rather than growing a second application inside `examples/`.
+## File Layout
+
+`registry.exs` defines the example registry and shared runner helpers. Each
+example lives in its own folder with source split by role:
+
+```text
+examples/support_agent/
+  actions/
+  controls/
+  agents/
+  example.exs
+```
+
+`example.exs` contains the small `run/1` module used by the mix task. Supporting
+actions, controls, agents, workflows, skills, plugins, resources, and other
+domain modules stay in named subfolders so each example can grow into a useful
+reference without turning the root `examples/` directory into a flat script
+dump.
+
+Example agents use `tools do ... end` for actions and integrations that become
+model-callable operations. The legacy `capabilities` block has been removed
+from the Elixir agent DSL.
+
+## Live Integration Policy
+
+Default example runs must stay deterministic and provider-free. Live mode should
+exercise the same agent with a short prompt and accept normal Jidoka outcomes:
+`{:ok, result}`, `{:interrupt, interrupt}`, or `{:handoff, handoff}`. Chat
+errors fail the example so `mix jidoka.example --all --live` can catch runtime
+regressions. A live run requires `ANTHROPIC_API_KEY` or an explicitly provided
+`--provider-env` value.

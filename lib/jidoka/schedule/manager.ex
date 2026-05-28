@@ -15,6 +15,10 @@ defmodule Jidoka.Schedule.Manager do
 
   Run history is for short-lived diagnostics and UI feedback. It is not a
   durable audit log, replay source, or recovery journal.
+
+  Manual `run/2` calls return `{:ok, run}` when the manager records the run.
+  Callers must inspect `run.status` to distinguish successful work from recorded
+  failures, interrupts, handoffs, and skips.
   """
 
   use GenServer

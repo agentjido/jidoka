@@ -9,7 +9,6 @@ defmodule Jidoka.Agent.Dsl.Agent do
     :description,
     :context,
     :result,
-    :schedules,
     :__spark_metadata__
   ]
 end
@@ -38,6 +37,7 @@ defmodule Jidoka.Agent.Dsl.MCPTools do
   defstruct [
     :endpoint,
     :prefix,
+    :required,
     :transport,
     :client_info,
     :protocol_version,
@@ -111,114 +111,6 @@ defmodule Jidoka.Agent.Dsl.Handoff do
     :forward_context,
     :__spark_metadata__
   ]
-end
-
-defmodule Jidoka.Agent.Dsl.Schedule do
-  @moduledoc false
-
-  defstruct [
-    :name,
-    :cron,
-    :timezone,
-    :prompt,
-    :context,
-    :conversation,
-    :agent_id,
-    :overlap,
-    :timeout,
-    :enabled?,
-    :__spark_metadata__
-  ]
-end
-
-defmodule Jidoka.Agent.Dsl.MemoryMode do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.MemoryNamespace do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.MemorySharedNamespace do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.MemoryCapture do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.MemoryInject do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.MemoryRetrieve do
-  @moduledoc false
-
-  defstruct [:limit, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.CompactionMode do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.CompactionStrategy do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.CompactionMaxMessages do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.CompactionKeepLast do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.CompactionMaxSummaryChars do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.CompactionPrompt do
-  @moduledoc false
-
-  defstruct [:value, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.BeforeTurnHook do
-  @moduledoc false
-
-  defstruct [:hook, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.AfterTurnHook do
-  @moduledoc false
-
-  defstruct [:hook, :__spark_metadata__]
-end
-
-defmodule Jidoka.Agent.Dsl.InterruptHook do
-  @moduledoc false
-
-  defstruct [:hook, :__spark_metadata__]
 end
 
 defmodule Jidoka.Agent.Dsl.InputControl do

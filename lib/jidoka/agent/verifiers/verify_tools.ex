@@ -5,8 +5,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
 
   @impl true
   def verify(dsl_state) do
-    (Spark.Dsl.Verifier.get_entities(dsl_state, [:capabilities]) ++
-       Spark.Dsl.Verifier.get_entities(dsl_state, [:tools]))
+    Spark.Dsl.Verifier.get_entities(dsl_state, [:tools])
     |> Enum.reduce_while({:ok, MapSet.new()}, fn
       %Jidoka.Agent.Dsl.Tool{} = tool_ref, {:ok, seen_names} ->
         module = tool_ref.module
@@ -44,7 +43,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
   defp duplicate_tool_error(dsl_state, tool_ref, name) do
     Spark.Error.DslError.exception(
       message: "tool #{inspect(name)} is defined more than once",
-      path: [:capabilities, :tool],
+      path: [:tools, :action],
       module: Spark.Dsl.Verifier.get_persisted(dsl_state, :module),
       location: Spark.Dsl.Entity.anno(tool_ref)
     )
@@ -53,7 +52,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
   defp tool_error(dsl_state, tool_ref, message) do
     Spark.Error.DslError.exception(
       message: message,
-      path: [:capabilities, :tool],
+      path: [:tools, :action],
       module: Spark.Dsl.Verifier.get_persisted(dsl_state, :module),
       location: Spark.Dsl.Entity.anno(tool_ref)
     )
@@ -62,7 +61,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
   defp mcp_error(dsl_state, mcp_ref, message) do
     Spark.Error.DslError.exception(
       message: message,
-      path: [:capabilities, :mcp_tools],
+      path: [:tools, :mcp_tools],
       module: Spark.Dsl.Verifier.get_persisted(dsl_state, :module),
       location: Spark.Dsl.Entity.anno(mcp_ref)
     )

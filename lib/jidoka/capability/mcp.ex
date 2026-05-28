@@ -5,9 +5,18 @@ defmodule Jidoka.MCP do
   Jidoka treats MCP servers as a first-class tool source for agents. MCP endpoints
   may come from `:jido_mcp` application config, `jido_mcp` runtime endpoint
   registration, or inline `mcp_tools` DSL entries on compiled agents.
+
+  During an agent turn, automatic `mcp_tools` sync is fail-open by default: sync
+  failures are recorded in request inspection metadata and MCP trace events,
+  then the turn continues with the tools already available to the agent. Mark an
+  entry `required: true` when a sync failure should fail the request. Use
+  `sync_tools/2` directly when the application needs explicit `{:ok, result}` or
+  `{:error, reason}` handling before running a turn.
   """
 
+  alias Jido.AI.Request
   alias Jido.MCP.{ClientPool, Endpoint}
+  alias Jidoka.Lifecycle.PhaseSpec
 
   @state_key :__jidoka_mcp__
 
@@ -15,6 +24,7 @@ defmodule Jidoka.MCP do
   @type endpoint_config :: %{
           required(:endpoint) => endpoint_ref(),
           required(:prefix) => String.t() | nil,
+          optional(:required) => boolean(),
           optional(:registration) => Endpoint.t()
         }
   @type config :: [endpoint_config()]
@@ -155,22 +165,28 @@ defmodule Jidoka.MCP do
 
     synced = agent.state |> Map.get(@state_key, %{}) |> Map.get(:synced, %{})
 
-    {agent, synced, errors} =
-      Enum.reduce(config, {agent, synced, []}, fn entry, {agent_acc, synced_acc, errors_acc} ->
+    {agent, synced, errors, required_errors} =
+      Enum.reduce(config, {agent, synced, [], []}, fn entry, {agent_acc, synced_acc, errors_acc, required_errors_acc} ->
         key = sync_key(entry)
 
         if Map.get(synced_acc, key, false) do
           trace_mcp(context, entry, :skip)
-          {agent_acc, synced_acc, errors_acc}
+          {agent_acc, synced_acc, errors_acc, required_errors_acc}
         else
           case sync_endpoint(entry, agent_acc) do
             {:ok, updated_agent} ->
               trace_mcp(context, entry, :sync)
-              {updated_agent, Map.put(synced_acc, key, true), errors_acc}
+              {updated_agent, Map.put(synced_acc, key, true), errors_acc, required_errors_acc}
 
             {:error, reason} ->
+              error = format_error(entry, reason)
+
               trace_mcp(context, entry, :error, %{error: Jidoka.Error.format(reason)})
-              {agent_acc, synced_acc, [format_error(entry, reason) | errors_acc]}
+
+              required_errors_acc =
+                if required?(entry), do: [error | required_errors_acc], else: required_errors_acc
+
+              {agent_acc, synced_acc, [error | errors_acc], required_errors_acc}
           end
         end
       end)
@@ -185,15 +201,31 @@ defmodule Jidoka.MCP do
         |> drop_empty_errors()
       )
 
-    {:ok, put_mcp_state(agent, synced, errors), action}
+    agent = put_mcp_state(agent, synced, errors)
+
+    case Enum.reverse(required_errors) do
+      [] -> {:ok, agent, action}
+      required_errors -> fail_required_sync(agent, action, required_errors)
+    end
   end
 
   def on_before_cmd(agent, action, _config), do: {:ok, agent, action}
+
+  @doc false
+  @spec before_phase_specs(config()) :: [PhaseSpec.t()]
+  def before_phase_specs(config) do
+    [
+      PhaseSpec.before(:mcp_before, :mcp, fn agent, action ->
+        on_before_cmd(agent, action, config)
+      end)
+    ]
+  end
 
   defp normalize_dsl_entry(%Jidoka.Agent.Dsl.MCPTools{} = entry) do
     normalize_entry(%{
       endpoint: entry.endpoint,
       prefix: entry.prefix,
+      required: entry.required,
       transport: entry.transport,
       client_info: entry.client_info,
       protocol_version: entry.protocol_version,
@@ -208,10 +240,11 @@ defmodule Jidoka.MCP do
 
     with {:ok, normalized_endpoint} <- normalize_endpoint(endpoint),
          {:ok, normalized_prefix} <- normalize_prefix(prefix),
+         {:ok, required?} <- normalize_required(entry),
          {:ok, registration} <- normalize_registration(normalized_endpoint, entry) do
       entry = %{endpoint: normalized_endpoint, prefix: normalized_prefix}
 
-      {:ok, maybe_put_registration(entry, registration)}
+      {:ok, entry |> maybe_put_required(required?) |> maybe_put_registration(registration)}
     end
   end
 
@@ -244,6 +277,22 @@ defmodule Jidoka.MCP do
 
   defp normalize_prefix(other),
     do: {:error, "mcp prefix must be a string when provided, got: #{inspect(other)}"}
+
+  defp normalize_required(entry) do
+    required? =
+      entry
+      |> Map.get(:required, Map.get(entry, "required", false))
+      |> case do
+        nil -> false
+        value -> value
+      end
+
+    if is_boolean(required?) do
+      {:ok, required?}
+    else
+      {:error, "mcp required must be a boolean when provided, got: #{inspect(required?)}"}
+    end
+  end
 
   defp normalize_registration(endpoint, entry) do
     transport = Map.get(entry, :transport, Map.get(entry, "transport"))
@@ -279,6 +328,9 @@ defmodule Jidoka.MCP do
 
   defp maybe_put_registration(entry, nil), do: entry
   defp maybe_put_registration(entry, %Endpoint{} = endpoint), do: Map.put(entry, :registration, endpoint)
+
+  defp maybe_put_required(entry, false), do: entry
+  defp maybe_put_required(entry, true), do: Map.put(entry, :required, true)
 
   defp format_endpoint_error(reason) when is_binary(reason), do: reason
   defp format_endpoint_error(reason), do: "invalid MCP endpoint definition: #{inspect(reason)}"
@@ -363,6 +415,8 @@ defmodule Jidoka.MCP do
   defp format_entry(%{endpoint: endpoint, prefix: nil}), do: to_string(endpoint)
   defp format_entry(%{endpoint: endpoint, prefix: prefix}), do: "#{endpoint}:#{prefix}"
 
+  defp required?(entry), do: Map.get(entry, :required, false) == true
+
   defp format_error(entry, reason) do
     error =
       Jidoka.Error.Normalize.mcp_error(reason,
@@ -392,6 +446,38 @@ defmodule Jidoka.MCP do
 
   defp drop_empty_errors(%{mcp_errors: []} = meta), do: Map.delete(meta, :mcp_errors)
   defp drop_empty_errors(meta), do: meta
+
+  defp fail_required_sync(agent, {:ai_react_start, params}, required_errors) when is_map(params) do
+    request_id = params[:request_id] || agent.state[:last_request_id]
+    error = required_sync_error(required_errors)
+
+    agent =
+      if is_binary(request_id) do
+        Request.fail_request(agent, request_id, error)
+      else
+        agent
+      end
+
+    {:ok, agent,
+     {:ai_react_request_error,
+      %{
+        request_id: request_id,
+        reason: :mcp_sync_failed,
+        message: Map.get(params, :query)
+      }}}
+  end
+
+  defp required_sync_error(required_errors) do
+    Jidoka.Error.execution_error("Required MCP tool sync failed.",
+      phase: :mcp,
+      details: %{
+        operation: :sync_tools,
+        reason: :required_sync_failed,
+        endpoints: Enum.map(required_errors, & &1.endpoint),
+        errors: Enum.map(required_errors, &Map.take(&1, [:endpoint, :prefix, :message]))
+      }
+    )
+  end
 
   defp trace_mcp(context, entry, event, metadata \\ %{}) do
     Jidoka.Trace.emit(

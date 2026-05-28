@@ -1,8 +1,12 @@
 defmodule Jidoka.Agent do
   @moduledoc """
-  Thin Spark-backed wrapper around `Jido.AI.Agent` for Jidoka.
+  Spark-backed agent authoring surface for Jidoka.
 
-  This first DSL is intentionally tiny:
+  This DSL compiles a developer-friendly Jidoka agent definition into a
+  `Jido.AI.Agent` runtime module while keeping the authoring surface focused on
+  three sections: `agent`, `tools`, and `controls`.
+
+  The first authoring surface is intentionally small:
 
       defmodule MyApp.ChatAgent do
         use Jidoka.Agent
@@ -15,9 +19,6 @@ defmodule Jidoka.Agent do
 
         tools do
           action MyApp.Tools.AddNumbers
-        end
-
-        capabilities do
           ash_resource MyApp.Accounts.User
         end
       end
@@ -29,27 +30,23 @@ defmodule Jidoka.Agent do
   - `agent.model`
   - `agent.instructions` as a string, module callback, or MFA tuple
   - `agent.character` as an optional prompt/persona source
-  - `agent.schedule` for first-class recurring agent turns registered by the application
-  - `tools` for deterministic action modules
-  - `capabilities` for Ash resources, MCP tools, skills, plugins, subagents, and workflows
+  - `tools` for deterministic actions and model-callable integrations
   - `controls` for input, operation, and result policy
-  - `lifecycle` for runtime behavior such as memory, hooks, and compaction
 
   Vocabulary:
 
   - context is caller-provided data for a turn
   - agent state belongs to the running process
-  - memory recalls facts across turns or from a store
-  - compaction summarizes older transcript context for future model calls
+  - memory, compaction, hooks, and schedules are runtime features, not agent DSL
   - result is the final app-facing value returned from a turn
 
   A nested runtime module is generated automatically and uses `Jido.AI.Agent`
-  with the model-callable operation modules. The `tools` block is for direct
-  `Jidoka.Action` modules. The `capabilities` block is for higher-level
-  integrations that expand into action-backed tools, such as Ash resources,
-  MCP tools, skills, plugins, subagents, workflows, and handoffs.
+  with the model-callable operation modules. The `tools` block accepts direct
+  `Jidoka.Action` modules and higher-level integrations that expand into
+  action-backed tools, such as Ash resources, MCP tools, skills, plugins,
+  subagents, workflows, and handoffs.
   Subagent entries compile specialist agents into model-callable bounded
-  delegation capabilities. The parent asks a child to handle one task, receives
+  delegation tools. The parent asks a child to handle one task, receives
   the result, and keeps ownership of future turns. Subagent entries can tune
   child `timeout`, public `forward_context`, and parent-visible `result` shape
   without introducing handoffs or workflow graphs.
@@ -64,8 +61,6 @@ defmodule Jidoka.Agent do
   supplied through `Jidoka.chat/3` or the generated agent `chat/3` function.
   Plugin entries accept `Jidoka.Plugin` modules and merge their declared
   action-backed operations into the same model-callable operation surface.
-  Schedule entries compile into `schedules/0` metadata that can be registered
-  with `Jidoka.Schedule.Manager` from the application runtime boundary.
   """
 
   @doc false

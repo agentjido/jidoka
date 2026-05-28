@@ -1,7 +1,7 @@
 defmodule JidokaTest.RunicLifecycleTest do
   use JidokaTest.Support.Case, async: false
 
-  alias Jidoka.Lifecycle.{Config, Graph, Phase, Runner, State}
+  alias Jidoka.Lifecycle.{Config, Graph, Phase, PhaseRegistry, Runner, State}
   alias JidokaTest.HookedAgent
 
   test "builds lifecycle structs through Zoi-backed constructors" do
@@ -128,12 +128,12 @@ defmodule JidokaTest.RunicLifecycleTest do
 
     before_names =
       __MODULE__
-      |> Runner.before_phases(config, fn agent, action -> {:ok, agent, action} end)
+      |> PhaseRegistry.before_phases(config, fn agent, action -> {:ok, agent, action} end)
       |> Graph.phase_names()
 
     after_names =
       __MODULE__
-      |> Runner.after_phases(config, fn agent, _action, directives -> {:ok, agent, directives} end)
+      |> PhaseRegistry.after_phases(config, fn agent, _action, directives -> {:ok, agent, directives} end)
       |> Graph.phase_names()
 
     assert before_names == [
@@ -161,14 +161,15 @@ defmodule JidokaTest.RunicLifecycleTest do
            ]
   end
 
-  test "generated runtime callbacks preserve Jido.AI request tracking and hook behavior" do
+  test "generated runtime callbacks preserve Jido.AI request tracking and request hook behavior" do
     runtime = HookedAgent.runtime_module()
     agent = new_runtime_agent(runtime)
+    tool_context = Jidoka.Hooks.attach_request_hooks(%{}, HookedAgent.hook_config())
 
     assert {:ok, agent, {:ai_react_start, params}} =
              runtime.on_before_cmd(
                agent,
-               {:ai_react_start, %{query: "hello", request_id: "req-runic-1", tool_context: %{}}}
+               {:ai_react_start, %{query: "hello", request_id: "req-runic-1", tool_context: tool_context}}
              )
 
     assert params.query == "hello for acme"

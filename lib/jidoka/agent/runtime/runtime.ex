@@ -9,7 +9,8 @@ defmodule Jidoka.Agent.Runtime do
           Jidoka.Memory.config() | nil,
           Jidoka.Output.t() | nil,
           Jidoka.Skill.config() | nil,
-          Jidoka.MCP.config()
+          Jidoka.MCP.config(),
+          Jidoka.Lifecycle.Timeouts.t()
         ) :: Macro.t()
   def hook_runtime_ast(
         default_hooks,
@@ -19,13 +20,15 @@ defmodule Jidoka.Agent.Runtime do
         default_memory \\ nil,
         default_output \\ nil,
         default_skills \\ nil,
-        default_mcp_tools \\ []
+        default_mcp_tools \\ [],
+        default_timeouts \\ Jidoka.Lifecycle.Timeouts.default()
       ) do
     lifecycle_config =
       Jidoka.Lifecycle.Config.new!(
         hooks: default_hooks,
         context: default_context,
         guardrails: default_guardrails,
+        timeouts: default_timeouts,
         compaction: default_compaction,
         memory: default_memory,
         output: default_output,

@@ -291,7 +291,7 @@ defmodule Demo.MathAgent do
     instructions "Use the workflow tool when arithmetic needs deterministic execution."
   end
 
-  capabilities do
+  tools do
     workflow Demo.MathWorkflow,
       as: :run_math,
       result: :structured
@@ -366,7 +366,7 @@ defmodule Demo.Orchestrator do
     action Demo.SearchCatalog
   end
 
-  capabilities do
+  tools do
     subagent Demo.ResearchSpecialist,
       as: "research_specialist",
       description: "Ask a focused research specialist."

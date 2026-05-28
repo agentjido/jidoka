@@ -8,7 +8,8 @@ defmodule JidokaTest.HooksTest do
     InjectTenantHook,
     InterruptingAgent,
     NormalizeReplyHook,
-    NotifyOpsHook
+    NotifyOpsHook,
+    TimeoutHookAgent
   }
 
   test "wraps Jidoka.Hook with published names" do
@@ -19,21 +20,17 @@ defmodule JidokaTest.HooksTest do
              Jidoka.Hook.hook_names([InjectTenantHook, NormalizeReplyHook])
   end
 
-  test "exposes configured hooks by stage" do
-    assert HookedAgent.hooks() == %{
-             before_turn: [InjectTenantHook, {HookCallbacks, :before_turn, ["dsl_mfa"]}],
+  test "keeps hooks runtime-scoped instead of generated agent helpers" do
+    assert HookedAgent.hook_config() == %{
+             before_turn: [InjectTenantHook, {HookCallbacks, :before_turn, ["runtime_mfa"]}],
              after_turn: [NormalizeReplyHook, {HookCallbacks, :after_turn, ["!"]}],
-             on_interrupt: [NotifyOpsHook, {HookCallbacks, :notify_interrupt, ["dsl_mfa"]}]
+             on_interrupt: [NotifyOpsHook, {HookCallbacks, :notify_interrupt, ["runtime_mfa"]}]
            }
 
-    assert HookedAgent.before_turn_hooks() ==
-             [InjectTenantHook, {HookCallbacks, :before_turn, ["dsl_mfa"]}]
-
-    assert HookedAgent.after_turn_hooks() ==
-             [NormalizeReplyHook, {HookCallbacks, :after_turn, ["!"]}]
-
-    assert HookedAgent.interrupt_hooks() ==
-             [NotifyOpsHook, {HookCallbacks, :notify_interrupt, ["dsl_mfa"]}]
+    refute function_exported?(HookedAgent, :hooks, 0)
+    refute function_exported?(HookedAgent, :before_turn_hooks, 0)
+    refute function_exported?(HookedAgent, :after_turn_hooks, 0)
+    refute function_exported?(HookedAgent, :interrupt_hooks, 0)
   end
 
   test "accepts request-scoped module, MFA, and function hooks" do
@@ -94,14 +91,42 @@ defmodule JidokaTest.HooksTest do
     end
   end
 
+  test "generated runtimes honor configured before_turn hook timeouts" do
+    agent = new_runtime_agent(TimeoutHookAgent.runtime_module())
+
+    assert {:ok, updated_agent,
+            {:ai_react_request_error, %{request_id: "req-hook-timeout", reason: :hook_failed, message: "hello"}}} =
+             Jidoka.Hooks.on_before_cmd(
+               TimeoutHookAgent.runtime_module(),
+               agent,
+               {:ai_react_start, %{query: "hello", request_id: "req-hook-timeout"}},
+               TimeoutHookAgent.hook_config(),
+               TimeoutHookAgent.context(),
+               TimeoutHookAgent.hook_timeout_config()
+             )
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             Jido.AI.Request.get_result(updated_agent, "req-hook-timeout")
+
+    assert error.details.stage == :before_turn
+    assert error.details.cause == :timeout
+  end
+
   test "runs before_turn hooks in declaration order and rewrites request params" do
     runtime = HookedAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+
+    agent =
+      runtime
+      |> new_runtime_agent()
+      |> start_ai_request("req-hook-2", "hello")
 
     assert {:ok, updated_agent, {:ai_react_start, params}} =
-             runtime.on_before_cmd(
+             Jidoka.Hooks.on_before_cmd(
+               runtime,
                agent,
-               {:ai_react_start, %{query: "hello", request_id: "req-hook-1", tool_context: %{notify_pid: self()}}}
+               {:ai_react_start, %{query: "hello", request_id: "req-hook-1", tool_context: %{notify_pid: self()}}},
+               HookedAgent.hook_config(),
+               HookedAgent.context()
              )
 
     assert params.query == "hello for acme"
@@ -121,41 +146,67 @@ defmodule JidokaTest.HooksTest do
              :jidoka_hooks,
              :metadata,
              :sequence
-           ]) == ["inject_tenant", "dsl_mfa"]
+           ]) == ["inject_tenant", "runtime_mfa"]
   end
 
   test "runs after_turn hooks in reverse order for successful outcomes" do
     runtime = HookedAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+
+    agent =
+      runtime
+      |> new_runtime_agent()
+      |> start_ai_request("req-hook-2", "hello")
 
     {:ok, agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Hooks.on_before_cmd(
+        runtime,
         agent,
-        {:ai_react_start, %{query: "hello", request_id: "req-hook-2", tool_context: %{notify_pid: self()}}}
+        {:ai_react_start, %{query: "hello", request_id: "req-hook-2", tool_context: %{notify_pid: self()}}},
+        HookedAgent.hook_config(),
+        HookedAgent.context()
       )
 
     agent = Jido.AI.Request.complete_request(agent, "req-hook-2", "done")
 
     assert {:ok, updated_agent, []} =
-             runtime.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-hook-2"}}, [])
+             Jidoka.Hooks.on_after_cmd(
+               runtime,
+               agent,
+               {:ai_react_start, %{request_id: "req-hook-2"}},
+               [],
+               HookedAgent.hook_config()
+             )
 
     assert Jido.AI.Request.get_result(updated_agent, "req-hook-2") == {:ok, "normalized:done!"}
   end
 
   test "runs after_turn hooks in reverse order for failed outcomes" do
     runtime = HookedAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+
+    agent =
+      runtime
+      |> new_runtime_agent()
+      |> start_ai_request("req-hook-3", "hello")
 
     {:ok, agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Hooks.on_before_cmd(
+        runtime,
         agent,
-        {:ai_react_start, %{query: "hello", request_id: "req-hook-3", tool_context: %{notify_pid: self()}}}
+        {:ai_react_start, %{query: "hello", request_id: "req-hook-3", tool_context: %{notify_pid: self()}}},
+        HookedAgent.hook_config(),
+        HookedAgent.context()
       )
 
     agent = Jido.AI.Request.fail_request(agent, "req-hook-3", :boom)
 
     assert {:ok, updated_agent, []} =
-             runtime.on_after_cmd(agent, {:ai_react_start, %{request_id: "req-hook-3"}}, [])
+             Jidoka.Hooks.on_after_cmd(
+               runtime,
+               agent,
+               {:ai_react_start, %{request_id: "req-hook-3"}},
+               [],
+               HookedAgent.hook_config()
+             )
 
     assert Jido.AI.Request.get_result(updated_agent, "req-hook-3") ==
              {:error, {:normalized_error, {"!", :boom}}}
@@ -166,15 +217,21 @@ defmodule JidokaTest.HooksTest do
     agent = new_runtime_agent(runtime)
 
     {:ok, agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Hooks.on_before_cmd(
+        runtime,
         agent,
-        {:ai_react_start, %{query: "first", request_id: "req-hook-4", tool_context: %{notify_pid: self()}}}
+        {:ai_react_start, %{query: "first", request_id: "req-hook-4", tool_context: %{notify_pid: self()}}},
+        HookedAgent.hook_config(),
+        HookedAgent.context()
       )
 
     {:ok, agent, _action} =
-      runtime.on_before_cmd(
+      Jidoka.Hooks.on_before_cmd(
+        runtime,
         agent,
-        {:ai_react_start, %{query: "second", request_id: "req-hook-5", tool_context: %{notify_pid: self()}}}
+        {:ai_react_start, %{query: "second", request_id: "req-hook-5", tool_context: %{notify_pid: self()}}},
+        HookedAgent.hook_config(),
+        HookedAgent.context()
       )
 
     assert get_in(agent.state, [:requests, "req-hook-4", :meta, :jidoka_hooks, :message]) ==
@@ -189,7 +246,10 @@ defmodule JidokaTest.HooksTest do
 
     try do
       assert {:interrupt, %Jidoka.Interrupt{kind: :approval, message: "Approval required"}} =
-               InterruptingAgent.chat(pid, "Refund this order", context: [notify_pid: self()])
+               InterruptingAgent.chat(pid, "Refund this order",
+                 context: [notify_pid: self()],
+                 hooks: InterruptingAgent.hook_config()
+               )
 
       assert_receive {:hook_interrupt, :approval, :before_turn}
     after
@@ -233,5 +293,9 @@ defmodule JidokaTest.HooksTest do
     after
       :ok = Jidoka.stop_agent(pid)
     end
+  end
+
+  defp start_ai_request(agent, request_id, query) do
+    Jido.AI.Request.start_request(agent, request_id, query)
   end
 end

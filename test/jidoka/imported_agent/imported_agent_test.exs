@@ -127,7 +127,7 @@ defmodule JidokaTest.ImportedAgentTest do
         "tools" => ["add_numbers"],
         "skills" => ["module-math-skill"],
         "skill_paths" => ["test/fixtures/skills"],
-        "mcp_tools" => [%{"endpoint" => "github", "prefix" => "github_"}],
+        "mcp_tools" => [%{"endpoint" => "github", "prefix" => "github_", "required" => true}],
         "subagents" => [
           %{
             "agent" => "research_agent",
@@ -566,14 +566,14 @@ defmodule JidokaTest.ImportedAgentTest do
              )
 
     assert {:ok, encoded} = Jidoka.encode_agent(agent, format: :yaml)
-    assert encoded =~ "id: \"yaml_agent\""
-    assert encoded =~ "provider: \"openai\""
+    assert encoded =~ "id: yaml_agent"
+    assert encoded =~ "provider: openai"
     assert encoded =~ "context:"
-    assert encoded =~ "tenant: \"yaml\""
-    assert encoded =~ "- \"add_numbers\""
-    assert encoded =~ "- \"math_plugin\""
+    assert encoded =~ "tenant: yaml"
+    assert encoded =~ "- add_numbers"
+    assert encoded =~ "- math_plugin"
     assert encoded =~ "hooks:"
-    assert encoded =~ "- \"notify_ops\""
+    assert encoded =~ "- notify_ops"
     assert encoded =~ "guardrails:"
     assert agent.tool_modules == [AddNumbers, JidokaTest.MultiplyNumbers]
     assert agent.spec.context == %{"tenant" => "yaml", "channel" => "imported"}
@@ -680,9 +680,9 @@ defmodule JidokaTest.ImportedAgentTest do
 
     assert {:ok, encoded_yaml} = Jidoka.encode_agent(agent, format: :yaml)
     assert encoded_yaml =~ "subagents:"
-    assert encoded_yaml =~ "agent: \"research_agent\""
+    assert encoded_yaml =~ "agent: research_agent"
     assert encoded_yaml =~ "timeout_ms: 12345"
-    assert encoded_yaml =~ "result: \"structured\""
+    assert encoded_yaml =~ "result: structured"
   end
 
   test "imports constrained subagent runtime options from YAML" do
@@ -754,7 +754,7 @@ defmodule JidokaTest.ImportedAgentTest do
 
     assert {:ok, encoded_yaml} = Jidoka.encode_agent(agent, format: :yaml)
     assert encoded_yaml =~ "workflows:"
-    assert encoded_yaml =~ "workflow: \"workflow_capability_math\""
+    assert encoded_yaml =~ "workflow: workflow_capability_math"
   end
 
   test "imports workflow string entries through available_workflows" do
@@ -791,7 +791,7 @@ defmodule JidokaTest.ImportedAgentTest do
 
     assert {:ok, encoded_yaml} = Jidoka.encode_agent(agent, format: :yaml)
     assert encoded_yaml =~ "web:"
-    assert encoded_yaml =~ "mode: \"read_only\""
+    assert encoded_yaml =~ "mode: read_only"
   end
 
   test "imports web string entries" do
@@ -862,7 +862,7 @@ defmodule JidokaTest.ImportedAgentTest do
 
       assert {:ok, encoded_yaml} = Jidoka.encode_agent(agent, format: :yaml)
       assert encoded_yaml =~ "handoffs:"
-      assert encoded_yaml =~ "agent: \"billing_specialist\""
+      assert encoded_yaml =~ "agent: billing_specialist"
     after
       Jidoka.reset_handoff(conversation_id)
       reset_agent(peer_id)
@@ -980,8 +980,8 @@ defmodule JidokaTest.ImportedAgentTest do
 
     assert {:ok, encoded_yaml} = Jidoka.encode_agent(agent, format: :yaml)
     assert encoded_yaml =~ "memory:"
-    assert encoded_yaml =~ "namespace: \"context\""
-    assert encoded_yaml =~ "context_namespace_key: \"session\""
+    assert encoded_yaml =~ "namespace: context"
+    assert encoded_yaml =~ "context_namespace_key: session"
   end
 
   test "imported agents retrieve and capture memory across turns" do

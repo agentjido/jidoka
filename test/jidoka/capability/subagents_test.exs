@@ -20,6 +20,8 @@ defmodule JidokaTest.SubagentsTest do
     StartFailureOrchestratorAgent,
     StartIgnoreOrchestratorAgent,
     StartTripleOrchestratorAgent,
+    StructuredInvalidResultOrchestratorAgent,
+    StructuredMapOrchestratorAgent,
     StructuredOrchestratorAgent,
     TimeoutOrchestratorAgent,
     WrongPeerOrchestratorAgent
@@ -152,10 +154,65 @@ defmodule JidokaTest.SubagentsTest do
     assert "tenant" in metadata.context_keys
   end
 
+  test "supports structured parent-visible map results from subagents" do
+    map_tool = find_tool(StructuredMapOrchestratorAgent, "map_result_agent")
+    agent_id = "subagent-parent-map"
+    request_id = "req-subagent-map-1"
+
+    assert {:ok, %{result: result, subagent: metadata}} =
+             map_tool.run(%{task: "Structured map task"}, %{
+               :tenant => "structured",
+               Jidoka.Subagent.server_key() => self(),
+               Jidoka.Subagent.request_id_key() => request_id,
+               Jidoka.Trace.agent_id_key() => agent_id
+             })
+
+    assert result == %{
+             category: "research",
+             confidence: 0.91,
+             summary: "map:Structured map task"
+           }
+
+    assert metadata.name == "map_result_agent"
+    assert metadata.mode == :ephemeral
+    assert metadata.outcome == :ok
+    assert metadata.result_preview =~ "map:Structured map task"
+    assert "tenant" in metadata.context_keys
+
+    assert [%{name: "map_result_agent", result_preview: preview, outcome: :ok}] =
+             Jidoka.Subagent.request_calls(self(), request_id)
+
+    assert preview =~ "map:Structured map task"
+
+    assert {:ok, trace} = Jidoka.Trace.for_request(agent_id, request_id)
+    stop_event = Enum.find(trace.events, &(&1.category == :subagent and &1.event == :stop))
+    assert stop_event.metadata.result_preview =~ "map:Structured map task"
+  end
+
+  test "structured subagents still reject unsupported result shapes" do
+    invalid_tool = find_tool(StructuredInvalidResultOrchestratorAgent, "list_result_agent")
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             invalid_tool.run(%{task: "Invalid structured result"}, %{})
+
+    assert error.message == "Subagent returned an invalid result."
+    assert error.details.reason == :invalid_result
+    assert error.details.agent_id == "list_result_agent"
+    assert error.details.cause == ["not", "supported"]
+  end
+
   test "operation controls can interrupt subagent delegation before child execution" do
     runtime = ControlledSubagentOrchestratorAgent.runtime_module()
     agent = new_runtime_agent(runtime)
     request_id = "req-subagent-hitl-1"
+
+    hook_context =
+      %{notify_pid: self()}
+      |> Jidoka.Hooks.attach_request_hooks(%{
+        before_turn: [],
+        after_turn: [],
+        on_interrupt: [JidokaTest.NotifyDelegationInterruptHook]
+      })
 
     assert {:ok, _agent, {:ai_react_start, params}} =
              runtime.on_before_cmd(
@@ -164,7 +221,7 @@ defmodule JidokaTest.SubagentsTest do
                 %{
                   query: "delegate",
                   request_id: request_id,
-                  tool_context: %{notify_pid: self()}
+                  tool_context: hook_context
                 }}
              )
 

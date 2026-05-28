@@ -10,7 +10,8 @@ defmodule JidokaTest.GuardrailsTest do
     GuardrailCallbacks,
     GuardrailedAgent,
     SafePromptGuardrail,
-    SafeReplyGuardrail
+    SafeReplyGuardrail,
+    TimeoutControlAgent
   }
 
   test "wraps Jidoka.Guardrail with published names" do
@@ -194,6 +195,33 @@ defmodule JidokaTest.GuardrailsTest do
            } = tool_context[:__jidoka_guardrails__]
   end
 
+  test "generated runtimes honor configured input control timeouts" do
+    agent = new_runtime_agent(TimeoutControlAgent.runtime_module())
+
+    assert TimeoutControlAgent.control_timeout_config().input == 5
+
+    assert {:ok, updated_agent,
+            {:ai_react_request_error,
+             %{
+               request_id: "req-control-timeout",
+               reason: :guardrail_blocked,
+               message: "hello"
+             }}} =
+             Jidoka.Guardrails.on_before_cmd(
+               agent,
+               {:ai_react_start, %{query: "hello", request_id: "req-control-timeout"}},
+               %{input: TimeoutControlAgent.input_controls(), output: [], tool: []},
+               TimeoutControlAgent.control_timeout_config()
+             )
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             Jido.AI.Request.get_result(updated_agent, "req-control-timeout")
+
+    assert error.details.stage == :input
+    assert error.details.label == "JidokaTest.GuardrailCallbacks.slow_input/2"
+    assert error.details.cause == :timeout
+  end
+
   test "rejects malformed request-scoped control specs with a validation error" do
     assert {:error, %Jidoka.Error.ValidationError{} = error} =
              Jidoka.Agent.prepare_chat_opts([controls: [1, 2]], nil)
@@ -326,6 +354,10 @@ defmodule JidokaTest.GuardrailsTest do
     agent = new_runtime_agent(runtime)
     test_pid = self()
 
+    hook_context =
+      %{notify_pid: test_pid}
+      |> Jidoka.Hooks.attach_request_hooks(%{before_turn: [], after_turn: [], on_interrupt: [JidokaTest.NotifyOpsHook]})
+
     assert {:ok, _agent, {:ai_react_start, params}} =
              runtime.on_before_cmd(
                agent,
@@ -333,7 +365,7 @@ defmodule JidokaTest.GuardrailsTest do
                 %{
                   query: "calculate",
                   request_id: "req-guard-callback",
-                  tool_context: %{notify_pid: test_pid}
+                  tool_context: hook_context
                 }}
              )
 
@@ -359,6 +391,7 @@ defmodule JidokaTest.GuardrailsTest do
       assert {:interrupt, %Jidoka.Interrupt{kind: :approval}} =
                Jidoka.chat(pid, "hello",
                  context: %{notify_pid: test_pid},
+                 hooks: [on_interrupt: JidokaTest.NotifyOpsHook],
                  controls: [
                    input: fn _input ->
                      {:interrupt,

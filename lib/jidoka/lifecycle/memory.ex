@@ -4,6 +4,7 @@ defmodule Jidoka.Memory do
   require Logger
 
   alias Jido.AI.Request
+  alias Jidoka.Lifecycle.PhaseSpec
 
   @memory_context_key :__jidoka_memory__
 
@@ -43,14 +44,8 @@ defmodule Jidoka.Memory do
     end
   end
 
-  @spec normalize_dsl([struct()]) :: {:ok, config() | nil} | {:error, String.t()}
-  def normalize_dsl(entries), do: Jidoka.Memory.Config.normalize_dsl(entries)
-
   @spec normalize_imported(nil | map()) :: {:ok, config() | nil} | {:error, String.t()}
   def normalize_imported(memory), do: Jidoka.Memory.Config.normalize_imported(memory)
-
-  @spec validate_dsl_entry(struct()) :: :ok | {:error, String.t()}
-  def validate_dsl_entry(entry), do: Jidoka.Memory.Config.validate_dsl_entry(entry)
 
   @spec default_plugins(config() | nil) :: map()
   def default_plugins(config), do: Jidoka.Memory.Config.default_plugins(config)
@@ -116,6 +111,16 @@ defmodule Jidoka.Memory do
 
   def on_before_cmd(agent, action, _config, _default_context), do: {:ok, agent, action}
 
+  @doc false
+  @spec before_phase_specs(config() | nil, map()) :: [PhaseSpec.t()]
+  def before_phase_specs(config, default_context) when is_map(default_context) do
+    [
+      PhaseSpec.before(:memory_before, :memory, fn agent, action ->
+        on_before_cmd(agent, action, config, default_context)
+      end)
+    ]
+  end
+
   @spec on_after_cmd(Jido.Agent.t(), term(), [term()], config() | nil) ::
           {:ok, Jido.Agent.t(), [term()]}
   def on_after_cmd(agent, _action, directives, nil), do: {:ok, agent, directives}
@@ -138,6 +143,16 @@ defmodule Jidoka.Memory do
   end
 
   def on_after_cmd(agent, _action, directives, _config), do: {:ok, agent, directives}
+
+  @doc false
+  @spec after_phase_specs(config() | nil) :: [PhaseSpec.t()]
+  def after_phase_specs(config) do
+    [
+      PhaseSpec.after_phase(:memory_after, :memory, fn agent, action, directives ->
+        on_after_cmd(agent, action, directives, config)
+      end)
+    ]
+  end
 
   defp capture_conversation(agent, request_id, directives, %{capture: :off}, meta) do
     trace_memory(agent, request_id, :capture, %{

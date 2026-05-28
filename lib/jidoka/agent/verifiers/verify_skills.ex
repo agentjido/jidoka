@@ -5,8 +5,7 @@ defmodule Jidoka.Agent.Verifiers.VerifySkills do
 
   @impl true
   def verify(dsl_state) do
-    dsl_state
-    |> Spark.Dsl.Verifier.get_entities([:capabilities])
+    Spark.Dsl.Verifier.get_entities(dsl_state, [:tools])
     |> Enum.reduce_while({:ok, MapSet.new()}, fn
       %Jidoka.Agent.Dsl.SkillRef{skill: skill} = entry, {:ok, seen} ->
         with :ok <- Jidoka.Skill.validate_skill_ref(skill),
@@ -50,7 +49,7 @@ defmodule Jidoka.Agent.Verifiers.VerifySkills do
   defp skill_error(dsl_state, entry, path_name, message) do
     Spark.Error.DslError.exception(
       message: message,
-      path: [:capabilities, path_name],
+      path: [:tools, path_name],
       module: Spark.Dsl.Verifier.get_persisted(dsl_state, :module),
       location: Spark.Dsl.Entity.anno(entry)
     )

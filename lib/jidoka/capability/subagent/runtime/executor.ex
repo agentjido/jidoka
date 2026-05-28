@@ -4,7 +4,7 @@ defmodule Jidoka.Subagent.Runtime.Executor do
   alias Jido.AI.Request
   alias Jidoka.Subagent.Context
 
-  @spec execute(map(), map(), map()) :: {:ok, String.t(), map()} | {:error, term(), map()}
+  @spec execute(map(), map(), map()) :: {:ok, term(), map()} | {:error, term(), map()}
   def execute(%{} = subagent, params, context) do
     started_at = System.monotonic_time(:millisecond)
 
@@ -30,7 +30,7 @@ defmodule Jidoka.Subagent.Runtime.Executor do
     case start_child(subagent.agent, child_id) do
       {:ok, pid} ->
         try do
-          subagent.agent
+          subagent
           |> ask_child(pid, task, child_context, subagent.timeout)
           |> delegate_result(subagent, :ephemeral, task, child_id, child_context, started_at)
         after
@@ -54,7 +54,7 @@ defmodule Jidoka.Subagent.Runtime.Executor do
     with {:ok, peer_id} <- resolve_peer_id(peer_ref, parent_context),
          {:ok, pid} <- resolve_peer_pid(peer_id),
          :ok <- verify_peer_runtime(subagent.agent, pid) do
-      subagent.agent
+      subagent
       |> ask_child(pid, task, child_context, subagent.timeout)
       |> delegate_result(subagent, :peer, task, peer_id, child_context, started_at)
     else
@@ -85,15 +85,15 @@ defmodule Jidoka.Subagent.Runtime.Executor do
     "jidoka-subagent-#{name}-#{unique}"
   end
 
-  defp ask_child(agent_module, pid, task, context, timeout) do
+  defp ask_child(%{agent: agent_module} = subagent, pid, task, context, timeout) do
     if jidoka_agent_module?(agent_module) do
-      ask_jidoka_child(agent_module, pid, task, context, timeout)
+      ask_jidoka_child(subagent, pid, task, context, timeout)
     else
-      ask_compatible_child(agent_module, pid, task, context, timeout)
+      ask_compatible_child(subagent, pid, task, context, timeout)
     end
   end
 
-  defp ask_jidoka_child(agent_module, pid, task, context, timeout) do
+  defp ask_jidoka_child(%{agent: agent_module} = subagent, pid, task, context, timeout) do
     child_opts = [context: context, timeout: timeout]
 
     with {:ok, prepared_opts} <-
@@ -107,7 +107,7 @@ defmodule Jidoka.Subagent.Runtime.Executor do
          {:ok, request} <- Request.create_and_send(pid, task, request_opts) do
       request
       |> await_child_request(agent_module, pid, timeout)
-      |> normalize_jidoka_child_result(pid, request.id, timeout)
+      |> normalize_jidoka_child_result(subagent, pid, request.id, timeout)
     else
       {:error, reason} -> {:error, {:child_error, reason}, nil, %{}}
     end
@@ -147,12 +147,12 @@ defmodule Jidoka.Subagent.Runtime.Executor do
     :exit, _reason -> :ok
   end
 
-  defp ask_compatible_child(agent_module, pid, task, context, timeout) do
+  defp ask_compatible_child(%{agent: agent_module} = subagent, pid, task, context, timeout) do
     task_ref = Task.async(fn -> safe_call(fn -> agent_module.chat(pid, task, context: context) end) end)
 
     case Task.yield(task_ref, timeout) || Task.shutdown(task_ref, :brutal_kill) do
       {:ok, {:ok, result}} ->
-        normalize_direct_child_result(result)
+        normalize_direct_child_result(result, subagent)
 
       {:ok, {:error, reason}} ->
         {:error, {:child_error, reason}, nil, %{}}
@@ -173,11 +173,11 @@ defmodule Jidoka.Subagent.Runtime.Executor do
     kind, reason -> {:error, {kind, reason}}
   end
 
-  defp normalize_jidoka_child_result({:error, :timeout}, pid, request_id, timeout) do
+  defp normalize_jidoka_child_result({:error, :timeout}, _subagent, pid, request_id, timeout) do
     {:error, {:timeout, timeout}, request_id, child_request_meta(pid, request_id)}
   end
 
-  defp normalize_jidoka_child_result(await_result, pid, request_id, _timeout) do
+  defp normalize_jidoka_child_result(await_result, subagent, pid, request_id, _timeout) do
     result =
       pid
       |> Jidoka.Chat.finalize_chat_request(request_id, await_result)
@@ -185,6 +185,9 @@ defmodule Jidoka.Subagent.Runtime.Executor do
 
     case result do
       {:ok, child_result} when is_binary(child_result) ->
+        {:ok, child_result, request_id, child_request_meta(pid, request_id)}
+
+      {:ok, child_result} when is_map(child_result) and subagent.result == :structured ->
         {:ok, child_result, request_id, child_request_meta(pid, request_id)}
 
       {:ok, other} ->
@@ -198,23 +201,26 @@ defmodule Jidoka.Subagent.Runtime.Executor do
     end
   end
 
-  defp normalize_direct_child_result({:ok, result}) when is_binary(result),
+  defp normalize_direct_child_result({:ok, result}, _subagent) when is_binary(result),
     do: {:ok, result, nil, %{}}
 
-  defp normalize_direct_child_result({:ok, other}),
+  defp normalize_direct_child_result({:ok, result}, %{result: :structured}) when is_map(result),
+    do: {:ok, result, nil, %{}}
+
+  defp normalize_direct_child_result({:ok, other}, _subagent),
     do: {:error, {:invalid_result, other}, nil, %{}}
 
-  defp normalize_direct_child_result({:interrupt, interrupt}) do
+  defp normalize_direct_child_result({:interrupt, interrupt}, _subagent) do
     case normalize_interrupt(interrupt) do
       {:ok, normalized} -> {:interrupt, normalized, nil, %{}}
       {:error, reason} -> {:error, reason, nil, %{}}
     end
   end
 
-  defp normalize_direct_child_result({:error, reason}),
+  defp normalize_direct_child_result({:error, reason}, _subagent),
     do: {:error, {:child_error, reason}, nil, %{}}
 
-  defp normalize_direct_child_result(other),
+  defp normalize_direct_child_result(other, _subagent),
     do: {:error, {:child_error, other}, nil, %{}}
 
   defp normalize_interrupt(interrupt) do
@@ -494,7 +500,8 @@ defmodule Jidoka.Subagent.Runtime.Executor do
     |> String.slice(0, 140)
   end
 
-  defp result_preview(_result), do: nil
+  defp result_preview(nil), do: nil
+  defp result_preview(result), do: Jidoka.Sanitize.preview(result, 140)
 
   defp next_sequence, do: System.unique_integer([:positive, :monotonic])
 end

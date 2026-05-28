@@ -6,7 +6,7 @@ defmodule JidokaTest.Support.AshResourceAgent do
     instructions "You can use Ash resource tools."
   end
 
-  capabilities do
+  tools do
     ash_resource JidokaTest.Support.User
   end
 end

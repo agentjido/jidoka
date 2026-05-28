@@ -5,6 +5,7 @@ defmodule Jidoka.Lifecycle.Config do
   defstruct [
     :hooks,
     :guardrails,
+    :timeouts,
     :compaction,
     :memory,
     :output,
@@ -17,6 +18,7 @@ defmodule Jidoka.Lifecycle.Config do
           hooks: Jidoka.Hooks.stage_map(),
           context: map(),
           guardrails: Jidoka.Guardrails.stage_map(),
+          timeouts: Jidoka.Lifecycle.Timeouts.t(),
           compaction: Jidoka.Compaction.config() | nil,
           memory: Jidoka.Memory.config() | nil,
           output: Jidoka.Output.t() | nil,
@@ -28,6 +30,7 @@ defmodule Jidoka.Lifecycle.Config do
             hooks: Zoi.any(),
             context: Zoi.any() |> Zoi.default(%{}),
             guardrails: Zoi.any(),
+            timeouts: Zoi.any() |> Zoi.default(Jidoka.Lifecycle.Timeouts.default()),
             compaction: Zoi.any() |> Zoi.optional(),
             memory: Zoi.any() |> Zoi.optional(),
             output: Zoi.any() |> Zoi.optional(),
@@ -40,8 +43,9 @@ defmodule Jidoka.Lifecycle.Config do
     attrs = if is_list(attrs), do: Map.new(attrs), else: attrs
 
     with {:ok, parsed} <- Zoi.parse(@schema, attrs),
+         {:ok, timeouts} <- Jidoka.Lifecycle.Timeouts.normalize(parsed.timeouts),
          :ok <- validate_context(parsed.context) do
-      {:ok, struct(__MODULE__, parsed)}
+      {:ok, struct(__MODULE__, %{parsed | timeouts: timeouts})}
     end
   end
 

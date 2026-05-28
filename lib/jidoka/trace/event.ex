@@ -4,9 +4,17 @@ defmodule Jidoka.Trace.Event do
 
   Events are a Jidoka-friendly projection of Jido/Jido.AI telemetry plus
   Jidoka-specific lifecycle events.
+
+  `schema_version/0` identifies the normalized event struct contract used by
+  AgentView, Kino, Livebook helpers, and external UI projections. The stable
+  contract is the top-level struct fields; `metadata` and `measurements` remain
+  source-specific diagnostic maps unless a field is promoted into the struct.
   """
 
+  @schema_version 1
+
   @type t :: %__MODULE__{
+          schema_version: pos_integer(),
           seq: pos_integer(),
           at_ms: integer(),
           source: atom(),
@@ -24,6 +32,15 @@ defmodule Jidoka.Trace.Event do
           measurements: map(),
           metadata: map()
         }
+
+  @doc """
+  Returns the current normalized trace event schema version.
+
+  Additive top-level fields keep the same major version. Renaming or removing a
+  top-level field requires a new version.
+  """
+  @spec schema_version() :: pos_integer()
+  def schema_version, do: @schema_version
 
   @enforce_keys [
     :seq,
@@ -49,6 +66,7 @@ defmodule Jidoka.Trace.Event do
     :trace_id,
     :span_id,
     :parent_span_id,
+    schema_version: @schema_version,
     measurements: %{},
     metadata: %{}
   ]

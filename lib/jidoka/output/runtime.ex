@@ -120,21 +120,45 @@ defmodule Jidoka.Output.Runtime do
          opts
        )
        when retries > 0 do
-    trace(output, request_id, context, :repair, %{attempt: 1})
-
-    case repair(agent, output, context, result, reason, opts) do
-      {:ok, repaired} ->
-        meta = output_meta(output, :repaired, result, attempt: 1, applied?: true, validation_error: reason)
-        trace(output, request_id, context, :validated, %{attempt: 1})
-        complete_request(agent, request_id, repaired, meta)
-
-      {:error, repair_reason} ->
-        fail_output(agent, request_id, output, context, result, repair_reason, attempt: 1)
-    end
+    repair_loop(agent, request_id, output, context, result, reason, reason, opts, 1, retries)
   end
 
   defp maybe_repair(agent, request_id, output, context, result, reason, _opts) do
     fail_output(agent, request_id, output, context, result, reason, attempt: 0)
+  end
+
+  defp repair_loop(agent, request_id, output, context, result, reason, initial_reason, opts, attempt, max_attempts) do
+    trace(output, request_id, context, :repair, %{attempt: attempt})
+
+    case repair(agent, output, context, result, reason, opts) do
+      {:ok, repaired} ->
+        meta =
+          output_meta(output, :repaired, result,
+            attempt: attempt,
+            applied?: true,
+            validation_error: initial_reason
+          )
+
+        trace(output, request_id, context, :validated, %{attempt: attempt})
+        complete_request(agent, request_id, repaired, meta)
+
+      {:error, repair_reason} when attempt < max_attempts ->
+        repair_loop(
+          agent,
+          request_id,
+          output,
+          context,
+          result,
+          repair_reason,
+          initial_reason,
+          opts,
+          attempt + 1,
+          max_attempts
+        )
+
+      {:error, repair_reason} ->
+        fail_output(agent, request_id, output, context, result, repair_reason, attempt: attempt)
+    end
   end
 
   defp repair(agent, output, context, result, reason, opts) do

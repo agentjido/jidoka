@@ -5,7 +5,7 @@ defmodule JidokaTest.WebSearchAgent do
     instructions "You can search the public web."
   end
 
-  capabilities do
+  tools do
     web(:search)
   end
 end
@@ -17,7 +17,7 @@ defmodule JidokaTest.WebReadOnlyAgent do
     instructions "You can search and read public web pages."
   end
 
-  capabilities do
+  tools do
     web(:read_only)
   end
 end

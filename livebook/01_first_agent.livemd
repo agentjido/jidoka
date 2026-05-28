@@ -120,9 +120,9 @@ The next cell shows the most useful ones at a glance.
 
 ### Inspect the compiled surface with Kino
 
-`Jidoka.Kino.debug_agent/1` renders the same information as three small
-Kino tables: identity, capabilities, and lifecycle. This is the recommended
-view for "what did the DSL actually produce?".
+`Jidoka.Kino.debug_agent/1` renders the same information as compact
+Kino tables for identity, tools, controls, and runtime defaults. This is the
+recommended view for "what did the DSL actually produce?".
 
 ```elixir
 {:ok, _inspection} = Jidoka.Kino.debug_agent(Demo.Assistant)
@@ -131,9 +131,9 @@ view for "what did the DSL actually produce?".
 ### Visualize it as a Mermaid diagram
 
 `agent_diagram/1` renders a flowchart of the agent's model, context,
-lifecycle, and tools. Even on a tiny agent it's a useful sanity check —
-once you start adding tools, workflows, and subagents you'll see them
-appear here.
+tools, controls, and runtime path. Even on a tiny agent it's a useful sanity
+check — once you start adding tools, workflows, and subagents you'll see
+them appear here.
 
 ```elixir
 {:ok, _markdown} = Jidoka.Kino.agent_diagram(Demo.Assistant)
@@ -208,7 +208,7 @@ The same session is the address for every debugging helper. After any turn
 
 * the **request** — what would have been sent to the model,
 * the **trace** — ordered events showing what ran when, and
-* the **call graph** — a Mermaid view of capability calls.
+* the **call graph** — a Mermaid view of tool and delegation calls.
 
 ```elixir
 {:ok, _request} = Jidoka.Kino.debug_request(session)

@@ -68,12 +68,12 @@ defmodule Jidoka do
   the canonical Elixir DSL settles.
 
   Importing is constrained data loading, not arbitrary code loading. Raw module
-  strings in specs are rejected. Any module-backed capability must be made
+  strings in specs are rejected. Any module-backed integration must be made
   available through an explicit host-provided registry.
 
   The imported format is a constrained interchange schema. It mirrors the same
-  agent capabilities, while preserving compatibility-oriented field names such
-  as `defaults` and lifecycle `guardrails` while the beta DSL settles.
+  agent integration features, while preserving compatibility-oriented imported
+  field names such as `defaults`, `capabilities`, and lifecycle `guardrails`.
 
   Imported tools, plugins, hooks, controls, and delegation targets must be
   resolved through explicit `available_*` registries passed in `opts`.
@@ -186,12 +186,24 @@ defmodule Jidoka do
           {:ok, Jidoka.Chat.Stream.t()} | {:error, term()}
   defdelegate chat_stream(server_or_id, message, opts \\ []), to: Jidoka.Chat
 
-  @doc false
+  @doc """
+  Starts a chat request without waiting for the final result.
+
+  This is an advanced public API for UI and job orchestration code that needs to
+  keep a request handle, refresh projections, or await the result later. For the
+  common blocking path, use `chat/3`. For incremental runtime events, use
+  `chat_stream/3`.
+  """
   @spec start_chat_request(Session.t() | pid() | atom() | {:via, module(), term()} | String.t(), String.t(), keyword()) ::
           {:ok, Jido.AI.Request.Handle.t()} | {:error, term()}
   defdelegate start_chat_request(server_or_id, message, opts \\ []), to: Jidoka.Chat
 
-  @doc false
+  @doc """
+  Waits for a request handle returned by `start_chat_request/3`.
+
+  The returned shape matches `chat/3`: `{:ok, result}`, `{:interrupt,
+  interrupt}`, `{:handoff, handoff}`, or `{:error, error}`.
+  """
   @spec await_chat_request(Jido.AI.Request.Handle.t(), keyword()) ::
           {:ok, term()} | {:error, term()} | {:interrupt, Jidoka.Interrupt.t()} | {:handoff, Jidoka.Handoff.t()}
   defdelegate await_chat_request(request, opts \\ []), to: Jidoka.Chat
@@ -234,6 +246,10 @@ defmodule Jidoka do
 
   @doc """
   Runs a schedule immediately and waits for the run record.
+
+  A successful return means the manager recorded the run, not that the scheduled
+  work completed successfully. Inspect `run.status` for `:completed`,
+  `:failed`, `:interrupted`, `:handoff`, or `:skipped`.
   """
   @spec run_schedule(String.t() | atom(), keyword()) :: {:ok, map()} | {:error, term()}
   defdelegate run_schedule(id, opts \\ []), to: Jidoka.Schedule.Manager, as: :run
@@ -243,14 +259,14 @@ defmodule Jidoka do
   """
   @spec handoff_owner(Session.t() | String.t()) :: map() | nil
   def handoff_owner(%Session{} = session), do: Session.handoff_owner(session)
-  def handoff_owner(conversation_id), do: Jidoka.Handoff.Registry.owner(conversation_id)
+  def handoff_owner(conversation_id), do: Jidoka.Handoff.OwnerStore.owner(conversation_id)
 
   @doc """
   Clears the current handoff owner for a conversation.
   """
   @spec reset_handoff(Session.t() | String.t()) :: :ok
   def reset_handoff(%Session{} = session), do: Session.reset_handoff(session)
-  def reset_handoff(conversation_id), do: Jidoka.Handoff.Registry.reset(conversation_id)
+  def reset_handoff(conversation_id), do: Jidoka.Handoff.OwnerStore.reset(conversation_id)
 
   @doc """
   Returns Jidoka's inspection view of an agent definition or running agent.
@@ -265,6 +281,13 @@ defmodule Jidoka do
   """
   @spec inspect_agent(module() | struct() | pid() | String.t()) :: {:ok, map()} | {:error, term()}
   def inspect_agent(target), do: Jidoka.Inspection.inspect_agent(target)
+
+  @doc """
+  Returns the ordered prompt sections that would be joined into the system
+  prompt for an agent turn, without sending a request to the model provider.
+  """
+  @spec prompt_preflight(module() | ImportedAgent.t(), String.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def prompt_preflight(agent, message, opts \\ []), do: Jidoka.PromptPreflight.run(agent, message, opts)
 
   @doc """
   Returns Jidoka's inspection view of a compiled workflow definition.
@@ -307,8 +330,9 @@ defmodule Jidoka do
   @doc """
   Manually compacts the current conversation for a running Jidoka agent.
 
-  Agents must opt in with `lifecycle.compaction`. The original `Jido.Thread`
-  remains intact; compaction only affects future provider-facing turns.
+  Pass `config:` when the running agent was not started from an imported spec
+  that already includes compaction settings. The original `Jido.Thread` remains
+  intact; compaction only affects future provider-facing turns.
   """
   @spec compact(Session.t() | pid() | String.t() | Jido.Agent.t(), keyword()) ::
           {:ok, Jidoka.Compaction.t()} | {:error, term()}

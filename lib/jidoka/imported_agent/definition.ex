@@ -71,6 +71,7 @@ defmodule Jidoka.ImportedAgent.Definition do
       plugin_names: plugin_names,
       hooks: hook_modules,
       guardrails: guardrail_modules,
+      lifecycle_timeouts: Jidoka.Lifecycle.Timeouts.default(),
       ash_resources: [],
       ash_domain: nil,
       requires_actor?: false

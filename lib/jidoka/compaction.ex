@@ -9,6 +9,7 @@ defmodule Jidoka.Compaction do
   require Logger
 
   alias Jidoka.Compaction.{Config, Prompt}
+  alias Jidoka.Lifecycle.PhaseSpec
 
   @context_key :__jidoka_compaction__
   @state_key :__jidoka_compaction__
@@ -86,16 +87,8 @@ defmodule Jidoka.Compaction do
   def enabled?(%{}), do: true
 
   @doc false
-  @spec normalize_dsl([struct()], module() | nil) :: {:ok, config() | nil} | {:error, String.t()}
-  def normalize_dsl(entries, owner_module \\ nil), do: Config.normalize_dsl(entries, owner_module)
-
-  @doc false
   @spec normalize_imported(nil | map()) :: {:ok, config() | nil} | {:error, String.t()}
   def normalize_imported(compaction), do: Config.normalize_imported(compaction)
-
-  @doc false
-  @spec validate_dsl_entry(struct(), module() | nil) :: :ok | {:error, String.t()}
-  def validate_dsl_entry(entry, owner_module \\ nil), do: Config.validate_dsl_entry(entry, owner_module)
 
   @doc false
   @spec externalize(config() | nil) :: map() | nil
@@ -174,6 +167,16 @@ defmodule Jidoka.Compaction do
   end
 
   def on_before_cmd(agent, action, _config, _default_context), do: {:ok, agent, action}
+
+  @doc false
+  @spec before_phase_specs(config() | nil, map()) :: [PhaseSpec.t()]
+  def before_phase_specs(config, default_context) when is_map(default_context) do
+    [
+      PhaseSpec.before(:compaction_before, :compaction, fn agent, action ->
+        on_before_cmd(agent, action, config, default_context)
+      end)
+    ]
+  end
 
   @spec compact(Jidoka.Session.t() | pid() | String.t() | Jido.Agent.t(), keyword()) ::
           {:ok, t()} | {:error, term()}

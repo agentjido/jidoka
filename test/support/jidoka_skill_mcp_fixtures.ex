@@ -20,7 +20,7 @@ defmodule JidokaTest.SkillAgent do
     instructions "You can use skills."
   end
 
-  capabilities do
+  tools do
     skill JidokaTest.ModuleMathSkill
   end
 end
@@ -33,7 +33,7 @@ defmodule JidokaTest.RuntimeSkillAgent do
     instructions "You can use runtime skills."
   end
 
-  capabilities do
+  tools do
     skill "math-discipline"
     load_path "../fixtures/skills"
   end
@@ -47,8 +47,21 @@ defmodule JidokaTest.MCPAgent do
     instructions "You can use MCP-synced tools."
   end
 
-  capabilities do
+  tools do
     mcp_tools endpoint: :github, prefix: "github_"
+  end
+end
+
+defmodule JidokaTest.RequiredMCPAgent do
+  use Jidoka.Agent
+
+  agent :required_mcp_agent do
+    model :fast
+    instructions "You require MCP-synced tools."
+  end
+
+  tools do
+    mcp_tools endpoint: :github, prefix: "github_", required: true
   end
 end
 
@@ -60,7 +73,7 @@ defmodule JidokaTest.LocalFSMCPAgent do
     instructions "You can use filesystem MCP tools."
   end
 
-  capabilities do
+  tools do
     mcp_tools endpoint: :local_fs, prefix: "fs_"
   end
 end
@@ -73,7 +86,7 @@ defmodule JidokaTest.InlineMCPAgent do
     instructions "You can use an inline MCP endpoint."
   end
 
-  capabilities do
+  tools do
     mcp_tools endpoint: :inline_fs,
               prefix: "inline_",
               transport: {:stdio, command: "echo"},

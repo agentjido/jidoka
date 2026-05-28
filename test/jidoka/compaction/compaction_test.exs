@@ -10,7 +10,6 @@ defmodule JidokaTest.CompactionTest do
     ChatAgent,
     CompactionAgent,
     CompactionPrompt,
-    CompactionPromptCallbacks,
     CompactionSummarizer,
     EmptyCompactionPrompt,
     ErrorCompactionPrompt,
@@ -34,7 +33,7 @@ defmodule JidokaTest.CompactionTest do
     :ok
   end
 
-  test "agents expose configured compaction settings" do
+  test "compaction uses explicit runtime configs instead of agent DSL helpers" do
     assert %{
              mode: :auto,
              strategy: :summary,
@@ -42,9 +41,9 @@ defmodule JidokaTest.CompactionTest do
              keep_last: 2,
              max_summary_chars: 120,
              prompt: "Compact the transcript for this test."
-           } = CompactionAgent.compaction()
+           } = CompactionAgent.compaction_config()
 
-    assert ChatAgent.compaction() == nil
+    refute function_exported?(ChatAgent, :compaction, 0)
   end
 
   test "public compaction helpers expose defaults, enablement, prompt text, and message windows" do
@@ -83,20 +82,12 @@ defmodule JidokaTest.CompactionTest do
     assert Compaction.apply_to_messages(messages, :not_a_context) == messages
   end
 
-  test "normalizes prompt overrides and rejects invalid compaction config" do
-    assert {:ok, %{prompt: CompactionPrompt}} =
-             Compaction.normalize_dsl([%Jidoka.Agent.Dsl.CompactionPrompt{value: CompactionPrompt}])
-
-    assert {:ok, %{prompt: {CompactionPromptCallbacks, :build, ["prefix"]}}} =
-             Compaction.normalize_dsl([
-               %Jidoka.Agent.Dsl.CompactionPrompt{value: {CompactionPromptCallbacks, :build, ["prefix"]}}
-             ])
+  test "normalizes imported compaction config and rejects invalid message windows" do
+    assert {:ok, %{prompt: "Imported prompt."}} =
+             Compaction.normalize_imported(%{"prompt" => "Imported prompt."})
 
     assert {:error, reason} =
-             Compaction.normalize_dsl([
-               %Jidoka.Agent.Dsl.CompactionMaxMessages{value: 2},
-               %Jidoka.Agent.Dsl.CompactionKeepLast{value: 2}
-             ])
+             Compaction.normalize_imported(%{"max_messages" => 2, "keep_last" => 2})
 
     assert reason =~ "keep_last must be less than max_messages"
   end
@@ -178,14 +169,16 @@ defmodule JidokaTest.CompactionTest do
       ])
 
     assert {:ok, updated_agent, {:ai_react_start, params}} =
-             runtime.on_before_cmd(
+             Compaction.on_before_cmd(
                agent,
                {:ai_react_start,
                 %{
                   query: "next",
                   request_id: "req-compact",
                   tool_context: %{conversation_id: "conv-1"}
-                }}
+                }},
+               CompactionAgent.compaction_config(),
+               %{}
              )
 
     assert_receive {:compaction_input, "Compact the transcript for this test.", 4, 2}
@@ -221,7 +214,7 @@ defmodule JidokaTest.CompactionTest do
         ai_message(:assistant, "recent 2", request_id: "req-3")
       ])
 
-    config = %{CompactionAgent.compaction() | prompt: CompactionPrompt}
+    config = %{CompactionAgent.compaction_config() | prompt: CompactionPrompt}
     original_thread_count = agent |> ThreadAgent.get() |> Thread.entry_count()
 
     assert {:ok, updated_agent, {:ai_react_start, _params}} =
@@ -254,7 +247,7 @@ defmodule JidokaTest.CompactionTest do
         ai_message(:assistant, "short 2", request_id: "req-1")
       ])
 
-    config = %{CompactionAgent.compaction() | max_messages: 10}
+    config = %{CompactionAgent.compaction_config() | max_messages: 10}
 
     assert {:ok, updated_agent, {:ai_react_start, params}} =
              Compaction.on_before_cmd(
@@ -322,7 +315,7 @@ defmodule JidokaTest.CompactionTest do
            Compaction.on_before_cmd(
              agent,
              {:ai_react_start, %{query: "next", request_id: "req-error", tool_context: %{}}},
-             CompactionAgent.compaction(),
+             CompactionAgent.compaction_config(),
              %{}
            )}
         )
@@ -353,7 +346,10 @@ defmodule JidokaTest.CompactionTest do
     end)
 
     assert {:ok, %Compaction{status: :summarized, summary: "manual summary"}} =
-             Jidoka.compact(pid, summarizer: fn _input -> {:ok, "manual summary"} end)
+             Jidoka.compact(pid,
+               config: ManualCompactionAgent.compaction_config(),
+               summarizer: fn _input -> {:ok, "manual summary"} end
+             )
 
     assert {:ok, %Compaction{summary: "manual summary"}} = Jidoka.inspect_compaction(pid)
 
@@ -421,7 +417,10 @@ defmodule JidokaTest.CompactionTest do
 
     try do
       assert {:ok, %Compaction{} = compaction} =
-               Jidoka.compact(pid, summarizer: fn _input -> {:ok, "Earlier summary has api_key=#{secret}."} end)
+               Jidoka.compact(pid,
+                 config: ManualCompactionAgent.compaction_config(),
+                 summarizer: fn _input -> {:ok, "Earlier summary has api_key=#{secret}."} end
+               )
 
       assert compaction.summary == "Earlier summary has api_key=[REDACTED]"
       assert compaction.summary_preview == "Earlier summary has api_key=[REDACTED]"

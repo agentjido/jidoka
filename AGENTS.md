@@ -4,8 +4,14 @@
 
 This directory contains the `jidoka` Elixir package.
 
-`jidoka` is a thin, opinionated harness over Jido and Jido.AI for building
-developer-friendly LLM agents with a narrow public API.
+`jidoka` is an opinionated orchestration layer over Jido and Jido.AI for
+building developer-friendly LLM agents with a narrow public API.
+
+Jidoka owns the authoring and application-facing layer: DSL compilation, prompt
+assembly, runtime context, controls, memory, compaction, delegation, schedules,
+inspection, and tracing. Jido and Jido.AI remain the lower runtime foundation
+for provider calls, ReAct execution, threads, signals, directives, and durable
+runtime storage.
 
 The package currently has two public authoring paths:
 

@@ -1,6 +1,6 @@
 defmodule Jidoka.Plugin do
   @moduledoc """
-  Thin wrapper around `Jido.Plugin` for defining Jidoka-friendly plugins.
+  Jidoka-friendly plugin authoring surface backed by `Jido.Plugin`.
 
   This first pass keeps the plugin surface intentionally narrow:
 

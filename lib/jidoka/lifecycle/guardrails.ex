@@ -4,6 +4,7 @@ defmodule Jidoka.Guardrails do
   alias Jido.AI.Request
   alias Jidoka.Guardrails.{Config, Input, Output, Runner, Tool}
   alias Jidoka.Interrupt
+  alias Jidoka.Lifecycle.PhaseSpec
 
   @stages [:input, :output, :tool]
 
@@ -44,8 +45,10 @@ defmodule Jidoka.Guardrails do
     Config.attach_request_guardrails(context, guardrails)
   end
 
-  @spec on_before_cmd(Jido.Agent.t(), term(), stage_map()) :: {:ok, Jido.Agent.t(), term()}
-  def on_before_cmd(agent, {:ai_react_start, %{query: query} = params}, defaults) do
+  @spec on_before_cmd(Jido.Agent.t(), term(), stage_map(), map()) :: {:ok, Jido.Agent.t(), term()}
+  def on_before_cmd(agent, action, defaults, timeouts \\ Jidoka.Lifecycle.Timeouts.default().controls)
+
+  def on_before_cmd(agent, {:ai_react_start, %{query: query} = params}, defaults, timeouts) do
     request_id = params[:request_id] || agent.state[:last_request_id]
     {request_guardrails, params} = Config.pop_request_guardrails(params)
     guardrails = combine(defaults, request_guardrails)
@@ -63,15 +66,15 @@ defmodule Jidoka.Guardrails do
       request_opts: params
     }
 
-    case Runner.run_input(guardrails.input, input) do
+    case Runner.run_input(guardrails.input, input, timeouts.input) do
       {:ok, %Input{} = input} ->
-        params = apply_input_control_result(params, input, guardrails, agent, request_id)
-        guardrail_meta = guardrail_meta(guardrails, input)
+        params = apply_input_control_result(params, input, guardrails, agent, request_id, timeouts)
+        guardrail_meta = guardrail_meta(guardrails, input, timeouts)
 
         {:ok, put_request_guardrail_meta(agent, request_id, guardrail_meta), {:ai_react_start, params}}
 
       {:error, label, reason} ->
-        guardrail_meta = guardrail_meta(guardrails, input)
+        guardrail_meta = guardrail_meta(guardrails, input, timeouts)
         error = Runner.normalize_guardrail_error(:input, label, reason, agent, request_id)
 
         agent =
@@ -82,7 +85,7 @@ defmodule Jidoka.Guardrails do
         {:ok, agent, {:ai_react_request_error, %{request_id: request_id, reason: :guardrail_blocked, message: query}}}
 
       {:interrupt, label, %Interrupt{} = interrupt} ->
-        guardrail_meta = guardrail_meta(guardrails, input)
+        guardrail_meta = guardrail_meta(guardrails, input, timeouts)
 
         agent =
           agent
@@ -100,16 +103,38 @@ defmodule Jidoka.Guardrails do
     end
   end
 
-  def on_before_cmd(agent, action, _defaults), do: {:ok, agent, action}
+  def on_before_cmd(agent, action, _defaults, _timeouts), do: {:ok, agent, action}
 
-  @spec on_after_cmd(Jido.Agent.t(), term(), [term()], stage_map()) ::
-          {:ok, Jido.Agent.t(), [term()]}
-  def on_after_cmd(agent, {:ai_react_start, %{request_id: request_id}}, directives, _defaults) do
-    run_output_guardrails(agent, request_id, directives)
+  @doc false
+  @spec before_phase_specs(stage_map(), map()) :: [PhaseSpec.t()]
+  def before_phase_specs(guardrails, timeouts \\ Jidoka.Lifecycle.Timeouts.default().controls) do
+    [
+      PhaseSpec.before(:controls_before, :controls, fn agent, action ->
+        on_before_cmd(agent, action, guardrails, timeouts)
+      end)
+    ]
   end
 
-  def on_after_cmd(agent, _action, directives, _defaults) do
-    run_output_guardrails(agent, agent.state[:last_request_id], directives)
+  @spec on_after_cmd(Jido.Agent.t(), term(), [term()], stage_map(), map()) ::
+          {:ok, Jido.Agent.t(), [term()]}
+  def on_after_cmd(agent, action, directives, defaults, timeouts \\ Jidoka.Lifecycle.Timeouts.default().controls)
+
+  def on_after_cmd(agent, {:ai_react_start, %{request_id: request_id}}, directives, _defaults, timeouts) do
+    run_output_guardrails(agent, request_id, directives, timeouts)
+  end
+
+  def on_after_cmd(agent, _action, directives, _defaults, timeouts) do
+    run_output_guardrails(agent, agent.state[:last_request_id], directives, timeouts)
+  end
+
+  @doc false
+  @spec after_phase_specs(stage_map(), map()) :: [PhaseSpec.t()]
+  def after_phase_specs(guardrails, timeouts \\ Jidoka.Lifecycle.Timeouts.default().controls) do
+    [
+      PhaseSpec.after_phase(:controls_after, :controls, fn agent, action, directives ->
+        on_after_cmd(agent, action, directives, guardrails, timeouts)
+      end)
+    ]
   end
 
   @spec combine(stage_map(), stage_map()) :: stage_map()
@@ -139,7 +164,7 @@ defmodule Jidoka.Guardrails do
     kind, reason -> {:error, {kind, reason}}
   end
 
-  defp maybe_attach_tool_guardrail_callback(context, tool_guardrails, agent, request_id)
+  defp maybe_attach_tool_guardrail_callback(context, tool_guardrails, agent, request_id, timeouts)
        when is_map(context) and is_binary(request_id) do
     callback = fn %{
                     tool_name: tool_name,
@@ -163,7 +188,7 @@ defmodule Jidoka.Guardrails do
       with :ok <- Jidoka.Credential.reject_raw_secrets(arguments, field: :arguments) do
         trace_credential_refs(agent, request_id, tool_name, tool_call_id, arguments, runtime_context)
 
-        case Runner.run_guardrails(tool_guardrails, input) do
+        case Runner.run_guardrails(tool_guardrails, input, timeouts.tool) do
           :ok ->
             :ok
 
@@ -180,7 +205,7 @@ defmodule Jidoka.Guardrails do
     Map.put(context, Config.tool_guardrail_callback_key(), callback)
   end
 
-  defp maybe_attach_tool_guardrail_callback(context, _tool_guardrails, _agent, _request_id),
+  defp maybe_attach_tool_guardrail_callback(context, _tool_guardrails, _agent, _request_id, _timeouts),
     do: context
 
   defp operation_control_callback(context) do
@@ -224,11 +249,11 @@ defmodule Jidoka.Guardrails do
     end
   end
 
-  defp apply_input_control_result(params, %Input{} = input, guardrails, agent, request_id) do
+  defp apply_input_control_result(params, %Input{} = input, guardrails, agent, request_id, timeouts) do
     context =
       input.context
       |> Kernel.||(%{})
-      |> maybe_attach_tool_guardrail_callback(guardrails.tool, agent, request_id)
+      |> maybe_attach_tool_guardrail_callback(guardrails.tool, agent, request_id, timeouts)
 
     params
     |> Map.merge(input.request_opts || %{})
@@ -247,9 +272,10 @@ defmodule Jidoka.Guardrails do
   defp maybe_put_optional(params, _key, nil), do: params
   defp maybe_put_optional(params, key, value), do: Map.put(params, key, value)
 
-  defp guardrail_meta(guardrails, %Input{} = input) do
+  defp guardrail_meta(guardrails, %Input{} = input, timeouts) do
     %{
       guardrails: guardrails,
+      timeouts: timeouts,
       message: input.message,
       context: input.context,
       allowed_tools: input.allowed_tools,
@@ -289,12 +315,14 @@ defmodule Jidoka.Guardrails do
     get_in(agent.state, [:requests, request_id, :meta, :jidoka_guardrails])
   end
 
-  defp run_output_guardrails(agent, request_id, directives) when is_binary(request_id) do
+  defp run_output_guardrails(agent, request_id, directives, default_timeouts) when is_binary(request_id) do
     case {get_request_guardrail_meta(agent, request_id), current_outcome(agent, request_id)} do
       {%{} = meta, outcome} when not is_nil(outcome) ->
         if Map.get(meta, :output_applied?, false) or raw_output_mode?(meta[:context]) do
           {:ok, agent, directives}
         else
+          timeouts = meta[:timeouts] || default_timeouts
+
           input = %Output{
             agent: agent,
             server: self(),
@@ -308,7 +336,7 @@ defmodule Jidoka.Guardrails do
             outcome: outcome
           }
 
-          case Runner.run_output(get_in(meta, [:guardrails, :output]) || [], input) do
+          case Runner.run_output(get_in(meta, [:guardrails, :output]) || [], input, timeouts.output) do
             {:ok, %Output{} = input} ->
               agent = apply_output_control_result(agent, request_id, outcome, input)
 
@@ -356,7 +384,7 @@ defmodule Jidoka.Guardrails do
     end
   end
 
-  defp run_output_guardrails(agent, _request_id, directives), do: {:ok, agent, directives}
+  defp run_output_guardrails(agent, _request_id, directives, _default_timeouts), do: {:ok, agent, directives}
 
   defp raw_output_mode?(context) when is_map(context) do
     key = Jidoka.Output.context_key()

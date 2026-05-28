@@ -37,12 +37,12 @@ Use this structure for each concept notebook in `livebook/`.
    - Avoid production ceremony unless the concept requires it.
 
 4. **Inspect The Surface**
-   - Show generated IDs, tools, result contracts, schedules, or controls.
+   - Show generated IDs, tools, result contracts, controls, or runtime schedule handles.
    - Use public helpers only.
 
 5. **Run Provider-Free**
    - Prove the concept without model credentials.
-   - Prefer deterministic actions, direct parsing, manual schedules, or an input
+   - Prefer deterministic actions, direct parsing, runtime schedules, or an input
      control that interrupts before the provider call.
 
 6. **Debug It**

@@ -74,15 +74,22 @@ defmodule JidokaTest.ScheduledAgent do
   agent :scheduled_agent do
     model :fast
     instructions "You are a concise scheduled assistant."
+  end
 
-    schedule :daily_digest do
-      cron("0 9 * * *")
-      timezone("America/Chicago")
-      prompt({JidokaTest.ScheduleCallbacks, :support_digest_prompt, []})
-      context({JidokaTest.ScheduleCallbacks, :support_digest_context, []})
-      conversation("support-digest")
-      overlap(:skip)
-    end
+  def daily_digest_schedule do
+    {:ok, schedule} =
+      Jidoka.Schedule.new(__MODULE__,
+        id: "scheduled_agent:daily_digest",
+        agent_id: "scheduled_agent:daily_digest",
+        cron: "0 9 * * *",
+        timezone: "America/Chicago",
+        prompt: {JidokaTest.ScheduleCallbacks, :support_digest_prompt, []},
+        context: {JidokaTest.ScheduleCallbacks, :support_digest_context, []},
+        conversation: "support-digest",
+        overlap: :skip
+      )
+
+    schedule
   end
 end
 
@@ -127,13 +134,15 @@ defmodule JidokaTest.CompactionAgent do
     instructions "You have compaction."
   end
 
-  lifecycle do
-    compaction do
-      max_messages(4)
-      keep_last(2)
-      max_summary_chars(120)
-      prompt("Compact the transcript for this test.")
-    end
+  def compaction_config do
+    %{
+      mode: :auto,
+      strategy: :summary,
+      max_messages: 4,
+      keep_last: 2,
+      max_summary_chars: 120,
+      prompt: "Compact the transcript for this test."
+    }
   end
 end
 
@@ -145,12 +154,15 @@ defmodule JidokaTest.ManualCompactionAgent do
     instructions "You have manual compaction."
   end
 
-  lifecycle do
-    compaction do
-      mode :manual
-      max_messages(4)
-      keep_last(2)
-    end
+  def compaction_config do
+    %{
+      mode: :manual,
+      strategy: :summary,
+      max_messages: 4,
+      keep_last: 2,
+      max_summary_chars: 2_000,
+      prompt: nil
+    }
   end
 end
 

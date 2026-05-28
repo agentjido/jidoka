@@ -118,7 +118,7 @@ defmodule JidokaTest.WorkflowCapability.MathAgent do
     instructions "Use deterministic workflows for known tasks."
   end
 
-  capabilities do
+  tools do
     workflow(JidokaTest.WorkflowCapability.MathWorkflow,
       as: :run_math,
       result: :structured
@@ -135,7 +135,7 @@ defmodule JidokaTest.WorkflowCapability.ContextAgent do
     instructions "Use deterministic workflows with forwarded context."
   end
 
-  capabilities do
+  tools do
     workflow(JidokaTest.WorkflowCapability.ContextWorkflow,
       as: :context_echo,
       forward_context: {:only, [:suffix]}
@@ -152,7 +152,7 @@ defmodule JidokaTest.WorkflowCapability.FailingAgent do
     instructions "Expose a failing workflow for tests."
   end
 
-  capabilities do
+  tools do
     workflow(JidokaTest.WorkflowCapability.FailingWorkflow, as: :fail_workflow)
   end
 end

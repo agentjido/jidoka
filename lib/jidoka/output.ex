@@ -8,6 +8,7 @@ defmodule Jidoka.Output do
   raw model/provider output before the caller receives that result.
   """
 
+  alias Jidoka.Lifecycle.PhaseSpec
   alias Jidoka.Output.{Config, Runtime, Schema}
 
   @type schema_kind :: :zoi | :json_schema
@@ -84,6 +85,26 @@ defmodule Jidoka.Output do
   @doc false
   @spec on_after_cmd(Jido.Agent.t(), term(), [term()], t() | nil) :: {:ok, Jido.Agent.t(), [term()]}
   def on_after_cmd(agent, action, directives, output), do: Runtime.on_after_cmd(agent, action, directives, output)
+
+  @doc false
+  @spec before_phase_specs(t() | nil) :: [PhaseSpec.t()]
+  def before_phase_specs(output) do
+    [
+      PhaseSpec.before(:output_before, :output, fn agent, action ->
+        on_before_cmd(agent, action, output)
+      end)
+    ]
+  end
+
+  @doc false
+  @spec after_phase_specs(t() | nil) :: [PhaseSpec.t()]
+  def after_phase_specs(output) do
+    [
+      PhaseSpec.after_phase(:output_after, :output, fn agent, action, directives ->
+        on_after_cmd(agent, action, directives, output)
+      end)
+    ]
+  end
 
   @doc """
   Finalizes a completed request result into the structured app-facing result.

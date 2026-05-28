@@ -323,8 +323,8 @@ defmodule JidokaTest.ScheduleTest do
     assert schedule.last_error =~ "must not be empty"
   end
 
-  test "generated agents expose declared schedules" do
-    assert [%Schedule{} = schedule] = JidokaTest.ScheduledAgent.schedules()
+  test "applications can build schedules from runtime code" do
+    assert %Schedule{} = schedule = JidokaTest.ScheduledAgent.daily_digest_schedule()
 
     assert schedule.id == "scheduled_agent:daily_digest"
     assert schedule.agent_id == "scheduled_agent:daily_digest"
@@ -335,10 +335,11 @@ defmodule JidokaTest.ScheduleTest do
     assert schedule.overlap == :skip
   end
 
-  test "generated schedule metadata is available through public and runtime definitions" do
-    assert [public_schedule] = JidokaTest.ScheduledAgent.schedules()
-    assert JidokaTest.ScheduledAgent.__jidoka__().schedules == [public_schedule]
-    assert JidokaTest.ScheduledAgent.runtime_module().__jidoka_definition__().schedules == [public_schedule]
+  test "agent definitions no longer expose schedule DSL metadata" do
+    public_schedule = JidokaTest.ScheduledAgent.daily_digest_schedule()
+    refute function_exported?(JidokaTest.ScheduledAgent, :schedules, 0)
+    refute Map.has_key?(JidokaTest.ScheduledAgent.__jidoka__(), :schedules)
+    refute Map.has_key?(JidokaTest.ScheduledAgent.runtime_module().__jidoka_definition__(), :schedules)
 
     assert public_schedule.kind == :agent
     assert public_schedule.prompt == {JidokaTest.ScheduleCallbacks, :support_digest_prompt, []}

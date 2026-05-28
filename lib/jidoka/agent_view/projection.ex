@@ -53,7 +53,7 @@ defmodule Jidoka.AgentView.Projection do
       }
     }
     |> maybe_put(:request_summary, latest_request_summary(agent_ref, Keyword.get(opts, :request_id)))
-    |> maybe_put(:handoff_owner, Jidoka.Handoff.Registry.owner(conversation_id))
+    |> maybe_put(:handoff_owner, Jidoka.Handoff.OwnerStore.owner(conversation_id))
   end
 
   defp latest_request_summary(agent_ref, request_id) do

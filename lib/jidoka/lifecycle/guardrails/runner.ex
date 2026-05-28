@@ -4,38 +4,37 @@ defmodule Jidoka.Guardrails.Runner do
   alias Jidoka.Guardrails.{Input, Output, Tool}
   alias Jidoka.Interrupt
 
-  @guardrail_timeout_ms 5_000
   @type control_result(input) :: {:ok, input} | {:error, String.t(), term()} | {:interrupt, String.t(), Interrupt.t()}
 
-  @spec run_input([Jidoka.Guardrails.guardrail_ref()], Input.t()) ::
+  @spec run_input([Jidoka.Guardrails.guardrail_ref()], Input.t(), pos_integer()) ::
           control_result(Input.t())
-  def run_input(guardrails, %Input{} = input) do
-    run_controls(guardrails, input)
+  def run_input(guardrails, %Input{} = input, timeout \\ Jidoka.Lifecycle.Timeouts.default_timeout_ms()) do
+    run_controls(guardrails, input, timeout)
   end
 
-  @spec run_output([Jidoka.Guardrails.guardrail_ref()], Output.t()) ::
+  @spec run_output([Jidoka.Guardrails.guardrail_ref()], Output.t(), pos_integer()) ::
           control_result(Output.t())
-  def run_output(guardrails, %Output{} = input) do
-    run_controls(guardrails, input)
+  def run_output(guardrails, %Output{} = input, timeout \\ Jidoka.Lifecycle.Timeouts.default_timeout_ms()) do
+    run_controls(guardrails, input, timeout)
   end
 
-  @spec run_guardrails([Jidoka.Guardrails.guardrail_ref()], struct()) ::
+  @spec run_guardrails([Jidoka.Guardrails.guardrail_ref()], struct(), pos_integer()) ::
           :ok | {:error, String.t(), term()} | {:interrupt, String.t(), Interrupt.t()}
-  def run_guardrails(guardrails, input) do
-    case run_controls(guardrails, input) do
+  def run_guardrails(guardrails, input, timeout \\ Jidoka.Lifecycle.Timeouts.default_timeout_ms()) do
+    case run_controls(guardrails, input, timeout) do
       {:ok, _input} -> :ok
       other -> other
     end
   end
 
-  @spec run_controls([Jidoka.Guardrails.guardrail_ref()], struct()) ::
+  @spec run_controls([Jidoka.Guardrails.guardrail_ref()], struct(), pos_integer()) ::
           control_result(struct())
-  def run_controls(guardrails, input) do
+  def run_controls(guardrails, input, timeout \\ Jidoka.Lifecycle.Timeouts.default_timeout_ms()) do
     Enum.reduce_while(guardrails, {:ok, input}, fn guardrail, {:ok, input_acc} ->
       label = guardrail_label(guardrail)
       trace_guardrail(input_acc, label, :start)
 
-      case invoke_guardrail(guardrail, input_acc) do
+      case invoke_guardrail(guardrail, input_acc, timeout) do
         result when result in [:ok, :cont, :allow] ->
           trace_guardrail(input_acc, label, :allow, %{outcome: :allow})
           {:cont, {:ok, input_acc}}
@@ -187,36 +186,39 @@ defmodule Jidoka.Guardrails.Runner do
 
   defp guardrail_label(fun) when is_function(fun, 1), do: "anonymous_guardrail"
 
-  defp invoke_guardrail(module, input) when is_atom(module) do
-    invoke_with_timeout(fn -> module.call(input) end)
+  defp invoke_guardrail(module, input, timeout) when is_atom(module) do
+    invoke_with_timeout(fn -> module.call(input) end, timeout)
   end
 
-  defp invoke_guardrail(%Jidoka.Control.Operation{} = operation, input) do
+  defp invoke_guardrail(%Jidoka.Control.Operation{} = operation, input, timeout) do
     if operation_matches?(operation, input) do
-      invoke_guardrail(operation.ref, input)
+      invoke_guardrail(operation.ref, input, timeout)
     else
       :cont
     end
   end
 
-  defp invoke_guardrail({module, function, args}, input) do
-    invoke_with_timeout(fn -> apply(module, function, [input | args]) end)
+  defp invoke_guardrail({module, function, args}, input, timeout) do
+    invoke_with_timeout(fn -> apply(module, function, [input | args]) end, timeout)
   end
 
-  defp invoke_guardrail(fun, input) when is_function(fun, 1) do
-    invoke_with_timeout(fn -> fun.(input) end)
+  defp invoke_guardrail(fun, input, timeout) when is_function(fun, 1) do
+    invoke_with_timeout(fn -> fun.(input) end, timeout)
   end
 
-  defp invoke_with_timeout(fun) do
+  defp invoke_with_timeout(fun, timeout) do
     task = Task.async(fn -> safe_invoke(fun) end)
 
-    case Task.yield(task, @guardrail_timeout_ms) || Task.shutdown(task, :brutal_kill) do
+    case Task.yield(task, normalize_timeout(timeout)) || Task.shutdown(task, :brutal_kill) do
       {:ok, {:ok, result}} -> result
       {:ok, {:error, reason}} -> {:error, reason}
       {:exit, reason} -> {:error, reason}
       nil -> {:error, :timeout}
     end
   end
+
+  defp normalize_timeout(timeout) when is_integer(timeout) and timeout > 0, do: timeout
+  defp normalize_timeout(_timeout), do: Jidoka.Lifecycle.Timeouts.default_timeout_ms()
 
   defp safe_invoke(fun) do
     {:ok, fun.()}

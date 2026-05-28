@@ -9,6 +9,7 @@ defmodule JidokaTest.SkillsMCPTest do
     InlineMCPAgent,
     LocalFSMCPAgent,
     MCPAgent,
+    RequiredMCPAgent,
     RuntimeSkillAgent,
     SkillAgent
   }
@@ -293,6 +294,46 @@ defmodule JidokaTest.SkillsMCPTest do
     assert error.details.target == :github
 
     assert context == %{}
+  end
+
+  test "required mcp sync failures fail the request" do
+    Application.put_env(:jidoka, :mcp_sync_module, FailingMCPSync)
+
+    request_id = "req-required-mcp-sync"
+
+    agent =
+      RequiredMCPAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request(request_id, "sync required mcp")
+
+    assert [%{endpoint: :github, prefix: "github_", required: true}] = RequiredMCPAgent.mcp_tools()
+
+    assert {:ok, updated_agent,
+            {:ai_react_request_error,
+             %{request_id: ^request_id, reason: :mcp_sync_failed, message: "sync required mcp"}}} =
+             Jidoka.MCP.on_before_cmd(
+               agent,
+               {:ai_react_start,
+                %{
+                  query: "sync required mcp",
+                  request_id: request_id,
+                  tool_context: %{}
+                }},
+               RequiredMCPAgent.mcp_tools()
+             )
+
+    assert [
+             %{
+               endpoint: :github,
+               reason: %Jidoka.Error.ExecutionError{},
+               message: "MCP operation failed."
+             }
+           ] = get_in(updated_agent.state, [:__jidoka_mcp__, :last_errors])
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} = Request.get_result(updated_agent, request_id)
+    assert error.message == "Required MCP tool sync failed."
+    assert error.details.reason == :required_sync_failed
+    assert error.details.endpoints == [:github]
   end
 
   @tag :mcp_local

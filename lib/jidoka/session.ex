@@ -181,13 +181,13 @@ defmodule Jidoka.Session do
   Returns the current handoff owner for the session conversation.
   """
   @spec handoff_owner(t()) :: map() | nil
-  def handoff_owner(%__MODULE__{} = session), do: Jidoka.Handoff.Registry.owner(session.conversation_id)
+  def handoff_owner(%__MODULE__{} = session), do: Jidoka.Handoff.OwnerStore.owner(session.conversation_id)
 
   @doc """
   Clears handoff ownership for the session conversation.
   """
   @spec reset_handoff(t()) :: :ok
-  def reset_handoff(%__MODULE__{} = session), do: Jidoka.Handoff.Registry.reset(session.conversation_id)
+  def reset_handoff(%__MODULE__{} = session), do: Jidoka.Handoff.OwnerStore.reset(session.conversation_id)
 
   @doc false
   @spec session_refs(t()) :: map()

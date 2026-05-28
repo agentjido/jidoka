@@ -2,6 +2,8 @@ defmodule Jidoka.Context do
   @moduledoc false
 
   @reserved_keys [
+    "__jidoka_character__",
+    "__jidoka_compaction__",
     "__jidoka_hooks__",
     "__jidoka_guardrails__",
     "__jidoka_memory__",
@@ -25,8 +27,13 @@ defmodule Jidoka.Context do
 
   def normalize(context, nil) do
     case coerce_map(context) do
-      {:ok, normalized} -> {:ok, normalized}
-      :error -> {:error, Jidoka.Error.invalid_context(:expected_map, value: context)}
+      {:ok, normalized} ->
+        with :ok <- validate_default(normalized) do
+          {:ok, normalized}
+        end
+
+      :error ->
+        {:error, Jidoka.Error.invalid_context(:expected_map, value: context)}
     end
   end
 
@@ -65,6 +72,12 @@ defmodule Jidoka.Context do
         :ok
     end
   end
+
+  @spec reserved_keys() :: [String.t()]
+  def reserved_keys, do: @reserved_keys
+
+  @spec reserved_key?(atom() | String.t()) :: boolean()
+  def reserved_key?(key), do: internal_key?(key)
 
   @spec schema_has_key?(schema(), atom() | String.t()) :: boolean()
   def schema_has_key?(nil, _key), do: false

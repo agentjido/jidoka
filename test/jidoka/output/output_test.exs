@@ -227,6 +227,88 @@ defmodule JidokaTest.OutputTest do
     assert validation_error =~ "Invalid output"
   end
 
+  test "output repair honors configured retry count" do
+    {:ok, output} = Output.new(schema: @schema, retries: 2)
+    request_id = "req-output-repair-loop"
+
+    agent =
+      StructuredOutputPlainAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request(request_id, "Classify this")
+      |> Request.complete_request(request_id, "billing issue with high confidence")
+
+    repair_fun = fn _output, _agent, _context, raw, reason ->
+      attempt = Process.get(:jidoka_output_repair_attempt, 0) + 1
+      Process.put(:jidoka_output_repair_attempt, attempt)
+      send(self(), {:repair_attempt, attempt, raw, reason})
+
+      case attempt do
+        1 -> {:ok, %{"category" => "billing", "confidence" => 0.5}}
+        2 -> {:ok, %{"category" => "billing", "confidence" => 0.93, "summary" => "Billing issue"}}
+      end
+    end
+
+    agent = Output.finalize(agent, request_id, output, context: %{}, repair_fun: repair_fun)
+
+    assert_received {:repair_attempt, 1, "billing issue with high confidence", %Jidoka.Error.ValidationError{}}
+    assert_received {:repair_attempt, 2, "billing issue with high confidence", %Jidoka.Error.ValidationError{}}
+
+    assert {:ok, %{category: :billing, confidence: 0.93, summary: "Billing issue"}} =
+             Request.get_result(agent, request_id)
+
+    assert %{status: :repaired, attempt: 2} = get_in(agent.state, [:requests, request_id, :meta, :jidoka_output])
+
+    assert {:ok, trace} = Jidoka.Trace.for_request(agent.id, request_id)
+
+    assert [
+             %{event: :repair, metadata: %{attempt: 1}},
+             %{event: :repair, metadata: %{attempt: 2}}
+           ] = Enum.filter(trace.events, &(&1.category == :output and &1.event == :repair))
+  end
+
+  test "output repair records final failed attempt metadata" do
+    {:ok, output} = Output.new(schema: @schema, retries: 3)
+    request_id = "req-output-repair-final-attempt"
+
+    agent =
+      StructuredOutputPlainAgent.runtime_module()
+      |> new_runtime_agent()
+      |> Request.start_request(request_id, "Classify this")
+      |> Request.complete_request(request_id, "not structured")
+
+    repair_fun = fn _output, _agent, _context, raw, reason ->
+      attempt = Process.get(:jidoka_output_repair_failure_attempt, 0) + 1
+      Process.put(:jidoka_output_repair_failure_attempt, attempt)
+      send(self(), {:repair_failure_attempt, attempt, raw, reason})
+      {:ok, %{"category" => "billing", "confidence" => 0.5}}
+    end
+
+    agent = Output.finalize(agent, request_id, output, context: %{}, repair_fun: repair_fun)
+
+    assert_received {:repair_failure_attempt, 1, "not structured", %Jidoka.Error.ValidationError{}}
+    assert_received {:repair_failure_attempt, 2, "not structured", %Jidoka.Error.ValidationError{}}
+    assert_received {:repair_failure_attempt, 3, "not structured", %Jidoka.Error.ValidationError{}}
+
+    assert {:error, %Jidoka.Error.ValidationError{} = error} = Request.get_result(agent, request_id)
+    assert error.details.reason == {:schema, %{summary: ["is required"]}}
+
+    assert %{status: :error, attempt: 3, error: formatted_error} =
+             get_in(agent.state, [:requests, request_id, :meta, :jidoka_output])
+
+    assert formatted_error =~ "Invalid output"
+
+    assert {:ok, trace} = Jidoka.Trace.for_request(agent.id, request_id)
+
+    assert [1, 2, 3] =
+             trace.events
+             |> Enum.filter(&(&1.category == :output and &1.event == :repair))
+             |> Enum.map(& &1.metadata.attempt)
+
+    assert Enum.any?(trace.events, fn event ->
+             event.category == :output and event.event == :error and event.metadata.attempt == 3
+           end)
+  end
+
   test "output raw mode bypasses structured finalization" do
     runtime = StructuredOutputAgent.runtime_module()
     request_id = "req-output-raw"

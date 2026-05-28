@@ -188,20 +188,13 @@ defmodule SupportDesk.Agent do
       on_validation_error :repair
     end
 
-    schedule :daily_support_digest do
-      cron "0 9 * * *"
-      timezone "America/Chicago"
-      prompt "Prepare the daily support digest."
-      conversation "support-digest"
-      overlap :skip
-    end
   end
 
   tools do
     action SupportDesk.LoadTicket
   end
 
-  capabilities do
+  tools do
     workflow SupportDesk.TriageWorkflow,
       as: :triage_ticket,
       result: :structured
@@ -209,25 +202,6 @@ defmodule SupportDesk.Agent do
     subagent SupportDesk.ResearchSpecialist,
       as: "research_specialist",
       description: "Ask the specialist for focused background."
-  end
-
-  lifecycle do
-    memory do
-      mode :conversation
-      namespace {:context, :session}
-      capture :conversation
-      retrieve limit: 3
-      inject :instructions
-    end
-
-    compaction do
-      mode :manual
-      strategy :summary
-      max_messages 8
-      keep_last 2
-      max_summary_chars 500
-      prompt "Compact this support conversation for future turns."
-    end
   end
 
   controls do
@@ -249,10 +223,7 @@ alias SupportDesk.Agent, as: SupportAgent
   tools: SupportAgent.tool_names(),
   workflows: Enum.map(SupportAgent.workflows(), & &1.name),
   subagents: Enum.map(SupportAgent.subagents(), & &1.name),
-  schedules: Enum.map(SupportAgent.schedules(), & &1.id),
-  controls: Map.new(SupportAgent.controls(), fn {stage, controls} -> {stage, length(controls)} end),
-  memory: definition.memory != nil,
-  compaction: definition.compaction != nil
+  controls: Map.new(SupportAgent.controls(), fn {stage, controls} -> {stage, length(controls)} end)
 }
 ```
 

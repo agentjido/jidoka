@@ -279,6 +279,9 @@ defmodule Jidoka.ImportedAgent.Spec.Schema do
                          |> Zoi.trim()
                          |> Zoi.min(1)
                          |> Zoi.max(128)
+                         |> Zoi.optional(),
+                       required:
+                         Zoi.boolean()
                          |> Zoi.optional()
                      },
                      coerce: true,

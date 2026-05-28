@@ -79,6 +79,21 @@ defmodule JidokaTest.CredentialTest do
              })
   end
 
+  test "credential scanning treats non-credential structs as opaque values" do
+    credential = Credential.new!(provider: "github", lease_id: "lease_123")
+
+    context = %{
+      credential_ref: credential,
+      effect_policy: Jido.AI.Effects.default_policy(),
+      operation: %Jidoka.Control.Operation{ref: JidokaTest.BlockOperationControl, match: %{kind: :action}},
+      nested: %{api_key: "raw-secret"}
+    }
+
+    assert Credential.references(context) == [credential]
+    assert Credential.references(%{credential_ref: Jido.AI.Effects.default_policy()}) == []
+    assert Credential.raw_secret_paths(context) == ["nested.api_key"]
+  end
+
   test "credential metadata redacts audit fields for trace and inspection surfaces" do
     credential =
       Credential.new!(

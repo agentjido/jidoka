@@ -131,6 +131,7 @@ defmodule Jidoka.ImportedAgent.Spec do
     }
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
+    |> externalize_tree()
   end
 
   @spec fingerprint(t()) :: String.t()
@@ -174,6 +175,20 @@ defmodule Jidoka.ImportedAgent.Spec do
 
   defp externalize_model(model) when is_atom(model), do: Atom.to_string(model)
   defp externalize_model(model), do: model
+
+  defp externalize_tree(%{} = map) do
+    map
+    |> Enum.map(fn {key, value} -> {externalize_key(key), externalize_tree(value)} end)
+    |> Map.new()
+  end
+
+  defp externalize_tree(values) when is_list(values), do: Enum.map(values, &externalize_tree/1)
+  defp externalize_tree(value) when is_boolean(value) or is_nil(value), do: value
+  defp externalize_tree(value) when is_atom(value), do: Atom.to_string(value)
+  defp externalize_tree(value), do: value
+
+  defp externalize_key(key) when is_atom(key), do: Atom.to_string(key)
+  defp externalize_key(key), do: key
 
   defp externalize_output(nil), do: nil
 

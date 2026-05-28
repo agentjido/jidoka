@@ -1,15 +1,6 @@
 defmodule JidokaTest.MemoryTest do
   use JidokaTest.Support.Case, async: false
 
-  alias Jidoka.Agent.Dsl.{
-    MemoryCapture,
-    MemoryInject,
-    MemoryMode,
-    MemoryNamespace,
-    MemoryRetrieve,
-    MemorySharedNamespace
-  }
-
   alias JidokaTest.MemoryAgent
 
   defmodule QueryFailureStore do
@@ -61,35 +52,6 @@ defmodule JidokaTest.MemoryTest do
     end
 
     def prune_expired(_opts), do: {:ok, 0}
-  end
-
-  test "normalizes DSL memory entries, defaults, and duplicate entries" do
-    assert Jidoka.Memory.normalize_dsl([]) == {:ok, nil}
-
-    assert {:ok,
-            %{
-              mode: :conversation,
-              namespace: {:shared, "team"},
-              capture: :off,
-              retrieve: %{limit: 2},
-              inject: :context
-            }} =
-             Jidoka.Memory.normalize_dsl([
-               %MemoryMode{value: :conversation},
-               %MemoryNamespace{value: :shared},
-               %MemorySharedNamespace{value: " team "},
-               %MemoryCapture{value: :off},
-               %MemoryRetrieve{limit: 2},
-               %MemoryInject{value: :context}
-             ])
-
-    assert {:error, reason} =
-             Jidoka.Memory.normalize_dsl([
-               %MemoryMode{value: :conversation},
-               %MemoryMode{value: :conversation}
-             ])
-
-    assert reason =~ "duplicate memory mode entry"
   end
 
   test "validates imported memory defaults and known string values without atom leaks" do
@@ -174,13 +136,17 @@ defmodule JidokaTest.MemoryTest do
   end
 
   test "returns a structured memory failure when context namespace key is missing" do
-    runtime = MemoryAgent.runtime_module()
-    agent = new_runtime_agent(runtime)
+    agent =
+      MemoryAgent.runtime_module()
+      |> new_runtime_agent()
+      |> start_ai_request("req-memory-missing-context", "remember this")
 
     assert {:ok, failed_agent, {:ai_react_request_error, error_action}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
-               {:ai_react_start, %{query: "remember this", request_id: "req-memory-missing-context"}}
+               {:ai_react_start, %{query: "remember this", request_id: "req-memory-missing-context"}},
+               MemoryAgent.memory_config(),
+               MemoryAgent.context()
              )
 
     assert error_action.reason == :memory_failed
@@ -196,18 +162,23 @@ defmodule JidokaTest.MemoryTest do
   end
 
   test "records memory retrieval failures on request metadata" do
-    runtime = MemoryAgent.runtime_module()
-    agent = runtime |> new_runtime_agent() |> put_memory_store(QueryFailureStore)
+    agent =
+      MemoryAgent.runtime_module()
+      |> new_runtime_agent()
+      |> put_memory_store(QueryFailureStore)
+      |> start_ai_request("req-memory-query-failure", "remember this")
 
     assert {:ok, failed_agent, {:ai_react_request_error, error_action}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
                {:ai_react_start,
                 %{
                   query: "remember this",
                   request_id: "req-memory-query-failure",
                   tool_context: %{session: "query-failure"}
-                }}
+                }},
+               MemoryAgent.memory_config(),
+               MemoryAgent.context()
              )
 
     assert error_action.reason == :memory_failed
@@ -223,27 +194,33 @@ defmodule JidokaTest.MemoryTest do
   end
 
   test "records memory capture failures without failing the completed request" do
-    runtime = MemoryAgent.runtime_module()
-    agent = runtime |> new_runtime_agent() |> put_memory_store(CaptureFailureStore)
+    agent =
+      MemoryAgent.runtime_module()
+      |> new_runtime_agent()
+      |> put_memory_store(CaptureFailureStore)
+      |> start_ai_request("req-memory-capture-failure", "remember this")
 
     assert {:ok, agent, _action} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
                {:ai_react_start,
                 %{
                   query: "remember this",
                   request_id: "req-memory-capture-failure",
                   tool_context: %{session: "capture-failure"}
-                }}
+                }},
+               MemoryAgent.memory_config(),
+               MemoryAgent.context()
              )
 
     agent = Jido.AI.Request.complete_request(agent, "req-memory-capture-failure", "stored")
 
     assert {:ok, agent, []} =
-             runtime.on_after_cmd(
+             Jidoka.Memory.on_after_cmd(
                agent,
                {:ai_react_start, %{request_id: "req-memory-capture-failure"}},
-               []
+               [],
+               MemoryAgent.memory_config()
              )
 
     memory_meta = get_in(agent.state, [:requests, "req-memory-capture-failure", :meta, :jidoka_memory])
@@ -260,18 +237,23 @@ defmodule JidokaTest.MemoryTest do
   end
 
   test "redacts recalled memory in prompt text and request metadata" do
-    runtime = MemoryAgent.runtime_module()
-    agent = runtime |> new_runtime_agent() |> put_memory_store(SecretMemoryStore)
+    agent =
+      MemoryAgent.runtime_module()
+      |> new_runtime_agent()
+      |> put_memory_store(SecretMemoryStore)
+      |> start_ai_request("req-memory-redaction", "What do you remember?")
 
     assert {:ok, agent, {:ai_react_start, params}} =
-             runtime.on_before_cmd(
+             Jidoka.Memory.on_before_cmd(
                agent,
                {:ai_react_start,
                 %{
                   query: "What do you remember?",
                   request_id: "req-memory-redaction",
                   tool_context: %{session: "redaction"}
-                }}
+                }},
+               MemoryAgent.memory_config(),
+               MemoryAgent.context()
              )
 
     prompt = Jidoka.Memory.prompt_text(params.runtime_context)
@@ -283,16 +265,16 @@ defmodule JidokaTest.MemoryTest do
   end
 
   defp put_memory_store(agent, store_module) do
-    state =
-      put_in(
-        agent.state,
-        [
-          Jido.Memory.Runtime.plugin_state_key(),
-          :store
-        ],
-        {store_module, []}
-      )
+    plugin_state = %{
+      namespace: "agent:#{agent.id}",
+      store: {store_module, []},
+      auto_capture: false
+    }
 
-    %{agent | state: state}
+    %{agent | state: Map.put(agent.state, Jido.Memory.Runtime.plugin_state_key(), plugin_state)}
+  end
+
+  defp start_ai_request(agent, request_id, query) do
+    Jido.AI.Request.start_request(agent, request_id, query)
   end
 end

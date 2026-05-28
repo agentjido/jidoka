@@ -56,7 +56,7 @@ defmodule JidokaTest.PluginAgent do
     instructions "You can use plugin-provided tools."
   end
 
-  capabilities do
+  tools do
     plugin JidokaTest.MathPlugin
   end
 end
@@ -136,7 +136,7 @@ defmodule JidokaTest.OrchestratorAgent do
     instructions "You can delegate to subagents."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist
 
     subagent JidokaTest.ReviewSpecialist,
@@ -153,7 +153,7 @@ defmodule JidokaTest.PeerOrchestratorAgent do
     instructions "You can delegate to a peer specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, target: {:peer, "research-peer-test"}
   end
 end
@@ -166,7 +166,7 @@ defmodule JidokaTest.ContextPeerOrchestratorAgent do
     instructions "You can delegate to a context-derived peer specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, target: {:peer, {:context, :research_peer_id}}
   end
 end
@@ -179,7 +179,7 @@ defmodule JidokaTest.ContextPeerNoForwardOrchestratorAgent do
     instructions "You can delegate to a context-derived peer without forwarding context."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist,
       target: {:peer, {:context, :research_peer_id}},
       forward_context: :none
@@ -194,7 +194,7 @@ defmodule JidokaTest.WrongPeerOrchestratorAgent do
     instructions "You expect a research specialist peer."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, target: {:peer, "wrong-peer-test"}
   end
 end
@@ -207,7 +207,7 @@ defmodule JidokaTest.ForwardNoneOrchestratorAgent do
     instructions "You can delegate without public context."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, forward_context: :none
   end
 end
@@ -220,7 +220,7 @@ defmodule JidokaTest.ForwardOnlyOrchestratorAgent do
     instructions "You can delegate with selected context."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, forward_context: {:only, [:tenant, "notify_pid"]}
   end
 end
@@ -233,7 +233,7 @@ defmodule JidokaTest.ForwardExceptOrchestratorAgent do
     instructions "You can delegate with excluded context."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, forward_context: {:except, ["secret"]}
   end
 end
@@ -246,8 +246,68 @@ defmodule JidokaTest.StructuredOrchestratorAgent do
     instructions "You can delegate with structured metadata."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, result: :structured
+  end
+end
+
+defmodule JidokaTest.MapResultSpecialist do
+  defmodule Runtime do
+    use Jido.Agent,
+      name: "map_result_specialist_runtime",
+      schema: Zoi.object(%{})
+  end
+
+  def name, do: "map_result_agent"
+  def runtime_module, do: Runtime
+  def start_link(opts \\ []), do: Jidoka.start_agent(Runtime, opts)
+
+  def chat(_pid, message, _opts \\ []) do
+    {:ok,
+     %{
+       category: "research",
+       confidence: 0.91,
+       summary: "map:#{message}"
+     }}
+  end
+end
+
+defmodule JidokaTest.StructuredMapOrchestratorAgent do
+  use Jidoka.Agent
+
+  agent :structured_map_orchestrator_agent do
+    model :fast
+    instructions "You can delegate to subagents that return structured maps."
+  end
+
+  tools do
+    subagent JidokaTest.MapResultSpecialist, result: :structured
+  end
+end
+
+defmodule JidokaTest.ListResultSpecialist do
+  defmodule Runtime do
+    use Jido.Agent,
+      name: "list_result_specialist_runtime",
+      schema: Zoi.object(%{})
+  end
+
+  def name, do: "list_result_agent"
+  def runtime_module, do: Runtime
+  def start_link(opts \\ []), do: Jidoka.start_agent(Runtime, opts)
+  def chat(_pid, _message, _opts \\ []), do: {:ok, ["not", "supported"]}
+end
+
+defmodule JidokaTest.StructuredInvalidResultOrchestratorAgent do
+  use Jidoka.Agent
+
+  agent :structured_invalid_result_orchestrator_agent do
+    model :fast
+    instructions "You reject unsupported structured child result shapes."
+  end
+
+  tools do
+    subagent JidokaTest.ListResultSpecialist, result: :structured
   end
 end
 
@@ -259,17 +319,13 @@ defmodule JidokaTest.ControlledSubagentOrchestratorAgent do
     instructions "You require approval before delegating to subagents."
   end
 
-  lifecycle do
-    on_interrupt JidokaTest.NotifyDelegationInterruptHook
-  end
-
   controls do
     operation(JidokaTest.ApproveDelegationControl,
       when: [kind: :subagent]
     )
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist
   end
 end
@@ -282,7 +338,7 @@ defmodule JidokaTest.MissingPeerOrchestratorAgent do
     instructions "You expect an existing peer."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.ResearchSpecialist, target: {:peer, "missing-peer-test"}
   end
 end
@@ -312,7 +368,7 @@ defmodule JidokaTest.TimeoutOrchestratorAgent do
     instructions "You can delegate to a slow specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.SlowSpecialist, timeout: 20
   end
 end
@@ -338,7 +394,7 @@ defmodule JidokaTest.InvalidResultOrchestratorAgent do
     instructions "You can delegate to an invalid specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.InvalidResultSpecialist
   end
 end
@@ -364,7 +420,7 @@ defmodule JidokaTest.RaisingOrchestratorAgent do
     instructions "You can delegate to a raising specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.RaisingSpecialist
   end
 end
@@ -393,7 +449,7 @@ defmodule JidokaTest.InterruptOrchestratorAgent do
     instructions "You can delegate to an interrupting specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.InterruptSpecialist
   end
 end
@@ -419,7 +475,7 @@ defmodule JidokaTest.InvalidInterruptOrchestratorAgent do
     instructions "You can delegate to an invalid interrupt specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.InvalidInterruptSpecialist
   end
 end
@@ -445,7 +501,7 @@ defmodule JidokaTest.StartFailureOrchestratorAgent do
     instructions "You can delegate to a failing specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.StartFailureSpecialist
   end
 end
@@ -471,7 +527,7 @@ defmodule JidokaTest.StartIgnoreOrchestratorAgent do
     instructions "You can delegate to an ignored specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.StartIgnoreSpecialist
   end
 end
@@ -503,7 +559,7 @@ defmodule JidokaTest.StartTripleOrchestratorAgent do
     instructions "You can delegate to a triple-start specialist."
   end
 
-  capabilities do
+  tools do
     subagent JidokaTest.StartTripleSpecialist
   end
 end
@@ -544,7 +600,7 @@ defmodule JidokaTest.HandoffRouterAgent do
     description "Routes owned support conversations."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       description: "Transfer billing ownership to the billing specialist."
@@ -569,7 +625,7 @@ defmodule JidokaTest.SessionHandoffRouterAgent do
     instructions "Transfer session ownership when billing should continue the conversation."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.SessionBillingHandoffAgent,
       as: :session_billing_specialist,
       description: "Transfer session ownership to the billing specialist."
@@ -585,17 +641,13 @@ defmodule JidokaTest.ControlledHandoffRouterAgent do
     instructions "You require approval before transferring conversation ownership."
   end
 
-  lifecycle do
-    on_interrupt JidokaTest.NotifyDelegationInterruptHook
-  end
-
   controls do
     operation(JidokaTest.ApproveDelegationControl,
       when: [kind: :handoff]
     )
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.SessionBillingHandoffAgent,
       as: :controlled_billing_specialist,
       description: "Transfer to billing after approval."
@@ -611,7 +663,7 @@ defmodule JidokaTest.HandoffForwardNoneAgent do
     instructions "Transfer without public context."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       forward_context: :none
@@ -627,7 +679,7 @@ defmodule JidokaTest.HandoffForwardOnlyAgent do
     instructions "Transfer selected context."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       forward_context: {:only, [:tenant, "account_id"]}
@@ -643,7 +695,7 @@ defmodule JidokaTest.HandoffForwardExceptAgent do
     instructions "Transfer public context except secrets."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       forward_context: {:except, [:secret]}
@@ -659,7 +711,7 @@ defmodule JidokaTest.PeerHandoffAgent do
     instructions "Transfer ownership to an existing peer."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       target: {:peer, "billing-peer-handoff-test"}
@@ -675,7 +727,7 @@ defmodule JidokaTest.ContextPeerHandoffAgent do
     instructions "Transfer ownership to a context-selected peer."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       target: {:peer, {:context, :billing_peer_id}}
@@ -691,7 +743,7 @@ defmodule JidokaTest.MissingPeerHandoffAgent do
     instructions "Transfer ownership to a peer that must exist."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       target: {:peer, "missing-billing-peer-handoff-test"}
@@ -707,7 +759,7 @@ defmodule JidokaTest.WrongPeerHandoffAgent do
     instructions "Transfer ownership to a peer with the expected runtime."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.BillingHandoffSpecialist,
       as: :billing_specialist,
       target: {:peer, "wrong-billing-peer-handoff-test"}
@@ -723,7 +775,7 @@ defmodule JidokaTest.StartFailureHandoffAgent do
     instructions "Transfer ownership to a specialist that fails during startup."
   end
 
-  capabilities do
+  tools do
     handoff(JidokaTest.StartFailureSpecialist,
       as: :start_failure_specialist,
       description: "Transfer to a specialist that cannot start."

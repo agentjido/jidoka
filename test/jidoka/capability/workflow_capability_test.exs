@@ -136,7 +136,7 @@ defmodule JidokaTest.WorkflowCapabilityTest do
           action JidokaTest.WorkflowCapability.DuplicateNameTool
         end
 
-        capabilities do
+        tools do
           workflow JidokaTest.WorkflowCapability.MathWorkflow
         end
       end

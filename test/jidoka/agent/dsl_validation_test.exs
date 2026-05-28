@@ -46,6 +46,24 @@ defmodule JidokaTest.DslValidationTest do
     assert module.tool_names() == ["add_numbers"]
   end
 
+  test "supports generated operation integrations inside tools" do
+    module =
+      compile_agent("""
+      agent :workflow_tool_agent do
+        instructions "Use deterministic workflows when useful."
+      end
+
+      tools do
+        workflow JidokaTest.WorkflowCapability.MathWorkflow,
+          as: :run_math,
+          result: :structured
+      end
+      """)
+
+    assert module.workflow_names() == ["run_math"]
+    assert "run_math" in module.tool_names()
+  end
+
   test "collapses policy into input, operation, and result controls" do
     module =
       compile_agent("""
@@ -121,7 +139,7 @@ defmodule JidokaTest.DslValidationTest do
            ] = module.operation_controls()
   end
 
-  test "compiles every supported V3 DSL section" do
+  test "compiles the hard-removed V3 DSL surface" do
     module =
       compile_agent("""
       @result_schema Zoi.object(%{summary: Zoi.string()})
@@ -136,45 +154,11 @@ defmodule JidokaTest.DslValidationTest do
           repair(1)
           on_validation_error(:repair)
         end
-
-        schedule :daily_digest do
-          cron("0 9 * * *")
-          timezone("America/Chicago")
-          prompt("Prepare the daily digest.")
-          conversation("daily-digest")
-          overlap(:skip)
-        end
       end
 
       tools do
         action JidokaTest.AddNumbers
-      end
-
-      capabilities do
         plugin JidokaTest.MathPlugin
-      end
-
-      lifecycle do
-        before_turn JidokaTest.InjectTenantHook
-        after_turn JidokaTest.NormalizeReplyHook
-        on_interrupt JidokaTest.NotifyOpsHook
-
-        memory do
-          mode :conversation
-          namespace :per_agent
-          capture :conversation
-          inject :instructions
-          retrieve(limit: 2)
-        end
-
-        compaction do
-          mode :manual
-          strategy :summary
-          max_messages(8)
-          keep_last(2)
-          max_summary_chars(256)
-          prompt("Compact older context.")
-        end
       end
 
       controls do
@@ -190,28 +174,22 @@ defmodule JidokaTest.DslValidationTest do
     assert %Zoi.Types.Map{} = module.result_schema()
     assert module.tool_names() == ["add_numbers", "multiply_numbers"]
     assert module.plugins() == [JidokaTest.MathPlugin]
-    assert module.before_turn_hooks() == [JidokaTest.InjectTenantHook]
-    assert module.after_turn_hooks() == [JidokaTest.NormalizeReplyHook]
-    assert module.interrupt_hooks() == [JidokaTest.NotifyOpsHook]
-    assert %{mode: :conversation, namespace: :per_agent} = module.memory()
-    assert %{mode: :manual, strategy: :summary, keep_last: 2} = module.compaction()
     assert module.input_controls() == [JidokaTest.SafePromptGuardrail]
     assert module.operation_controls() == [JidokaTest.ApproveLargeMathToolGuardrail]
     assert module.result_controls() == [JidokaTest.SafeReplyGuardrail]
-
-    assert [
-             %Jidoka.Schedule{
-               id: "full_section_agent:daily_digest",
-               cron: "0 9 * * *",
-               prompt: "Prepare the daily digest.",
-               conversation: "daily-digest"
-             }
-           ] = module.schedules()
+    refute function_exported?(module, :hooks, 0)
+    refute function_exported?(module, :memory, 0)
+    refute function_exported?(module, :compaction, 0)
+    refute function_exported?(module, :schedules, 0)
+    refute Map.has_key?(module.__jidoka__(), :lifecycle_timeouts)
   end
 
-  test "rejects discarded top-level sections" do
+  test "rejects removed top-level sections" do
     for {section, body} <- [
           {"defaults", "model :fast"},
+          {"capabilities", "plugin JidokaTest.MathPlugin"},
+          {"lifecycle", "before_turn JidokaTest.InjectTenantHook"},
+          {"compaction", "mode :manual"},
           {"memory", "mode :conversation"},
           {"skills", "skill \"math-discipline\""},
           {"plugins", "plugin JidokaTest.MathPlugin"},
@@ -255,12 +233,12 @@ defmodule JidokaTest.DslValidationTest do
       instructions "This should fail."
     end
 
-    capabilities do
+    tools do
       tool JidokaTest.AddNumbers
     end
     """)
 
-    assert_compile_error(~r/`input_guardrail` is not valid.*controls do input/s, """
+    assert_compile_error(~r/Top-level `lifecycle do .*` is not valid/s, """
     agent :lifecycle_guardrail_agent do
       instructions "This should fail."
     end
@@ -286,6 +264,17 @@ defmodule JidokaTest.DslValidationTest do
 
       output do
         schema Zoi.object(%{summary: Zoi.string()})
+      end
+    end
+    """)
+
+    assert_compile_error(~r/`schedule` is not valid.*Jidoka.schedule\/2/s, """
+    agent :old_schedule_agent do
+      instructions "This should fail."
+
+      schedule :daily_digest do
+        cron("0 9 * * *")
+        prompt("Daily digest")
       end
     end
     """)
@@ -367,72 +356,25 @@ defmodule JidokaTest.DslValidationTest do
     """)
   end
 
-  test "validates memory lifecycle configuration" do
-    assert_dsl_error(~r/memory namespace must be :per_agent, :shared with shared_namespace/, """
-    agent :invalid_memory_namespace_agent do
-      instructions "This should fail."
-    end
-
-    lifecycle do
-      memory do
-        namespace :shared
+  test "rejects removed lifecycle feature DSL" do
+    for {name, body} <- [
+          {"memory", "memory do\n  namespace :shared\nend"},
+          {"compaction", "compaction do\n  max_messages(4)\nend"},
+          {"timeouts", "timeouts hooks: [before_turn: 0]"},
+          {"before_turn", "before_turn JidokaTest.InjectTenantHook"},
+          {"after_turn", "after_turn JidokaTest.NormalizeReplyHook"},
+          {"on_interrupt", "on_interrupt JidokaTest.NotifyOpsHook"}
+        ] do
+      assert_compile_error(~r/Top-level `lifecycle do .*` is not valid/s, """
+      agent :removed_#{name}_agent do
+        instructions "This should fail."
       end
-    end
-    """)
 
-    assert_dsl_error(~r/shared_namespace is only valid when namespace is :shared/, """
-    agent :invalid_shared_namespace_agent do
-      instructions "This should fail."
-    end
-
-    lifecycle do
-      memory do
-        namespace :per_agent
-        shared_namespace "wrong"
+      lifecycle do
+        #{body}
       end
+      """)
     end
-    """)
-
-    assert_dsl_error(~r/memory context namespace key is not declared/, """
-    agent :invalid_memory_context_key_agent do
-      instructions "This should fail."
-
-      context Zoi.object(%{tenant: Zoi.string() |> Zoi.optional()})
-    end
-
-    lifecycle do
-      memory do
-        namespace {:context, :session}
-      end
-    end
-    """)
-  end
-
-  test "validates compaction lifecycle configuration" do
-    assert_dsl_error(~r/keep_last must be less than max_messages/, """
-    agent :invalid_compaction_agent do
-      instructions "This should fail."
-    end
-
-    lifecycle do
-      compaction do
-        max_messages(4)
-        keep_last(4)
-      end
-    end
-    """)
-  end
-
-  test "validates schedule configuration" do
-    assert_dsl_error(~r/prompt.*required|required.*prompt/s, """
-    agent :invalid_schedule_agent do
-      instructions "This should fail."
-
-      schedule :missing_prompt do
-        cron("0 9 * * *")
-      end
-    end
-    """)
   end
 
   test "rejects duplicate action names across operation sources" do
@@ -445,24 +387,13 @@ defmodule JidokaTest.DslValidationTest do
       action JidokaTest.MultiplyNumbers
     end
 
-    capabilities do
+    tools do
       plugin JidokaTest.MathPlugin
     end
     """)
   end
 
-  test "rejects duplicate lifecycle and control refs within stages" do
-    assert_dsl_error(~r/hook .*defined more than once/, """
-    agent :duplicate_hook_agent do
-      instructions "This should fail."
-    end
-
-    lifecycle do
-      before_turn JidokaTest.InjectTenantHook
-      before_turn JidokaTest.InjectTenantHook
-    end
-    """)
-
+  test "rejects duplicate control refs within stages" do
     assert_dsl_error(~r/control .*defined more than once/, """
     agent :duplicate_control_agent do
       instructions "This should fail."
@@ -521,7 +452,7 @@ defmodule JidokaTest.DslValidationTest do
       instructions "This should fail."
     end
 
-    capabilities do
+    tools do
       workflow :daily_digest
     end
     """)

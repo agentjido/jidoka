@@ -8,6 +8,7 @@ defmodule Jidoka.Subagent do
   owner; use a handoff when future turns should route to another agent.
   """
 
+  alias Jidoka.Lifecycle.PhaseSpec
   alias Jidoka.Subagent.{Definition, Runtime, Tool}
 
   @enforce_keys [:agent, :name, :description, :target, :timeout, :forward_context, :result]
@@ -115,6 +116,22 @@ defmodule Jidoka.Subagent do
   @doc false
   @spec on_after_cmd(Jido.Agent.t(), term(), [term()]) :: {:ok, Jido.Agent.t(), [term()]}
   defdelegate on_after_cmd(agent, action, directives), to: Runtime
+
+  @doc false
+  @spec before_phase_specs() :: [PhaseSpec.t()]
+  def before_phase_specs do
+    [
+      PhaseSpec.before(:subagent_before, :subagent, &on_before_cmd/2)
+    ]
+  end
+
+  @doc false
+  @spec after_phase_specs() :: [PhaseSpec.t()]
+  def after_phase_specs do
+    [
+      PhaseSpec.after_phase(:subagent_after, :subagent, &on_after_cmd/3)
+    ]
+  end
 
   @doc false
   @spec run_subagent_tool(t(), map(), map()) :: {:ok, map()} | {:error, term()}
