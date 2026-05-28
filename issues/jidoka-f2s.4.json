@@ -2,7 +2,8 @@
   "assignee": "",
   "blocked_by": [
     "jidoka-f2s.2",
-    "jidoka-f2s.3"
+    "jidoka-f2s.3",
+    "jidoka-f2s.5"
   ],
   "blocks": [],
   "created": "2026-05-28T17:32:18Z",
@@ -14,5 +15,5 @@
   "status": "open",
   "title": "Lifecycle and compiler architecture",
   "type": "epic",
-  "updated_at": "2026-05-28T17:32:22Z"
+  "updated_at": "2026-05-28T17:32:23Z"
 }

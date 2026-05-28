@@ -3,7 +3,9 @@
   "blocked_by": [
     "jidoka-f2s.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-f2s.4"
+  ],
   "created": "2026-05-28T17:32:18Z",
   "description": "Stabilize public-facing contracts before 1.0: vocabulary, imported-agent parity, trace/inspection stability, facade scope, MCP/web docs, and imported YAML encoding.",
   "id": "jidoka-f2s.5",
@@ -13,5 +15,5 @@
   "status": "open",
   "title": "Public contracts vocabulary and interop",
   "type": "epic",
-  "updated_at": "2026-05-28T17:32:22Z"
+  "updated_at": "2026-05-28T17:32:23Z"
 }
