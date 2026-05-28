@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:19Z",
+  "description": "Add tests for multi-attempt structured result repair, including successful later repair, final failure attempt metadata, and trace attempt numbers.",
+  "id": "jidoka-f2s.2.2",
+  "labels": [],
+  "parent": "jidoka-f2s.2",
+  "priority": 0,
+  "status": "open",
+  "title": "Test structured result repair final attempt metadata",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:19Z"
+}
