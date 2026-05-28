@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Update public docs, public errors, and generated inspection summaries toward result, controls, and operation terminology while keeping internal compatibility names where needed.",
+  "id": "jidoka-f2s.5.3",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 1,
+  "status": "open",
+  "title": "Update public language toward result controls operation",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
