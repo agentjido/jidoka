@@ -3,7 +3,9 @@
   "blocked_by": [
     "jidoka-f2s.1"
   ],
-  "blocks": [],
+  "blocks": [
+    "jidoka-f2s.4"
+  ],
   "created": "2026-05-28T17:32:18Z",
   "description": "Fix concrete runtime behavior mismatches identified in CRITIQUE.md, especially structured result retry semantics and structured subagent result handling.",
   "id": "jidoka-f2s.2",

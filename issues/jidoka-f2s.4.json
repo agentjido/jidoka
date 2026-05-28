@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-f2s.2"
+  ],
   "blocks": [],
   "created": "2026-05-28T17:32:18Z",
   "description": "Harden internal architecture by moving lifecycle and compiler integration away from central hard-coded registries toward feature-owned internal contracts.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Lifecycle and compiler architecture",
   "type": "epic",
-  "updated_at": "2026-05-28T17:32:18Z"
+  "updated_at": "2026-05-28T17:32:22Z"
 }
