@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:20Z",
+  "description": "Document that memory retrieval currently fails the request while memory capture failure is recorded without failing the completed request.",
+  "id": "jidoka-f2s.3.5",
+  "labels": [],
+  "parent": "jidoka-f2s.3",
+  "priority": 1,
+  "status": "open",
+  "title": "Document memory failure policy",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:20Z"
+}
