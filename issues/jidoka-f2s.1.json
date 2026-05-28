@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:17Z",
+  "description": "Address the verified critique that Jidoka is no longer accurately described as just a thin wrapper. Clarify what Jidoka owns versus what remains delegated to Jido/Jido.AI, then update public docs around runtime targets and production usage.",
+  "id": "jidoka-f2s.1",
+  "labels": [],
+  "parent": "jidoka-f2s",
+  "priority": 0,
+  "status": "open",
+  "title": "Architecture positioning and docs",
+  "type": "epic",
+  "updated_at": "2026-05-28T17:32:17Z"
+}
