@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:18Z",
+  "description": "Stabilize public-facing contracts before 1.0: vocabulary, imported-agent parity, trace/inspection stability, facade scope, MCP/web docs, and imported YAML encoding.",
+  "id": "jidoka-f2s.5",
+  "labels": [],
+  "parent": "jidoka-f2s",
+  "priority": 1,
+  "status": "open",
+  "title": "Public contracts vocabulary and interop",
+  "type": "epic",
+  "updated_at": "2026-05-28T17:32:18Z"
+}
