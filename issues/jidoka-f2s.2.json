@@ -1,6 +1,8 @@
 {
   "assignee": "",
-  "blocked_by": [],
+  "blocked_by": [
+    "jidoka-f2s.1"
+  ],
   "blocks": [],
   "created": "2026-05-28T17:32:18Z",
   "description": "Fix concrete runtime behavior mismatches identified in CRITIQUE.md, especially structured result retry semantics and structured subagent result handling.",
@@ -11,5 +13,5 @@
   "status": "open",
   "title": "Runtime correctness fixes",
   "type": "epic",
-  "updated_at": "2026-05-28T17:32:18Z"
+  "updated_at": "2026-05-28T17:32:22Z"
 }
