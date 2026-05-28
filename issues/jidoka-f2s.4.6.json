@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:21Z",
+  "description": "Expose per-agent or per-stage timeout configuration for hooks and controls while preserving the 5 second default.",
+  "id": "jidoka-f2s.4.6",
+  "labels": [],
+  "parent": "jidoka-f2s.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Add configurable hook and control timeouts",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:21Z"
+}
