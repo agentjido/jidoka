@@ -2,14 +2,16 @@
   "assignee": "Mike Hostetler",
   "blocked_by": [],
   "blocks": [],
+  "closed_at": "2026-05-28T17:39:14Z",
+  "close_reason": "Added Jidoka.chat target matrix in README.",
   "created": "2026-05-28T17:32:18Z",
   "description": "Add a compact target matrix for Jidoka.chat/3 covering compiled modules, pids, registered ids, sessions, imported-agent sessions, handoff-routed conversations, and streaming targets. Include auto-start, lifetime owner, handoff behavior, context behavior, and recommended use.",
   "id": "jidoka-f2s.1.3",
   "labels": [],
   "parent": "jidoka-f2s.1",
   "priority": 1,
-  "status": "in_progress",
+  "status": "closed",
   "title": "Add Jidoka.chat target matrix",
   "type": "task",
-  "updated_at": "2026-05-28T17:38:05Z"
+  "updated_at": "2026-05-28T17:39:14Z"
 }
