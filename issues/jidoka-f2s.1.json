@@ -3,7 +3,8 @@
   "blocked_by": [],
   "blocks": [
     "jidoka-f2s.2",
-    "jidoka-f2s.3"
+    "jidoka-f2s.3",
+    "jidoka-f2s.5"
   ],
   "created": "2026-05-28T17:32:17Z",
   "description": "Address the verified critique that Jidoka is no longer accurately described as just a thin wrapper. Clarify what Jidoka owns versus what remains delegated to Jido/Jido.AI, then update public docs around runtime targets and production usage.",
