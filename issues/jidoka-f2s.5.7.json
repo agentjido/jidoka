@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:22Z",
+  "description": "Use one structured external-map encoding path for both JSON and YAML imported-agent encoding to reduce drift.",
+  "id": "jidoka-f2s.5.7",
+  "labels": [],
+  "parent": "jidoka-f2s.5",
+  "priority": 2,
+  "status": "open",
+  "title": "Refactor imported YAML encoding to structured map path",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:22Z"
+}
