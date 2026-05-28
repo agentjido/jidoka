@@ -1,0 +1,14 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:17Z",
+  "description": "Track the critique remediation work from CRITIQUE.md as a coherent beta hardening push before adding more capabilities.\n\nPrimary goals:\n- reframe Jidoka as an opinionated orchestration layer rather than just a thin wrapper\n- fix concrete runtime correctness gaps\n- clarify operational and durability boundaries\n- harden lifecycle/compiler architecture\n- stabilize public contracts, vocabulary, and interop surfaces\n\nDependency shape:\n\n```mermaid\ngraph LR\n  A[Architecture Positioning] --\u003e B[Runtime Correctness]\n  A --\u003e C[Operational Boundaries]\n  A --\u003e E[Public Contracts]\n  B --\u003e D[Lifecycle \u0026 Compiler Architecture]\n  C --\u003e D\n  E --\u003e D\n```\n\nSource: CRITIQUE.md",
+  "id": "jidoka-f2s",
+  "labels": [],
+  "priority": 0,
+  "status": "open",
+  "title": "Harden Jidoka beta architecture from critique",
+  "type": "epic",
+  "updated_at": "2026-05-28T17:32:17Z"
+}
