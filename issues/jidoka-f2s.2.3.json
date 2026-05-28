@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:19Z",
+  "description": "Allow child subagent results to return validated maps in structured mode instead of rejecting all non-binary results as invalid_result.",
+  "id": "jidoka-f2s.2.3",
+  "labels": [],
+  "parent": "jidoka-f2s.2",
+  "priority": 0,
+  "status": "open",
+  "title": "Support structured map results from subagents",
+  "type": "bug",
+  "updated_at": "2026-05-28T17:32:19Z"
+}
