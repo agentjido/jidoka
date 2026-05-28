@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:19Z",
+  "description": "Design a pluggable handoff owner store behaviour or callback while keeping the current GenServer registry as the default development store.",
+  "id": "jidoka-f2s.3.2",
+  "labels": [],
+  "parent": "jidoka-f2s.3",
+  "priority": 0,
+  "status": "open",
+  "title": "Design handoff owner store behaviour",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:19Z"
+}
