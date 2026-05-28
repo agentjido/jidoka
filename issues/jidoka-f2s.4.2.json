@@ -1,0 +1,15 @@
+{
+  "assignee": "",
+  "blocked_by": [],
+  "blocks": [],
+  "created": "2026-05-28T17:32:20Z",
+  "description": "Move phase registration out of Runner.before_phases/3 and Runner.after_phases/3 into feature-owned internal specs while preserving current order and behavior.",
+  "id": "jidoka-f2s.4.2",
+  "labels": [],
+  "parent": "jidoka-f2s.4",
+  "priority": 1,
+  "status": "open",
+  "title": "Migrate hard-coded lifecycle phase registration",
+  "type": "task",
+  "updated_at": "2026-05-28T17:32:20Z"
+}
