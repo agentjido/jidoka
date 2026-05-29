@@ -1,0 +1,58 @@
+defmodule Jidoka.Turn.Plan do
+  @moduledoc "Executable data compiled from `Jidoka.Agent.Spec`."
+
+  alias Jidoka.Agent
+  alias Jidoka.Schema
+
+  @phases [
+    :assemble_prompt,
+    :plan_model_effect,
+    :apply_model_result,
+    :plan_operation_effects,
+    :apply_operation_results
+  ]
+  @workflow_profiles [:chat, :tool_loop, :structured_result, :controlled_tool_loop]
+
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              spec: Zoi.lazy({Agent.Spec, :schema, []}),
+              workflow_profile: Zoi.enum(@workflow_profiles) |> Zoi.default(:tool_loop),
+              max_model_turns: Zoi.integer() |> Zoi.positive() |> Zoi.default(8),
+              phases: Zoi.array(Zoi.atom()) |> Zoi.default(@phases),
+              metadata: Zoi.map() |> Zoi.default(%{})
+            },
+            coerce: true
+          )
+
+  @type t :: unquote(Zoi.type_spec(@schema))
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
+
+  @spec new(Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
+  def new(%Agent.Spec{} = spec) do
+    Schema.parse(@schema, new_attrs(spec))
+  end
+
+  @spec new!(Agent.Spec.t()) :: t()
+  def new!(%Agent.Spec{} = spec), do: Schema.parse!(@schema, new_attrs(spec), "turn plan")
+
+  defp new_attrs(%Agent.Spec{} = spec) do
+    defaults = spec.runtime_defaults || %{}
+
+    %{
+      spec: spec,
+      workflow_profile: default_value(defaults, :workflow_profile, :tool_loop),
+      max_model_turns: default_value(defaults, :max_model_turns, 8),
+      phases: default_value(defaults, :phases, @phases),
+      metadata: default_value(defaults, :metadata, %{})
+    }
+  end
+
+  defp default_value(defaults, key, fallback) do
+    Map.get(defaults, key, Map.get(defaults, Atom.to_string(key), fallback))
+  end
+end

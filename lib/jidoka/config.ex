@@ -1,0 +1,98 @@
+defmodule Jidoka.Config do
+  @moduledoc """
+  Runtime configuration helpers for Jidoka.
+  """
+
+  alias Jidoka.Agent.Spec.Generation
+
+  @default_model "openai:gpt-4o-mini"
+  @default_generation %{params: %{temperature: 0.0, max_tokens: 500}}
+
+  @type model_spec :: ReqLLM.model_input()
+  @type model :: LLMDB.Model.t()
+
+  @doc """
+  Returns the configured default model as normalized LLMDB data.
+  """
+  @spec default_model() :: model()
+  def default_model do
+    :jidoka
+    |> Application.get_env(:default_model, @default_model)
+    |> normalize_model_spec!(:default_model)
+  end
+
+  @doc """
+  Returns the configured default generation parameters.
+  """
+  @spec default_generation() :: Generation.t()
+  def default_generation do
+    :jidoka
+    |> Application.get_env(:default_generation, @default_generation)
+    |> normalize_generation!(:default_generation)
+  end
+
+  @doc """
+  Validates and normalizes any ReqLLM-supported model input.
+  """
+  @spec normalize_model_spec(term(), atom()) :: {:ok, model()} | {:error, term()}
+  def normalize_model_spec(value, field \\ :model)
+
+  def normalize_model_spec(value, field) do
+    case ReqLLM.model(value) do
+      {:ok, %LLMDB.Model{} = model} -> {:ok, model}
+      {:error, reason} -> {:error, {field, value, reason}}
+    end
+  rescue
+    exception -> {:error, {field, value, Exception.message(exception)}}
+  end
+
+  @doc """
+  Validates and normalizes a model input, raising on error.
+  """
+  @spec normalize_model_spec!(term(), atom()) :: model()
+  def normalize_model_spec!(value, field \\ :model) do
+    case normalize_model_spec(value, field) do
+      {:ok, model} -> model
+      {:error, reason} -> raise ArgumentError, "invalid #{field}: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
+  Validates and normalizes generation defaults.
+  """
+  @spec normalize_generation(term(), atom()) :: {:ok, Generation.t()} | {:error, term()}
+  def normalize_generation(value, field \\ :generation) do
+    case Generation.from_input(value) do
+      {:ok, %Generation{} = generation} -> {:ok, generation}
+      {:error, reason} -> {:error, {field, value, reason}}
+    end
+  end
+
+  @doc """
+  Validates and normalizes generation defaults, raising on error.
+  """
+  @spec normalize_generation!(term(), atom()) :: Generation.t()
+  def normalize_generation!(value, field \\ :generation) do
+    case normalize_generation(value, field) do
+      {:ok, generation} -> generation
+      {:error, reason} -> raise ArgumentError, "invalid #{field}: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
+  Returns a compact provider/model identifier for prompts, traces, and tests.
+  """
+  @spec model_ref(model()) :: String.t()
+  def model_ref(%LLMDB.Model{} = model) do
+    provider = Atom.to_string(model.provider)
+    model_id = model.provider_model_id || model.model || model.id
+
+    provider <> ":" <> model_id
+  end
+
+  def model_ref(model_input) do
+    model_input
+    |> normalize_model_spec!()
+    |> model_ref()
+  end
+end

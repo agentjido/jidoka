@@ -1,0 +1,140 @@
+# Jidoka V2 Getting Started
+
+```elixir
+Mix.install(
+  [
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  ],
+  consolidate_protocols: false
+)
+```
+
+## Define A Jido Action
+
+```elixir
+defmodule NotebookLocalTime do
+  use Jidoka.Action,
+    name: "local_time",
+    description: "Returns a deterministic local time for a city.",
+    schema:
+      Zoi.object(%{
+        city: Zoi.string() |> Zoi.default("Chicago")
+      })
+
+  @impl true
+  def run(params, _context) do
+    city = Map.get(params, :city) || Map.get(params, "city") || "Chicago"
+    {:ok, %{city: city, time: "09:30", timezone: "America/Chicago"}}
+  end
+end
+```
+
+## Define An Agent
+
+```elixir
+defmodule NotebookTimeAgent do
+  use Jidoka.Agent
+
+  agent :notebook_time_agent do
+    model %{provider: :test, id: "notebook-model"}
+    generation %{temperature: 0.0, max_tokens: 256}
+    instructions "Call local_time when asked for the time."
+  end
+
+  tools do
+    action NotebookLocalTime
+  end
+end
+```
+
+## Inspect The Compiled Spec
+
+```elixir
+spec = NotebookTimeAgent.spec()
+
+%{
+  id: spec.id,
+  model: Jidoka.Config.model_ref(spec.model),
+  generation: spec.generation.params,
+  operations: Enum.map(spec.operations, & &1.name)
+}
+```
+
+## Run With A Deterministic Model
+
+```elixir
+fake_llm = fn _intent, journal ->
+  llm_calls =
+    Enum.count(journal.results, fn {_id, result} ->
+      result.kind == :llm
+    end)
+
+  case llm_calls do
+    0 ->
+      {:ok, %{type: :operation, name: "local_time", arguments: %{"city" => "Chicago"}}}
+
+    1 ->
+      {:ok, %{type: :final, content: "Chicago time is 09:30."}}
+  end
+end
+
+{:ok, result} =
+  NotebookTimeAgent.run_turn("What time is it in Chicago?",
+    llm: fake_llm
+  )
+
+result.content
+```
+
+## Inspect The Journal
+
+```elixir
+result.journal.results
+|> Map.values()
+|> Enum.map(fn effect_result ->
+  %{
+    kind: effect_result.kind,
+    status: effect_result.status,
+    output: effect_result.output
+  }
+end)
+```
+
+## Hibernate And Resume
+
+```elixir
+{:hibernate, snapshot} =
+  NotebookTimeAgent.run_turn("What time is it in Chicago?",
+    llm: fake_llm,
+    checkpoint: :after_prompt
+  )
+
+snapshot.cursor
+```
+
+```elixir
+{:ok, resumed_result} = Jidoka.resume(snapshot, llm: fake_llm)
+resumed_result.content
+```
+
+## Live Mode
+
+After adding `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` to `.env`, define an agent
+with a real model:
+
+```elixir
+# defmodule LiveTimeAgent do
+#   use Jidoka.Agent
+#
+#   agent :live_time_agent do
+#     model "openai:gpt-4o-mini"
+#     instructions "Call local_time when asked for the time."
+#   end
+#
+#   tools do
+#     action NotebookLocalTime
+#   end
+# end
+#
+# LiveTimeAgent.chat("What time is it in Chicago?")
+```
