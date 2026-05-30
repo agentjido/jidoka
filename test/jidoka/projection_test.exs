@@ -55,6 +55,8 @@ defmodule Jidoka.ProjectionTest do
                extra: %{}
              },
              context_schema?: true,
+             result: nil,
+             memory: nil,
              operations: [
                %{
                  name: "lookup",
@@ -70,7 +72,7 @@ defmodule Jidoka.ProjectionTest do
                max_turns: nil,
                timeout_ms: nil,
                inputs: [],
-               results: [],
+               outputs: [],
                operations: [
                  %{
                    control: "support_control",
@@ -110,6 +112,23 @@ defmodule Jidoka.ProjectionTest do
                %{intent_id: "b", kind: :operation, output: %{value: 2}}
              ]
            } = Jidoka.projection(journal)
+  end
+
+  test "projects structured result contracts without exposing raw Zoi schema data" do
+    spec =
+      Agent.Spec.new!(
+        id: "structured_projection_agent",
+        instructions: "Project a result schema.",
+        model: %{provider: :test, id: "projection-model"},
+        result: [
+          schema: Zoi.object(%{answer: Zoi.string()}),
+          max_repairs: 2,
+          metadata: %{owner: "unit"}
+        ]
+      )
+
+    assert %{result: %{schema?: true, max_repairs: 2, metadata: %{owner: "unit"}}} =
+             Jidoka.projection(spec)
   end
 
   test "summarizes raw LLMDB models and Zoi schemas in nested projection data" do

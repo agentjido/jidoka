@@ -36,14 +36,21 @@ defmodule Jidoka.Turn.Plan do
 
   @spec new(Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
   def new(%Agent.Spec{} = spec) do
-    Schema.parse(@schema, new_attrs(spec))
+    with :ok <- Agent.Spec.validate_operation_policies(spec) do
+      Schema.parse(@schema, new_attrs(spec))
+    end
   end
 
   @spec new!(Agent.Spec.t()) :: t()
-  def new!(%Agent.Spec{} = spec), do: Schema.parse!(@schema, new_attrs(spec), "turn plan")
+  def new!(%Agent.Spec{} = spec) do
+    case new(spec) do
+      {:ok, plan} -> plan
+      {:error, reason} -> raise ArgumentError, "invalid turn plan: #{inspect(reason)}"
+    end
+  end
 
   defp new_attrs(%Agent.Spec{} = spec) do
-    defaults = spec.runtime_defaults || %{}
+    defaults = spec.runtime_defaults
 
     %{
       spec: spec,

@@ -20,8 +20,8 @@ defmodule Jidoka.Agent.Verifiers.VerifyControls do
         %Jidoka.Agent.Dsl.OperationControl{} = control_ref, {:ok, seen} ->
           verify_operation(module, control_ref, seen)
 
-        %Jidoka.Agent.Dsl.ResultControl{} = control_ref, {:ok, seen} ->
-          verify_boundary(module, control_ref, seen, Result, :results, [:controls, :result])
+        %Jidoka.Agent.Dsl.OutputControl{} = control_ref, {:ok, seen} ->
+          verify_boundary(module, control_ref, seen, Result, :results, [:controls, :output])
 
         _entity, {:ok, seen} ->
           {:cont, {:ok, seen}}

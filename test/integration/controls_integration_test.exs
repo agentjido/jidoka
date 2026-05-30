@@ -11,13 +11,15 @@ defmodule Jidoka.ControlsIntegrationTest do
   alias Jidoka.IntegrationSupport.ControlledLookupAction
   alias Jidoka.IntegrationSupport.ControlledLookupAgent
   alias Jidoka.IntegrationSupport.InputControlledLookupAgent
+  alias Jidoka.IntegrationSupport.OperationDecisionAgent
+  alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
   @live_enabled? not is_nil(
                    System.get_env("OPENAI_API_KEY") || System.get_env("ANTHROPIC_API_KEY")
                  )
 
-  test "operation controls compile into spec data and do not execute in the current runtime slice" do
+  test "operation controls compile into spec data and run before operation capabilities" do
     spec = ControlledLookupAgent.spec()
 
     assert [
@@ -58,14 +60,38 @@ defmodule Jidoka.ControlsIntegrationTest do
       end
     end
 
+    request =
+      Turn.Request.new!(
+        input: "Look up ctrl_123",
+        context: %{test_pid: self()}
+      )
+
     assert {:ok, %Turn.Result{} = result} =
-             ControlledLookupAgent.run_turn("Look up ctrl_123",
+             ControlledLookupAgent.run_turn(request,
                llm: llm,
                operation_context: %{test_pid: self()}
              )
 
+    assert_receive {:operation_control_called, "require_approval", "controlled_lookup",
+                    %{"id" => "ctrl_123"}}
+
+    assert_receive {:operation_control_called, "audit_control", "controlled_lookup",
+                    %{"id" => "ctrl_123"}}
+
     assert result.content == "Controlled lookup ctrl_123 is controlled-value."
-    assert_received {:controlled_lookup_called, "ctrl_123"}
+    assert_receive {:controlled_lookup_called, "ctrl_123"}
+
+    timeline = Jidoka.Extensions.Trace.timeline(result.events)
+
+    require_approval_index = operation_control_index(timeline, "require_approval")
+    audit_index = operation_control_index(timeline, "audit_control")
+    capability_index = operation_capability_index(timeline, "controlled_lookup")
+
+    assert is_integer(require_approval_index)
+    assert is_integer(audit_index)
+    assert is_integer(capability_index)
+    assert require_approval_index < capability_index
+    assert audit_index < capability_index
   end
 
   test "imported operation controls normalize string matches to the same spec shape as DSL" do
@@ -143,6 +169,238 @@ defmodule Jidoka.ControlsIntegrationTest do
                 cause: :blocked_input
               }
             }} = InputControlledLookupAgent.run_turn("blocked lookup", llm: llm)
+  end
+
+  test "operation controls block before the operation capability runs" do
+    llm = operation_llm("blocked")
+
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :control,
+              details: %{
+                reason: :control_blocked,
+                control: "operation_decision_control",
+                boundary: :operation,
+                operation: "controlled_lookup",
+                cause: :blocked_operation
+              }
+            }} =
+             OperationDecisionAgent.run_turn(
+               operation_request("blocked", {:block, :blocked_operation}),
+               llm: llm,
+               operation_context: %{test_pid: self()}
+             )
+
+    assert_receive {:operation_decision_control_called,
+                    %{
+                      arguments: %{"id" => "blocked"},
+                      boundary: :operation,
+                      control_name: "operation_decision_control",
+                      idempotency: :idempotent,
+                      idempotency_key?: true,
+                      kind: :action,
+                      operation: "controlled_lookup",
+                      operation_kind: :action,
+                      operation_match: %{kind: :action, name: "controlled_lookup"},
+                      operation_spec: "controlled_lookup",
+                      type: :control
+                    }}
+
+    refute_received {:controlled_lookup_called, "blocked"}
+  end
+
+  test "operation controls can interrupt into a review snapshot before execution" do
+    assert {:hibernate, %Jidoka.Runtime.AgentSnapshot{} = snapshot} =
+             OperationDecisionAgent.run_turn(
+               operation_request("approval", {:interrupt, :approval_required}),
+               llm: operation_llm("approval"),
+               operation_context: %{test_pid: self()}
+             )
+
+    assert snapshot.cursor.phase == :review
+    assert snapshot.turn_state.status == :waiting
+    assert snapshot.turn_state.pending_interrupt.reason == :approval_required
+    assert snapshot.turn_state.pending_interrupt.operation == "controlled_lookup"
+
+    assert_receive {:operation_decision_control_called,
+                    %{
+                      arguments: %{"id" => "approval"},
+                      kind: :action,
+                      operation: "controlled_lookup"
+                    }}
+
+    refute_received {:controlled_lookup_called, "approval"}
+  end
+
+  test "operation controls reject invalid decisions before operation execution" do
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :control,
+              details: %{
+                reason: :invalid_control_decision,
+                control: "operation_decision_control",
+                boundary: :operation,
+                operation: "controlled_lookup",
+                decision: :not_a_decision
+              }
+            }} =
+             OperationDecisionAgent.run_turn(
+               operation_request("invalid", :not_a_decision),
+               llm: operation_llm("invalid"),
+               operation_context: %{test_pid: self()}
+             )
+
+    assert_receive {:operation_decision_control_called,
+                    %{
+                      arguments: %{"id" => "invalid"},
+                      kind: :action,
+                      operation: "controlled_lookup"
+                    }}
+
+    refute_received {:controlled_lookup_called, "invalid"}
+  end
+
+  test "operation control exceptions are normalized as control failures" do
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :control,
+              details: %{
+                reason: :control_failed,
+                control: "operation_decision_control",
+                boundary: :operation,
+                operation: "controlled_lookup",
+                cause: %RuntimeError{message: "operation control raised"}
+              }
+            }} =
+             OperationDecisionAgent.run_turn(
+               operation_request("raise", :raise),
+               llm: operation_llm("raise"),
+               operation_context: %{test_pid: self()}
+             )
+
+    assert_receive {:operation_decision_control_called,
+                    %{
+                      arguments: %{"id" => "raise"},
+                      kind: :action,
+                      operation: "controlled_lookup"
+                    }}
+
+    refute_received {:controlled_lookup_called, "raise"}
+  end
+
+  test "non-matching operation controls do not run" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "NonMatchingOperationControlAgent#{suffix}")
+
+    Code.compile_string("""
+    defmodule #{inspect(agent_module)} do
+      use Jidoka.Agent
+
+      agent :non_matching_operation_control_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+      end
+
+      tools do
+        action Jidoka.IntegrationSupport.ControlledLookupAction
+      end
+
+      controls do
+        operation Jidoka.IntegrationSupport.OperationDecisionControl,
+          when: [kind: :action, name: :other_lookup]
+      end
+    end
+    """)
+
+    llm = fn _intent, %Effect.Journal{} = journal ->
+      case count_results(journal, :llm) do
+        0 ->
+          {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => "nonmatch"}}}
+
+        1 ->
+          {:ok, %{type: :final, content: "nonmatch done"}}
+      end
+    end
+
+    assert {:ok, %Turn.Result{content: "nonmatch done"}} =
+             agent_module.run_turn(
+               operation_request("nonmatch", {:block, :should_not_run}),
+               llm: llm,
+               operation_context: %{test_pid: self()}
+             )
+
+    refute_received {:operation_decision_control_called, _}
+    assert_received {:controlled_lookup_called, "nonmatch"}
+  end
+
+  test "operation controls also wrap data-defined local operations" do
+    suffix = System.unique_integer([:positive])
+
+    spec =
+      Jidoka.agent!(
+        id: "local_operation_control_agent_#{suffix}",
+        instructions: "Use local_lookup before answering.",
+        model: %{provider: :test, id: "model"},
+        operations: [
+          %{
+            name: "local_lookup",
+            description: "Looks up a local value.",
+            idempotency: :pure
+          }
+        ],
+        controls: %{
+          operations: [
+            %{
+              control: Jidoka.IntegrationSupport.OperationDecisionControl,
+              match: %{kind: :operation, name: "local_lookup"}
+            }
+          ]
+        }
+      )
+
+    test_pid = self()
+
+    operations =
+      LocalOperations.operations(%{
+        "local_lookup" => fn %{"id" => id} ->
+          send(test_pid, {:local_lookup_called, id})
+          {:ok, %{id: id, value: "local-value"}}
+        end
+      })
+
+    llm = fn _intent, %Effect.Journal{} = journal ->
+      case count_results(journal, :llm) do
+        0 -> {:ok, %{type: :operation, name: "local_lookup", arguments: %{"id" => "local"}}}
+        1 -> {:ok, %{type: :final, content: "local done"}}
+      end
+    end
+
+    assert {:ok, %Turn.Result{content: "local done"} = result} =
+             Jidoka.run_turn(spec, operation_request("local", :cont),
+               llm: llm,
+               operations: operations
+             )
+
+    assert_receive {:operation_decision_control_called,
+                    %{
+                      arguments: %{"id" => "local"},
+                      idempotency: :pure,
+                      idempotency_key?: true,
+                      kind: :operation,
+                      operation: "local_lookup",
+                      operation_kind: :operation,
+                      operation_match: %{kind: :operation, name: "local_lookup"},
+                      operation_spec: "local_lookup"
+                    }}
+
+    assert_receive {:local_lookup_called, "local"}
+
+    timeline = Jidoka.Extensions.Trace.timeline(result.events)
+    control_index = operation_control_index(timeline, "operation_decision_control")
+    capability_index = operation_capability_index(timeline, "local_lookup")
+
+    assert is_integer(control_index)
+    assert is_integer(capability_index)
+    assert control_index < capability_index
   end
 
   test "controls max_turns is enforced by the Runic turn runner" do
@@ -227,33 +485,33 @@ defmodule Jidoka.ControlsIntegrationTest do
             }} = agent_module.run_turn("hello", llm: llm, clock: clock)
   end
 
-  test "result controls run before the final result leaves the turn" do
+  test "output controls run before the final result leaves the turn" do
     suffix = System.unique_integer([:positive])
-    agent_module = Module.concat(JidokaTest, "ResultControlAgent#{suffix}")
+    agent_module = Module.concat(JidokaTest, "OutputControlAgent#{suffix}")
 
     Code.compile_string("""
-    defmodule JidokaTest.BlockResultControl#{suffix} do
-      use Jidoka.Control, name: "block_result_control_#{suffix}"
+    defmodule JidokaTest.BlockOutputControl#{suffix} do
+      use Jidoka.Control, name: "block_output_control_#{suffix}"
 
       @impl true
-      def call(%{boundary: :result, result: result}) do
+      def call(%{boundary: :output, result: result}) do
         if String.contains?(result, "blocked") do
-          {:block, :blocked_result}
+          {:block, :blocked_output}
         else
           :cont
         end
       end
     end
 
-    defmodule JidokaTest.ResultControlAgent#{suffix} do
+    defmodule JidokaTest.OutputControlAgent#{suffix} do
       use Jidoka.Agent
 
-      agent :result_control_agent_#{suffix} do
+      agent :output_control_agent_#{suffix} do
         model %{provider: :test, id: "model"}
       end
 
       controls do
-        result JidokaTest.BlockResultControl#{suffix}
+        output JidokaTest.BlockOutputControl#{suffix}
       end
     end
     """)
@@ -262,8 +520,8 @@ defmodule Jidoka.ControlsIntegrationTest do
              %Agent.Spec.Controls.Result{control: result_control}
            ] = agent_module.spec().controls.results
 
-    assert result_control.name() == "block_result_control_#{suffix}"
-    control_name = "block_result_control_#{suffix}"
+    assert result_control.name() == "block_output_control_#{suffix}"
+    control_name = "block_output_control_#{suffix}"
 
     llm = fn _intent, _journal -> {:ok, %{type: :final, content: "blocked answer"}} end
 
@@ -273,33 +531,33 @@ defmodule Jidoka.ControlsIntegrationTest do
               details: %{
                 reason: :control_blocked,
                 control: ^control_name,
-                boundary: :result,
-                cause: :blocked_result
+                boundary: :output,
+                cause: :blocked_output
               }
             }} = agent_module.run_turn("hello", llm: llm)
   end
 
-  test "allowed result controls are traced before the turn is finished" do
+  test "allowed output controls are traced before the turn is finished" do
     suffix = System.unique_integer([:positive])
-    agent_module = Module.concat(JidokaTest, "AllowResultControlAgent#{suffix}")
+    agent_module = Module.concat(JidokaTest, "AllowOutputControlAgent#{suffix}")
 
     Code.compile_string("""
-    defmodule JidokaTest.AllowResultControl#{suffix} do
-      use Jidoka.Control, name: "allow_result_control_#{suffix}"
+    defmodule JidokaTest.AllowOutputControl#{suffix} do
+      use Jidoka.Control, name: "allow_output_control_#{suffix}"
 
       @impl true
-      def call(%{boundary: :result, result: "allowed answer"}), do: :cont
+      def call(%{boundary: :output, result: "allowed answer"}), do: :cont
     end
 
-    defmodule JidokaTest.AllowResultControlAgent#{suffix} do
+    defmodule JidokaTest.AllowOutputControlAgent#{suffix} do
       use Jidoka.Agent
 
-      agent :allow_result_control_agent_#{suffix} do
+      agent :allow_output_control_agent_#{suffix} do
         model %{provider: :test, id: "model"}
       end
 
       controls do
-        result JidokaTest.AllowResultControl#{suffix}
+        output JidokaTest.AllowOutputControl#{suffix}
       end
     end
     """)
@@ -309,7 +567,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     assert {:ok, %Turn.Result{} = result} = agent_module.run_turn("hello", llm: llm)
 
     assert [
-             %{event: :control_allowed, data: %{boundary: :result}},
+             %{event: :control_allowed, data: %{boundary: :output}},
              %{event: :turn_finished}
            ] =
              result.events
@@ -349,7 +607,7 @@ defmodule Jidoka.ControlsIntegrationTest do
   if @live_enabled? do
     @tag :live
     @tag timeout: 120_000
-    test "live ReqLLM turn runs input controls before a real model tool loop" do
+    test "live ReqLLM turn runs controls before a real model tool loop" do
       suffix = System.unique_integer([:positive])
       agent_module = Module.concat(JidokaTest, "LiveControlsAgent#{suffix}")
       model = live_model_spec()
@@ -376,6 +634,8 @@ defmodule Jidoka.ControlsIntegrationTest do
           max_turns 4
           timeout 120_000
           input Jidoka.IntegrationSupport.AuditInputControl
+          operation Jidoka.IntegrationSupport.ApprovalControl,
+            when: [kind: :action, name: :controlled_lookup]
         end
       end
       """)
@@ -390,6 +650,10 @@ defmodule Jidoka.ControlsIntegrationTest do
                agent_module.run_turn(request, operation_context: %{test_pid: self()})
 
       assert_received {:input_control_called, "Look up ctrl_live with controlled_lookup."}
+
+      assert_received {:operation_control_called, "require_approval", "controlled_lookup",
+                       %{"id" => "ctrl_live"}}
+
       assert_received {:controlled_lookup_called, "ctrl_live"}
 
       assert result.content =~ "jidoka_controls_live_canary_123"
@@ -397,17 +661,26 @@ defmodule Jidoka.ControlsIntegrationTest do
       assert [%Effect.OperationResult{operation: "controlled_lookup"}] =
                result.agent_state.operation_results
 
+      timeline = Jidoka.Extensions.Trace.timeline(result.events)
+
       assert [
                %{event: :control_allowed, data: %{control: "audit_input_control"}}
                | _events
-             ] = Jidoka.Extensions.Trace.timeline(result.events)
+             ] = timeline
+
+      operation_control_index = operation_control_index(timeline, "require_approval")
+      capability_index = operation_capability_index(timeline, "controlled_lookup")
+
+      assert is_integer(operation_control_index)
+      assert is_integer(capability_index)
+      assert operation_control_index < capability_index
 
       assert Enum.count(result.journal.results) == 3
     end
   else
     @tag :live
     @tag :skip
-    test "live ReqLLM turn runs input controls before a real model tool loop" do
+    test "live ReqLLM turn runs controls before a real model tool loop" do
       :ok
     end
   end
@@ -484,6 +757,43 @@ defmodule Jidoka.ControlsIntegrationTest do
     spec
     |> Jidoka.projection()
     |> Map.drop([:metadata])
+  end
+
+  defp operation_request(id, decision) do
+    Turn.Request.new!(
+      input: "Look up #{id}",
+      context: %{test_pid: self()},
+      metadata: %{
+        test_pid: self(),
+        operation_control_decision: decision
+      }
+    )
+  end
+
+  defp operation_llm(id) do
+    fn _intent, _journal ->
+      {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => id}}}
+    end
+  end
+
+  defp operation_control_index(timeline, control_name) do
+    Enum.find_index(
+      timeline,
+      &match?(
+        %{event: :control_allowed, data: %{boundary: :operation, control: ^control_name}},
+        &1
+      )
+    )
+  end
+
+  defp operation_capability_index(timeline, operation) do
+    Enum.find_index(
+      timeline,
+      &match?(
+        %{event: :capability_call_started, effect_kind: :operation, operation: ^operation},
+        &1
+      )
+    )
   end
 
   defp count_results(%Effect.Journal{results: results}, kind) do

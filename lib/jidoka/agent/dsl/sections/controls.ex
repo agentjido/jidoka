@@ -64,14 +64,14 @@ defmodule Jidoka.Agent.Dsl.Sections.Controls do
     }
   end
 
-  @spec result_entity() :: Spark.Dsl.Entity.t()
-  def result_entity do
+  @spec output_entity() :: Spark.Dsl.Entity.t()
+  def output_entity do
     %Spark.Dsl.Entity{
-      name: :result,
-      target: Jidoka.Agent.Dsl.ResultControl,
+      name: :output,
+      target: Jidoka.Agent.Dsl.OutputControl,
       args: [:control],
       describe: """
-      Register a control that evaluates the final result before it is returned.
+      Register a control that evaluates the final output before it is returned.
       """,
       schema: [
         control: [
@@ -120,14 +120,14 @@ defmodule Jidoka.Agent.Dsl.Sections.Controls do
       name: :controls,
       singleton_entity_keys: [:max_turns, :timeout],
       describe: """
-      Configure policy controls around inputs, operations, and results.
+      Configure policy controls around inputs, operations, and outputs.
       """,
       entities: [
         max_turns_entity(),
         timeout_entity(),
         input_entity(),
         operation_entity(),
-        result_entity()
+        output_entity()
       ]
     }
   end

@@ -145,3 +145,10 @@ end
 result.content
 #=> "Chicago time is 09:30."
 ```
+
+## Next Steps
+
+- Add policy with [Controls](controls.md).
+- Return typed application data with [Structured Results](structured-results.md).
+- Persist hibernated work with [Runtime And Harness](runtime-and-harness.md).
+- Try a live provider with [Live LLM Tool Loop](live-llm-tool-loop.md).

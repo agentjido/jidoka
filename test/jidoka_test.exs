@@ -72,7 +72,6 @@ defmodule JidokaTest do
     assert {:ok, %Turn.Result{content: "echo"}} = Jidoka.Harness.run_turn(plan, "Echo", llm: llm)
     assert {:ok, %Turn.Result{content: "echo"}} = Jidoka.run_turn(plan, "Echo", llm: llm)
     assert {:ok, "echo"} = Jidoka.chat(spec, "Echo", capabilities: [llm: llm])
-    assert {:ok, "echo"} = Jidoka.chat(spec, "Echo", adapters: [llm: llm])
   end
 
   test "agent specs are normalized through Zoi schemas" do

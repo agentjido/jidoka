@@ -65,19 +65,22 @@ defmodule Jidoka.Golden.DslToSpecTest do
                extra: %{}
              },
              context_schema?: false,
+             result: nil,
+             memory: nil,
              operations: [],
              controls: %{
                max_turns: nil,
                timeout_ms: nil,
                inputs: [],
-               results: [],
+               outputs: [],
                operations: [],
                metadata: %{}
              },
              runtime_defaults: %{},
              metadata: %{
                "context_schema?" => false,
-               "jido_agent" => true
+               "jido_agent" => true,
+               "result_schema?" => false
              }
            }
   end
@@ -93,6 +96,8 @@ defmodule Jidoka.Golden.DslToSpecTest do
                extra: %{}
              },
              context_schema?: true,
+             result: nil,
+             memory: nil,
              operations: [
                %{
                  name: "local_time",
@@ -109,7 +114,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
                max_turns: nil,
                timeout_ms: nil,
                inputs: [],
-               results: [],
+               outputs: [],
                operations: [
                  %{
                    control: "require_local_time_approval",
@@ -123,7 +128,8 @@ defmodule Jidoka.Golden.DslToSpecTest do
              runtime_defaults: %{},
              metadata: %{
                "context_schema?" => true,
-               "jido_agent" => true
+               "jido_agent" => true,
+               "result_schema?" => false
              }
            }
   end

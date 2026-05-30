@@ -88,6 +88,64 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     assert effect_id == intent.id
   end
 
+  test "reuses journaled operation results without calling operations again" do
+    intent = Effect.Intent.new(:operation, %{name: "weather", arguments: %{city: "Paris"}})
+    result = Effect.Result.ok(intent, %{"city" => "Paris", "condition" => "sunny"})
+
+    journal =
+      Effect.Journal.new!()
+      |> Effect.Journal.put_intent(intent)
+      |> Effect.Journal.put_result(result)
+
+    state = state_with_pending_effect(intent, journal: journal)
+
+    operations = fn _intent, _journal ->
+      flunk("operation should not be called when result exists")
+    end
+
+    {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+    assert {:ok, ^result, next_state} = EffectInterpreter.interpret_pending(state, capabilities)
+    assert next_state.journal == state.journal
+
+    assert [%{event: :effect_replayed, effect_id: effect_id, effect_kind: :operation}] =
+             Jidoka.Extensions.Trace.timeline(next_state.events)
+
+    assert effect_id == intent.id
+  end
+
+  test "incomplete unsafe operation intents are not retried automatically" do
+    intent =
+      Effect.Intent.new(:operation, %{name: "refund", arguments: %{order_id: "ord_1"}},
+        idempotency: :unsafe_once
+      )
+
+    journal =
+      Effect.Journal.new!()
+      |> Effect.Journal.put_intent(intent)
+
+    state = state_with_pending_effect(intent, journal: journal)
+
+    operations = fn _intent, _journal ->
+      flunk("unsafe operation should not be retried when its prior intent is incomplete")
+    end
+
+    {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :effect,
+              details: %{
+                reason: :unsafe_once_incomplete_effect,
+                operation_name: "refund",
+                idempotency: :unsafe_once,
+                idempotency_key: idempotency_key
+              }
+            }} = EffectInterpreter.interpret_pending(state, capabilities)
+
+    assert idempotency_key == intent.idempotency_key
+  end
+
   test "returns an error when no pending effect exists" do
     {:ok, capabilities} = Capabilities.new(llm: missing_llm())
 

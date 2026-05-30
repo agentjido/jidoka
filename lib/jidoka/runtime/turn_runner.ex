@@ -7,11 +7,14 @@ defmodule Jidoka.Runtime.TurnRunner do
   session storage, replay, eval cases, or approval queues.
   """
 
+  alias Jidoka.Agent
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
+  alias Jidoka.Runtime.Review
   alias Jidoka.Effect
+  alias Jidoka.Review.Interrupt
   alias Jidoka.Turn
   alias Jidoka.Workflow.Compiler
   alias Runic.Workflow
@@ -28,16 +31,18 @@ defmodule Jidoka.Runtime.TurnRunner do
         %Capabilities{} = capabilities,
         opts \\ []
       ) do
-    state =
-      Turn.State.new!(
-        spec: plan.spec,
-        plan: plan,
-        request: request,
-        agent_state: request.agent_state,
-        started_at_ms: clock_ms(opts)
-      )
-
-    with {:ok, state} <- Controls.run_input_controls(state),
+    with :ok <- Agent.Spec.validate_operation_policies(plan.spec),
+         state <-
+           Turn.State.new!(
+             spec: plan.spec,
+             plan: plan,
+             request: request,
+             agent_state: request.agent_state,
+             memory: Keyword.get(opts, :memory),
+             compactions: Keyword.get(opts, :compactions, []),
+             started_at_ms: clock_ms(opts)
+           ),
+         {:ok, state} <- Controls.run_input_controls(state),
          :ok <- enforce_timeout(state, opts) do
       run_loop(state, capabilities, opts)
     end
@@ -48,8 +53,35 @@ defmodule Jidoka.Runtime.TurnRunner do
     with {:ok, state} <- Turn.State.from_snapshot(snapshot) do
       state
       |> ensure_started_at(opts)
-      |> continue_after_pending_effect(capabilities, opts)
+      |> resume_from_snapshot(snapshot, capabilities, opts)
     end
+  end
+
+  defp resume_from_snapshot(
+         %Turn.State{status: :waiting, pending_interrupt: %Interrupt{} = interrupt} = state,
+         %AgentSnapshot{} = snapshot,
+         capabilities,
+         opts
+       ) do
+    case Review.approval_response(opts) do
+      :missing ->
+        {:hibernate, snapshot}
+
+      {:ok, %Jidoka.Review.Response{} = response} ->
+        response = Review.ensure_responded_at(response, clock_ms(opts))
+
+        with :ok <- Review.validate_response(interrupt, response),
+             {:ok, state} <- Review.apply_response(state, interrupt, response) do
+          continue_after_pending_effect(state, capabilities, opts)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp resume_from_snapshot(%Turn.State{} = state, _snapshot, capabilities, opts) do
+    continue_after_pending_effect(state, capabilities, opts)
   end
 
   defp run_loop(%Turn.State{loop_index: loop_index, plan: plan} = state, capabilities, opts) do
@@ -101,7 +133,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp continue_after_pending_effect(%Turn.State{} = state, capabilities, opts) do
     if Turn.State.pending_effect?(state) do
       with :ok <- enforce_timeout(state, opts),
-           {:ok, effect_result, state} <- EffectInterpreter.interpret_pending(state, capabilities),
+           {:ok, effect_result, state} <- interpret_or_hibernate(state, capabilities, opts),
            {:ok, %Turn.State{} = state} <- Turn.State.apply_effect_result(state, effect_result),
            :ok <- enforce_timeout(state, opts) do
         case state.status do
@@ -121,6 +153,27 @@ defmodule Jidoka.Runtime.TurnRunner do
       end
     else
       {:error, {:missing_pending_effect, state}}
+    end
+  end
+
+  defp interpret_or_hibernate(%Turn.State{} = state, capabilities, opts) do
+    case EffectInterpreter.interpret_pending(state, capabilities) do
+      {:ok, %Effect.Result{} = result, %Turn.State{} = state} ->
+        {:ok, result, state}
+
+      {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
+        hibernate_for_interrupt(state, interrupt, opts)
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp hibernate_for_interrupt(%Turn.State{} = state, %Interrupt{} = interrupt, opts) do
+    with {:ok, approval_ttl_ms} <- Review.approval_ttl_ms(opts),
+         {:ok, state, interrupt} <-
+           Review.put_pending_interrupt(state, interrupt, clock_ms(opts), approval_ttl_ms) do
+      hibernate(state, Turn.Cursor.review(interrupt), opts)
     end
   end
 

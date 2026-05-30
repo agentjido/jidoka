@@ -142,6 +142,8 @@ defmodule Jidoka.Error do
          :error <- normalize_turn_reason(reason, context),
          :error <- normalize_effect_reason(reason, context),
          :error <- normalize_control_reason(reason, context),
+         :error <- normalize_approval_reason(reason, context),
+         :error <- normalize_result_reason(reason, context),
          :error <- normalize_llm_reason(reason, context),
          :error <- normalize_operation_reason(reason, context),
          :error <- normalize_agent_server_reason(reason, context) do
@@ -276,6 +278,25 @@ defmodule Jidoka.Error do
      )}
   end
 
+  defp normalize_effect_reason(
+         {:unsafe_once_incomplete_effect, %Jidoka.Effect.Intent{} = intent} = reason,
+         context
+       ) do
+    {:ok,
+     execution_error("Unsafe operation effect is incomplete and cannot be retried automatically.",
+       phase: :effect,
+       details:
+         details(context, %{
+           reason: :unsafe_once_incomplete_effect,
+           operation_name: effect_operation_name(intent),
+           intent_id: intent.id,
+           idempotency: intent.idempotency,
+           idempotency_key: intent.idempotency_key,
+           cause: reason
+         })
+     )}
+  end
+
   defp normalize_effect_reason(_reason, _context), do: :error
 
   defp normalize_control_reason({:control_blocked, control, boundary, cause}, context) do
@@ -335,6 +356,113 @@ defmodule Jidoka.Error do
   end
 
   defp normalize_control_reason(_reason, _context), do: :error
+
+  defp normalize_approval_reason({:invalid_approval_response, cause}, context) do
+    {:ok,
+     validation_error("Approval response is invalid.",
+       field: :approval,
+       details: details(context, %{reason: :invalid_approval_response, cause: cause})
+     )}
+  end
+
+  defp normalize_approval_reason({:invalid_approval_ttl_ms, value} = reason, context) do
+    {:ok,
+     validation_error("Approval TTL must be a positive integer in milliseconds.",
+       field: :approval_ttl_ms,
+       value: value,
+       details: details(context, %{reason: :invalid_approval_ttl_ms, cause: reason})
+     )}
+  end
+
+  defp normalize_approval_reason(
+         {:approval_interrupt_mismatch, expected, actual} = reason,
+         context
+       ) do
+    {:ok,
+     execution_error("Approval response targets a different interrupt.",
+       phase: :approval,
+       details:
+         details(context, %{
+           reason: :approval_interrupt_mismatch,
+           expected_interrupt_id: expected,
+           actual_interrupt_id: actual,
+           cause: reason
+         })
+     )}
+  end
+
+  defp normalize_approval_reason(
+         {:approval_expired, interrupt_id, responded_at_ms, expires_at_ms} = reason,
+         context
+       ) do
+    {:ok,
+     execution_error("Approval response expired.",
+       phase: :approval,
+       details:
+         details(context, %{
+           reason: :approval_expired,
+           interrupt_id: interrupt_id,
+           responded_at_ms: responded_at_ms,
+           expires_at_ms: expires_at_ms,
+           cause: reason
+         })
+     )}
+  end
+
+  defp normalize_approval_reason({:approval_denied, response} = reason, context) do
+    {:ok,
+     execution_error("Approval response denied the pending operation.",
+       phase: :approval,
+       details:
+         details(context, %{
+           reason: :approval_denied,
+           interrupt_id: Map.get(response, :interrupt_id),
+           decision: Map.get(response, :decision),
+           approval_reason: Map.get(response, :reason),
+           cause: reason
+         })
+     )}
+  end
+
+  defp normalize_approval_reason({:approval_effect_mismatch, expected, actual} = reason, context) do
+    {:ok,
+     execution_error("Approval response does not match the pending effect.",
+       phase: :approval,
+       details:
+         details(context, %{
+           reason: :approval_effect_mismatch,
+           expected_effect_id: expected,
+           actual_effect_id: actual,
+           cause: reason
+         })
+     )}
+  end
+
+  defp normalize_approval_reason(_reason, _context), do: :error
+
+  defp normalize_result_reason({:invalid_result, cause}, context) do
+    {:ok,
+     execution_error("LLM final result does not match the declared result schema.",
+       phase: :result,
+       details: details(context, %{reason: :invalid_result, cause: cause})
+     )}
+  end
+
+  defp normalize_result_reason({:invalid_result, cause, attempts, max_repairs}, context) do
+    {:ok,
+     execution_error("LLM final result does not match the declared result schema.",
+       phase: :result,
+       details:
+         details(context, %{
+           reason: :invalid_result,
+           repair_attempts: attempts,
+           max_repairs: max_repairs,
+           cause: cause
+         })
+     )}
+  end
+
+  defp normalize_result_reason(_reason, _context), do: :error
 
   defp normalize_llm_reason({:missing_prompt_payload, payload} = reason, context) do
     {:ok,
@@ -406,6 +534,34 @@ defmodule Jidoka.Error do
        phase: :operation,
        details:
          details(context, %{reason: :unknown_operation, operation_name: name, cause: reason})
+     )}
+  end
+
+  defp normalize_operation_reason({:unsafe_once_requires_control, name, kind} = reason, context) do
+    {:ok,
+     config_error("Unsafe operation requires an explicit operation control.",
+       field: :controls,
+       details:
+         details(context, %{
+           reason: :unsafe_once_requires_control,
+           operation_name: name,
+           operation_kind: kind,
+           idempotency: :unsafe_once,
+           cause: reason
+         })
+     )}
+  end
+
+  defp normalize_operation_reason({:duplicate_operation_source_name, name} = reason, context) do
+    {:ok,
+     config_error("Operation source names must be unique.",
+       field: :operations,
+       details:
+         details(context, %{
+           reason: :duplicate_operation_source_name,
+           operation_name: name,
+           cause: reason
+         })
      )}
   end
 
@@ -590,6 +746,12 @@ defmodule Jidoka.Error do
   end
 
   defp control_name(control), do: inspect(control)
+
+  defp effect_operation_name(%Jidoka.Effect.Intent{kind: :operation, payload: payload}) do
+    Map.get(payload, :name) || Map.get(payload, "name")
+  end
+
+  defp effect_operation_name(_intent), do: nil
 
   defp details(context, attrs) do
     context

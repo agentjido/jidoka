@@ -23,6 +23,8 @@ agent :support_agent do
   generation %{temperature: 0.0, max_tokens: 500}
   instructions "Answer support questions tersely."
   context Zoi.object(%{tenant_id: Zoi.string()})
+  result schema: Zoi.object(%{answer: Zoi.string()}), max_repairs: 1
+  memory scope: :session, max_entries: 5
 end
 ```
 
@@ -32,7 +34,16 @@ Supported fields:
   `%{provider: :openai, id: "gpt-4o-mini"}`;
 - `generation` - permissive provider-facing generation defaults;
 - `instructions` - system-level behavior instructions;
-- `context` - optional Zoi schema for runtime context validation.
+- `context` - optional Zoi schema for runtime context validation;
+- `result` - optional Zoi schema or `Jidoka.Agent.Spec.Result` data for
+  structured app-facing turn results;
+- `memory` - optional memory policy data, or `true` for defaults.
+
+When `result` is declared, models still return final assistant text, but the
+runtime also validates the final structured value and exposes it as
+`Jidoka.Turn.Result.value`. Invalid values trigger a bounded repair loop using
+`max_repairs`; after the bound is exhausted, the turn fails with a result-phase
+error.
 
 ## Tools Block
 
@@ -51,7 +62,7 @@ Controls describe policy at explicit turn boundaries:
 
 - `input` runs before the first model call;
 - `operation` describes policy around model-callable work;
-- `result` runs before the final answer is returned;
+- `output` runs before the final answer is returned;
 - `max_turns` and `timeout` bound the turn loop.
 
 ```elixir
@@ -68,7 +79,13 @@ defmodule MyApp.RequireApproval do
   use Jidoka.Control, name: "require_approval"
 
   @impl true
-  def call(_operation), do: :cont
+  def call(%Jidoka.Runtime.Controls.OperationContext{} = operation) do
+    if operation.operation == "local_time" do
+      {:interrupt, :approval_required}
+    else
+      :cont
+    end
+  end
 end
 
 defmodule MyApp.SafeReply do
@@ -87,13 +104,19 @@ controls do
   operation MyApp.RequireApproval,
     when: [kind: :action, name: :local_time]
 
-  result MyApp.SafeReply
+  output MyApp.SafeReply
 end
 ```
 
-Input and result controls run in declaration order. Operation controls compile
-into `Agent.Spec.Controls`; runtime approval, blocking, and interrupt execution
-for operations remain follow-up work.
+Input, operation, and output controls run in declaration order at their
+respective runtime boundaries. Operation controls receive
+`Jidoka.Runtime.Controls.OperationContext` data and may return `:cont`,
+`{:block, reason}`, `{:interrupt, reason}`, or `{:error, reason}`.
+
+An operation interrupt hibernates the turn with a `:review` cursor and a
+`Jidoka.Review.Request` in `snapshot.metadata["pending_review"]`.
+
+See [Controls](controls.md) for approval, limit, and testing examples.
 
 ## Compiled Shape
 
@@ -105,6 +128,7 @@ The important boundary is the compiled spec:
   model: %LLMDB.Model{},
   generation: %Jidoka.Agent.Spec.Generation{},
   context_schema: %Zoi.Schema{},
+  result: %Jidoka.Agent.Spec.Result{},
   operations: [%Jidoka.Agent.Spec.Operation{}],
   controls: %Jidoka.Agent.Spec.Controls{}
 }
@@ -126,6 +150,9 @@ agent:
   instructions: Answer support questions tersely.
   context:
     ref: support_context
+  result:
+    ref: support_result
+    max_repairs: 1
 tools:
   actions:
     - local_time
@@ -139,7 +166,7 @@ controls:
       when:
         kind: action
         name: local_time
-  results:
+  outputs:
     - control: safe_reply
 ```
 
@@ -151,6 +178,9 @@ agent:
   instructions: Answer support questions tersely.
   context:
     ref: support_context
+  result:
+    ref: support_result
+    max_repairs: 1
 tools:
   actions:
     - local_time
@@ -164,7 +194,7 @@ controls:
       when:
         kind: action
         name: local_time
-  results:
+  outputs:
     - control: safe_reply
 """
 
@@ -177,14 +207,14 @@ controls:
         "require_approval" => MyApp.RequireApproval,
         "safe_reply" => MyApp.SafeReply
       },
-      context_schemas: %{"support_context" => Zoi.object(%{tenant_id: Zoi.string()})}
+      context_schemas: %{"support_context" => Zoi.object(%{tenant_id: Zoi.string()})},
+      result_schemas: %{"support_result" => Zoi.object(%{answer: Zoi.string()})}
     }
   )
 ```
 
 ## Intentionally Absent
 
-The current DSL does not expose memory, handoffs, workflows, sessions, approval
-queues, operation-control runtime execution, or native provider tool-calling.
-Those should land after the `Agent.Spec`, harness, and runtime contracts are
-stable.
+The current DSL does not expose handoffs, workflows, session queues, approval
+queues, or native provider tool-calling. Those should land after the
+`Agent.Spec`, harness, and runtime contracts are stable.

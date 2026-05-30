@@ -21,6 +21,8 @@ defmodule Jidoka.Agent do
   alias Jidoka.Agent.Spec
   alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Agent.Spec.Generation
+  alias Jidoka.Agent.Spec.Memory
+  alias Jidoka.Agent.Spec.Result
   alias Jidoka.Config
   alias Jidoka.Runtime.Actions.RunTurn
   alias Jidoka.Runtime.JidoActions
@@ -93,6 +95,8 @@ defmodule Jidoka.Agent do
           required(:instructions) => String.t(),
           required(:description) => String.t() | nil,
           required(:context_schema) => term(),
+          required(:result) => Result.t() | nil,
+          required(:memory) => Memory.t() | nil,
           required(:actions) => [module()],
           required(:controls) => Controls.t()
         }
@@ -109,6 +113,8 @@ defmodule Jidoka.Agent do
       instructions: normalize_instructions!(agent.instructions),
       description: agent.description,
       context_schema: agent.context,
+      result: normalize_result!(agent_module, agent.result),
+      memory: normalize_memory!(agent_module, agent.memory),
       actions: actions,
       controls: controls
     }
@@ -120,6 +126,8 @@ defmodule Jidoka.Agent do
 
     unless is_nil(agent.model), do: normalize_model!(agent_module, agent.model)
     unless is_nil(agent.generation), do: normalize_generation!(agent_module, agent.generation)
+    unless is_nil(agent.result), do: normalize_result!(agent_module, agent.result)
+    unless is_nil(agent.memory), do: normalize_memory!(agent_module, agent.memory)
     validate_action_modules!(agent_module, actions)
     controls!(agent_module)
 
@@ -177,15 +185,15 @@ defmodule Jidoka.Agent do
           []
       end)
 
-    results =
+    outputs =
       entities
       |> Enum.flat_map(fn
-        %Jidoka.Agent.Dsl.ResultControl{} = result ->
+        %Jidoka.Agent.Dsl.OutputControl{} = output ->
           [
-            normalize_dsl_value!(agent_module, [:controls, :result], fn ->
+            normalize_dsl_value!(agent_module, [:controls, :output], fn ->
               Controls.Result.new!(
-                control: result.control,
-                metadata: result.metadata || %{}
+                control: output.control,
+                metadata: output.metadata || %{}
               )
             end)
           ]
@@ -200,7 +208,7 @@ defmodule Jidoka.Agent do
         timeout_ms: singleton_control_value(entities, Jidoka.Agent.Dsl.TimeoutControl),
         inputs: inputs,
         operations: operations,
-        results: results
+        outputs: outputs
       )
     end)
   end
@@ -227,13 +235,16 @@ defmodule Jidoka.Agent do
       model: definition.model,
       generation: definition.generation,
       context_schema: definition.context_schema,
+      result: definition.result,
+      memory: definition.memory,
       operations: JidoActions.operations_from_actions(definition.actions),
       controls: definition.controls,
       runtime_defaults: %{},
       metadata: %{
         "dsl_module" => inspect(agent_module),
         "jido_agent" => true,
-        "context_schema?" => not is_nil(definition.context_schema)
+        "context_schema?" => not is_nil(definition.context_schema),
+        "result_schema?" => not is_nil(definition.result)
       }
     )
   end
@@ -337,6 +348,30 @@ defmodule Jidoka.Agent do
     end)
   end
 
+  defp normalize_result!(_agent_module, nil), do: nil
+
+  defp normalize_result!(agent_module, result) do
+    normalize_dsl_value!(agent_module, [:agent, :result], fn ->
+      Result.from_input(result)
+      |> case do
+        {:ok, result} -> result
+        {:error, reason} -> raise ArgumentError, "invalid agent result: #{inspect(reason)}"
+      end
+    end)
+  end
+
+  defp normalize_memory!(_agent_module, nil), do: nil
+
+  defp normalize_memory!(agent_module, memory) do
+    normalize_dsl_value!(agent_module, [:agent, :memory], fn ->
+      Memory.from_input(memory)
+      |> case do
+        {:ok, memory} -> memory
+        {:error, reason} -> raise ArgumentError, "invalid agent memory: #{inspect(reason)}"
+      end
+    end)
+  end
+
   defp normalize_dsl_value!(agent_module, path, fun) when is_function(fun, 0) do
     fun.()
   rescue
@@ -354,6 +389,11 @@ defmodule Jidoka.Agent do
 
   defp normalize_dsl_error_message([:agent, :generation], exception) do
     "`agent.generation` must be a map or keyword list: " <> Exception.message(exception)
+  end
+
+  defp normalize_dsl_error_message([:agent, :result], exception) do
+    "`agent.result` must be a Zoi schema or `Jidoka.Agent.Spec.Result` data: " <>
+      Exception.message(exception)
   end
 
   defp normalize_dsl_error_message(_path, exception), do: Exception.message(exception)

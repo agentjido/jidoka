@@ -110,7 +110,7 @@ Jidoka's public concepts are right:
 - `agent` describes identity, model, instructions, character, context, and
   structured result.
 - `tools` describes model-callable operations and integrations.
-- `controls` describes input, operation, and result policy.
+- `controls` describes input, operation, and output policy.
 - `session` is a descriptor, not a process abstraction.
 - memory, compaction, schedules, hooks, handoffs, and workflow ownership are
   runtime concerns, not core DSL sections.
@@ -686,7 +686,7 @@ V2 should enforce vocabulary consistently:
 | --- | --- | --- |
 | `agent` | `AgentSpec` | The immutable definition of one agent. |
 | `tools` | `operations` | Authoring block for model-callable work; canonical executable entries. |
-| `controls` | `controls` | Policy around input, operations, result, budget, and review. |
+| `controls` | `controls` | Policy around input, operations, output, budget, and review. |
 | `result` | `result` | Final app-facing value after validation/repair. |
 | `context` | `context` | Caller-provided runtime data for a turn. |
 | `memory` | `memory` | Retrieved or stored facts outside the immediate transcript. |
@@ -838,7 +838,7 @@ It is hard-coded at the level of invariants:
 - model output is interpreted before operation planning;
 - external effects go through `EffectIntent`/`EffectResult`;
 - operation observations feed back into a bounded loop;
-- result validation and controls happen before completion;
+- result validation and output controls happen before completion;
 - checkpoints happen at safe boundaries.
 
 It is flexible at the level of data:
@@ -1227,11 +1227,11 @@ Suggested harness modules:
   latest snapshot, trace cursor, and status;
 - `Jidoka.Harness.Runner` - drives `run_turn`, `resume`, `drain`, and
   hibernate policies;
-- `Jidoka.Harness.Case` - deterministic test/eval case with scripted model and
+- `Jidoka.Eval.Case` - deterministic test/eval case with scripted model and
   operation results;
 - `Jidoka.Harness.Replay` - reconstructs a run from `AgentSnapshot`,
   `EffectJournal`, and trace events;
-- `Jidoka.Harness.Approval` - review request/response contract;
+- `Jidoka.Review` - interrupt/request/response contracts;
 - `Jidoka.Harness.Store` - behaviour for snapshots, effect journals, traces,
   and session metadata.
 
@@ -1298,7 +1298,7 @@ The session artifact should be serializable:
   queue: [%Jidoka.Harness.Signal{}],
   outputs: [%Jidoka.TurnResult{}],
   latest_snapshot: %Jidoka.Runtime.AgentSnapshot{},
-  pending_reviews: [%Jidoka.Harness.ApprovalRequest{}],
+  pending_reviews: [%Jidoka.Review.Request{}],
   trace_cursor: %Jidoka.Runtime.TraceCursor{},
   measurements: %{},
   metadata: %{}
@@ -1321,8 +1321,8 @@ The weak spots should be explicit backlog items, not hidden future work:
 | Visual inspection/time travel | `Jidoka.Harness.Inspection` snapshots, state history, and diff helpers | Harness |
 | Trace backend | `Jidoka.Trace.Sink` implementations for in-memory, logger, telemetry, and store-backed traces | Harness/runtime |
 | Replay CLI | `mix jidoka.replay` over `Jidoka.Harness.Replay` | Harness tooling |
-| Eval dataset/case tooling | `Jidoka.Harness.Case`, `EvalRun`, assertions, aggregate scoring | Harness |
-| Human approval inbox | `Jidoka.Harness.ApprovalRequest`, `ApprovalResponse`, and store queries | Harness/application runtime |
+| Eval dataset/case tooling | `Jidoka.Eval.Case`, `Jidoka.Eval.Run`, assertions, aggregate scoring | Harness |
+| Human approval inbox | `Jidoka.Review.Request`, `Jidoka.Review.Response`, and store queries | Harness/application runtime |
 | Concurrency/backpressure | queue policy, drain policy, max in-flight effects, cancellation signals | Harness/runtime |
 | Durable runtime integrations | runtime for Oban first, then Temporal/Restate/DBOS if justified | Production runtime |
 
@@ -1417,7 +1417,7 @@ Implement capabilities in this order:
 2. `Context` - runtime context schema/defaults.
 3. `Result` - structured final result and repair policy.
 4. `ActionOperation` - direct deterministic operation.
-5. `Controls` - input, operation, result controls.
+5. `Controls` - input, operation, output controls.
 6. `ToolLoop` - model-visible tool calling through selected operations.
 
 Only after these are stable:
@@ -1554,7 +1554,7 @@ Returns:
 
 ```elixir
 {:ok, %Jidoka.TurnResult{}}
-{:interrupt, %Jidoka.Interrupt{}}
+{:interrupt, %Jidoka.Review.Interrupt{}}
 {:handoff, %Jidoka.Handoff{}}
 {:wait, %Jidoka.Wait{}}
 {:hibernate, %Jidoka.Runtime.AgentSnapshot{}}
@@ -1767,6 +1767,18 @@ Trace projection and capture should be policy-driven. The workflow should
 always create typed core events at meaningful boundaries, but sinks may redact,
 sample, summarize, or drop large payloads depending on runtime policy.
 
+Current implementation checkpoint:
+
+- `Jidoka.Event` is the neutral event contract emitted by the turn spine.
+- `Jidoka.Trace.Policy` controls enablement, sampling, redaction, and omitted
+  payload keys.
+- `Jidoka.Trace.Sink` is the optional sink behaviour, with
+  `Jidoka.Trace.Sink.InMemory` as the deterministic test/example sink.
+- `Jidoka.inspect/1` has stable views for turns, snapshots, sessions, replay,
+  effect journals, review objects, memory results, and eval runs.
+- `Jidoka.Eval.Case` / `Jidoka.Eval.Run` provide deterministic harness eval
+  fixtures without introducing a second runtime path.
+
 V2 should support replay from:
 
 - `AgentSpec`;
@@ -1933,9 +1945,11 @@ lib/jidoka/
     runner.ex
     case.ex
     replay.ex
-    approval.ex
-    approval_request.ex
-    approval_response.ex
+    review.ex
+    review/
+      interrupt.ex
+      request.ex
+      response.ex
     inspection.ex
     store.ex
     store/
@@ -1986,9 +2000,10 @@ Current checkpoint: the Spark DSL and JSON/YAML import runtime both compile
 into `Jidoka.Agent.Spec`. Import parity currently covers agent id, model,
 generation, default instructions, context schema refs, direct operations, Jido
 action refs resolved through registries, and the `controls` surface for
-`input`, `operation`, `result`, `max_turns`, and `timeout`. Operation controls
-are durable spec data for now; input and result controls execute at runtime. The
-root import API is `Jidoka.import/2` for document strings, with
+`input`, `operation`, `output`, `max_turns`, and `timeout`. Operation controls
+are durable spec data and execute before operation capabilities; input and
+output controls execute at runtime as well. The root import API is
+`Jidoka.import/2` for document strings, with
 `Jidoka.Import.load/2` retained for already-decoded maps.
 
 Deliverables:
@@ -2046,7 +2061,7 @@ Deliverables:
   capability start/end/failure and journal replay;
 - [x] trace extension projection over core events;
 - [ ] formal workflow profiles beyond the current `:tool_loop` plan;
-- [ ] optional trace sinks/policy outside the in-memory turn state.
+- [x] optional trace sinks/policy outside the in-memory turn state.
 
 Exit criteria:
 
@@ -2062,16 +2077,19 @@ Goal: support deterministic model-callable operations.
 
 Current checkpoint: Jido actions can be exposed as tools, model decisions can
 request an operation, operation effects are journaled, and the model can finish
-on a later loop. The remaining Phase 3 work is to formalize operation
-request/result contracts and make idempotency visible enough for replay.
+on a later loop. Operation request/result structs now define the runtime
+boundary, unsafe policies are validated before planning, and journaled
+operation results replay without duplicate execution.
 
 Deliverables:
 
 - [x] `AgentSpec.Operation`;
 - [x] operation registry via Jido action refs and explicit operations;
 - [x] direct action capability through `Jidoka.Runtime.JidoActions`;
-- [ ] operation request/result contracts beyond raw effect payload maps;
+- [x] operation request/result contracts beyond raw effect payload maps;
 - [x] operation planning and execution steps;
+- [x] unsafe-once operation policy validation;
+- [x] operation effect replay from `Effect.Journal`;
 - [x] loop limits;
 - [x] scripted operation tests.
 
@@ -2082,7 +2100,10 @@ Exit criteria:
 - [x] workflow executes action;
 - [x] observation is appended;
 - [x] model can finish on a later turn;
-- [ ] all behavior is replayable through formal trace/replay contracts.
+- [x] operation effects replay through the effect journal without duplicate
+  execution.
+- [x] full harness/session replay can reconstruct an entire run outside the
+  current process.
 
 ### Phase 4: Controls And Structured Results
 
@@ -2091,12 +2112,12 @@ Goal: make policy and typed results first-class.
 Deliverables:
 
 - [x] operation controls as spec/import/DSL data;
-- [ ] operation control runtime execution;
-- [x] input and result control contracts;
-- review/wait interrupt shape;
+- [x] operation control runtime execution;
+- [x] input and output control contracts;
+- [x] review/wait interrupt shape;
 - result validation and bounded repair loop;
 - [x] budget/time limits for `max_turns` and wall-clock timeout;
-- [x] control trace events for currently executed input/result controls.
+- [x] control trace events for currently executed input/output controls.
 
 Exit criteria:
 
@@ -2108,51 +2129,68 @@ Exit criteria:
 
 Goal: make long-running context manageable without hiding transcript truth.
 
+Current checkpoint: memory has explicit spec policy, recall/write contracts,
+an in-memory store, harness write/recall helpers, prompt/preflight visibility,
+and a compaction snapshot data contract with source-message provenance.
+
 Deliverables:
 
 - context bundle contract;
-- memory recall/write runtime;
-- compaction snapshot contract;
-- provenance from summary to source messages;
+- [x] memory recall/write runtime;
+- [x] compaction snapshot contract;
+- [x] provenance from summary to source messages;
 - fail-open/fail-closed policy as data.
 
 Exit criteria:
 
-- memory and compaction are visible in `TurnState` and trace;
-- test failures are order-independent;
-- no global summarizer configuration is required.
+- [x] memory is visible in `TurnState` and trace;
+- [ ] runtime compaction decisions are visible in trace;
+- [x] test failures are order-independent;
+- [x] no global summarizer configuration is required.
 
 ### Phase 6: Harness Layer
 
 Goal: make the kernel operable without making core a production platform.
 
+Current checkpoint: the harness now has a serializable session envelope, a
+small store behaviour, an in-memory store for tests/examples, session
+run/resume APIs, pending-review listing, and a replay projection over stored
+snapshots, journals, and trace events.
+
 Deliverables:
 
 - formal `Jidoka.Harness` facade;
-- `Jidoka.Harness.Session`;
+- [x] `Jidoka.Harness.Session`;
 - `Jidoka.Harness.Signal`;
 - `Jidoka.Harness.Runner`;
-- `Jidoka.Harness.Case`;
-- `Jidoka.Harness.Replay`;
-- harness store behaviour;
-- in-memory harness store;
-- approval request/response contracts;
-- inspection/history/diff helpers;
-- deterministic eval run shape.
+- [x] `Jidoka.Eval.Case` / `Jidoka.Eval.Run`;
+- [x] `Jidoka.Harness.Replay`;
+- [x] harness store behaviour;
+- [x] in-memory harness store;
+- [x] approval request/response contracts;
+- [x] inspection helpers for sessions, replay, effects, approvals, memory, and
+  eval runs;
+- [x] deterministic eval run shape.
 
 Exit criteria:
 
 - a harness session can queue input, run, hibernate, resume, and expose
   outputs;
-- the same session can round-trip through the in-memory store;
-- replay can reconstruct a deterministic scripted run;
-- approval requests can pause and resume without losing the snapshot;
-- inspection can list snapshots and compare two state versions;
+- [x] the same session can round-trip through the in-memory store;
+- [x] replay can reconstruct stored trace/history projections;
+- [x] approval requests can pause and resume without losing the snapshot;
+- [x] inspection can list session snapshots and replay timeline data;
 - harness code depends on core contracts, not private Runic internals.
 
 ### Phase 7: Advanced Capabilities
 
 Goal: bring back V1 integrations through the capability spine.
+
+Current checkpoint: `Jidoka.Operation.Source` provides the operation-source
+contract, and `Jidoka.Operation.Source.Local` proves a non-action source can
+compile into `Agent.Spec.Operation` data and execute through the existing
+operation effect path. Future integrations should implement this source shape
+instead of adding separate runtime branches.
 
 Suggested order:
 
@@ -2293,13 +2331,13 @@ graph LR
 
 Next tasks:
 
-1. Replace raw operation effect payload maps with typed operation
-   request/result contracts.
-2. Add a minimal `Jidoka.Harness.Replay` over `AgentSnapshot` and
-   `Effect.Journal`.
-3. Add optional trace sinks/policy after replay makes trace persistence useful.
-4. Only then start Phase 4 controls and structured result validation.
+1. Finish documentation, examples, and Livebook coverage around the current V2
+   surface.
+2. Run the release-hardening pass across public API, docs, snapshot/import
+   versions, and migration notes.
+3. Defer production trace/store/runtime integrations until the package surface
+   is stable enough to support them.
 
 This keeps the next work aligned with the V2 thesis: data definitions first,
-Runic spine second, effect shell third. It also avoids adding controls, memory,
-or production stores before the current loop can explain and replay itself.
+Runic spine second, effect shell third. It also avoids adding handoffs or
+production stores before the current loop can explain and replay itself.

@@ -28,8 +28,16 @@ This is the V2 kernel. It currently supports:
 - Zoi-backed `Agent.Spec`, turn, effect, and snapshot structs;
 - model normalization through ReqLLM/LLMDB;
 - Jido actions as model-callable tools;
-- `input`, `operation`, and `result` controls as data on `Agent.Spec.Controls`;
-- runtime execution for input and result controls;
+- operation source contracts that normalize non-action sources onto the same
+  operation spine;
+- `input`, `operation`, and `output` controls as data on `Agent.Spec.Controls`;
+- runtime execution for input, operation, and output controls;
+- human-in-the-loop operation interrupts through durable approval snapshots;
+- harness sessions with a swappable store behaviour and in-memory store;
+- session replay projections over snapshots, journals, and trace events;
+- visible memory recall/write through `Agent.Spec.memory` and memory stores;
+- structured result schemas with validated `Turn.Result.value`;
+- bounded result repair when model output does not match the declared schema;
 - `max_turns` and `timeout` turn limits under `controls`;
 - default process hosting through `Jidoka.Jido` and `Jido.AgentServer`;
 - a constrained JSON model-decision protocol;
@@ -39,8 +47,11 @@ This is the V2 kernel. It currently supports:
   extension;
 - neutral `Jidoka.Event` values emitted through `Jidoka.Turn.Transition` and
   projected by the trace extension;
+- optional trace sinks through `Jidoka.Trace.Sink`, with an in-memory sink and
+  trace sampling/redaction policy;
 - stable inspection through `Jidoka.inspect/1` and prompt preflight through
   `Jidoka.preflight/3`;
+- deterministic eval cases through `Jidoka.Eval.run_case/2`;
 - deterministic unit tests and an opt-in live ReqLLM integration test.
 
 ## Quick Start
@@ -120,12 +131,98 @@ Jidoka.inspect(MyApp.Assistant)
 {:ok, preflight} = Jidoka.preflight(MyApp.Assistant, "What can you do?")
 ```
 
+Trace capture is caller-owned:
+
+```elixir
+{:ok, pid} = Jidoka.Trace.Sink.InMemory.start_link()
+{:ok, result} = Jidoka.run_turn(spec, "Hello", llm: llm)
+
+:ok =
+  Jidoka.Trace.record(result.events, {Jidoka.Trace.Sink.InMemory, pid: pid},
+    policy: Jidoka.Trace.Policy.new!()
+  )
+```
+
+Deterministic eval cases use the same harness path:
+
+```elixir
+{:ok, run} =
+  Jidoka.Eval.run_case(
+    [
+      id: "assistant_smoke",
+      agent: spec,
+      input: "Say hello",
+      assertions: %{contains: "hello"}
+    ],
+    llm: llm
+  )
+```
+
 When `model` is omitted, Jidoka uses:
 
 ```elixir
 config :jidoka,
   default_model: "openai:gpt-4o-mini"
 ```
+
+## Human-In-The-Loop
+
+Operation controls may pause a turn before a tool/action runs:
+
+```elixir
+defmodule MyApp.RequireApproval do
+  use Jidoka.Control, name: "require_approval"
+
+  @impl true
+  def call(%Jidoka.Runtime.Controls.OperationContext{} = operation) do
+    if operation.operation == "refund_order" do
+      {:interrupt, :approval_required}
+    else
+      :cont
+    end
+  end
+end
+```
+
+An interrupt returns a hibernated snapshot:
+
+```elixir
+{:hibernate, snapshot} = Jidoka.run_turn(spec, "Refund order_123", llm: llm, operations: ops)
+approval = Jidoka.Review.Response.approve(snapshot.turn_state.pending_interrupt)
+{:ok, result} = Jidoka.resume(snapshot, approval: approval, llm: llm, operations: ops)
+```
+
+The snapshot contains `snapshot.metadata["pending_review"]` as a
+`Jidoka.Review.Request`. Denials and expired approvals fail deterministically
+without executing the pending operation.
+
+## Structured Results
+
+Agents may declare a Zoi result schema. The final assistant text remains in
+`Turn.Result.content`; the validated application value is available as
+`Turn.Result.value`.
+
+```elixir
+defmodule MyApp.ProfileAgent do
+  use Jidoka.Agent
+
+  agent :profile_agent do
+    instructions "Return a short profile summary."
+
+    result schema: Zoi.object(%{
+             name: Zoi.string(),
+             confidence: Zoi.integer()
+           }),
+           max_repairs: 1
+  end
+end
+
+{:ok, result} = MyApp.ProfileAgent.run_turn("Summarize Ada.")
+result.value
+```
+
+For JSON/YAML imports, result schemas stay data-safe by resolving refs through
+`result_schemas` or `registries: %{result_schemas: ...}`.
 
 ## Commands
 
@@ -144,12 +241,32 @@ cp .env.example .env
 mix test --include live test/jidoka/live_req_llm_test.exs
 ```
 
+## API Stability
+
+This is the V2 milestone baseline. Stable application-facing concepts are:
+
+- `Jidoka.Agent.Spec` as immutable agent definition data;
+- `Jidoka.Turn.Plan`, `Jidoka.Turn.Request`, and `Jidoka.Turn.Result`;
+- `Jidoka.Harness` for execution, resume, sessions, stores, replay, and memory;
+- `Jidoka.Effect.Intent` / `Jidoka.Effect.Result` for external work;
+- `controls`, `operations`, `result`, `memory`, `trace`, and `eval` vocabulary.
+
+Current versioned data boundaries are import document `version: 1`, snapshot
+`schema_version: 1`, serialized snapshot prefix `jidoka:snapshot:v1:`, and
+harness session `schema_version: 1`.
+
+Production store/runtime integrations, handoffs, workflow DSL, and native
+provider tool-calling are still future surfaces.
+
 ## Guides
 
 - [Getting Started](guides/getting-started.md)
 - [Agent DSL](guides/agent-dsl.md)
+- [Controls](guides/controls.md)
+- [Structured Results](guides/structured-results.md)
 - [Runtime And Harness](guides/runtime-and-harness.md)
 - [Live LLM Tool Loop](guides/live-llm-tool-loop.md)
+- [Migration From V1](guides/migration-from-v1.md)
 - [Getting Started Livebook](guides/jidoka_v2_getting_started.livemd)
 
 ## Golden Tests
@@ -170,6 +287,9 @@ the full LLMDB or Spark internals.
   Jidoka agents.
 - `Effect.Intent` and `Effect.Result` make external work journalable and
   replayable.
+- Operation idempotency is explicit; `:unsafe_once` operations require an
+  operation control and incomplete unsafe intents are not retried automatically.
 - ReqLLM and Jido.Action are first-class runtime dependencies.
 
 Long-form architecture notes live in [JIDOKA_V2.md](JIDOKA_V2.md).
+Milestone release notes live in [CHANGELOG.md](CHANGELOG.md).

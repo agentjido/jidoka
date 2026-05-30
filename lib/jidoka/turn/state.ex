@@ -13,13 +13,20 @@ defmodule Jidoka.Turn.State do
               plan: Zoi.lazy({Turn.Plan, :schema, []}),
               request: Zoi.lazy({Turn.Request, :schema, []}),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
+              memory: Zoi.lazy({Jidoka.Memory.RecallResult, :schema, []}) |> Zoi.nullish(),
+              compactions:
+                Zoi.array(Zoi.lazy({Jidoka.Memory.Compaction, :schema, []})) |> Zoi.default([]),
               prompt: Zoi.any() |> Zoi.nullish(),
               llm_result: Zoi.lazy({Effect.LLMDecision, :schema, []}) |> Zoi.nullish(),
               operation_plan: Zoi.lazy({Effect.OperationRequest, :schema, []}) |> Zoi.nullish(),
               pending_effects:
                 Zoi.array(Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default([]),
+              pending_interrupt:
+                Zoi.lazy({Jidoka.Review.Interrupt, :schema, []}) |> Zoi.nullish(),
               result: Zoi.string() |> Zoi.nullish(),
-              status: Schema.atom_enum([:running, :finished]) |> Zoi.default(:running),
+              result_value: Zoi.any() |> Zoi.nullish(),
+              result_repair_count: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              status: Schema.atom_enum([:running, :waiting, :finished]) |> Zoi.default(:running),
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               started_at_ms: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
@@ -94,6 +101,16 @@ defmodule Jidoka.Turn.State do
 
   def pop_pending_effect(%__MODULE__{} = state), do: state
 
+  @spec put_pending_interrupt(t(), Jidoka.Review.Interrupt.t()) :: t()
+  def put_pending_interrupt(%__MODULE__{} = state, %Jidoka.Review.Interrupt{} = interrupt) do
+    %__MODULE__{state | pending_interrupt: interrupt, status: :waiting}
+  end
+
+  @spec clear_pending_interrupt(t()) :: t()
+  def clear_pending_interrupt(%__MODULE__{} = state) do
+    %__MODULE__{state | pending_interrupt: nil, status: :running}
+  end
+
   defp normalize_pending_effects(%{} = attrs) do
     cond do
       Map.has_key?(attrs, :pending_effects) or Map.has_key?(attrs, "pending_effects") ->
@@ -121,8 +138,8 @@ defmodule Jidoka.Turn.State do
     state = pop_pending_effect(state)
 
     case Effect.LLMDecision.from_input(output) do
-      {:ok, %Effect.LLMDecision{type: :final, content: content}} ->
-        finish_turn(state, content)
+      {:ok, %Effect.LLMDecision{type: :final} = decision} ->
+        apply_final_result(state, decision)
 
       {:ok, %Effect.LLMDecision{type: :operation, name: name, arguments: arguments} = decision} ->
         plan_operation_turn(state, decision, name, arguments)
@@ -176,7 +193,29 @@ defmodule Jidoka.Turn.State do
     %Agent.State{state | operation_results: results ++ [result]}
   end
 
-  defp finish_turn(%__MODULE__{} = state, content) do
+  defp apply_final_result(
+         %__MODULE__{spec: %Agent.Spec{result: nil}} = state,
+         %Effect.LLMDecision{content: content}
+       ) do
+    finish_turn(state, content, nil)
+  end
+
+  defp apply_final_result(
+         %__MODULE__{spec: %Agent.Spec{result: %Agent.Spec.Result{} = result}} = state,
+         %Effect.LLMDecision{} = decision
+       ) do
+    with {:ok, value} <- Agent.Spec.validate_result(state.spec, structured_final_value(decision)) do
+      state =
+        append_result_validated(state, value)
+
+      finish_turn(state, decision.content, value)
+    else
+      {:error, {:invalid_result, reason}} ->
+        maybe_repair_result(state, decision, result, reason)
+    end
+  end
+
+  defp finish_turn(%__MODULE__{} = state, content, value) do
     message = Agent.Message.assistant(content)
 
     {:ok,
@@ -184,9 +223,110 @@ defmodule Jidoka.Turn.State do
        state
        | pending_effects: [],
          result: content,
+         result_value: value,
          status: :finished,
          agent_state: append_message(state.agent_state, message)
      }}
+  end
+
+  defp structured_final_value(%Effect.LLMDecision{result: nil, content: content}) do
+    case Jason.decode(content) do
+      {:ok, value} -> value
+      {:error, _reason} -> content
+    end
+  end
+
+  defp structured_final_value(%Effect.LLMDecision{result: result}), do: result
+
+  defp maybe_repair_result(
+         %__MODULE__{} = state,
+         %Effect.LLMDecision{} = decision,
+         %Agent.Spec.Result{} = result,
+         reason
+       ) do
+    if state.result_repair_count < result.max_repairs do
+      repair_count = state.result_repair_count + 1
+
+      state =
+        state
+        |> append_result_repair_requested(decision, repair_count, reason)
+        |> put_repair_message(repair_count, reason)
+
+      {:ok,
+       %__MODULE__{
+         state
+         | llm_result: decision,
+           result_repair_count: repair_count,
+           status: :running
+       }}
+    else
+      {:error, {:invalid_result, reason, state.result_repair_count, result.max_repairs}}
+    end
+  end
+
+  defp put_repair_message(%__MODULE__{} = state, repair_count, reason) do
+    message =
+      Agent.Message.user(
+        "The previous final result did not match the declared result schema. " <>
+          "Return a corrected final JSON object with a valid result field. " <>
+          "Repair attempt #{repair_count}. Validation error: #{repair_reason(reason)}",
+        metadata: %{
+          "jidoka_result_repair" => true,
+          "repair_count" => repair_count
+        }
+      )
+
+    %__MODULE__{state | agent_state: append_message(state.agent_state, message)}
+  end
+
+  defp repair_reason(reason) when is_list(reason) do
+    reason
+    |> Enum.map(&repair_reason/1)
+    |> Enum.join("; ")
+  end
+
+  defp repair_reason(%{path: path, message: message}) do
+    path = Enum.map_join(List.wrap(path), ".", &to_string/1)
+
+    case path do
+      "" -> to_string(message)
+      path -> "#{path}: #{message}"
+    end
+  end
+
+  defp repair_reason(reason), do: inspect(reason)
+
+  defp append_result_validated(%__MODULE__{} = state, value) do
+    state
+    |> transition()
+    |> transition_event(:result_validated,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index,
+      data: %{result: value}
+    )
+    |> Turn.Transition.commit()
+  end
+
+  defp append_result_repair_requested(
+         %__MODULE__{} = state,
+         %Effect.LLMDecision{} = decision,
+         repair_count,
+         reason
+       ) do
+    state
+    |> transition()
+    |> transition_event(:result_repair_requested,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index,
+      data: %{
+        repair_count: repair_count,
+        content: decision.content
+      },
+      error: reason
+    )
+    |> Turn.Transition.commit()
   end
 
   defp plan_operation_turn(
@@ -200,7 +340,9 @@ defmodule Jidoka.Turn.State do
         {:error, {:unknown_operation, name}}
 
       operation ->
-        {:ok, put_operation_effect(state, operation, decision, name, arguments)}
+        with :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
+          {:ok, put_operation_effect(state, operation, decision, name, arguments)}
+        end
     end
   end
 

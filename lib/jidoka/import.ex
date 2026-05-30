@@ -26,8 +26,10 @@ defmodule Jidoka.Import do
           | {:control_registry, registry()}
           | {:context_schemas, registry()}
           | {:context_schema_registry, registry()}
+          | {:result_schemas, registry()}
+          | {:result_schema_registry, registry()}
 
-  @agent_keys ~w(id model generation instructions context context_schema runtime_defaults metadata)
+  @agent_keys ~w(id model generation instructions context context_schema result result_schema memory runtime_defaults metadata)
   @document_keys ~w(version agent tools controls operations runtime_defaults metadata)
 
   @doc """
@@ -90,6 +92,7 @@ defmodule Jidoka.Import do
 
   defp spec_attrs(%AgentDocument{} = document, opts) do
     with {:ok, context_schema} <- resolve_context_schema(document.agent, opts),
+         {:ok, result} <- resolve_result(document.agent, opts),
          {:ok, action_operations} <- action_operations(document.tools, opts),
          {:ok, explicit_operations} <- explicit_operations(document.operations),
          {:ok, controls} <- controls(document.controls, opts) do
@@ -102,11 +105,13 @@ defmodule Jidoka.Import do
          generation: Schema.get_key(agent, :generation),
          instructions: Schema.get_key(agent, :instructions, Agent.default_instructions()),
          context_schema: context_schema,
+         result: result,
+         memory: Schema.get_key(agent, :memory),
          operations: action_operations ++ explicit_operations,
          controls: controls,
          runtime_defaults:
            Schema.get_key(agent, :runtime_defaults, document.runtime_defaults) || %{},
-         metadata: import_metadata(document, context_schema, opts)
+         metadata: import_metadata(document, context_schema, result, opts)
        }}
     end
   end
@@ -144,6 +149,47 @@ defmodule Jidoka.Import do
 
       other ->
         {:error, {:invalid_context_ref, other}}
+    end
+  end
+
+  defp resolve_result(agent, opts) do
+    case Schema.get_key(agent, :result) || Schema.get_key(agent, :result_schema) do
+      nil ->
+        {:ok, nil}
+
+      %{} = result ->
+        resolve_result_map(result, opts)
+
+      ref when is_binary(ref) or is_atom(ref) ->
+        with {:ok, schema} <- fetch_registry(:result_schemas, ref, opts) do
+          Spec.Result.new(
+            schema: schema,
+            metadata: %{"schema_ref" => to_string(ref)}
+          )
+        end
+
+      other ->
+        {:error, {:invalid_result_ref, other}}
+    end
+  end
+
+  defp resolve_result_map(result, opts) do
+    case Schema.get_key(result, :ref) || Schema.get_key(result, :schema_ref) do
+      nil ->
+        {:error, {:invalid_result_ref, result}}
+
+      ref ->
+        with {:ok, schema} <- fetch_registry(:result_schemas, ref, opts) do
+          Spec.Result.new(
+            schema: schema,
+            max_repairs: Schema.get_key(result, :max_repairs, 1),
+            metadata:
+              result
+              |> Schema.get_key(:metadata, %{})
+              |> stringify_keys()
+              |> Map.put("schema_ref", to_string(ref))
+          )
+        end
     end
   end
 
@@ -222,7 +268,8 @@ defmodule Jidoka.Import do
   defp normalize_operation_attrs(attrs), do: attrs
 
   defp controls(controls, opts) when is_map(controls) do
-    with {:ok, inputs} <-
+    with :ok <- reject_legacy_result_controls(controls),
+         {:ok, inputs} <-
            boundary_controls(
              controls,
              opts,
@@ -231,21 +278,34 @@ defmodule Jidoka.Import do
              :invalid_input_control
            ),
          {:ok, operations} <- operation_controls(controls, opts),
-         {:ok, results} <-
+         {:ok, outputs} <-
            boundary_controls(
              controls,
              opts,
-             [:results, :result],
+             [:outputs, :output],
              Controls.Result,
-             :invalid_result_control
+             :invalid_output_control
            ) do
       Controls.new(
         max_turns: Schema.get_key(controls, :max_turns),
         timeout_ms: Schema.get_key(controls, :timeout_ms) || Schema.get_key(controls, :timeout),
         inputs: inputs,
         operations: operations,
-        results: results
+        outputs: outputs
       )
+    end
+  end
+
+  defp reject_legacy_result_controls(controls) do
+    cond do
+      match?({:ok, _value}, Schema.fetch_key(controls, :result)) ->
+        {:error, {:unsupported_control_key, :result, :output}}
+
+      match?({:ok, _value}, Schema.fetch_key(controls, :results)) ->
+        {:error, {:unsupported_control_key, :results, :outputs}}
+
+      true ->
+        :ok
     end
   end
 
@@ -348,12 +408,13 @@ defmodule Jidoka.Import do
     end
   end
 
-  defp import_metadata(%AgentDocument{} = document, context_schema, opts) do
+  defp import_metadata(%AgentDocument{} = document, context_schema, result, opts) do
     document.metadata
     |> stringify_keys()
     |> Map.put("source", "import")
     |> Map.put("import_version", document.version)
     |> Map.put("context_schema?", not is_nil(context_schema))
+    |> Map.put("result_schema?", not is_nil(result))
     |> maybe_put_source(Keyword.get(opts, :source))
   end
 
@@ -387,6 +448,13 @@ defmodule Jidoka.Import do
     Keyword.get(opts, :context_schemas) ||
       Keyword.get(opts, :context_schema_registry) ||
       nested_registry(opts, :context_schemas) ||
+      %{}
+  end
+
+  defp registry(:result_schemas, opts) do
+    Keyword.get(opts, :result_schemas) ||
+      Keyword.get(opts, :result_schema_registry) ||
+      nested_registry(opts, :result_schemas) ||
       %{}
   end
 

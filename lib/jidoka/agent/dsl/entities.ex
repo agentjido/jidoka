@@ -8,6 +8,8 @@ defmodule Jidoka.Agent.Dsl.Agent do
     :instructions,
     :description,
     :context,
+    :result,
+    :memory,
     :__spark_metadata__
   ]
 end
@@ -30,7 +32,7 @@ defmodule Jidoka.Agent.Dsl.InputControl do
   defstruct [:control, :metadata, :__spark_metadata__]
 end
 
-defmodule Jidoka.Agent.Dsl.ResultControl do
+defmodule Jidoka.Agent.Dsl.OutputControl do
   @moduledoc false
 
   defstruct [:control, :metadata, :__spark_metadata__]

@@ -9,11 +9,16 @@ defmodule Jidoka.Workflow.Steps do
 
   @spec assemble_prompt(Turn.State.t()) :: Turn.State.t()
   def assemble_prompt(%Turn.State{} = state) do
+    %Turn.State{} = state = append_memory_recalled(state)
+
     messages =
       [
         Agent.Message.system(state.spec.instructions),
+        memory_message(state.memory),
         Agent.Message.user(state.request.input)
-      ] ++ state.agent_state.messages
+      ]
+      |> Enum.reject(&is_nil/1)
+      |> Kernel.++(state.agent_state.messages)
 
     messages = Enum.map(messages, &Agent.Message.to_map/1)
 
@@ -34,6 +39,9 @@ defmodule Jidoka.Workflow.Steps do
       model: Config.model_ref(state.spec.model),
       messages: messages,
       operations: operations,
+      result: result_contract(state.spec.result),
+      memory: memory_contract(state.memory),
+      compactions: Enum.map(state.compactions, &Jidoka.projection/1),
       context: state.request.context,
       generation: state.spec.generation.params,
       loop_index: state.loop_index
@@ -94,6 +102,51 @@ defmodule Jidoka.Workflow.Steps do
 
   defp transition_event(%Turn.Transition{} = transition, event, attrs) do
     Turn.Transition.event(transition, event, attrs)
+  end
+
+  defp result_contract(nil), do: nil
+
+  defp result_contract(%Agent.Spec.Result{} = result) do
+    %{
+      schema?: true,
+      max_repairs: result.max_repairs,
+      metadata: result.metadata
+    }
+  end
+
+  defp append_memory_recalled(%Turn.State{memory: nil} = state), do: state
+  defp append_memory_recalled(%Turn.State{memory: %{entries: []}} = state), do: state
+
+  defp append_memory_recalled(%Turn.State{} = state) do
+    state
+    |> transition()
+    |> transition_event(:memory_recalled,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index,
+      data: memory_contract(state.memory)
+    )
+    |> Turn.Transition.commit()
+  end
+
+  defp memory_message(nil), do: nil
+  defp memory_message(%{entries: []}), do: nil
+
+  defp memory_message(memory) do
+    content =
+      memory.entries
+      |> Enum.map_join("\n", fn entry -> "- #{entry.content}" end)
+
+    Agent.Message.system("Relevant memory:\n" <> content)
+  end
+
+  defp memory_contract(nil), do: nil
+
+  defp memory_contract(memory) do
+    %{
+      entries: Enum.map(memory.entries, &Jidoka.projection/1),
+      count: length(memory.entries)
+    }
   end
 
   defp stable_key(parts) do

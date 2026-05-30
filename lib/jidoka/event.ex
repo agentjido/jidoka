@@ -24,7 +24,16 @@ defmodule Jidoka.Event do
     capability_call_failed: %{category: :runtime, phase: :interpret_effect, status: :failed},
     control_allowed: %{category: :control, phase: :control, status: :completed},
     control_blocked: %{category: :control, phase: :control, status: :failed},
+    control_interrupted: %{category: :control, phase: :control, status: :pending},
     control_failed: %{category: :control, phase: :control, status: :failed},
+    approval_requested: %{category: :approval, phase: :review, status: :pending},
+    approval_responded: %{category: :approval, phase: :review, status: :completed},
+    approval_applied: %{category: :approval, phase: :review, status: :completed},
+    result_validated: %{category: :result, phase: :validate_result, status: :completed},
+    result_repair_requested: %{category: :result, phase: :validate_result, status: :planned},
+    memory_recalled: %{category: :memory, phase: :memory, status: :completed},
+    memory_written: %{category: :memory, phase: :memory, status: :completed},
+    compaction_applied: %{category: :compaction, phase: :compaction, status: :completed},
     operation_observed: %{
       category: :operation,
       phase: :apply_operation_results,
@@ -32,16 +41,30 @@ defmodule Jidoka.Event do
     },
     turn_finished: %{category: :workflow, phase: :finish, status: :completed}
   }
-  @categories [:workflow, :effect, :runtime, :operation, :control]
+  @categories [
+    :workflow,
+    :effect,
+    :runtime,
+    :operation,
+    :control,
+    :approval,
+    :result,
+    :memory,
+    :compaction
+  ]
   @phases [
     :control,
+    :review,
+    :memory,
+    :compaction,
     :assemble_prompt,
     :plan_model_effect,
     :interpret_effect,
+    :validate_result,
     :apply_operation_results,
     :finish
   ]
-  @statuses [:planned, :started, :replayed, :completed, :failed]
+  @statuses [:planned, :pending, :started, :replayed, :completed, :failed]
 
   @schema Zoi.struct(
             __MODULE__,

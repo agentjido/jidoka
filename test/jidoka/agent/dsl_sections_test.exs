@@ -42,8 +42,9 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert entities.input.target == Jidoka.Agent.Dsl.InputControl
     assert entities.input.args == [:control]
 
-    assert entities.result.target == Jidoka.Agent.Dsl.ResultControl
-    assert entities.result.args == [:control]
+    assert entities.output.target == Jidoka.Agent.Dsl.OutputControl
+    assert entities.output.args == [:control]
+    refute Map.has_key?(entities, :result)
 
     assert entities.operation.target == Jidoka.Agent.Dsl.OperationControl
     assert entities.operation.args == [:control]

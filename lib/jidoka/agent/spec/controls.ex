@@ -27,6 +27,15 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
   @spec valid_kinds() :: [atom()]
   def valid_kinds, do: @valid_kinds
 
+  @doc "Returns true when this operation control applies to an operation name/kind."
+  @spec matches?(t(), String.t(), atom()) :: boolean()
+  def matches?(%__MODULE__{match: match}, operation_name, operation_kind) do
+    Enum.all?(match, fn
+      {:kind, kind} -> kind == operation_kind
+      {:name, name} -> name == operation_name
+    end)
+  end
+
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -162,7 +171,7 @@ end
 
 defmodule Jidoka.Agent.Spec.Controls.Result do
   @moduledoc """
-  Control attached to the final-result boundary.
+  Control attached to the final output boundary.
   """
 
   alias Jidoka.Schema
@@ -197,7 +206,7 @@ defmodule Jidoka.Agent.Spec.Controls.Result do
   def new!(attrs) do
     case new(attrs) do
       {:ok, result} -> result
-      {:error, reason} -> raise ArgumentError, "invalid result control: #{inspect(reason)}"
+      {:error, reason} -> raise ArgumentError, "invalid output control: #{inspect(reason)}"
     end
   end
 
@@ -245,10 +254,10 @@ defmodule Jidoka.Agent.Spec.Controls do
          {:ok, inputs} <- normalize_inputs(control_entries(attrs, :inputs, :input)),
          {:ok, operations} <-
            normalize_operations(control_entries(attrs, :operations, :operation)),
-         {:ok, results} <- normalize_results(control_entries(attrs, :results, :result)),
+         {:ok, results} <- normalize_results(output_entries(attrs)),
          :ok <- validate_unique_boundary_controls(inputs, Input, :duplicate_input_control),
          :ok <- validate_unique_operations(operations),
-         :ok <- validate_unique_boundary_controls(results, Result, :duplicate_result_control) do
+         :ok <- validate_unique_boundary_controls(results, Result, :duplicate_output_control) do
       attrs =
         attrs
         |> Map.delete(:timeout)
@@ -257,8 +266,14 @@ defmodule Jidoka.Agent.Spec.Controls do
         |> Map.delete("input")
         |> Map.delete(:operation)
         |> Map.delete("operation")
+        |> Map.delete(:output)
+        |> Map.delete("output")
+        |> Map.delete(:outputs)
+        |> Map.delete("outputs")
         |> Map.delete(:result)
         |> Map.delete("result")
+        |> Map.delete(:results)
+        |> Map.delete("results")
         |> Map.put(:max_turns, max_turns)
         |> Map.put(:timeout_ms, timeout_ms)
         |> Map.put(:inputs, inputs)
@@ -293,6 +308,19 @@ defmodule Jidoka.Agent.Spec.Controls do
     end
   end
 
+  defp output_entries(attrs) do
+    case Schema.fetch_key(attrs, :outputs) do
+      {:ok, value} ->
+        value
+
+      :error ->
+        case Schema.fetch_key(attrs, :output) do
+          {:ok, value} -> value
+          :error -> control_entries(attrs, :results, :result)
+        end
+    end
+  end
+
   defp normalize_positive_integer(nil), do: {:ok, nil}
   defp normalize_positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
 
@@ -309,7 +337,7 @@ defmodule Jidoka.Agent.Spec.Controls do
     do: normalize_boundary_controls(inputs, Input, :invalid_input_controls)
 
   defp normalize_results(results),
-    do: normalize_boundary_controls(results, Result, :invalid_result_controls)
+    do: normalize_boundary_controls(results, Result, :invalid_output_controls)
 
   defp normalize_boundary_controls(controls, module, _error_reason) when is_list(controls) do
     controls

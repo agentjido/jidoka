@@ -8,6 +8,11 @@ defmodule Jidoka.Runtime.ReqLLM.DecisionTest do
              Decision.parse_text(~s({"type":"final","content":"hello"}))
   end
 
+  test "parses structured result values from final decisions" do
+    assert {:ok, %{type: :final, content: "hello", result: %{"answer" => "Ada"}}} =
+             Decision.parse_text(~s({"type":"final","content":"hello","result":{"answer":"Ada"}}))
+  end
+
   test "parses operation decisions from JSON text" do
     assert {:ok, %{type: :operation, name: "weather", arguments: %{"city" => "Paris"}}} =
              Decision.parse_text(

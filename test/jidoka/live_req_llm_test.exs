@@ -81,10 +81,12 @@ defmodule Jidoka.LiveReqLLMTest do
       assert {:ok, %Turn.Result{} = result} =
                TimeAgent.run_turn("What time is it in Chicago? Use local_time.")
 
-      assert result.content =~ "jidoka_live_canary_0930"
+      assert result.content =~ "09:30"
 
-      assert [%Effect.OperationResult{operation: "local_time"}] =
+      assert [%Effect.OperationResult{operation: "local_time"} = operation_result] =
                result.agent_state.operation_results
+
+      assert Map.get(operation_result.output, "canary") == "jidoka_live_canary_0930"
 
       assert Enum.count(result.journal.results) == 3
     end

@@ -7,12 +7,16 @@ defmodule Jidoka.Runtime.Controls do
   """
 
   alias Jidoka.Agent.Spec.Controls.Input
+  alias Jidoka.Agent.Spec.Controls.Operation, as: OperationControl
   alias Jidoka.Agent.Spec.Controls.Result
+  alias Jidoka.Effect
+  alias Jidoka.Review.Interrupt
+  alias Jidoka.Runtime.Controls.Decision
+  alias Jidoka.Runtime.Controls.Operation
   alias Jidoka.Turn
 
-  @allow_decisions [:allow, :cont, :ok]
-
   @type boundary_control :: Input.t() | Result.t()
+  @type operation_control :: OperationControl.t()
 
   @spec run_input_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
   def run_input_controls(%Turn.State{} = state),
@@ -20,13 +24,19 @@ defmodule Jidoka.Runtime.Controls do
 
   @spec run_result_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
   def run_result_controls(%Turn.State{} = state),
-    do: run_controls(state, :result, state.spec.controls.results)
+    do: run_controls(state, :output, state.spec.controls.results)
+
+  @spec run_operation_controls(Turn.State.t(), Effect.Intent.t()) ::
+          {:ok, Turn.State.t()} | {:interrupt, Interrupt.t(), Turn.State.t()} | {:error, term()}
+  def run_operation_controls(%Turn.State{} = state, %Effect.Intent{} = intent) do
+    Operation.run(state, intent)
+  end
 
   defp run_controls(%Turn.State{} = state, boundary, controls)
        when is_atom(boundary) and is_list(controls) do
     Enum.reduce_while(controls, {:ok, state}, fn control, {:ok, state} ->
-      case call_control(control, state, boundary) do
-        decision when decision in @allow_decisions ->
+      case call_control(control, state, boundary) |> Decision.normalize() do
+        :allow ->
           {:cont, {:ok, append_control_event(state, control, boundary, :control_allowed)}}
 
         {:block, reason} ->
@@ -38,7 +48,7 @@ defmodule Jidoka.Runtime.Controls do
         {:error, reason} ->
           {:halt, {:error, {:control_failed, control.control, boundary, reason}}}
 
-        decision ->
+        {:invalid, decision} ->
           {:halt, {:error, {:invalid_control_decision, control.control, boundary, decision}}}
       end
     end)
@@ -65,6 +75,7 @@ defmodule Jidoka.Runtime.Controls do
       request: state.request,
       input: state.request.input,
       result: state.result,
+      result_value: state.result_value,
       context: state.request.context,
       agent_state: state.agent_state
     }

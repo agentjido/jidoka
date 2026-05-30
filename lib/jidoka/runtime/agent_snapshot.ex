@@ -2,6 +2,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
   @moduledoc "Serializable semantic snapshot for hibernate/resume."
 
   alias Jidoka.Id
+  alias Jidoka.Runtime.Review
   alias Jidoka.Schema
   alias Jidoka.Turn
 
@@ -103,7 +104,8 @@ defmodule Jidoka.Runtime.AgentSnapshot do
         snapshot_id: snapshot_id,
         agent_id: state.spec.id,
         cursor: %Turn.Cursor{cursor | loop_index: state.loop_index},
-        turn_state: state
+        turn_state: state,
+        metadata: snapshot_metadata(state, opts)
       )
     end
   end
@@ -136,6 +138,12 @@ defmodule Jidoka.Runtime.AgentSnapshot do
 
   defp validate_schema_version(%__MODULE__{schema_version: version}) do
     {:error, {:unsupported_snapshot_schema_version, version, @schema_version}}
+  end
+
+  defp snapshot_metadata(%Turn.State{} = state, opts) do
+    opts
+    |> Keyword.get(:metadata, %{})
+    |> Review.put_pending_metadata(state.pending_interrupt)
   end
 
   defp safe_binary_to_term(binary) when is_binary(binary) do

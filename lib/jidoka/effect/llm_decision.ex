@@ -16,6 +16,7 @@ defmodule Jidoka.Effect.LLMDecision do
             %{
               type: Schema.atom_enum(@types),
               content: Zoi.string() |> Zoi.nullish(),
+              result: Zoi.any() |> Zoi.nullish(),
               name: Schema.non_empty_string() |> Zoi.nullish(),
               arguments: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
@@ -88,6 +89,7 @@ defmodule Jidoka.Effect.LLMDecision do
     new!(
       type: :final,
       content: content,
+      result: Keyword.get(opts, :result),
       metadata: Keyword.get(opts, :metadata, %{})
     )
   end
@@ -103,8 +105,10 @@ defmodule Jidoka.Effect.LLMDecision do
   end
 
   @spec to_payload(t()) :: map()
-  def to_payload(%__MODULE__{type: :final, content: content}) do
-    %{type: :final, content: content}
+  def to_payload(%__MODULE__{type: :final, content: content, result: result}) do
+    %{type: :final, content: content, result: result}
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
   end
 
   def to_payload(%__MODULE__{type: :operation, name: name, arguments: arguments}) do

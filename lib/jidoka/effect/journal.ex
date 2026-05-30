@@ -37,4 +37,18 @@ defmodule Jidoka.Effect.Journal do
   end
 
   def result_for(%__MODULE__{results: results}, %Effect.Intent{id: id}), do: Map.get(results, id)
+
+  @spec intent_for(t(), Effect.Intent.t() | String.t()) :: Effect.Intent.t() | nil
+  def intent_for(%__MODULE__{intents: intents}, %Effect.Intent{id: id}), do: Map.get(intents, id)
+  def intent_for(%__MODULE__{intents: intents}, id) when is_binary(id), do: Map.get(intents, id)
+
+  @spec intent_recorded?(t(), Effect.Intent.t() | String.t()) :: boolean()
+  def intent_recorded?(%__MODULE__{} = journal, intent_or_id) do
+    not is_nil(intent_for(journal, intent_or_id))
+  end
+
+  @spec incomplete_intent?(t(), Effect.Intent.t()) :: boolean()
+  def incomplete_intent?(%__MODULE__{} = journal, %Effect.Intent{} = intent) do
+    intent_recorded?(journal, intent) and is_nil(result_for(journal, intent))
+  end
 end

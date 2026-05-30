@@ -3,7 +3,7 @@ defmodule Jidoka.Turn.Cursor do
 
   alias Jidoka.Schema
 
-  @phases [:start, :after_prompt, :before_effect]
+  @phases [:start, :after_prompt, :before_effect, :review, :wait]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -38,6 +38,17 @@ defmodule Jidoka.Turn.Cursor do
       metadata: %{
         "effect_id" => Map.get(effect, :id),
         "effect_kind" => Map.get(effect, :kind)
+      }
+    )
+  end
+
+  def review(interrupt) do
+    new!(
+      phase: :review,
+      metadata: %{
+        "interrupt_id" => Map.get(interrupt, :id),
+        "boundary" => Map.get(interrupt, :boundary),
+        "operation" => Map.get(interrupt, :operation)
       }
     )
   end

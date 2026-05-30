@@ -2,9 +2,11 @@ defmodule Jidoka.MultiTurnIntegrationTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
+  alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.IntegrationSupport.AccountAgent
+  alias Jidoka.IntegrationSupport.ApprovalControl
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
@@ -28,6 +30,12 @@ defmodule Jidoka.MultiTurnIntegrationTest do
             idempotency: :unsafe_once
           )
         ],
+        controls:
+          Controls.new!(
+            operations: [
+              %{control: ApprovalControl, match: %{name: "refund_order"}}
+            ]
+          ),
         runtime_defaults: %{max_model_turns: 4}
       )
 

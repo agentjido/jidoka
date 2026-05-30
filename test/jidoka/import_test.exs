@@ -25,6 +25,7 @@ defmodule Jidoka.ImportTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
+  alias Jidoka.Import.AgentDocument
   alias Jidoka.ImportTest.Support.{EchoAction, EchoControl}
 
   test "imports the smallest possible agent document with default instructions" do
@@ -62,6 +63,32 @@ defmodule Jidoka.ImportTest do
     assert [%{name: "lookup", idempotency: :pure}] = spec.operations
     assert spec.metadata["source_ref"]["kind"] == "string"
     assert spec.metadata["source_ref"]["format"] == "yaml"
+  end
+
+  test "imports memory policy data" do
+    assert {:ok, %Agent.Spec{memory: memory}} =
+             Jidoka.Import.load(%{
+               agent: %{
+                 id: "import_memory_agent",
+                 model: %{provider: :test, id: "memory-model"},
+                 memory: %{scope: "session", max_entries: "3"}
+               }
+             })
+
+    assert %Agent.Spec.Memory{scope: :session, max_entries: 3} = memory
+  end
+
+  test "import documents enforce the current document version" do
+    assert AgentDocument.version() == 1
+
+    assert {:error,
+            %Jidoka.Error.ValidationError{
+              details: %{reason: {:unsupported_import_document_version, 2, 1}}
+            }} =
+             Jidoka.Import.load(%{
+               version: 2,
+               agent: %{id: "future_import_agent", model: %{provider: :test, id: "model"}}
+             })
   end
 
   test "imports action refs through an explicit registry" do
@@ -113,6 +140,37 @@ defmodule Jidoka.ImportTest do
            ] = spec.controls.operations
   end
 
+  test "imports structured result schema refs through an explicit registry" do
+    result_schema =
+      Zoi.object(%{
+        answer: Zoi.string(),
+        score: Zoi.integer()
+      })
+
+    assert {:ok, %Agent.Spec{} = spec} =
+             Jidoka.Import.load(
+               %{
+                 agent: %{
+                   id: "import_result_agent",
+                   model: %{provider: :test, id: "result-model"},
+                   result: %{
+                     ref: "answer_result",
+                     max_repairs: 2
+                   }
+                 }
+               },
+               result_schemas: %{"answer_result" => result_schema}
+             )
+
+    assert %Agent.Spec.Result{max_repairs: 2, metadata: %{"schema_ref" => "answer_result"}} =
+             spec.result
+
+    assert spec.metadata["result_schema?"]
+
+    assert {:ok, %{answer: "Ada", score: 10}} =
+             Agent.Spec.Result.validate(spec.result, %{"answer" => "Ada", "score" => 10})
+  end
+
   test "imports planned singular control keys as data aliases" do
     assert {:ok, %Agent.Spec{} = spec} =
              Jidoka.Import.load(
@@ -127,7 +185,7 @@ defmodule Jidoka.ImportTest do
                      control: "echo_control",
                      when: %{kind: "action", name: "echo_value"}
                    },
-                   result: %{control: "echo_control"}
+                   output: %{control: "echo_control"}
                  }
                },
                controls: %{"echo_control" => EchoControl}
@@ -143,6 +201,27 @@ defmodule Jidoka.ImportTest do
            ] = spec.controls.operations
 
     assert [%Agent.Spec.Controls.Result{control: EchoControl}] = spec.controls.results
+  end
+
+  test "rejects legacy result control import keys" do
+    for legacy_key <- [:result, :results] do
+      assert {:error,
+              %Jidoka.Error.ValidationError{
+                details: %{reason: {:unsupported_control_key, ^legacy_key, _replacement}}
+              }} =
+               Jidoka.Import.load(
+                 %{
+                   agent: %{
+                     id: "import_legacy_#{legacy_key}_control_agent",
+                     model: %{provider: :test, id: "control-model"}
+                   },
+                   controls: %{
+                     legacy_key => %{control: "echo_control"}
+                   }
+                 },
+                 controls: %{"echo_control" => EchoControl}
+               )
+    end
   end
 
   test "returns validation errors for unknown refs and duplicate operations" do

@@ -106,6 +106,10 @@ defmodule Jidoka.Runtime.ReqLLM do
     To answer the user directly:
     {"type":"final","content":"your answer"}
 
+    If the prompt payload includes a non-null "result" contract, include a
+    "result" field with the structured application value:
+    {"type":"final","content":"short user-facing answer","result":{}}
+
     To call an available operation:
     {"type":"operation","name":"operation_name","arguments":{}}
 

@@ -9,10 +9,12 @@ defmodule Jidoka.Import.AgentDocument do
 
   alias Jidoka.Schema
 
+  @version 1
+
   @schema Zoi.struct(
             __MODULE__,
             %{
-              version: Zoi.integer() |> Zoi.positive() |> Zoi.default(1),
+              version: Zoi.integer() |> Zoi.positive() |> Zoi.default(@version),
               agent: Zoi.map(),
               tools: Zoi.map() |> Zoi.default(%{}),
               controls: Zoi.map() |> Zoi.default(%{}),
@@ -30,9 +32,31 @@ defmodule Jidoka.Import.AgentDocument do
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @spec version() :: pos_integer()
+  def version, do: @version
+
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs), do: Schema.parse(@schema, attrs)
+  def new(attrs) do
+    with {:ok, %__MODULE__{} = document} <- Schema.parse(@schema, attrs),
+         :ok <- validate_version(document) do
+      {:ok, document}
+    end
+  end
 
   @spec new!(keyword() | map()) :: t()
-  def new!(attrs), do: Schema.parse!(@schema, attrs, "imported agent document")
+  def new!(attrs) do
+    case new(attrs) do
+      {:ok, document} ->
+        document
+
+      {:error, reason} ->
+        raise ArgumentError, "invalid imported agent document: #{inspect(reason)}"
+    end
+  end
+
+  defp validate_version(%__MODULE__{version: @version}), do: :ok
+
+  defp validate_version(%__MODULE__{version: version}) do
+    {:error, {:unsupported_import_document_version, version, @version}}
+  end
 end

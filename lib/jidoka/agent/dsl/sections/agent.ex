@@ -41,6 +41,17 @@ defmodule Jidoka.Agent.Dsl.Sections.Agent do
           type: :any,
           required: false,
           doc: "Optional Zoi schema for runtime context."
+        ],
+        result: [
+          type: :any,
+          required: false,
+          doc:
+            "Optional Zoi schema or `Jidoka.Agent.Spec.Result` data for structured turn results."
+        ],
+        memory: [
+          type: :any,
+          required: false,
+          doc: "Optional memory policy data, `true`, or `false`."
         ]
       ]
     }

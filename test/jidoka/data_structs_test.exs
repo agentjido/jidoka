@@ -1,11 +1,23 @@
+defmodule Jidoka.DataStructsTest.Support.AllowControl do
+  @moduledoc false
+
+  use Jidoka.Control, name: "allow_operation"
+
+  @impl true
+  def call(_context), do: :cont
+end
+
 defmodule Jidoka.DataStructsTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
+  alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
+  alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
+  alias Jidoka.DataStructsTest.Support.AllowControl
 
   test "agent state accepts nil, maps, and structs as input" do
     assert {:ok, %Agent.State{messages: [], operation_results: [], metadata: %{}}} =
@@ -57,6 +69,98 @@ defmodule Jidoka.DataStructsTest do
 
     assert {:error, [%Zoi.Error{path: [:idempotency]}]} =
              Operation.new(name: "lookup", idempotency: :not_valid)
+  end
+
+  test "operation policies expose replay and control semantics" do
+    assert Operation.kind(Operation.new!(name: "lookup")) == :operation
+
+    assert Operation.kind(Operation.new!(name: "lookup", metadata: %{"runtime" => "jido_action"})) ==
+             :action
+
+    assert Operation.kind(Operation.new!(name: "lookup", metadata: %{kind: "workflow"})) ==
+             :workflow
+
+    assert Operation.requires_control?(:unsafe_once)
+    refute Operation.requires_control?(:idempotent)
+
+    refute Operation.replay_safe?(:unsafe_once)
+    assert Operation.replay_safe?(:dedupe)
+  end
+
+  test "unsafe once operations require explicit operation controls before planning" do
+    unsafe_operation =
+      Operation.new!(
+        name: "charge_card",
+        description: "Charges a customer card.",
+        idempotency: :unsafe_once
+      )
+
+    spec =
+      Agent.Spec.new!(
+        id: "unsafe_without_control",
+        instructions: "Charge only when explicitly requested.",
+        operations: [unsafe_operation]
+      )
+
+    assert {:error, {:unsafe_once_requires_control, "charge_card", :operation}} =
+             Agent.Spec.validate_operation_policies(spec)
+
+    assert {:error, {:unsafe_once_requires_control, "charge_card", :operation}} =
+             Turn.Plan.new(spec)
+
+    controlled_spec =
+      Agent.Spec.new!(
+        id: "unsafe_with_control",
+        instructions: "Charge only when explicitly requested.",
+        operations: [unsafe_operation],
+        controls:
+          Controls.new!(
+            operations: [
+              %{control: AllowControl, match: %{name: "charge_card"}}
+            ]
+          )
+      )
+
+    assert :ok = Agent.Spec.validate_operation_policies(controlled_spec)
+    assert {:ok, %Turn.Plan{}} = Turn.Plan.new(controlled_spec)
+  end
+
+  test "control specs accept output controls as the public data key" do
+    assert %Controls{results: [%Controls.Result{control: AllowControl}]} =
+             Controls.new!(
+               outputs: [
+                 %{control: AllowControl}
+               ]
+             )
+  end
+
+  test "structured result specs require Zoi schemas and normalize JSON-style keys" do
+    assert {:error, {:invalid_result_schema, :not_a_schema}} =
+             Agent.Spec.Result.new(schema: :not_a_schema)
+
+    assert_raise ArgumentError, ~r/invalid_result_schema/, fn ->
+      Agent.Spec.Result.new!(schema: :not_a_schema)
+    end
+
+    assert {:ok, %Agent.Spec.Result{} = result} =
+             Agent.Spec.Result.new(
+               schema:
+                 Zoi.object(%{
+                   answer: Zoi.string(),
+                   citations:
+                     Zoi.array(
+                       Zoi.object(%{
+                         url: Zoi.string()
+                       })
+                     )
+                 })
+             )
+
+    assert {:ok, %{answer: "Ada", citations: [%{url: "https://example.com"}]}} =
+             Agent.Spec.Result.validate(result, %{
+               "answer" => "Ada",
+               "citations" => [%{"url" => "https://example.com"}]
+             })
   end
 
   test "effect intents derive stable ids and results preserve status" do
@@ -178,6 +282,7 @@ defmodule Jidoka.DataStructsTest do
 
   test "turn cursors describe checkpoint positions" do
     intent = Effect.Intent.new(:operation, %{name: "lookup"})
+    interrupt = interrupt()
 
     assert %Turn.Cursor{phase: :after_prompt, loop_index: 0} = Turn.Cursor.after_prompt()
 
@@ -186,6 +291,35 @@ defmodule Jidoka.DataStructsTest do
 
     assert metadata["effect_id"] == intent.id
     assert metadata["effect_kind"] == :operation
+
+    assert %Turn.Cursor{phase: :review, metadata: review_metadata} = Turn.Cursor.review(interrupt)
+    assert review_metadata["interrupt_id"] == interrupt.id
+    assert review_metadata["operation"] == "lookup"
+  end
+
+  test "interrupt and approval contracts are serializable data" do
+    interrupt = interrupt()
+
+    assert Review.Interrupt.expired?(interrupt, 1_001) == false
+
+    interrupt = Review.Interrupt.with_review_window(interrupt, 1_000, 10)
+    assert interrupt.created_at_ms == 1_000
+    assert interrupt.expires_at_ms == 1_010
+    assert Review.Interrupt.expired?(interrupt, 1_011)
+
+    assert %Review.Request{
+             interrupt_id: interrupt_id,
+             operation: "lookup",
+             arguments: %{"id" => "A-1"}
+           } = Review.Request.from_interrupt!(interrupt)
+
+    assert interrupt_id == interrupt.id
+
+    assert %Review.Response{interrupt_id: ^interrupt_id, decision: :approved} =
+             Review.Response.approve(interrupt)
+
+    assert %Review.Response{interrupt_id: ^interrupt_id, decision: :denied, reason: :rejected} =
+             Review.Response.deny(interrupt.id, reason: :rejected)
   end
 
   test "agent snapshots round-trip from serializable maps" do
@@ -274,6 +408,26 @@ defmodule Jidoka.DataStructsTest do
       plan: plan,
       request: request,
       agent_state: request.agent_state
+    )
+  end
+
+  defp interrupt do
+    Review.Interrupt.new!(
+      id: Review.Interrupt.stable_id(["test", "lookup"]),
+      boundary: :operation,
+      control: __MODULE__,
+      control_name: "test_control",
+      reason: :approval_required,
+      agent_id: "snapshot_agent",
+      request_id: "turn_1",
+      loop_index: 0,
+      effect_id: "operation:lookup",
+      effect_kind: :operation,
+      operation: "lookup",
+      operation_kind: :operation,
+      arguments: %{"id" => "A-1"},
+      idempotency: :idempotent,
+      idempotency_key: "key"
     )
   end
 

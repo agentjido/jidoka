@@ -13,6 +13,9 @@ defmodule Jidoka.InspectionTest do
 
   alias Jidoka.Inspection.Preflight
   alias Jidoka.InspectionTest.Support.Agent
+  alias Jidoka.Harness
+  alias Jidoka.Harness.Session
+  alias Jidoka.Review
 
   test "Jidoka.inspect returns an agent inspection view" do
     assert %{
@@ -72,5 +75,62 @@ defmodule Jidoka.InspectionTest do
              :effect_completed,
              :turn_finished
            ]
+
+    assert %{
+             kind: :effect_journal,
+             intent_count: 1,
+             result_count: 1,
+             incomplete_intents: []
+           } = Jidoka.inspect(result.journal)
+  end
+
+  test "Jidoka.inspect summarizes sessions and replay data" do
+    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "session inspected"}} end
+
+    assert {:ok, %Session{} = session} =
+             Harness.start_session(Agent.spec(), session_id: "sess_inspection")
+
+    assert {:ok, %Session{} = session, _result} =
+             Harness.run_session(session, [input: "Inspect session", context: %{tenant_id: "t"}],
+               llm: llm
+             )
+
+    assert %{
+             kind: :session,
+             session_id: "sess_inspection",
+             status: :finished,
+             request_count: 1,
+             snapshot_count: 0,
+             replay: %{kind: :replay, status: :finished, timeline: timeline}
+           } = Jidoka.inspect(session)
+
+    assert Enum.any?(timeline, &(&1.event == :turn_finished))
+  end
+
+  test "Jidoka.inspect summarizes review requests" do
+    interrupt =
+      Review.Interrupt.new!(
+        id: "intr_inspect",
+        boundary: :operation,
+        control: __MODULE__,
+        control_name: "inspection_review",
+        reason: :approval_required,
+        agent_id: "inspection_agent",
+        request_id: "turn_inspection",
+        loop_index: 0,
+        effect_id: "operation:lookup",
+        effect_kind: :operation,
+        operation: "lookup",
+        arguments: %{"id" => "123"}
+      )
+
+    request = Review.Request.from_interrupt!(interrupt)
+
+    assert %{
+             kind: :review_request,
+             interrupt_id: "intr_inspect",
+             operation: "lookup",
+             reason: :approval_required
+           } = Jidoka.inspect(request)
   end
 end

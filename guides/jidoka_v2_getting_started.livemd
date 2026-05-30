@@ -60,6 +60,15 @@ spec = NotebookTimeAgent.spec()
 }
 ```
 
+```elixir
+Jidoka.inspect(NotebookTimeAgent)
+```
+
+```elixir
+{:ok, preflight} = Jidoka.preflight(NotebookTimeAgent, "What time is it in Chicago?")
+preflight.prompt.messages
+```
+
 ## Run With A Deterministic Model
 
 ```elixir
@@ -86,6 +95,39 @@ end
 result.content
 ```
 
+## Trace And Eval
+
+```elixir
+{:ok, trace_sink} = Jidoka.Trace.Sink.InMemory.start_link()
+
+:ok =
+  Jidoka.Trace.record(result.events, {Jidoka.Trace.Sink.InMemory, pid: trace_sink},
+    policy: Jidoka.Trace.Policy.new!(redact_keys: [], omit_keys: [])
+  )
+
+Jidoka.Trace.Sink.InMemory.list(trace_sink)
+|> Enum.map(& &1.event)
+```
+
+```elixir
+{:ok, eval_run} =
+  Jidoka.Eval.run_case(
+    [
+      id: "notebook_time_eval",
+      agent: NotebookTimeAgent.spec(),
+      input: "What time is it in Chicago?",
+      assertions: %{
+        contains: "09:30",
+        operation_called: :local_time
+      }
+    ],
+    llm: fake_llm,
+    operations: Jidoka.Runtime.JidoActions.operations([NotebookLocalTime])
+  )
+
+Jidoka.inspect(eval_run)
+```
+
 ## Inspect The Journal
 
 ```elixir
@@ -98,6 +140,39 @@ result.journal.results
     output: effect_result.output
   }
 end)
+```
+
+## Structured Result
+
+```elixir
+defmodule NotebookProfileAgent do
+  use Jidoka.Agent
+
+  agent :notebook_profile_agent do
+    model %{provider: :test, id: "notebook-model"}
+    instructions "Return a short profile summary."
+
+    result schema: Zoi.object(%{
+             name: Zoi.string(),
+             score: Zoi.integer() |> Zoi.gte(0)
+           }),
+           max_repairs: 1
+  end
+end
+```
+
+```elixir
+profile_llm = fn _intent, _journal ->
+  {:ok,
+   %{
+     type: :final,
+     content: "Ada is ready.",
+     result: %{"name" => "Ada", "score" => 10}
+   }}
+end
+
+{:ok, profile_result} = NotebookProfileAgent.run_turn("Summarize Ada.", llm: profile_llm)
+profile_result.value
 ```
 
 ## Hibernate And Resume

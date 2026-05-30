@@ -10,6 +10,9 @@ defmodule Jidoka.Inspection do
   alias Jidoka.Effect
   alias Jidoka.Error
   alias Jidoka.Inspection.Preflight
+  alias Jidoka.Harness
+  alias Jidoka.Memory
+  alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
   alias Jidoka.Workflow.Steps
@@ -24,9 +27,14 @@ defmodule Jidoka.Inspection do
           | Turn.Result.t()
           | Turn.Cursor.t()
           | AgentSnapshot.t()
+          | Harness.Session.t()
+          | Harness.Replay.t()
           | Effect.Journal.t()
           | Effect.Intent.t()
           | Effect.Result.t()
+          | Review.Interrupt.t()
+          | Review.Request.t()
+          | Review.Response.t()
           | term()
 
   @doc "Returns a stable inspection view for a Jidoka value."
@@ -51,6 +59,20 @@ defmodule Jidoka.Inspection do
   def inspect(%Turn.Result{} = result, _opts), do: turn_result_view(result)
   def inspect(%Turn.State{} = state, _opts), do: turn_state_view(state)
   def inspect(%AgentSnapshot{} = snapshot, _opts), do: snapshot_view(snapshot)
+  def inspect(%Harness.Session{} = session, _opts), do: session_view(session)
+  def inspect(%Harness.Replay{} = replay, _opts), do: replay_view(replay)
+  def inspect(%Effect.Journal{} = journal, _opts), do: journal_view(journal)
+  def inspect(%Effect.Intent{} = intent, _opts), do: intent_view(intent)
+  def inspect(%Effect.Result{} = result, _opts), do: effect_result_view(result)
+
+  def inspect(%Review.Interrupt{} = interrupt, _opts),
+    do: review_view(:review_interrupt, interrupt)
+
+  def inspect(%Review.Request{} = request, _opts), do: review_view(:review_request, request)
+  def inspect(%Review.Response{} = response, _opts), do: review_view(:review_response, response)
+  def inspect(%Memory.RecallResult{} = result, _opts), do: memory_view(:memory_recall, result)
+  def inspect(%Memory.WriteResult{} = result, _opts), do: memory_view(:memory_write, result)
+  def inspect(%Jidoka.Eval.Run{} = run, _opts), do: eval_run_view(run)
   def inspect(value, _opts), do: Jidoka.projection(value)
 
   @doc "Assembles the prompt for a turn without interpreting any effects."
@@ -59,9 +81,10 @@ defmodule Jidoka.Inspection do
   def preflight(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- resolve_plan(spec_or_plan),
          {:ok, request} <- request(request_input, opts),
-         :ok <- Agent.Spec.validate_context(plan.spec, request.context) do
+         :ok <- Agent.Spec.validate_context(plan.spec, request.context),
+         {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts) do
       plan
-      |> initial_state(request)
+      |> initial_state(request, memory)
       |> Steps.assemble_prompt()
       |> preflight_from_state()
     else
@@ -126,7 +149,109 @@ defmodule Jidoka.Inspection do
     }
   end
 
+  defp session_view(%Harness.Session{} = session) do
+    replay =
+      case Harness.replay(session) do
+        {:ok, replay} -> replay_view(replay)
+        {:error, reason} -> %{error: Jidoka.error_to_map(reason)}
+      end
+
+    %{
+      kind: :session,
+      session_id: session.session_id,
+      agent_id: session.agent_id,
+      status: session.status,
+      request_count: length(session.requests),
+      snapshot_count: length(session.snapshots),
+      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.projection/1),
+      latest_cursor: latest_cursor(session),
+      replay: replay,
+      result: Jidoka.projection(session.result),
+      error: Jidoka.projection(session.error)
+    }
+  end
+
+  defp replay_view(%Harness.Replay{} = replay) do
+    %{
+      kind: :replay,
+      session_id: replay.session_id,
+      agent_id: replay.agent_id,
+      status: replay.status,
+      snapshot_count: length(replay.snapshots),
+      timeline: replay.timeline,
+      journal: replay.journal,
+      pending_reviews: replay.pending_reviews,
+      result: replay.result,
+      metadata: replay.metadata
+    }
+  end
+
+  defp journal_view(%Effect.Journal{} = journal) do
+    intents = journal.intents |> Map.values() |> Enum.sort_by(& &1.id)
+    results = journal.results |> Map.values() |> Enum.sort_by(& &1.intent_id)
+    result_ids = results |> Enum.map(& &1.intent_id) |> MapSet.new()
+
+    %{
+      kind: :effect_journal,
+      intent_count: length(intents),
+      result_count: length(results),
+      incomplete_intents:
+        intents
+        |> Enum.reject(&MapSet.member?(result_ids, &1.id))
+        |> Enum.map(&Jidoka.projection/1),
+      intents: Enum.map(intents, &Jidoka.projection/1),
+      results: Enum.map(results, &Jidoka.projection/1)
+    }
+  end
+
+  defp intent_view(%Effect.Intent{} = intent) do
+    %{
+      kind: :effect_intent,
+      effect_id: intent.id,
+      effect_kind: intent.kind,
+      idempotency: intent.idempotency,
+      idempotency_key: intent.idempotency_key,
+      payload: Jidoka.projection(intent.payload),
+      metadata: Jidoka.projection(intent.metadata)
+    }
+  end
+
+  defp effect_result_view(%Effect.Result{} = result) do
+    %{
+      kind: :effect_result,
+      intent_id: result.intent_id,
+      effect_kind: result.kind,
+      status: result.status,
+      output: Jidoka.projection(result.output),
+      metadata: Jidoka.projection(result.metadata)
+    }
+  end
+
+  defp review_view(kind, review), do: Map.put(Jidoka.projection(review), :kind, kind)
+
+  defp memory_view(kind, result), do: Map.put(Jidoka.projection(result), :kind, kind)
+
+  defp eval_run_view(%Jidoka.Eval.Run{} = run) do
+    %{
+      kind: :eval_run,
+      case_id: run.case_id,
+      status: run.status,
+      assertion_count: length(run.assertions),
+      failed_assertions: Enum.filter(run.assertions, &(&1.status == :failed)),
+      observations: run.observations,
+      result: Jidoka.projection(run.result),
+      error: Jidoka.projection(run.error)
+    }
+  end
+
   defp timeline(events), do: Jidoka.Extensions.Trace.timeline(events)
+
+  defp latest_cursor(%Harness.Session{} = session) do
+    case Harness.Session.latest_snapshot(session) do
+      %AgentSnapshot{} = snapshot -> Jidoka.projection(snapshot.cursor)
+      nil -> nil
+    end
+  end
 
   defp resolve_plan(%Turn.Plan{} = plan), do: {:ok, plan}
 
@@ -167,12 +292,13 @@ defmodule Jidoka.Inspection do
     end
   end
 
-  defp initial_state(%Turn.Plan{} = plan, %Turn.Request{} = request) do
+  defp initial_state(%Turn.Plan{} = plan, %Turn.Request{} = request, memory) do
     Turn.State.new!(
       spec: plan.spec,
       plan: plan,
       request: request,
-      agent_state: request.agent_state
+      agent_state: request.agent_state,
+      memory: memory
     )
   end
 

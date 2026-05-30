@@ -35,8 +35,11 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
 
   defp parse_final(object) do
     case Schema.get_key(object, :content) do
-      content when is_binary(content) -> {:ok, LLMDecision.final(content)}
-      other -> {:error, {:invalid_final_content, other}}
+      content when is_binary(content) ->
+        {:ok, LLMDecision.final(content, result: Schema.get_key(object, :result))}
+
+      other ->
+        {:error, {:invalid_final_content, other}}
     end
   end
 

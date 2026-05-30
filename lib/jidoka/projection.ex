@@ -12,6 +12,8 @@ defmodule Jidoka.Projection do
   alias Jidoka.Effect
   alias Jidoka.Event
   alias Jidoka.Error
+  alias Jidoka.Harness
+  alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
 
@@ -24,6 +26,8 @@ defmodule Jidoka.Projection do
       model: Jidoka.Config.model_ref(spec.model),
       generation: project(spec.generation),
       context_schema?: not is_nil(spec.context_schema),
+      result: project(spec.result),
+      memory: project(spec.memory),
       operations: Enum.map(spec.operations, &project/1),
       controls: project(spec.controls),
       runtime_defaults: project_value(spec.runtime_defaults),
@@ -36,6 +40,23 @@ defmodule Jidoka.Projection do
       params: project_value(generation.params),
       provider_options: project_value(generation.provider_options),
       extra: project_value(generation.extra)
+    }
+  end
+
+  def project(%Agent.Spec.Result{} = result) do
+    %{
+      schema?: not is_nil(result.schema),
+      max_repairs: result.max_repairs,
+      metadata: project_value(result.metadata)
+    }
+  end
+
+  def project(%Agent.Spec.Memory{} = memory) do
+    %{
+      enabled: memory.enabled,
+      scope: memory.scope,
+      max_entries: memory.max_entries,
+      metadata: project_value(memory.metadata)
     }
   end
 
@@ -54,7 +75,7 @@ defmodule Jidoka.Projection do
       timeout_ms: controls.timeout_ms,
       inputs: Enum.map(controls.inputs, &project/1),
       operations: Enum.map(controls.operations, &project/1),
-      results: Enum.map(controls.results, &project/1),
+      outputs: Enum.map(controls.results, &project/1),
       metadata: project_value(controls.metadata)
     }
   end
@@ -121,11 +142,16 @@ defmodule Jidoka.Projection do
       plan: project(state.plan),
       request: project(state.request),
       agent_state: project(state.agent_state),
+      memory: project(state.memory),
+      compactions: Enum.map(state.compactions, &project/1),
       prompt: project_value(state.prompt),
       llm_result: project_value(state.llm_result),
       operation_plan: project_value(state.operation_plan),
       pending_effects: Enum.map(state.pending_effects, &project/1),
+      pending_interrupt: project(state.pending_interrupt),
       result: state.result,
+      result_value: project_value(state.result_value),
+      result_repair_count: state.result_repair_count,
       status: state.status,
       loop_index: state.loop_index,
       started_at_ms: state.started_at_ms,
@@ -146,6 +172,7 @@ defmodule Jidoka.Projection do
   def project(%Turn.Result{} = result) do
     %{
       content: result.content,
+      value: project_value(result.value),
       agent_state: project(result.agent_state),
       journal: project(result.journal),
       events: project_value(result.events),
@@ -216,6 +243,65 @@ defmodule Jidoka.Projection do
     }
   end
 
+  def project(%Jidoka.Memory.Entry{} = entry) do
+    %{
+      id: entry.id,
+      agent_id: entry.agent_id,
+      session_id: entry.session_id,
+      content: entry.content,
+      metadata: project_value(entry.metadata)
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
+  end
+
+  def project(%Jidoka.Memory.RecallRequest{} = request) do
+    %{
+      agent_id: request.agent_id,
+      session_id: request.session_id,
+      scope: request.scope,
+      query: request.query,
+      limit: request.limit,
+      metadata: project_value(request.metadata)
+    }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
+  end
+
+  def project(%Jidoka.Memory.RecallResult{} = result) do
+    %{
+      request: project(result.request),
+      entries: Enum.map(result.entries, &project/1),
+      metadata: project_value(result.metadata)
+    }
+  end
+
+  def project(%Jidoka.Memory.WriteRequest{} = request) do
+    %{
+      entry: project(request.entry),
+      metadata: project_value(request.metadata)
+    }
+  end
+
+  def project(%Jidoka.Memory.WriteResult{} = result) do
+    %{
+      request: project(result.request),
+      entry: project(result.entry),
+      status: result.status,
+      metadata: project_value(result.metadata)
+    }
+  end
+
+  def project(%Jidoka.Memory.Compaction{} = compaction) do
+    %{
+      id: compaction.id,
+      agent_id: compaction.agent_id,
+      summary: compaction.summary,
+      source_message_ids: compaction.source_message_ids,
+      metadata: project_value(compaction.metadata)
+    }
+  end
+
   def project(%AgentSnapshot{} = snapshot) do
     %{
       schema_version: snapshot.schema_version,
@@ -224,6 +310,107 @@ defmodule Jidoka.Projection do
       cursor: project(snapshot.cursor),
       turn_state: project(snapshot.turn_state),
       metadata: project_value(snapshot.metadata)
+    }
+  end
+
+  def project(%Harness.Session{} = session) do
+    %{
+      schema_version: session.schema_version,
+      session_id: session.session_id,
+      agent_id: session.agent_id,
+      status: session.status,
+      requests: Enum.map(session.requests, &project/1),
+      snapshots: Enum.map(session.snapshots, &project/1),
+      result: project(session.result),
+      pending_reviews: Enum.map(session.pending_reviews, &project/1),
+      error: project_value(session.error),
+      metadata: project_value(session.metadata)
+    }
+  end
+
+  def project(%Harness.Replay{} = replay) do
+    replay
+    |> Map.from_struct()
+    |> project_value()
+  end
+
+  def project(%Jidoka.Trace.Policy{} = policy) do
+    %{
+      enabled: policy.enabled,
+      sample_rate: policy.sample_rate,
+      redact_keys: policy.redact_keys,
+      omit_keys: policy.omit_keys,
+      metadata: project_value(policy.metadata)
+    }
+  end
+
+  def project(%Jidoka.Eval.Case{} = eval_case) do
+    %{
+      id: eval_case.id,
+      agent: project(eval_case.agent),
+      request: project(eval_case.request),
+      assertions: project_value(eval_case.assertions),
+      metadata: project_value(eval_case.metadata)
+    }
+  end
+
+  def project(%Jidoka.Eval.Run{} = run) do
+    %{
+      case_id: run.case_id,
+      status: run.status,
+      result: project(run.result),
+      error: project_value(run.error),
+      assertions: project_value(run.assertions),
+      observations: project_value(run.observations),
+      metadata: project_value(run.metadata)
+    }
+  end
+
+  def project(%Review.Interrupt{} = interrupt) do
+    %{
+      id: interrupt.id,
+      boundary: interrupt.boundary,
+      control: interrupt.control_name,
+      reason: project_value(interrupt.reason),
+      agent_id: interrupt.agent_id,
+      request_id: interrupt.request_id,
+      loop_index: interrupt.loop_index,
+      effect_id: interrupt.effect_id,
+      effect_kind: interrupt.effect_kind,
+      operation: interrupt.operation,
+      operation_kind: interrupt.operation_kind,
+      arguments: project_value(interrupt.arguments),
+      idempotency: interrupt.idempotency,
+      idempotency_key: interrupt.idempotency_key,
+      created_at_ms: interrupt.created_at_ms,
+      expires_at_ms: interrupt.expires_at_ms,
+      metadata: project_value(interrupt.metadata)
+    }
+  end
+
+  def project(%Review.Request{} = request) do
+    %{
+      id: request.id,
+      interrupt_id: request.interrupt_id,
+      agent_id: request.agent_id,
+      request_id: request.request_id,
+      boundary: request.boundary,
+      operation: request.operation,
+      arguments: project_value(request.arguments),
+      reason: project_value(request.reason),
+      created_at_ms: request.created_at_ms,
+      expires_at_ms: request.expires_at_ms,
+      metadata: project_value(request.metadata)
+    }
+  end
+
+  def project(%Review.Response{} = response) do
+    %{
+      interrupt_id: response.interrupt_id,
+      decision: response.decision,
+      reason: project_value(response.reason),
+      responded_at_ms: response.responded_at_ms,
+      metadata: project_value(response.metadata)
     }
   end
 

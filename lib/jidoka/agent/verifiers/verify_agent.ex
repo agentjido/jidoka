@@ -68,6 +68,15 @@ defmodule Jidoka.Agent.Verifiers.VerifyAgent do
            agent
          )}
 
+      not valid_result?(agent.result) ->
+        {:error,
+         dsl_error(
+           "`agent.result` must be a Zoi schema or `Jidoka.Agent.Spec.Result` data when provided.",
+           module,
+           [:agent, :result],
+           agent
+         )}
+
       true ->
         :ok
     end
@@ -93,6 +102,11 @@ defmodule Jidoka.Agent.Verifiers.VerifyAgent do
 
   defp valid_generation?(value),
     do: match?({:ok, _generation}, Jidoka.Config.normalize_generation(value))
+
+  defp valid_result?(nil), do: true
+
+  defp valid_result?(value),
+    do: match?({:ok, _result}, Jidoka.Agent.Spec.Result.from_input(value))
 
   defp dsl_error(message, module, path, entity \\ nil, hint \\ nil) do
     Spark.Error.DslError.exception(

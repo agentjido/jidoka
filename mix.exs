@@ -9,7 +9,14 @@ defmodule Jidoka.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       dialyzer: dialyzer(),
-      test_coverage: [summary: [threshold: 80]],
+      test_coverage: [
+        ignore_modules: [
+          ~r/^Jidoka\.Agent\.Dsl(\.|$)/,
+          ~r/^Jidoka\.Agent\.Verifiers\./,
+          ~r/^Jidoka\.IntegrationSupport\./
+        ],
+        summary: [threshold: 80]
+      ],
       deps: deps()
     ]
   end

@@ -9,11 +9,15 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
   alias Jidoka.Error
   alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Runtime.Controls
   alias Jidoka.Effect
+  alias Jidoka.Review.Interrupt
   alias Jidoka.Turn
 
   @spec interpret_pending(Turn.State.t(), Capabilities.t()) ::
-          {:ok, Effect.Result.t(), Turn.State.t()} | {:error, term()}
+          {:ok, Effect.Result.t(), Turn.State.t()}
+          | {:interrupt, Interrupt.t(), Turn.State.t()}
+          | {:error, term()}
   def interpret_pending(%Turn.State{} = state, %Capabilities{} = capabilities) do
     case Turn.State.current_pending_effect(state) do
       %Effect.Intent{} = intent ->
@@ -40,9 +44,52 @@ defmodule Jidoka.Runtime.EffectInterpreter do
         {:ok, result, append_effect_trace(state, intent, :effect_replayed)}
 
       nil ->
-        journal = Effect.Journal.put_intent(state.journal, intent)
-        state = %Turn.State{state | journal: journal}
-        state = append_effect_trace(state, intent, :effect_started)
+        with :ok <- validate_incomplete_effect_replay(state, intent) do
+          journal = Effect.Journal.put_intent(state.journal, intent)
+          state = %Turn.State{state | journal: journal}
+          state = append_effect_trace(state, intent, :effect_started)
+
+          interpret_after_controls(state, intent, capabilities, journal)
+        end
+    end
+  end
+
+  defp validate_incomplete_effect_replay(
+         %Turn.State{journal: journal},
+         %Effect.Intent{idempotency: :unsafe_once} = intent
+       ) do
+    cond do
+      approved_interrupt_id(intent) ->
+        :ok
+
+      Effect.Journal.incomplete_intent?(journal, intent) ->
+        {:error,
+         Error.normalize({:unsafe_once_incomplete_effect, intent},
+           operation: effect_operation(intent),
+           phase: :effect,
+           intent_id: intent.id,
+           effect_kind: intent.kind
+         )}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp validate_incomplete_effect_replay(_state, _intent), do: :ok
+
+  defp approved_interrupt_id(%Effect.Intent{metadata: metadata}) when is_map(metadata) do
+    Map.get(metadata, :approved_interrupt_id) || Map.get(metadata, "approved_interrupt_id")
+  end
+
+  defp interpret_after_controls(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Capabilities{} = capabilities,
+         %Effect.Journal{} = journal
+       ) do
+    case run_effect_controls(state, intent) do
+      {:ok, %Turn.State{} = state} ->
         state = append_effect_trace(state, intent, :capability_call_started)
 
         with {:ok, result} <- call_capability(intent, capabilities, journal) do
@@ -53,8 +100,37 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
           {:ok, result, state}
         end
+
+      {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
+        {:interrupt, interrupt, state}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
+
+  defp run_effect_controls(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent) do
+    case Controls.run_operation_controls(state, intent) do
+      {:ok, %Turn.State{} = state} ->
+        {:ok, state}
+
+      {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
+        {:interrupt, interrupt, state}
+
+      {:error, reason} ->
+        {:error,
+         Error.normalize(reason,
+           operation: effect_operation(intent),
+           phase: :control,
+           agent_id: state.spec.id,
+           request_id: effect_request_id(state, intent),
+           intent_id: intent.id,
+           effect_kind: intent.kind
+         )}
+    end
+  end
+
+  defp run_effect_controls(%Turn.State{} = state, %Effect.Intent{}), do: {:ok, state}
 
   defp call_capability(%Effect.Intent{kind: :llm} = intent, %Capabilities{llm: llm}, journal) do
     case invoke_capability(llm, intent, journal) do

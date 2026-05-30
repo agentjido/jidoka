@@ -55,7 +55,7 @@ defmodule Jidoka.Agent.DslTest do
         max_turns 5
         timeout 2_000
         input JidokaTest.CompiledDslControl#{suffix}
-        result JidokaTest.CompiledDslControl#{suffix}
+        output JidokaTest.CompiledDslControl#{suffix}
 
         operation JidokaTest.CompiledDslControl#{suffix},
           when: [kind: :action, name: :compiled_tool_#{suffix}]
@@ -138,6 +138,32 @@ defmodule Jidoka.Agent.DslTest do
     end
 
     assert {:ok, "hello"} = agent_module.chat("Say hello", llm: llm)
+  end
+
+  test "compiles a structured result schema from the agent DSL" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "StructuredResultDslAgent#{suffix}")
+
+    Code.compile_string("""
+    defmodule JidokaTest.StructuredResultDslAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :structured_result_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+
+        result schema: Zoi.object(%{
+                 answer: Zoi.string(),
+                 score: Zoi.integer()
+               }),
+               max_repairs: 2
+      end
+    end
+    """)
+
+    assert %Jidoka.Agent.Spec.Result{max_repairs: 2} = result = agent_module.spec().result
+
+    assert {:ok, %{answer: "Ada", score: 10}} =
+             Jidoka.Agent.Spec.Result.validate(result, %{"answer" => "Ada", "score" => 10})
   end
 
   test "uses the configured default model for bare agents" do

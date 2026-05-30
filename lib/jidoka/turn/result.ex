@@ -10,6 +10,7 @@ defmodule Jidoka.Turn.Result do
             __MODULE__,
             %{
               content: Zoi.string(),
+              value: Zoi.any() |> Zoi.nullish(),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
               events: Zoi.array(Zoi.lazy({Jidoka.Event, :schema, []})) |> Zoi.default([]),
@@ -35,6 +36,7 @@ defmodule Jidoka.Turn.Result do
   def from_turn_state!(%Turn.State{status: :finished, result: content} = state) do
     new!(
       content: content,
+      value: state.result_value,
       agent_state: state.agent_state,
       journal: state.journal,
       events: state.events
