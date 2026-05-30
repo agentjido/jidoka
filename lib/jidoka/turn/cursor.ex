@@ -8,7 +8,7 @@ defmodule Jidoka.Turn.Cursor do
   @schema Zoi.struct(
             __MODULE__,
             %{
-              phase: Zoi.enum(@phases) |> Zoi.default(:start),
+              phase: Schema.atom_enum(@phases) |> Zoi.default(:start),
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               metadata: Zoi.map() |> Zoi.default(%{})
             },

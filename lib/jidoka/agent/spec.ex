@@ -4,8 +4,10 @@ defmodule Jidoka.Agent.Spec do
   """
 
   alias Jidoka.Config
-  alias Jidoka.Agent.Spec.{Generation, Operation}
+  alias Jidoka.Agent.Spec.{Controls, Generation, Operation}
   alias Jidoka.Schema
+
+  @default_controls Controls.new!()
 
   @schema Zoi.struct(
             __MODULE__,
@@ -16,6 +18,7 @@ defmodule Jidoka.Agent.Spec do
               generation: Zoi.lazy({Generation, :schema, []}),
               context_schema: Zoi.any() |> Zoi.nullish(),
               operations: Zoi.array(Zoi.lazy({Operation, :schema, []})) |> Zoi.default([]),
+              controls: Zoi.lazy({Controls, :schema, []}) |> Zoi.default(@default_controls),
               runtime_defaults: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
@@ -32,7 +35,8 @@ defmodule Jidoka.Agent.Spec do
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     with {:ok, attrs} <- normalize_model_input(attrs),
-         {:ok, attrs} <- normalize_generation_input(attrs) do
+         {:ok, attrs} <- normalize_generation_input(attrs),
+         {:ok, attrs} <- normalize_controls_input(attrs) do
       Schema.parse(@schema, attrs)
     end
   end
@@ -87,12 +91,28 @@ defmodule Jidoka.Agent.Spec do
     end
   end
 
+  defp normalize_controls_input(attrs) do
+    case raw_controls(attrs) do
+      nil ->
+        {:ok, put_controls(attrs, Controls.new!())}
+
+      controls ->
+        with {:ok, controls} <- Controls.from_input(controls) do
+          {:ok, put_controls(attrs, controls)}
+        end
+    end
+  end
+
   defp raw_model(attrs) when is_map(attrs) do
     Map.get(attrs, :model, Map.get(attrs, "model"))
   end
 
   defp raw_generation(attrs) when is_map(attrs) do
     Map.get(attrs, :generation, Map.get(attrs, "generation"))
+  end
+
+  defp raw_controls(attrs) when is_map(attrs) do
+    Map.get(attrs, :controls, Map.get(attrs, "controls"))
   end
 
   defp put_model(attrs, model) when is_map(attrs) do
@@ -105,5 +125,11 @@ defmodule Jidoka.Agent.Spec do
     attrs
     |> Map.delete("generation")
     |> Map.put(:generation, generation)
+  end
+
+  defp put_controls(attrs, controls) when is_map(attrs) do
+    attrs
+    |> Map.delete("controls")
+    |> Map.put(:controls, controls)
   end
 end

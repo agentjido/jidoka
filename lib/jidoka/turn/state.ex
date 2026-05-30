@@ -14,14 +14,14 @@ defmodule Jidoka.Turn.State do
               request: Zoi.lazy({Turn.Request, :schema, []}),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
               prompt: Zoi.any() |> Zoi.nullish(),
-              llm_result: Zoi.map() |> Zoi.nullish(),
-              operation_plan: Zoi.map() |> Zoi.nullish(),
+              llm_result: Zoi.lazy({Effect.LLMDecision, :schema, []}) |> Zoi.nullish(),
+              operation_plan: Zoi.lazy({Effect.OperationRequest, :schema, []}) |> Zoi.nullish(),
               pending_effect: Zoi.lazy({Effect.Intent, :schema, []}) |> Zoi.nullish(),
               result: Zoi.string() |> Zoi.nullish(),
-              status: Zoi.enum([:running, :finished]) |> Zoi.default(:running),
+              status: Schema.atom_enum([:running, :finished]) |> Zoi.default(:running),
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
-              traces: Zoi.array(Zoi.map()) |> Zoi.default([]),
+              events: Zoi.array(Zoi.lazy({Jidoka.Event, :schema, []})) |> Zoi.default([]),
               diagnostics: Zoi.array(Zoi.any()) |> Zoi.default([])
             },
             coerce: true
@@ -55,10 +55,15 @@ defmodule Jidoka.Turn.State do
         output: output
       })
       when is_map(output) do
-    case normalize_llm_output(output) do
-      {:final, content} -> finish_turn(state, content)
-      {:operation, name, arguments} -> plan_operation_turn(state, name, arguments)
-      {:error, reason} -> {:error, reason}
+    case Effect.LLMDecision.from_input(output) do
+      {:ok, %Effect.LLMDecision{type: :final, content: content}} ->
+        finish_turn(state, content)
+
+      {:ok, %Effect.LLMDecision{type: :operation, name: name, arguments: arguments} = decision} ->
+        plan_operation_turn(state, decision, name, arguments)
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -69,26 +74,30 @@ defmodule Jidoka.Turn.State do
           output: output
         }
       ) do
-    observation = %{
-      role: :tool,
-      content: inspect(output),
-      operation: Schema.get_key(state.pending_effect.payload, :name),
-      output: output
-    }
+    with {:ok, observation} <- Effect.OperationResult.from_effect(state.pending_effect, output) do
+      agent_state =
+        state.agent_state
+        |> append_message(Effect.OperationResult.to_message(observation))
+        |> append_operation_result(observation)
 
-    agent_state =
-      state.agent_state
-      |> append_message(observation)
-      |> append_operation_result(observation)
+      state =
+        %__MODULE__{
+          state
+          | pending_effect: nil,
+            operation_plan: nil,
+            agent_state: agent_state
+        }
+        |> transition()
+        |> transition_event(:operation_observed,
+          agent_id: state.spec.id,
+          request_id: state.request.request_id,
+          loop_index: state.loop_index,
+          operation: observation.operation
+        )
+        |> Turn.Transition.commit()
 
-    {:ok,
-     %__MODULE__{
-       state
-       | pending_effect: nil,
-         operation_plan: nil,
-         agent_state: agent_state,
-         traces: state.traces ++ [%{event: :operation_observed, operation: observation.operation}]
-     }}
+      {:ok, state}
+    end
   end
 
   def apply_effect_result(_state, %Effect.Result{status: :error, output: output}),
@@ -104,53 +113,40 @@ defmodule Jidoka.Turn.State do
     %Agent.State{state | operation_results: results ++ [result]}
   end
 
-  defp normalize_llm_output(output) do
-    case normalized_type(Schema.get_key(output, :type)) do
-      "final" ->
-        case Schema.get_key(output, :content) do
-          content when is_binary(content) -> {:final, content}
-          other -> {:error, {:invalid_final_content, other}}
-        end
-
-      "operation" ->
-        name = Schema.get_key(output, :name)
-        arguments = Schema.get_key(output, :arguments, %{})
-
-        cond do
-          not is_binary(name) -> {:error, {:invalid_operation_name, name}}
-          not is_map(arguments) -> {:error, {:invalid_operation_arguments, arguments}}
-          true -> {:operation, name, arguments}
-        end
-
-      type ->
-        {:error, {:invalid_llm_decision_type, type}}
-    end
-  end
-
-  defp normalized_type(type) when is_atom(type), do: Atom.to_string(type)
-  defp normalized_type(type), do: type
-
   defp finish_turn(%__MODULE__{} = state, content) do
-    message = %{role: :assistant, content: content}
+    message = Agent.Message.assistant(content)
 
-    {:ok,
-     %__MODULE__{
-       state
-       | pending_effect: nil,
-         result: content,
-         status: :finished,
-         agent_state: append_message(state.agent_state, message),
-         traces: state.traces ++ [%{event: :turn_finished}]
-     }}
+    state =
+      %__MODULE__{
+        state
+        | pending_effect: nil,
+          result: content,
+          status: :finished,
+          agent_state: append_message(state.agent_state, message)
+      }
+      |> transition()
+      |> transition_event(:turn_finished,
+        agent_id: state.spec.id,
+        request_id: state.request.request_id,
+        loop_index: state.loop_index
+      )
+      |> Turn.Transition.commit()
+
+    {:ok, state}
   end
 
-  defp plan_operation_turn(%__MODULE__{} = state, name, arguments) do
+  defp plan_operation_turn(
+         %__MODULE__{} = state,
+         %Effect.LLMDecision{} = decision,
+         name,
+         arguments
+       ) do
     case operation_for(state, name) do
       nil ->
         {:error, {:unknown_operation, name}}
 
       operation ->
-        {:ok, put_operation_effect(state, operation, name, arguments)}
+        {:ok, put_operation_effect(state, operation, decision, name, arguments)}
     end
   end
 
@@ -158,15 +154,16 @@ defmodule Jidoka.Turn.State do
     Enum.find(operations, &(&1.name == name))
   end
 
-  defp put_operation_effect(%__MODULE__{} = state, operation, name, arguments) do
-    llm_result = %{type: :operation, name: name, arguments: arguments}
+  defp put_operation_effect(%__MODULE__{} = state, operation, decision, name, arguments) do
+    operation_request =
+      Effect.OperationRequest.new!(
+        name: name,
+        arguments: arguments,
+        request_id: state.request.request_id,
+        loop_index: state.loop_index
+      )
 
-    payload = %{
-      name: name,
-      arguments: arguments,
-      request_id: state.request.request_id,
-      loop_index: state.loop_index
-    }
+    payload = Effect.OperationRequest.to_payload(operation_request)
 
     effect =
       Effect.Intent.new(:operation, payload,
@@ -184,11 +181,26 @@ defmodule Jidoka.Turn.State do
 
     %__MODULE__{
       state
-      | llm_result: llm_result,
-        operation_plan: payload,
-        pending_effect: effect,
-        traces: state.traces ++ [%{event: :effect_planned, kind: :operation, id: effect.id}]
+      | llm_result: decision,
+        operation_plan: operation_request,
+        pending_effect: effect
     }
+    |> transition()
+    |> transition_event(:effect_planned,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index,
+      effect_id: effect.id,
+      effect_kind: :operation,
+      operation: name
+    )
+    |> Turn.Transition.commit()
+  end
+
+  defp transition(%__MODULE__{} = state), do: Turn.Transition.new!(state)
+
+  defp transition_event(%Turn.Transition{} = transition, event, attrs) do
+    Turn.Transition.event(transition, event, attrs)
   end
 
   defp stable_key(parts) do

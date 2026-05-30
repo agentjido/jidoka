@@ -3,11 +3,11 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
   Parses the constrained JSON decision protocol used by the ReqLLM runtime.
   """
 
+  alias Jidoka.Effect.LLMDecision
   alias Jidoka.Schema
 
   @type t ::
-          %{type: :final, content: String.t()}
-          | %{type: :operation, name: String.t(), arguments: map()}
+          LLMDecision.t()
 
   @spec parse_text(String.t() | nil) :: {:ok, t()} | {:error, term()}
   def parse_text(nil), do: {:error, :empty_llm_response}
@@ -15,7 +15,7 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
   def parse_text(text) when is_binary(text) do
     case decode_json_object(text) do
       {:ok, object} -> parse_object(object)
-      {:error, _reason} -> {:ok, %{type: :final, content: String.trim(text)}}
+      {:error, _reason} -> {:ok, LLMDecision.final(String.trim(text))}
     end
   end
 
@@ -35,7 +35,7 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
 
   defp parse_final(object) do
     case Schema.get_key(object, :content) do
-      content when is_binary(content) -> {:ok, %{type: :final, content: content}}
+      content when is_binary(content) -> {:ok, LLMDecision.final(content)}
       other -> {:error, {:invalid_final_content, other}}
     end
   end
@@ -52,7 +52,7 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
         {:error, {:invalid_operation_arguments, arguments}}
 
       true ->
-        {:ok, %{type: :operation, name: name, arguments: arguments}}
+        {:ok, LLMDecision.operation(name, arguments)}
     end
   end
 

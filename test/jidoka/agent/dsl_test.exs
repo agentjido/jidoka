@@ -30,6 +30,13 @@ defmodule Jidoka.Agent.DslTest do
       def run(_params, _context), do: {:ok, %{ok: true}}
     end
 
+    defmodule JidokaTest.CompiledDslControl#{suffix} do
+      use Jidoka.Control, name: "compiled_control_#{suffix}"
+
+      @impl true
+      def call(_operation), do: :cont
+    end
+
     defmodule JidokaTest.CompiledDslAgent#{suffix} do
       use Jidoka.Agent
 
@@ -43,6 +50,11 @@ defmodule Jidoka.Agent.DslTest do
       tools do
         action JidokaTest.CompiledDslAction#{suffix}
       end
+
+      controls do
+        operation JidokaTest.CompiledDslControl#{suffix},
+          when: [kind: :action, name: :compiled_tool_#{suffix}]
+      end
     end
     """)
 
@@ -53,6 +65,15 @@ defmodule Jidoka.Agent.DslTest do
 
     assert [%Jidoka.Agent.Spec.Operation{name: ^tool_name}] =
              agent_module.spec().operations
+
+    assert [
+             %Jidoka.Agent.Spec.Controls.Operation{
+               control: control_module,
+               match: %{kind: :action, name: ^tool_name}
+             }
+           ] = agent_module.spec().controls.operations
+
+    assert control_module.name() == "compiled_control_#{suffix}"
 
     assert agent_module.spec().metadata["context_schema?"]
 
@@ -88,6 +109,7 @@ defmodule Jidoka.Agent.DslTest do
              Jidoka.Config.model_ref(Jidoka.Config.default_model())
 
     assert spec.operations == []
+    assert spec.controls.operations == []
 
     llm = fn _intent, _journal ->
       {:ok, %{type: :final, content: "hello"}}
@@ -235,6 +257,46 @@ defmodule Jidoka.Agent.DslTest do
 
         tools do
           action String
+        end
+      end
+      """)
+    end
+  end
+
+  test "rejects invalid operation controls" do
+    suffix = System.unique_integer([:positive])
+
+    assert_raise Spark.Error.DslError, ~r/must expose `name\/0` and `call\/1`/, fn ->
+      Code.compile_string("""
+      defmodule JidokaTest.InvalidControlDslAgent#{suffix} do
+        use Jidoka.Agent
+
+        agent :invalid_control_agent_#{suffix}
+
+        controls do
+          operation String, when: [kind: :action, name: :lookup]
+        end
+      end
+      """)
+    end
+
+    assert_raise Spark.Error.DslError, ~r/invalid operation control/, fn ->
+      Code.compile_string("""
+      defmodule JidokaTest.BadControlMatch#{suffix} do
+        use Jidoka.Control, name: "bad_control_match_#{suffix}"
+
+        @impl true
+        def call(_operation), do: :cont
+      end
+
+      defmodule JidokaTest.BadControlMatchAgent#{suffix} do
+        use Jidoka.Agent
+
+        agent :bad_control_match_agent_#{suffix}
+
+        controls do
+          operation JidokaTest.BadControlMatch#{suffix},
+            when: [kind: :unknown, name: :lookup]
         end
       end
       """)

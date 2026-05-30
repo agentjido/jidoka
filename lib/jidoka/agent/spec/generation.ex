@@ -67,11 +67,31 @@ defmodule Jidoka.Agent.Spec.Generation do
     attrs = Schema.normalize_attrs(input)
 
     if Map.has_key?(attrs, :params) or Map.has_key?(attrs, "params") do
-      attrs
+      update_params(attrs)
     else
-      %{params: attrs}
+      %{params: normalize_param_keys(attrs)}
     end
   end
+
+  defp update_params(attrs) do
+    params = Map.get(attrs, :params, Map.get(attrs, "params", %{}))
+
+    attrs
+    |> Map.delete("params")
+    |> Map.put(:params, normalize_param_keys(params))
+  end
+
+  defp normalize_param_keys(params) when is_map(params) do
+    Map.new(params, fn {key, value} -> {normalize_param_key(key), value} end)
+  end
+
+  defp normalize_param_keys(params), do: params
+
+  defp normalize_param_key(key) when is_binary(key) do
+    Enum.find(@known_param_keys, key, &(Atom.to_string(&1) == key))
+  end
+
+  defp normalize_param_key(key), do: key
 
   defp maybe_put_provider_options(opts, provider_options) when provider_options == %{}, do: opts
 
@@ -85,9 +105,7 @@ defmodule Jidoka.Agent.Spec.Generation do
   defp normalize_key(key) when is_atom(key), do: key
 
   defp normalize_key(key) when is_binary(key) do
-    Enum.find(@known_param_keys, &(Atom.to_string(&1) == key)) || String.to_existing_atom(key)
-  rescue
-    ArgumentError ->
+    Enum.find(@known_param_keys, &(Atom.to_string(&1) == key)) ||
       raise ArgumentError,
             "generation param #{inspect(key)} is not a known option; put provider-specific values under provider_options"
   end

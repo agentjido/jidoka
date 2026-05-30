@@ -46,13 +46,16 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
   defp fetch_agent_module(_context), do: {:error, :missing_agent_module}
 
   defp build_request(input, params, context) do
-    Turn.Request.new(
-      input: input,
-      request_id: get(params, :request_id, default_request_id()),
-      agent_state: current_jidoka_state(context),
-      context: get(params, :context, %{}),
-      metadata: get(params, :metadata, %{})
-    )
+    attrs =
+      %{
+        input: input,
+        agent_state: current_jidoka_state(context),
+        context: get(params, :context, %{}),
+        metadata: get(params, :metadata, %{})
+      }
+      |> maybe_put(:request_id, get(params, :request_id))
+
+    Turn.Request.new(attrs)
   end
 
   defp current_jidoka_state(%{state: state}) when is_map(state) do
@@ -124,7 +127,4 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
-
-  defp default_request_id,
-    do: "turn_" <> Base.url_encode64(:crypto.strong_rand_bytes(8), padding: false)
 end

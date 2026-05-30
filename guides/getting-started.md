@@ -79,6 +79,45 @@ Jidoka.Config.model_ref(spec.model)
 The spec is definition data. It contains no live clients, processes, or API
 keys.
 
+## Import An Agent
+
+The same Phase 1 agent shape can be imported from JSON or YAML:
+
+```yaml
+agent:
+  id: time_agent
+  model: openai:gpt-4o-mini
+  generation:
+    temperature: 0.0
+    max_tokens: 500
+  instructions: Call local_time when asked for the time.
+tools:
+  actions:
+    - local_time
+```
+
+Runtime-only values are resolved through explicit registries:
+
+```elixir
+yaml = """
+agent:
+  id: time_agent
+  model: openai:gpt-4o-mini
+  generation:
+    temperature: 0.0
+    max_tokens: 500
+  instructions: Call local_time when asked for the time.
+tools:
+  actions:
+    - local_time
+"""
+
+{:ok, spec} =
+  Jidoka.import(yaml,
+    actions: %{"local_time" => MyApp.LocalTime}
+  )
+```
+
 ## Run A Turn
 
 For live execution:

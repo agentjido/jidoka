@@ -155,7 +155,7 @@ defmodule JidokaTest do
 
     assert result.content == "The weather in Paris is sunny."
     assert Enum.count(result.journal.results) == 3
-    assert [%{operation: "weather"}] = result.agent_state.operation_results
+    assert [%Effect.OperationResult{operation: "weather"}] = result.agent_state.operation_results
   end
 
   test "minimal agent DSL compiles to a Jido-backed tool loop" do

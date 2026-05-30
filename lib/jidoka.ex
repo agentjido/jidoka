@@ -16,6 +16,7 @@ defmodule Jidoka do
   alias Jidoka.Agent
   alias Jidoka.Error
   alias Jidoka.Harness
+  alias Jidoka.Inspection
   alias Jidoka.Runtime.AgentServerState
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.Signals
@@ -60,6 +61,12 @@ defmodule Jidoka do
   """
   @spec new_agent(keyword() | map()) :: {:ok, Agent.Spec.t()} | {:error, term()}
   def new_agent(attrs), do: agent(attrs)
+
+  @doc """
+  Imports a JSON/YAML agent document string into `Jidoka.Agent.Spec`.
+  """
+  @spec import(String.t(), keyword()) :: {:ok, Agent.Spec.t()} | {:error, term()}
+  def import(contents, opts \\ []), do: Jidoka.Import.import(contents, opts)
 
   @doc """
   Starts a Jidoka DSL agent under the default `Jidoka.Jido` process tree.
@@ -220,10 +227,10 @@ defmodule Jidoka do
   @doc """
   Resumes from a durable agent snapshot.
 
-  The snapshot may be an `AgentSnapshot` struct or map-shaped serialized data
-  that can be rebuilt by the snapshot schema.
+  The snapshot may be an `AgentSnapshot` struct, map-shaped snapshot data, or
+  the opaque string returned by `Jidoka.Runtime.AgentSnapshot.serialize/1`.
   """
-  @spec resume(AgentSnapshot.t() | keyword() | map(), runtime_opts()) :: run_result()
+  @spec resume(AgentSnapshot.t() | keyword() | map() | String.t(), runtime_opts()) :: run_result()
   def resume(snapshot_input, opts \\ []) do
     case Harness.resume(snapshot_input, opts) do
       {:ok, _result} = ok ->
@@ -250,6 +257,34 @@ defmodule Jidoka do
   def error_to_map(error), do: Error.to_map(error)
 
   @doc """
+  Returns a stable inspection view for an agent, plan, turn, snapshot, journal,
+  or other Jidoka data value.
+  """
+  @spec inspect(term(), keyword()) :: term()
+  def inspect(value, opts \\ []), do: Inspection.inspect(value, opts)
+
+  @doc """
+  Assembles the prompt for a turn without calling an LLM or tools.
+  """
+  @spec preflight(plan_input() | module(), request_input(), runtime_opts()) ::
+          {:ok, Inspection.Preflight.t()} | {:error, term()}
+  def preflight(spec_or_plan, request_input, opts \\ []) do
+    case Inspection.preflight(spec_or_plan, request_input, opts) do
+      {:ok, _preflight} = ok ->
+        ok
+
+      {:error, reason} ->
+        {:error, Error.normalize(reason, operation: :preflight)}
+    end
+  end
+
+  @doc """
+  Projects a Jidoka data contract into a stable inspection map.
+  """
+  @spec projection(term()) :: term()
+  def projection(value), do: Jidoka.Projection.project(value)
+
+  @doc """
   Normalizes any error term into a Splode-backed `Jidoka.Error` exception.
   """
   @spec normalize_error(term(), keyword() | map()) :: Exception.t()
@@ -258,7 +293,7 @@ defmodule Jidoka do
   defp plan_from_agent!({:ok, %Agent.Spec{} = spec}), do: Turn.Plan.new!(spec)
 
   defp plan_from_agent!({:error, reason}),
-    do: raise(ArgumentError, "invalid agent spec: #{inspect(reason)}")
+    do: raise(ArgumentError, "invalid agent spec: #{Kernel.inspect(reason)}")
 
   defp run_result_from_jido_agent(%Jido.Agent{state: state}) do
     case AgentServerState.from_jido_state(state) do

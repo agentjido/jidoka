@@ -7,7 +7,7 @@ defmodule Jidoka.Agent.Spec.GenerationTest do
     assert {:ok, %Generation{} = generation} =
              Generation.from_input(%{"temperature" => 0.2, "max_tokens" => 128})
 
-    assert generation.params == %{"temperature" => 0.2, "max_tokens" => 128}
+    assert generation.params == %{temperature: 0.2, max_tokens: 128}
     assert Keyword.get(Generation.to_req_llm_opts(generation), :temperature) == 0.2
     assert Keyword.get(Generation.to_req_llm_opts(generation), :max_tokens) == 128
   end

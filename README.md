@@ -24,13 +24,21 @@ through the Runic spine, and paused/resumed through explicit snapshots.
 This is the V2 kernel. It currently supports:
 
 - Spark DSL agents through `use Jidoka.Agent`;
+- JSON/YAML imports through `Jidoka.import/2`;
 - Zoi-backed `Agent.Spec`, turn, effect, and snapshot structs;
 - model normalization through ReqLLM/LLMDB;
 - Jido actions as model-callable tools;
+- operation controls as data on `Agent.Spec.Controls`;
 - default process hosting through `Jidoka.Jido` and `Jido.AgentServer`;
 - a constrained JSON model-decision protocol;
 - a Runic-backed ReAct-style loop;
 - hibernate/resume at safe boundaries;
+- a small `Jidoka.Extension` behaviour, with trace as the first built-in
+  extension;
+- neutral `Jidoka.Event` values emitted through `Jidoka.Turn.Transition` and
+  projected by the trace extension;
+- stable inspection through `Jidoka.inspect/1` and prompt preflight through
+  `Jidoka.preflight/3`;
 - deterministic unit tests and an opt-in live ReqLLM integration test.
 
 ## Quick Start
@@ -83,6 +91,33 @@ defmodule MyApp.Assistant do
 end
 ```
 
+The equivalent JSON/YAML import can be just as small:
+
+```yaml
+agent:
+  id: assistant
+  model: openai:gpt-4o-mini
+```
+
+```elixir
+yaml = """
+agent:
+  id: assistant
+  model: openai:gpt-4o-mini
+"""
+
+{:ok, spec} = Jidoka.import(yaml)
+{:ok, text} = Jidoka.chat(spec, "Hello")
+```
+
+For debugging, inspect the compiled agent or preflight the exact prompt without
+calling an LLM:
+
+```elixir
+Jidoka.inspect(MyApp.Assistant)
+{:ok, preflight} = Jidoka.preflight(MyApp.Assistant, "What can you do?")
+```
+
 When `model` is omitted, Jidoka uses:
 
 ```elixir
@@ -119,8 +154,8 @@ mix test --include live test/jidoka/live_req_llm_test.exs
 
 The public DSL-to-spec contract is locked by golden tests in
 `test/jidoka/golden/dsl_to_spec_test.exs`. These tests intentionally compare a
-stable projection of `Agent.Spec` and `Turn.Plan` rather than the full LLMDB or
-Spark internals.
+stable `Jidoka.projection/1` view of `Agent.Spec` and `Turn.Plan` rather than
+the full LLMDB or Spark internals.
 
 ## Design Notes
 

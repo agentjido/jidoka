@@ -17,9 +17,9 @@ defmodule Jidoka.Turn.Plan do
             __MODULE__,
             %{
               spec: Zoi.lazy({Agent.Spec, :schema, []}),
-              workflow_profile: Zoi.enum(@workflow_profiles) |> Zoi.default(:tool_loop),
+              workflow_profile: Schema.atom_enum(@workflow_profiles) |> Zoi.default(:tool_loop),
               max_model_turns: Zoi.integer() |> Zoi.positive() |> Zoi.default(8),
-              phases: Zoi.array(Zoi.atom()) |> Zoi.default(@phases),
+              phases: Zoi.array(Schema.atom_enum(@phases)) |> Zoi.default(@phases),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true

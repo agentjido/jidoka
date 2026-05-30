@@ -1,13 +1,16 @@
 defmodule Jidoka.Agent.State do
   @moduledoc "Durable semantic state for an agent session."
 
+  alias Jidoka.Agent
+  alias Jidoka.Effect
   alias Jidoka.Schema
 
   @schema Zoi.struct(
             __MODULE__,
             %{
-              messages: Zoi.array(Zoi.map()) |> Zoi.default([]),
-              operation_results: Zoi.array(Zoi.map()) |> Zoi.default([]),
+              messages: Zoi.array(Zoi.lazy({Agent.Message, :schema, []})) |> Zoi.default([]),
+              operation_results:
+                Zoi.array(Zoi.lazy({Effect.OperationResult, :schema, []})) |> Zoi.default([]),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true

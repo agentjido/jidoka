@@ -37,7 +37,7 @@ defmodule Jidoka.Runtime.ReqLLM do
 
   @doc false
   @spec generate(Effect.Intent.t(), Effect.Journal.t(), [option()]) ::
-          {:ok, map()} | {:error, term()}
+          {:ok, Effect.LLMDecision.t()} | {:error, term()}
   def generate(%Effect.Intent{kind: :llm, payload: payload}, _journal, opts) do
     llm_opts =
       payload

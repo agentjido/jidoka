@@ -29,6 +29,22 @@ defmodule Jidoka.Schema do
   @spec non_empty_string() :: Zoi.schema()
   def non_empty_string, do: Zoi.string(coerce: true) |> Zoi.min(1)
 
+  @spec atom_enum([atom()]) :: Zoi.schema()
+  def atom_enum(values) when is_list(values) do
+    Zoi.union([
+      Zoi.enum(values),
+      Zoi.string() |> Zoi.transform({__MODULE__, :parse_atom_enum, [values]})
+    ])
+  end
+
+  @doc false
+  def parse_atom_enum(value, values, _opts) when is_binary(value) and is_list(values) do
+    case Enum.find(values, &(Atom.to_string(&1) == value)) do
+      nil -> {:error, "invalid enum value: #{value}"}
+      value -> {:ok, value}
+    end
+  end
+
   @spec put_default(map(), atom(), term()) :: map()
   def put_default(attrs, key, value) when is_map(attrs) do
     string_key = Atom.to_string(key)

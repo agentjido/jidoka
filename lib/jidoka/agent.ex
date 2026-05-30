@@ -19,6 +19,7 @@ defmodule Jidoka.Agent do
   """
 
   alias Jidoka.Agent.Spec
+  alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Config
   alias Jidoka.Runtime.Actions.RunTurn
@@ -92,11 +93,13 @@ defmodule Jidoka.Agent do
           required(:instructions) => String.t(),
           required(:description) => String.t() | nil,
           required(:context_schema) => term(),
-          required(:actions) => [module()]
+          required(:actions) => [module()],
+          required(:controls) => Controls.t()
         }
   def definition!(agent_module) when is_atom(agent_module) do
     agent = fetch_agent!(agent_module)
     actions = action_modules(agent_module)
+    controls = controls!(agent_module)
     validate_action_modules!(agent_module, actions)
 
     %{
@@ -106,7 +109,8 @@ defmodule Jidoka.Agent do
       instructions: normalize_instructions!(agent.instructions),
       description: agent.description,
       context_schema: agent.context,
-      actions: actions
+      actions: actions,
+      controls: controls
     }
   end
 
@@ -117,6 +121,7 @@ defmodule Jidoka.Agent do
     unless is_nil(agent.model), do: normalize_model!(agent_module, agent.model)
     unless is_nil(agent.generation), do: normalize_generation!(agent_module, agent.generation)
     validate_action_modules!(agent_module, actions)
+    controls!(agent_module)
 
     %{
       id: normalize_id!(agent.id),
@@ -133,6 +138,26 @@ defmodule Jidoka.Agent do
     |> Enum.map(fn %Jidoka.Agent.Dsl.Tool{module: action} -> action end)
   end
 
+  @doc false
+  @spec controls!(module()) :: Controls.t()
+  def controls!(agent_module) when is_atom(agent_module) do
+    operations =
+      agent_module
+      |> Spark.Dsl.Extension.get_entities([:controls])
+      |> Enum.map(fn %Jidoka.Agent.Dsl.OperationControl{} = control ->
+        normalize_dsl_value!(agent_module, [:controls, :operation], fn ->
+          Controls.Operation.new!(
+            control: control.control,
+            match: control.match
+          )
+        end)
+      end)
+
+    normalize_dsl_value!(agent_module, [:controls], fn ->
+      Controls.new!(operations: operations)
+    end)
+  end
+
   @doc """
   Compiles a DSL agent module into `Jidoka.Agent.Spec`.
   """
@@ -147,6 +172,7 @@ defmodule Jidoka.Agent do
       generation: definition.generation,
       context_schema: definition.context_schema,
       operations: JidoActions.operations_from_actions(definition.actions),
+      controls: definition.controls,
       runtime_defaults: %{},
       metadata: %{
         "dsl_module" => inspect(agent_module),

@@ -8,13 +8,14 @@ defmodule Jidoka.Agent.Spec.Operation do
   @type idempotency :: :pure | :idempotent | :dedupe | :reconcile | :unsafe_once
 
   @valid_idempotency [:pure, :idempotent, :dedupe, :reconcile, :unsafe_once]
+  @idempotency_schema Schema.atom_enum(@valid_idempotency)
 
   @schema Zoi.struct(
             __MODULE__,
             %{
               name: Schema.non_empty_string(),
               description: Zoi.string() |> Zoi.nullish(),
-              idempotency: Zoi.enum(@valid_idempotency) |> Zoi.default(:idempotent),
+              idempotency: @idempotency_schema |> Zoi.default(:idempotent),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true

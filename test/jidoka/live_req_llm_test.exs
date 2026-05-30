@@ -9,6 +9,7 @@ defmodule Jidoka.LiveReqLLMTest do
                  )
 
   if @live_enabled? do
+    alias Jidoka.Effect
     alias Jidoka.Turn
 
     defmodule LocalTime do
@@ -62,7 +63,10 @@ defmodule Jidoka.LiveReqLLMTest do
                TimeAgent.run_turn("What time is it in Chicago? Use local_time.")
 
       assert result.content =~ "jidoka_live_canary_0930"
-      assert [%{operation: "local_time"}] = result.agent_state.operation_results
+
+      assert [%Effect.OperationResult{operation: "local_time"}] =
+               result.agent_state.operation_results
+
       assert Enum.count(result.journal.results) == 3
     end
   else

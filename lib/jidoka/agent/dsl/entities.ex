@@ -17,3 +17,9 @@ defmodule Jidoka.Agent.Dsl.Tool do
 
   defstruct [:module, :__spark_metadata__]
 end
+
+defmodule Jidoka.Agent.Dsl.OperationControl do
+  @moduledoc false
+
+  defstruct [:control, :match, :__spark_metadata__]
+end

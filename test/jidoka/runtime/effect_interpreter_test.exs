@@ -25,6 +25,13 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     assert result.kind == :llm
     assert result.status == :ok
     assert next_state.journal.results[intent.id] == result
+
+    assert Enum.map(Jidoka.Extensions.Trace.timeline(next_state.events), & &1.event) == [
+             :effect_started,
+             :capability_call_started,
+             :capability_call_completed,
+             :effect_completed
+           ]
   end
 
   test "wraps capability errors as effect results" do
@@ -42,6 +49,22 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
              EffectInterpreter.interpret_pending(state, capabilities)
 
     assert %Effect.Result{status: :error} = next_state.journal.results[intent.id]
+
+    timeline = Jidoka.Extensions.Trace.timeline(next_state.events)
+
+    assert Enum.map(timeline, & &1.event) == [
+             :effect_started,
+             :capability_call_started,
+             :capability_call_failed,
+             :effect_failed
+           ]
+
+    assert [
+             %{effect_kind: :operation, operation: "weather"},
+             %{effect_kind: :operation, operation: "weather"},
+             %{effect_kind: :operation, operation: "weather", error: %{category: :execution}},
+             %{effect_kind: :operation, operation: "weather", error: %{category: :execution}}
+           ] = timeline
   end
 
   test "reuses journaled results without calling capabilities again" do
@@ -56,7 +79,13 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     llm = fn _intent, _journal -> flunk("capability should not be called when result exists") end
     {:ok, capabilities} = Capabilities.new(llm: llm)
 
-    assert {:ok, ^result, ^state} = EffectInterpreter.interpret_pending(state, capabilities)
+    assert {:ok, ^result, next_state} = EffectInterpreter.interpret_pending(state, capabilities)
+    assert next_state.journal == state.journal
+
+    assert [%{event: :effect_replayed, effect_id: effect_id, effect_kind: :llm}] =
+             Jidoka.Extensions.Trace.timeline(next_state.events)
+
+    assert effect_id == intent.id
   end
 
   test "returns an error when no pending effect exists" do

@@ -8,8 +8,8 @@ defmodule Jidoka.Effect.Result do
             __MODULE__,
             %{
               intent_id: Schema.non_empty_string(),
-              kind: Zoi.enum([:llm, :operation]),
-              status: Zoi.enum([:ok, :error]),
+              kind: Schema.atom_enum([:llm, :operation]),
+              status: Schema.atom_enum([:ok, :error]),
               output: Zoi.any(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },

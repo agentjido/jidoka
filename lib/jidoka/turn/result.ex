@@ -12,7 +12,7 @@ defmodule Jidoka.Turn.Result do
               content: Zoi.string(),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
-              traces: Zoi.array(Zoi.map()) |> Zoi.default([]),
+              events: Zoi.array(Zoi.lazy({Jidoka.Event, :schema, []})) |> Zoi.default([]),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -37,7 +37,7 @@ defmodule Jidoka.Turn.Result do
       content: content,
       agent_state: state.agent_state,
       journal: state.journal,
-      traces: state.traces
+      events: state.events
     )
   end
 end

@@ -10,10 +10,11 @@ defmodule Jidoka.Effect.Intent do
             __MODULE__,
             %{
               id: Schema.non_empty_string(),
-              kind: Zoi.enum([:llm, :operation]),
+              kind: Schema.atom_enum([:llm, :operation]),
               payload: Zoi.map(),
               idempotency_key: Schema.non_empty_string(),
-              idempotency: Zoi.enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
+              idempotency:
+                Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -27,10 +28,16 @@ defmodule Jidoka.Effect.Intent do
   def schema, do: @schema
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs), do: Schema.parse(@schema, attrs)
+  def new(attrs) do
+    with {:ok, %__MODULE__{} = intent} <- Schema.parse(@schema, attrs),
+         {:ok, %__MODULE__{} = intent} <- normalize_payload(intent) do
+      {:ok, intent}
+    end
+  end
 
   @spec new(kind(), map(), keyword()) :: t()
   def new(kind, payload, opts \\ []) do
+    payload = normalize_payload!(kind, payload)
     key = Keyword.get(opts, :idempotency_key) || idempotency_key(kind, payload)
 
     new!(%{
@@ -44,7 +51,37 @@ defmodule Jidoka.Effect.Intent do
   end
 
   @spec new!(keyword() | map()) :: t()
-  def new!(attrs), do: Schema.parse!(@schema, attrs, "effect intent")
+  def new!(attrs) do
+    case new(attrs) do
+      {:ok, intent} -> intent
+      {:error, reason} -> raise ArgumentError, "invalid effect intent: #{inspect(reason)}"
+    end
+  end
+
+  defp normalize_payload(%__MODULE__{kind: :operation, payload: payload} = intent) do
+    with {:ok, request} <- Jidoka.Effect.OperationRequest.from_input(payload) do
+      {:ok, %__MODULE__{intent | payload: Jidoka.Effect.OperationRequest.to_payload(request)}}
+    end
+  end
+
+  defp normalize_payload(%__MODULE__{} = intent), do: {:ok, intent}
+
+  defp normalize_payload!(kind, payload) do
+    case normalize_payload(%__MODULE__{
+           id: "temporary",
+           kind: kind,
+           payload: payload,
+           idempotency_key: "temporary",
+           idempotency: :idempotent,
+           metadata: %{}
+         }) do
+      {:ok, %__MODULE__{payload: payload}} ->
+        payload
+
+      {:error, reason} ->
+        raise ArgumentError, "invalid effect payload: #{inspect(reason)}"
+    end
+  end
 
   defp effect_id(kind, key), do: "#{kind}:" <> key
 

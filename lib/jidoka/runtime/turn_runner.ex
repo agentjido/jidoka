@@ -62,10 +62,10 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp maybe_hibernate_after_prompt(state, capabilities, opts) do
     case checkpoint_policy(opts) do
       :after_prompt ->
-        hibernate(state, Turn.Cursor.after_prompt())
+        hibernate(state, Turn.Cursor.after_prompt(), opts)
 
       :after_each_phase ->
-        hibernate(state, Turn.Cursor.after_prompt())
+        hibernate(state, Turn.Cursor.after_prompt(), opts)
 
       _policy ->
         maybe_hibernate_before_effect(state, capabilities, opts)
@@ -82,7 +82,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp maybe_hibernate_before_effect(%Turn.State{} = state, capabilities, opts) do
     case checkpoint_policy(opts) do
       policy when policy in [:before_each_effect, :after_each_phase] ->
-        hibernate(state, Turn.Cursor.before_effect(state.pending_effect))
+        hibernate(state, Turn.Cursor.before_effect(state.pending_effect), opts)
 
       _policy ->
         continue_after_pending_effect(state, capabilities, opts)
@@ -113,11 +113,15 @@ defmodule Jidoka.Runtime.TurnRunner do
     end
   end
 
-  defp hibernate(%Turn.State{} = state, %Turn.Cursor{} = cursor) do
-    {:hibernate, AgentSnapshot.from_turn_state!(state, cursor)}
+  defp hibernate(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts) do
+    {:hibernate, AgentSnapshot.from_turn_state!(state, cursor, snapshot_opts(opts))}
   end
 
   defp checkpoint_policy(opts), do: Keyword.get(opts, :checkpoint, :none)
+
+  defp snapshot_opts(opts) do
+    Keyword.take(opts, [:snapshot_id, :id_generator])
+  end
 
   defp latest_state(%Workflow{} = workflow, component) do
     workflow

@@ -8,7 +8,6 @@ defmodule Jidoka.Runtime.LocalOperations do
   """
 
   alias Jidoka.Effect
-  alias Jidoka.Schema
 
   @type handler ::
           (map() -> term())
@@ -29,9 +28,9 @@ defmodule Jidoka.Runtime.LocalOperations do
 
     fn
       %Effect.Intent{kind: :operation, payload: payload} = intent, %Effect.Journal{} = journal ->
-        with {:ok, name} <- Schema.fetch_key(payload, :name),
-             {:ok, handler} <- fetch_handler(handlers, name) do
-          call_handler(handler, intent, journal)
+        with {:ok, request} <- Effect.OperationRequest.from_input(payload),
+             {:ok, handler} <- fetch_handler(handlers, request.name) do
+          call_handler(handler, intent, request, journal)
         end
 
       %Effect.Intent{kind: kind}, _journal ->
@@ -46,20 +45,26 @@ defmodule Jidoka.Runtime.LocalOperations do
     end
   end
 
-  defp call_handler(handler, %Effect.Intent{} = intent, %Effect.Journal{} = journal)
+  defp call_handler(
+         handler,
+         %Effect.Intent{} = intent,
+         %Effect.OperationRequest{},
+         %Effect.Journal{} = journal
+       )
        when is_function(handler, 2) do
     handler
     |> apply([intent, journal])
     |> normalize_result()
   end
 
-  defp call_handler(handler, %Effect.Intent{} = intent, _journal) when is_function(handler, 1) do
+  defp call_handler(handler, %Effect.Intent{}, %Effect.OperationRequest{} = request, _journal)
+       when is_function(handler, 1) do
     handler
-    |> apply([Schema.get_key(intent.payload, :arguments, %{})])
+    |> apply([request.arguments])
     |> normalize_result()
   end
 
-  defp call_handler(handler, _intent, _journal),
+  defp call_handler(handler, _intent, _request, _journal),
     do: {:error, {:invalid_operation_handler, handler}}
 
   defp normalize_result({:ok, _value} = result), do: result

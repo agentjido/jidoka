@@ -28,4 +28,16 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert entity.args == [:module]
     assert get_in(entity.schema, [:module, :type]) == :atom
   end
+
+  test "controls section declares operation control entities" do
+    section = Sections.Controls.section()
+    [entity] = section.entities
+
+    assert section.name == :controls
+    assert entity.name == :operation
+    assert entity.target == Jidoka.Agent.Dsl.OperationControl
+    assert entity.args == [:control]
+    assert get_in(entity.schema, [:control, :type]) == :atom
+    assert get_in(entity.schema, [:when, :as]) == :match
+  end
 end

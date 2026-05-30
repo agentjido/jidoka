@@ -1,6 +1,7 @@
 defmodule Jidoka.Workflow.Steps do
   @moduledoc "Pure phase functions used by the MVP Runic turn workflow."
 
+  alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Config
   alias Jidoka.Effect
@@ -10,9 +11,11 @@ defmodule Jidoka.Workflow.Steps do
   def assemble_prompt(%Turn.State{} = state) do
     messages =
       [
-        %{role: :system, content: state.spec.instructions},
-        %{role: :user, content: state.request.input}
+        Agent.Message.system(state.spec.instructions),
+        Agent.Message.user(state.request.input)
       ] ++ state.agent_state.messages
+
+    messages = Enum.map(messages, &Agent.Message.to_map/1)
 
     operations =
       Enum.map(state.spec.operations, fn %Operation{} = operation ->
@@ -38,9 +41,15 @@ defmodule Jidoka.Workflow.Steps do
 
     %Turn.State{
       state
-      | prompt: prompt,
-        traces: state.traces ++ [%{event: :prompt_assembled, loop_index: state.loop_index}]
+      | prompt: prompt
     }
+    |> transition()
+    |> transition_event(:prompt_assembled,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index
+    )
+    |> Turn.Transition.commit()
   end
 
   @spec plan_model_effect(Turn.State.t()) :: Turn.State.t()
@@ -68,9 +77,23 @@ defmodule Jidoka.Workflow.Steps do
 
     %Turn.State{
       state
-      | pending_effect: effect,
-        traces: state.traces ++ [%{event: :effect_planned, kind: :llm, id: effect.id}]
+      | pending_effect: effect
     }
+    |> transition()
+    |> transition_event(:effect_planned,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index,
+      effect_id: effect.id,
+      effect_kind: :llm
+    )
+    |> Turn.Transition.commit()
+  end
+
+  defp transition(%Turn.State{} = state), do: Turn.Transition.new!(state)
+
+  defp transition_event(%Turn.Transition{} = transition, event, attrs) do
+    Turn.Transition.event(transition, event, attrs)
   end
 
   defp stable_key(parts) do

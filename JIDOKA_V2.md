@@ -21,6 +21,35 @@ Implementation checkpoint:
   before a planned operation effect.
 - DSL `context` is now enforced before a turn runs when a context schema is
   present.
+- `Jidoka.import/2` now loads JSON/YAML agent document strings into
+  `Jidoka.Agent.Spec`. Import parity is covered by golden tests against the DSL
+  projection. Portable imports keep executable values out of the document and
+  resolve action modules and Zoi context schemas through explicit registries.
+- `Jidoka.projection/1` exposes stable inspection maps for specs, plans, turn
+  state, effect journals, turn results, and snapshots while omitting raw Zoi
+  schemas, full LLMDB structs, and DSL module metadata.
+- `Jidoka.Event` is now the neutral core event contract, and
+  `Jidoka.Turn.Transition` is the commit boundary for state plus events. Core
+  workflow/state/effect modules no longer import concrete extensions.
+- `Jidoka.Extension` now exists as a narrow extension behaviour. The first
+  built-in extension is `Jidoka.Extensions.Trace`, which projects core events
+  into trace timelines for inspection.
+- The public import API is intentionally string-only at the root. File IO is an
+  application concern; Jidoka owns parsing and normalization after the caller
+  supplies document text.
+- Import parsing does not convert arbitrary strings into atoms or modules.
+  String idempotency values are normalized by the Zoi-backed operation schema;
+  action and context refs are matched only against caller-provided registries.
+
+Plan cursor:
+
+- Phase 1 is complete for the current V2 surface: DSL authoring and JSON/YAML
+  string imports converge on `Jidoka.Agent.Spec`.
+- Phase 2 and Phase 3 are implemented ahead of the original phase order, but
+  need contract hardening before new features.
+- Next work should add explicit operation/idempotency contracts, replay, and
+  optional trace sinks/policy. Controls, memory, and production harness
+  sessions should wait until those contracts are visible and testable.
 
 ## Executive Summary
 
@@ -255,16 +284,16 @@ later.
 
 The first draft allowed `AgentSpec.Model.client`. That undermines the
 process-agnostic design. `AgentSpec` may hold model defaults and runtime
-preferences, but effectful clients belong in per-run `AdapterSet` values.
-`TurnPlan` may hold runtime requirements and non-effectful defaults, not live
-clients.
+preferences, but effectful clients belong in per-run
+`Jidoka.Runtime.Capabilities` values. `TurnPlan` may hold runtime requirements
+and non-effectful defaults, not live clients.
 
 The corrected rule:
 
 - `AgentSpec` describes what the agent wants.
 - `TurnPlan` describes how the workflow will execute that spec.
 - runtime options provide concrete clients, stores, sinks, and executors
-  through `AdapterSet`.
+  through `Jidoka.Runtime.Capabilities`.
 
 ### 4. Generated Modules Are Runtime Artifacts
 
@@ -732,7 +761,7 @@ Ephemeral workflow value used during one turn:
   result: nil,
   pending_effect: nil,
   decision: nil,
-  traces: [],
+  events: [],
   diagnostics: []
 }
 ```
@@ -932,13 +961,15 @@ Suggested fields:
 - `:metadata`.
 
 The workflow compiler merges capability-provided requirements into a single
-validated value. `AdapterSet` satisfies that value at execution time.
+validated value. `Jidoka.Runtime.Capabilities` satisfies that value at
+execution time.
 
-### AdapterSet
+### Runtime Capabilities
 
-`AdapterSet` is the runtime dependency bundle for one turn or session. It is
-not part of the immutable `AgentSpec`. It should normally be supplied to
-`run_turn/3`; defaults may be derived from `TurnPlan.runtime_requirements`.
+`Jidoka.Runtime.Capabilities` is the runtime dependency bundle for one turn or
+session. It is not part of the immutable `AgentSpec`. It should normally be
+supplied to `run_turn/3`; defaults may be derived from
+`TurnPlan.runtime_requirements`.
 
 Suggested fields:
 
@@ -951,7 +982,7 @@ Suggested fields:
 - `:scheduler` - schedule/resume runtime;
 - `:metadata`.
 
-The default `AdapterSet` for early phases should be deterministic and local:
+The default capabilities for early phases should be deterministic and local:
 fake or ReqLLM-backed LLM, in-process operation execution, no-op memory,
 in-memory state, and test-friendly trace capture.
 
@@ -1439,9 +1470,11 @@ end
 
 Model configuration is deliberately simple. Jidoka V2 should not ship model
 aliases such as `:fast` or `:thinking`; those hide provider choice and make the
-compiled spec less obvious. The `AgentSpec` always stores a concrete
-provider/model string such as `"openai:gpt-4o-mini"`. If an agent omits
-`model`, the compiler uses the application default:
+compiled spec less obvious. The `AgentSpec` always stores a normalized
+`%LLMDB.Model{}`. Public DSL/import input may use a string such as
+`"openai:gpt-4o-mini"` or an inline model map, but normalization happens before
+the spec reaches runtime. If an agent omits `model`, the compiler uses the
+application default:
 
 ```elixir
 config :jidoka, default_model: "openai:gpt-4o-mini"
@@ -1451,52 +1484,48 @@ The DSL may override that default with `model "provider:model"`, but it should
 not grow an alias registry unless a later package explicitly owns model
 cataloging as data.
 
-The macro should eventually generate:
+The macro should generate:
 
-- `__jidoka_spec__/0` in Phase 1;
-- `__jidoka_turn_plan__/0` once `TurnPlan` exists;
-- thin public helpers;
+- `spec/0` in Phase 1;
+- thin public helpers such as `chat/2`, `run_turn/2`, and `start/1`;
 - optional generated runtime modules only when an external runtime requires
   module-shaped integration.
 
 It should not generate feature-specific public helper functions for every
-capability by default. Prefer `Jidoka.inspect_agent(MyAgent)` and
+capability by default. Prefer compact root helpers such as
+`Jidoka.inspect(MyAgent)`, `Jidoka.preflight(MyAgent, input)`, and
 `AgentSpec` projections over a large helper surface.
 
 ### Imported Runtime
 
-Imported JSON/YAML should normalize into the same `AgentSpec`.
+Imported JSON/YAML should normalize into the same `AgentSpec`. The root public
+API is string-only:
+
+```elixir
+{:ok, spec} = Jidoka.import(agent_yaml, registries: registries)
+```
+
+Callers may read files themselves before calling `Jidoka.import/2`; Jidoka does
+not expose a separate file-import facade.
 
 V2 imported format should use V2 vocabulary:
 
 ```yaml
 agent:
   id: support_agent
-  description: Support triage assistant
-model: openai:gpt-4o-mini
-instructions: Help the support team.
-context:
-  schema:
-    type: object
-    properties:
-      tenant:
-        type: string
+  model: openai:gpt-4o-mini
+  instructions: Help the support team.
+  context:
+    ref: support_context
 tools:
   actions:
     - load_ticket
-controls:
-  operation:
-    - ref: require_approval
-      when:
-        kind: action
-        name: load_ticket
-result:
-  schema:
-    type: object
-    properties:
-      summary:
-        type: string
 ```
+
+Executable values stay out of the portable document. Action refs and Zoi
+context schema refs are resolved only through explicit registries. The import
+runtime should not resolve arbitrary module strings or create atoms from
+untrusted strings.
 
 If V1 import compatibility is needed, implement it as a separate
 `Jidoka.Import.V1Compat` runtime that immediately translates:
@@ -1731,11 +1760,11 @@ Every workflow boundary should emit typed events:
 - `turn.completed`;
 - `turn.failed`.
 
-Trace events should point to typed values by id/hash when values are large.
+Core events should point to typed values by id/hash when values are large.
 
-Trace capture should be policy-driven. The workflow should always create typed
-events at meaningful boundaries, but sinks may redact, sample, summarize, or
-drop large payloads depending on runtime policy.
+Trace projection and capture should be policy-driven. The workflow should
+always create typed core events at meaningful boundaries, but sinks may redact,
+sample, summarize, or drop large payloads depending on runtime policy.
 
 V2 should support replay from:
 
@@ -1952,75 +1981,107 @@ Exit criteria:
 
 Goal: compile the smallest useful agent into `AgentSpec`.
 
+Current checkpoint: the Spark DSL and JSON/YAML import runtime both compile
+into `Jidoka.Agent.Spec`. Import parity currently covers agent id, model,
+generation, default instructions, context schema refs, direct operations, and
+Jido action refs resolved through registries. A first operation-controls slice
+also preserves the V1 `controls do operation ... end` DSL shape as durable spec
+data, with JSON/YAML import parity through explicit control registries. The root
+import API is `Jidoka.import/2` for document strings, with
+`Jidoka.Import.load/2` retained for already-decoded maps.
+
 Deliverables:
 
-- Spark DSL with only `agent`;
-- V2 imported schema with only identity, model, instructions, context, result;
-- DSL/import parity tests;
-- public `__jidoka_spec__/0`;
-- no generated runtime module beyond introspection.
+- [x] Spark DSL with `agent` and optional `tools`;
+- [x] V2 imported JSON/YAML string runtime with identity, model, instructions,
+  generation, context refs, direct operations, action refs, and operation
+  control refs;
+- [x] DSL/import parity tests;
+- [x] public `spec/0` for DSL modules;
+- [x] no generated runtime module beyond Jido integration and introspection.
 
 Exit criteria:
 
-- first-agent DSL and imported spec normalize to equivalent `AgentSpec`;
-- README examples can be represented as data.
+- [x] first-agent DSL and imported spec normalize to equivalent `AgentSpec`;
+- [x] README examples can be represented as data.
+
+Residual hardening:
+
+- [x] add stable public projections for `Jidoka.Agent.Spec`, `Turn.Plan`,
+  `Turn.State`, `Effect.Journal`, `Turn.Result`, and `AgentSnapshot`;
+- decide whether `description` belongs in `Agent.Spec` or remains only a DSL
+  bridge into Jido agent metadata;
+- keep imported `result`, input/result controls, and JSON-schema-shaped context
+  out of Phase 1 until the corresponding runtime contracts exist.
 
 ### Phase 2: Runic Chat Kernel
 
 Goal: run one model turn through a Runic workflow.
 
+Current checkpoint: the Runic chat/tool loop runs through `Jidoka.Harness` and
+`Jidoka.Runtime.TurnRunner`. The remaining Phase 2 work is mostly visibility
+and contract hardening, not basic execution.
+
 Deliverables:
 
-- `TurnRequest`, `AgentState`, `TurnState`, `TurnResult`;
-- `TurnPlan`;
-- initial workflow profiles: `:chat`, `:tool_loop`, and
-  `:structured_result`;
-- `TurnCursor`;
-- `AgentSnapshot`;
-- `EffectJournal`;
-- `EffectInterpreter`;
-- `AdapterSet`;
-- `Jidoka.run_turn/3`;
-- `Jidoka.chat/3` as a thin helper over external-state `run_turn/3`;
-- Runic steps for context validation, prompt assembly, model call,
-  effect planning, effect result application, and result validation;
-- external-state execution only;
-- fake LLM runtime;
-- ReqLLM-backed `LLMRuntime`;
-- checkpoint policy with at least `:none`, `:phase_boundary`, and
-  `:after_each_phase`;
-- prompt preflight from the same workflow steps.
+- [x] `Turn.Request`, `Agent.State`, `Turn.State`, `Turn.Result`;
+- [x] `Turn.Plan`;
+- [x] `Turn.Cursor`;
+- [x] `AgentSnapshot`;
+- [x] `Effect.Journal`;
+- [x] `EffectInterpreter`;
+- [x] `Jidoka.Runtime.Capabilities`;
+- [x] `Jidoka.run_turn/3`;
+- [x] `Jidoka.chat/3` as a thin helper over external-state `run_turn/3`;
+- [x] Runic steps for prompt assembly, model effect planning, model result
+  application, operation effect planning, and operation result application;
+- [x] external-state execution;
+- [x] scripted/fake LLM capability through injected functions;
+- [x] ReqLLM-backed runtime capability;
+- [x] checkpoint policy with `:none`, `:after_prompt`, `:before_each_effect`,
+  and `:after_each_phase`;
+- [x] prompt preflight from the same workflow steps;
+- [x] neutral core events for the current workflow/effect boundaries, including
+  capability start/end/failure and journal replay;
+- [x] trace extension projection over core events;
+- [ ] formal workflow profiles beyond the current `:tool_loop` plan;
+- [ ] optional trace sinks/policy outside the in-memory turn state.
 
 Exit criteria:
 
-- deterministic chat test passes without provider credentials;
-- live provider smoke can be enabled separately;
-- trace shows each workflow boundary;
-- a turn can hibernate after prompt assembly and resume to completion with a
-  scripted LLM.
+- [x] deterministic chat test passes without provider credentials;
+- [x] live provider smoke can be enabled separately;
+- [x] trace shows each current workflow/effect boundary;
+- [x] a turn can hibernate after prompt assembly and resume to completion with
+  a scripted LLM.
 
 ### Phase 3: Direct Actions And Operation Loop
 
 Goal: support deterministic model-callable operations.
 
+Current checkpoint: Jido actions can be exposed as tools, model decisions can
+request an operation, operation effects are journaled, and the model can finish
+on a later loop. The remaining Phase 3 work is to formalize operation
+request/result contracts and make idempotency visible enough for replay.
+
 Deliverables:
 
-- `AgentSpec.Operation`;
-- operation registry and selection;
-- direct action capability;
-- operation request/result contracts;
-- operation planning and execution steps;
-- loop limits;
-- scripted operation tests.
+- [x] `AgentSpec.Operation`;
+- [x] operation registry via Jido action refs and explicit operations;
+- [x] direct action capability through `Jidoka.Runtime.JidoActions`;
+- [ ] operation request/result contracts beyond raw effect payload maps;
+- [x] operation planning and execution steps;
+- [x] loop limits;
+- [x] scripted operation tests.
 
 Exit criteria:
 
-- model can request an action;
-- operation plan includes deterministic idempotency keys;
-- workflow executes action;
-- observation is appended;
-- model can finish on a later turn;
-- all behavior is replayable.
+- [x] model can request an action;
+- [x] operation plan includes deterministic idempotency keys;
+- [x] workflow executes action;
+- [x] observation is appended;
+- [x] model can finish on a later turn;
+- [ ] all behavior is replayable through formal trace/replay contracts.
 
 ### Phase 4: Controls And Structured Results
 
@@ -2028,7 +2089,9 @@ Goal: make policy and typed results first-class.
 
 Deliverables:
 
-- input, operation, and result control contracts;
+- [x] operation controls as spec/import/DSL data;
+- [ ] operation control runtime execution;
+- input and result control contracts;
 - review/wait interrupt shape;
 - result validation and bounded repair loop;
 - budget/time limits;
@@ -2153,28 +2216,25 @@ end
 # not a separate runtime or hidden ReAct loop.
 {:ok, reply} = Jidoka.chat(MyApp.Assistant, "Hello")
 
-spec = MyApp.Assistant.__jidoka_spec__()
-plan = Jidoka.compile_turn_plan!(spec)
+spec = MyApp.Assistant.spec()
+plan = Jidoka.plan!(spec)
 
 {:ok, result} =
-  Jidoka.run_turn(plan,
-    Jidoka.TurnRequest.new!(input: "Hello"),
-    llm: scripted_llm
-  )
+  Jidoka.run_turn(plan, "Hello", llm: scripted_llm)
 ```
 
 Inspection:
 
 ```elixir
-Jidoka.inspect_agent(MyApp.Assistant)
-Jidoka.prompt_preflight(MyApp.Assistant, "What can you do?")
-Jidoka.trace_turn(result)
+Jidoka.inspect(MyApp.Assistant)
+{:ok, preflight} = Jidoka.preflight(MyApp.Assistant, "What can you do?")
+Jidoka.inspect(result)
 ```
 
 Imported:
 
 ```elixir
-{:ok, spec} = Jidoka.Import.load_file("agent.yaml", registries: registries)
+{:ok, spec} = Jidoka.import(agent_yaml, registries: registries)
 {:ok, result} = Jidoka.chat(spec, "Hello", llm: scripted_llm)
 ```
 
@@ -2215,27 +2275,30 @@ should replace the internals once the new spine is proven.
 9. Which weak-spot build items are required before V2 can replace the current
    internals, and which can remain optional harness/runtime packages?
 
-## Recommended First Beadwork Epic
+## Recommended Next Epic
 
-Create one epic with these children:
+The original first epic proved the core. The next epic should harden the
+contracts that make the current implementation inspectable, replayable, and
+ready for controls.
 
 ```mermaid
 graph LR
-  A["Phase 0: AgentSpec contracts"] --> B["Phase 1: Minimal DSL/import runtime"]
-  B --> C["Phase 2: Runic chat kernel"]
-  C --> D["Phase 3: Direct action operation loop"]
-  D --> E["Phase 4: Controls and result validation"]
-  E --> F["Phase 5: Context, memory, compaction"]
-  F --> G["Phase 6: Harness layer"]
-  G --> H["Phase 7: Advanced capabilities"]
-  H --> I["Phase 8: Production runtime and durable stores"]
+  A["Spec Projection"] --> B["Prompt Preflight"]
+  B --> C["Trace Events"]
+  C --> D["Operation Contracts"]
+  D --> E["Replay Harness"]
+  E --> F["Controls"]
 ```
 
-The first tasks should be small enough to complete without touching V1:
+Next tasks:
 
-1. scaffold isolated V2 core modules under `lib/jidoka`;
-2. implement `AgentSpec` contracts;
-3. run a deterministic Runic chat turn from a programmatic spec;
-4. hibernate/resume that turn from a phase-boundary snapshot.
+1. Replace raw operation effect payload maps with typed operation
+   request/result contracts.
+2. Add a minimal `Jidoka.Harness.Replay` over `AgentSnapshot` and
+   `Effect.Journal`.
+3. Add optional trace sinks/policy after replay makes trace persistence useful.
+4. Only then start Phase 4 controls and structured result validation.
 
-That gives V2 a real center before the DSL, imports, and integrations return.
+This keeps the next work aligned with the V2 thesis: data definitions first,
+Runic spine second, effect shell third. It also avoids adding controls, memory,
+or production stores before the current loop can explain and replay itself.

@@ -5,7 +5,7 @@ defmodule Jidoka.Runtime.Capabilities do
 
   @type llm_capability ::
           (Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t() ->
-             {:ok, map()} | {:error, term()})
+             {:ok, Jidoka.Effect.LLMDecision.t() | map()} | {:error, term()})
 
   @type operation_capability ::
           (Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t() ->

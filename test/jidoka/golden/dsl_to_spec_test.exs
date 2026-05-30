@@ -22,6 +22,13 @@ defmodule Jidoka.GoldenTest.Support.MinimalAgent do
   end
 end
 
+defmodule Jidoka.GoldenTest.Support.RequireLocalTimeApproval do
+  use Jidoka.Control, name: "require_local_time_approval"
+
+  @impl true
+  def call(_operation), do: :cont
+end
+
 defmodule Jidoka.GoldenTest.Support.TimeAgent do
   use Jidoka.Agent
 
@@ -35,6 +42,11 @@ defmodule Jidoka.GoldenTest.Support.TimeAgent do
   tools do
     action Jidoka.GoldenTest.Support.LocalTimeAction
   end
+
+  controls do
+    operation Jidoka.GoldenTest.Support.RequireLocalTimeApproval,
+      when: [kind: :action, name: :local_time]
+  end
 end
 
 defmodule Jidoka.Golden.DslToSpecTest do
@@ -43,7 +55,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
   alias Jidoka.GoldenTest.Support.{MinimalAgent, TimeAgent}
 
   test "minimal DSL agent compiles to the expected Agent.Spec projection" do
-    assert spec_projection(MinimalAgent.spec()) == %{
+    assert Jidoka.projection(MinimalAgent.spec()) == %{
              id: "golden_minimal_agent",
              instructions: Jidoka.Agent.default_instructions(),
              model: "test:golden-minimal-model",
@@ -54,6 +66,10 @@ defmodule Jidoka.Golden.DslToSpecTest do
              },
              context_schema?: false,
              operations: [],
+             controls: %{
+               operations: [],
+               metadata: %{}
+             },
              runtime_defaults: %{},
              metadata: %{
                "context_schema?" => false,
@@ -63,7 +79,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
   end
 
   test "tool DSL agent compiles to the expected Agent.Spec projection" do
-    assert spec_projection(TimeAgent.spec()) == %{
+    assert Jidoka.projection(TimeAgent.spec()) == %{
              id: "golden_time_agent",
              instructions: "Call local_time when asked for the time.",
              model: "test:golden-tool-model",
@@ -85,6 +101,17 @@ defmodule Jidoka.Golden.DslToSpecTest do
                  }
                }
              ],
+             controls: %{
+               operations: [
+                 %{
+                   control: "require_local_time_approval",
+                   module: "Jidoka.GoldenTest.Support.RequireLocalTimeApproval",
+                   match: %{kind: :action, name: "local_time"},
+                   metadata: %{}
+                 }
+               ],
+               metadata: %{}
+             },
              runtime_defaults: %{},
              metadata: %{
                "context_schema?" => true,
@@ -108,46 +135,6 @@ defmodule Jidoka.Golden.DslToSpecTest do
                :apply_operation_results
              ],
              metadata: %{}
-           } == plan_projection(plan)
-  end
-
-  defp spec_projection(spec) do
-    %{
-      id: spec.id,
-      instructions: spec.instructions,
-      model: Jidoka.Config.model_ref(spec.model),
-      generation: %{
-        params: spec.generation.params,
-        provider_options: spec.generation.provider_options,
-        extra: spec.generation.extra
-      },
-      context_schema?: not is_nil(spec.context_schema),
-      operations: Enum.map(spec.operations, &operation_projection/1),
-      runtime_defaults: spec.runtime_defaults,
-      metadata: Map.take(spec.metadata, ["context_schema?", "jido_agent"])
-    }
-  end
-
-  defp operation_projection(operation) do
-    %{
-      name: operation.name,
-      description: operation.description,
-      idempotency: operation.idempotency,
-      metadata: %{
-        "runtime" => operation.metadata["runtime"],
-        "action" => operation.metadata["action"],
-        "parameters_schema?" => is_map(operation.metadata["parameters_schema"])
-      }
-    }
-  end
-
-  defp plan_projection(plan) do
-    %{
-      spec_id: plan.spec.id,
-      workflow_profile: plan.workflow_profile,
-      max_model_turns: plan.max_model_turns,
-      phases: plan.phases,
-      metadata: plan.metadata
-    }
+           } == Jidoka.projection(plan)
   end
 end

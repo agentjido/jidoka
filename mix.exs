@@ -33,6 +33,7 @@ defmodule Jidoka.MixProject do
       {:runic, "~> 0.1.0-alpha.7"},
       {:splode, "~> 0.3.0"},
       {:spark, "~> 2.6"},
+      {:yaml_elixir, "~> 2.12"},
       {:zoi, "~> 0.18"}
     ]
   end

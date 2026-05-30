@@ -84,7 +84,10 @@ defmodule Jidoka.MultiTurnIntegrationTest do
              )
 
     assert first_result.content == "Order order_123 has shipped via UPS."
-    assert [%{operation: "lookup_order"}] = first_result.agent_state.operation_results
+
+    assert [%Effect.OperationResult{operation: "lookup_order"}] =
+             first_result.agent_state.operation_results
+
     assert length(first_result.agent_state.messages) == 2
     assert_received {:operation_called, "lookup_order", %{"order_id" => "order_123"}, :idempotent}
 
@@ -312,10 +315,9 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
   defp drain_snapshots({:hibernate, %AgentSnapshot{} = snapshot}, opts, cursors, remaining)
        when remaining > 0 do
-    serialized_snapshot = portable_map(snapshot)
-    assert {:ok, %AgentSnapshot{} = restored_snapshot} = AgentSnapshot.new(serialized_snapshot)
+    serialized_snapshot = AgentSnapshot.serialize!(snapshot)
 
-    restored_snapshot
+    serialized_snapshot
     |> Jidoka.resume(opts)
     |> drain_snapshots(opts, cursors ++ [snapshot.cursor], remaining - 1)
   end
@@ -342,7 +344,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
   end
 
   defp operation_names(operation_results) do
-    Enum.map(operation_results, &(Map.get(&1, :operation) || Map.get(&1, "operation")))
+    Enum.map(operation_results, fn %Effect.OperationResult{operation: operation} -> operation end)
   end
 
   defp tool_observation?(messages, operation, expected_fragment) do
@@ -382,13 +384,4 @@ defmodule Jidoka.MultiTurnIntegrationTest do
       0 -> acc
     end
   end
-
-  defp portable_map(%_{} = value), do: value |> Map.from_struct() |> portable_map()
-
-  defp portable_map(value) when is_map(value) do
-    Map.new(value, fn {key, nested} -> {to_string(key), portable_map(nested)} end)
-  end
-
-  defp portable_map(value) when is_list(value), do: Enum.map(value, &portable_map/1)
-  defp portable_map(value), do: value
 end

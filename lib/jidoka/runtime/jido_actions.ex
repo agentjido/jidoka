@@ -9,7 +9,6 @@ defmodule Jidoka.Runtime.JidoActions do
 
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
-  alias Jidoka.Schema
 
   @type action_module :: module()
 
@@ -56,10 +55,9 @@ defmodule Jidoka.Runtime.JidoActions do
 
     fn
       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
-        with {:ok, name} <- Schema.fetch_key(payload, :name),
-             {:ok, tool} <- fetch_tool(tools, name) do
-          arguments = Schema.get_key(payload, :arguments, %{})
-          call_tool(tool, arguments, context)
+        with {:ok, request} <- Effect.OperationRequest.from_input(payload),
+             {:ok, tool} <- fetch_tool(tools, request.name) do
+          call_tool(tool, request.arguments, context)
         end
 
       %Effect.Intent{kind: kind}, _journal ->

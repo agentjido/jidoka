@@ -27,7 +27,7 @@ defmodule Jidoka.Harness do
   @spec run_turn(plan_input(), request_input(), runtime_opts()) :: run_result()
   def run_turn(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- plan(spec_or_plan),
-         {:ok, request} <- Turn.Request.from_input(request_input),
+         {:ok, request} <- Turn.Request.from_input(request_input, request_opts(opts)),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
          {:ok, capabilities} <- normalize_capabilities(opts) do
       TurnRunner.run(plan, request, capabilities, opts)
@@ -37,7 +37,7 @@ defmodule Jidoka.Harness do
   @doc """
   Resumes a hibernated agent snapshot.
   """
-  @spec resume(AgentSnapshot.t() | keyword() | map(), runtime_opts()) :: run_result()
+  @spec resume(AgentSnapshot.t() | keyword() | map() | String.t(), runtime_opts()) :: run_result()
   def resume(snapshot_input, opts \\ []) do
     with {:ok, snapshot} <- AgentSnapshot.from_input(snapshot_input),
          {:ok, capabilities} <- normalize_capabilities(opts) do
@@ -65,6 +65,13 @@ defmodule Jidoka.Harness do
 
       nil ->
         Capabilities.new(opts)
+    end
+  end
+
+  defp request_opts(opts) do
+    case Keyword.fetch(opts, :id_generator) do
+      {:ok, generator} -> [id_generator: generator]
+      :error -> []
     end
   end
 end
