@@ -42,11 +42,13 @@ module.
 
 `Jidoka.Runtime.TurnRunner` owns the loop:
 
-1. run the Runic prompt/effect planning workflow;
-2. optionally hibernate at a safe checkpoint;
-3. interpret pending effects;
-4. apply effect results to turn state;
-5. loop until final answer or max model turns.
+1. run input controls;
+2. run the Runic prompt/effect planning workflow;
+3. optionally hibernate at a safe checkpoint;
+4. interpret pending effects;
+5. apply effect results to turn state;
+6. loop until final answer or max model turns;
+7. run result controls before returning.
 
 ## Effects
 

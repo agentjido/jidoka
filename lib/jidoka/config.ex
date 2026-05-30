@@ -7,6 +7,8 @@ defmodule Jidoka.Config do
 
   @default_model "openai:gpt-4o-mini"
   @default_generation %{params: %{temperature: 0.0, max_tokens: 500}}
+  @default_max_model_turns 8
+  @default_turn_timeout_ms 30_000
 
   @type model_spec :: ReqLLM.model_input()
   @type model :: LLMDB.Model.t()
@@ -29,6 +31,26 @@ defmodule Jidoka.Config do
     :jidoka
     |> Application.get_env(:default_generation, @default_generation)
     |> normalize_generation!(:default_generation)
+  end
+
+  @doc """
+  Returns the globally configured default maximum model turns.
+  """
+  @spec default_max_model_turns() :: pos_integer()
+  def default_max_model_turns do
+    :jidoka
+    |> Application.get_env(:default_max_model_turns, @default_max_model_turns)
+    |> normalize_positive_integer!(:default_max_model_turns)
+  end
+
+  @doc """
+  Returns the globally configured default turn timeout in milliseconds.
+  """
+  @spec default_turn_timeout_ms() :: pos_integer()
+  def default_turn_timeout_ms do
+    :jidoka
+    |> Application.get_env(:default_turn_timeout_ms, @default_turn_timeout_ms)
+    |> normalize_positive_integer!(:default_turn_timeout_ms)
   end
 
   @doc """
@@ -75,6 +97,34 @@ defmodule Jidoka.Config do
   def normalize_generation!(value, field \\ :generation) do
     case normalize_generation(value, field) do
       {:ok, generation} -> generation
+      {:error, reason} -> raise ArgumentError, "invalid #{field}: #{inspect(reason)}"
+    end
+  end
+
+  @doc """
+  Validates and normalizes a positive integer config value.
+  """
+  @spec normalize_positive_integer(term(), atom()) :: {:ok, pos_integer()} | {:error, term()}
+  def normalize_positive_integer(value, _field) when is_integer(value) and value > 0,
+    do: {:ok, value}
+
+  def normalize_positive_integer(value, field) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {integer, ""} when integer > 0 -> {:ok, integer}
+      _other -> {:error, {field, value, :not_positive_integer}}
+    end
+  end
+
+  def normalize_positive_integer(value, field),
+    do: {:error, {field, value, :not_positive_integer}}
+
+  @doc """
+  Validates and normalizes a positive integer config value, raising on error.
+  """
+  @spec normalize_positive_integer!(term(), atom()) :: pos_integer()
+  def normalize_positive_integer!(value, field) do
+    case normalize_positive_integer(value, field) do
+      {:ok, integer} -> integer
       {:error, reason} -> raise ArgumentError, "invalid #{field}: #{inspect(reason)}"
     end
   end

@@ -52,6 +52,11 @@ defmodule Jidoka.Agent.DslTest do
       end
 
       controls do
+        max_turns 5
+        timeout 2_000
+        input JidokaTest.CompiledDslControl#{suffix}
+        result JidokaTest.CompiledDslControl#{suffix}
+
         operation JidokaTest.CompiledDslControl#{suffix},
           when: [kind: :action, name: :compiled_tool_#{suffix}]
       end
@@ -67,11 +72,28 @@ defmodule Jidoka.Agent.DslTest do
              agent_module.spec().operations
 
     assert [
-             %Jidoka.Agent.Spec.Controls.Operation{
+             %Jidoka.Agent.Spec.Controls.Input{
                control: control_module,
+               metadata: %{}
+             }
+           ] = agent_module.spec().controls.inputs
+
+    assert agent_module.spec().controls.max_turns == 5
+    assert agent_module.spec().controls.timeout_ms == 2_000
+
+    assert [
+             %Jidoka.Agent.Spec.Controls.Operation{
+               control: ^control_module,
                match: %{kind: :action, name: ^tool_name}
              }
            ] = agent_module.spec().controls.operations
+
+    assert [
+             %Jidoka.Agent.Spec.Controls.Result{
+               control: ^control_module,
+               metadata: %{}
+             }
+           ] = agent_module.spec().controls.results
 
     assert control_module.name() == "compiled_control_#{suffix}"
 

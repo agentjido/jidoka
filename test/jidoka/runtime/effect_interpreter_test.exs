@@ -97,7 +97,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
   defp state_with_pending_effect(%Effect.Intent{} = intent, opts \\ []) do
     base_state()
-    |> Map.put(:pending_effect, intent)
+    |> Turn.State.set_pending_effects([intent])
     |> Map.put(:journal, Keyword.get(opts, :journal, Effect.Journal.new!()))
   end
 

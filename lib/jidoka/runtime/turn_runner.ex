@@ -9,7 +9,9 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
+  alias Jidoka.Effect
   alias Jidoka.Turn
   alias Jidoka.Workflow.Compiler
   alias Runic.Workflow
@@ -31,31 +33,39 @@ defmodule Jidoka.Runtime.TurnRunner do
         spec: plan.spec,
         plan: plan,
         request: request,
-        agent_state: request.agent_state
+        agent_state: request.agent_state,
+        started_at_ms: clock_ms(opts)
       )
 
-    run_loop(state, capabilities, opts)
+    with {:ok, state} <- Controls.run_input_controls(state),
+         :ok <- enforce_timeout(state, opts) do
+      run_loop(state, capabilities, opts)
+    end
   end
 
   @spec resume(AgentSnapshot.t(), Capabilities.t(), keyword()) :: run_result()
   def resume(%AgentSnapshot{} = snapshot, %Capabilities{} = capabilities, opts \\ []) do
     with {:ok, state} <- Turn.State.from_snapshot(snapshot) do
-      continue_after_pending_effect(state, capabilities, opts)
+      state
+      |> ensure_started_at(opts)
+      |> continue_after_pending_effect(capabilities, opts)
     end
   end
 
   defp run_loop(%Turn.State{loop_index: loop_index, plan: plan} = state, capabilities, opts) do
-    if loop_index >= plan.max_model_turns do
-      {:error, {:max_model_turns_exceeded, plan.max_model_turns}}
-    else
-      workflow = Compiler.model_turn_workflow(plan)
+    with :ok <- enforce_timeout(state, opts) do
+      if loop_index >= plan.max_model_turns do
+        {:error, {:max_model_turns_exceeded, plan.max_model_turns}}
+      else
+        workflow = Compiler.model_turn_workflow(plan)
 
-      planned_state =
-        workflow
-        |> Workflow.react_until_satisfied(state)
-        |> latest_state(:plan_model_effect)
+        planned_state =
+          workflow
+          |> Workflow.react_until_satisfied(state)
+          |> latest_state(:plan_model_effect)
 
-      maybe_hibernate_after_prompt(planned_state, capabilities, opts)
+        maybe_hibernate_after_prompt(planned_state, capabilities, opts)
+      end
     end
   end
 
@@ -72,44 +82,45 @@ defmodule Jidoka.Runtime.TurnRunner do
     end
   end
 
-  defp maybe_hibernate_before_effect(
-         %Turn.State{pending_effect: nil} = state,
-         capabilities,
-         opts
-       ),
-       do: continue_after_pending_effect(state, capabilities, opts)
-
   defp maybe_hibernate_before_effect(%Turn.State{} = state, capabilities, opts) do
-    case checkpoint_policy(opts) do
-      policy when policy in [:before_each_effect, :after_each_phase] ->
-        hibernate(state, Turn.Cursor.before_effect(state.pending_effect), opts)
+    with :ok <- enforce_timeout(state, opts) do
+      case {Turn.State.current_pending_effect(state), checkpoint_policy(opts)} do
+        {nil, _policy} ->
+          continue_after_pending_effect(state, capabilities, opts)
 
-      _policy ->
-        continue_after_pending_effect(state, capabilities, opts)
+        {%Effect.Intent{} = effect, policy}
+        when policy in [:before_each_effect, :after_each_phase] ->
+          hibernate(state, Turn.Cursor.before_effect(effect), opts)
+
+        {%Effect.Intent{}, _policy} ->
+          continue_after_pending_effect(state, capabilities, opts)
+      end
     end
   end
 
-  defp continue_after_pending_effect(
-         %Turn.State{pending_effect: nil} = state,
-         _capabilities,
-         _opts
-       ) do
-    {:error, {:missing_pending_effect, state}}
-  end
-
   defp continue_after_pending_effect(%Turn.State{} = state, capabilities, opts) do
-    with {:ok, effect_result, state} <- EffectInterpreter.interpret_pending(state, capabilities),
-         {:ok, %Turn.State{} = state} <- Turn.State.apply_effect_result(state, effect_result) do
-      case state.status do
-        :finished ->
-          {:ok, Turn.Result.from_turn_state!(state)}
+    if Turn.State.pending_effect?(state) do
+      with :ok <- enforce_timeout(state, opts),
+           {:ok, effect_result, state} <- EffectInterpreter.interpret_pending(state, capabilities),
+           {:ok, %Turn.State{} = state} <- Turn.State.apply_effect_result(state, effect_result),
+           :ok <- enforce_timeout(state, opts) do
+        case state.status do
+          :finished ->
+            with {:ok, state} <- Controls.run_result_controls(state),
+                 :ok <- enforce_timeout(state, opts) do
+              {:ok, state |> append_turn_finished() |> Turn.Result.from_turn_state!()}
+            end
 
-        :running when not is_nil(state.pending_effect) ->
-          maybe_hibernate_before_effect(state, capabilities, opts)
-
-        :running ->
-          run_loop(%Turn.State{state | loop_index: state.loop_index + 1}, capabilities, opts)
+          :running ->
+            if Turn.State.pending_effect?(state) do
+              maybe_hibernate_before_effect(state, capabilities, opts)
+            else
+              run_loop(%Turn.State{state | loop_index: state.loop_index + 1}, capabilities, opts)
+            end
+        end
       end
+    else
+      {:error, {:missing_pending_effect, state}}
     end
   end
 
@@ -118,6 +129,41 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp checkpoint_policy(opts), do: Keyword.get(opts, :checkpoint, :none)
+
+  defp append_turn_finished(%Turn.State{} = state) do
+    state
+    |> Turn.Transition.new!()
+    |> Turn.Transition.event(:turn_finished,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index
+    )
+    |> Turn.Transition.commit()
+  end
+
+  defp enforce_timeout(%Turn.State{plan: %{timeout_ms: timeout_ms}} = state, opts)
+       when is_integer(timeout_ms) do
+    elapsed_ms = clock_ms(opts) - state.started_at_ms
+
+    if elapsed_ms > timeout_ms do
+      {:error, {:turn_timeout_exceeded, timeout_ms, elapsed_ms}}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_started_at(%Turn.State{started_at_ms: nil} = state, opts) do
+    %Turn.State{state | started_at_ms: clock_ms(opts)}
+  end
+
+  defp ensure_started_at(%Turn.State{} = state, _opts), do: state
+
+  defp clock_ms(opts) do
+    case Keyword.get(opts, :clock) do
+      clock when is_function(clock, 0) -> clock.()
+      _clock -> System.system_time(:millisecond)
+    end
+  end
 
   defp snapshot_opts(opts) do
     Keyword.take(opts, [:snapshot_id, :id_generator])

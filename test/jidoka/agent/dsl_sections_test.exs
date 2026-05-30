@@ -29,15 +29,25 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert get_in(entity.schema, [:module, :type]) == :atom
   end
 
-  test "controls section declares operation control entities" do
+  test "controls section declares runtime and operation control entities" do
     section = Sections.Controls.section()
-    [entity] = section.entities
+    entities = Map.new(section.entities, &{&1.name, &1})
 
     assert section.name == :controls
-    assert entity.name == :operation
-    assert entity.target == Jidoka.Agent.Dsl.OperationControl
-    assert entity.args == [:control]
-    assert get_in(entity.schema, [:control, :type]) == :atom
-    assert get_in(entity.schema, [:when, :as]) == :match
+    assert section.singleton_entity_keys == [:max_turns, :timeout]
+
+    assert entities.max_turns.target == Jidoka.Agent.Dsl.MaxTurnsControl
+    assert entities.timeout.target == Jidoka.Agent.Dsl.TimeoutControl
+
+    assert entities.input.target == Jidoka.Agent.Dsl.InputControl
+    assert entities.input.args == [:control]
+
+    assert entities.result.target == Jidoka.Agent.Dsl.ResultControl
+    assert entities.result.args == [:control]
+
+    assert entities.operation.target == Jidoka.Agent.Dsl.OperationControl
+    assert entities.operation.args == [:control]
+    assert get_in(entities.operation.schema, [:control, :type]) == :atom
+    assert get_in(entities.operation.schema, [:when, :as]) == :match
   end
 end

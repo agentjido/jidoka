@@ -222,8 +222,62 @@ defmodule Jidoka.Import do
   defp normalize_operation_attrs(attrs), do: attrs
 
   defp controls(controls, opts) when is_map(controls) do
+    with {:ok, inputs} <-
+           boundary_controls(
+             controls,
+             opts,
+             [:inputs, :input],
+             Controls.Input,
+             :invalid_input_control
+           ),
+         {:ok, operations} <- operation_controls(controls, opts),
+         {:ok, results} <-
+           boundary_controls(
+             controls,
+             opts,
+             [:results, :result],
+             Controls.Result,
+             :invalid_result_control
+           ) do
+      Controls.new(
+        max_turns: Schema.get_key(controls, :max_turns),
+        timeout_ms: Schema.get_key(controls, :timeout_ms) || Schema.get_key(controls, :timeout),
+        inputs: inputs,
+        operations: operations,
+        results: results
+      )
+    end
+  end
+
+  defp boundary_controls(controls, opts, keys, module, reason) do
     controls
-    |> Schema.get_key(:operations, [])
+    |> first_control_entries(keys)
+    |> List.wrap()
+    |> Enum.reduce_while({:ok, []}, fn attrs, {:ok, boundary_controls} ->
+      with {:ok, boundary_control} <- boundary_control(attrs, opts, module, reason) do
+        {:cont, {:ok, [boundary_control | boundary_controls]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, boundary_controls} -> {:ok, Enum.reverse(boundary_controls)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp first_control_entries(controls, keys) when is_list(keys) do
+    Enum.reduce_while(keys, [], fn key, default ->
+      case Schema.fetch_key(controls, key) do
+        {:ok, value} -> {:halt, value}
+        :error -> {:cont, default}
+      end
+    end)
+  end
+
+  defp operation_controls(controls, opts) do
+    controls
+    |> first_control_entries([:operations, :operation])
     |> List.wrap()
     |> Enum.reduce_while({:ok, []}, fn attrs, {:ok, operations} ->
       with {:ok, operation} <- control_operation(attrs, opts) do
@@ -233,10 +287,24 @@ defmodule Jidoka.Import do
       end
     end)
     |> case do
-      {:ok, operations} -> Controls.new(operations: Enum.reverse(operations))
+      {:ok, operations} -> {:ok, Enum.reverse(operations)}
       {:error, reason} -> {:error, reason}
     end
   end
+
+  defp boundary_control(%{} = attrs, opts, module, _reason) do
+    attrs = stringify_keys(attrs)
+
+    with {:ok, control} <-
+           resolve_control(Schema.get_key(attrs, :control) || Schema.get_key(attrs, :ref), opts) do
+      module.new(
+        control: control,
+        metadata: Schema.get_key(attrs, :metadata, %{})
+      )
+    end
+  end
+
+  defp boundary_control(other, _opts, _module, reason), do: {:error, {reason, other}}
 
   defp control_operation(%{} = attrs, opts) do
     attrs = stringify_keys(attrs)

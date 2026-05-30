@@ -32,6 +32,7 @@ defmodule Jidoka.MixProject do
       {:req_llm, "~> 1.12"},
       {:runic, "~> 0.1.0-alpha.7"},
       {:splode, "~> 0.3.0"},
+      {:sourceror, "~> 1.7", only: [:dev, :test], runtime: false},
       {:spark, "~> 2.6"},
       {:yaml_elixir, "~> 2.12"},
       {:zoi, "~> 0.18"}

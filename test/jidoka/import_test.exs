@@ -113,6 +113,38 @@ defmodule Jidoka.ImportTest do
            ] = spec.controls.operations
   end
 
+  test "imports planned singular control keys as data aliases" do
+    assert {:ok, %Agent.Spec{} = spec} =
+             Jidoka.Import.load(
+               %{
+                 agent: %{
+                   id: "import_singular_controls_agent",
+                   model: %{provider: :test, id: "control-model"}
+                 },
+                 controls: %{
+                   input: %{control: "echo_control"},
+                   operation: %{
+                     control: "echo_control",
+                     when: %{kind: "action", name: "echo_value"}
+                   },
+                   result: %{control: "echo_control"}
+                 }
+               },
+               controls: %{"echo_control" => EchoControl}
+             )
+
+    assert [%Agent.Spec.Controls.Input{control: EchoControl}] = spec.controls.inputs
+
+    assert [
+             %Agent.Spec.Controls.Operation{
+               control: EchoControl,
+               match: %{kind: :action, name: "echo_value"}
+             }
+           ] = spec.controls.operations
+
+    assert [%Agent.Spec.Controls.Result{control: EchoControl}] = spec.controls.results
+  end
+
   test "returns validation errors for unknown refs and duplicate operations" do
     assert {:error,
             %Jidoka.Error.ValidationError{

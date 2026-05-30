@@ -141,21 +141,77 @@ defmodule Jidoka.Agent do
   @doc false
   @spec controls!(module()) :: Controls.t()
   def controls!(agent_module) when is_atom(agent_module) do
+    entities = Spark.Dsl.Extension.get_entities(agent_module, [:controls])
+
     operations =
-      agent_module
-      |> Spark.Dsl.Extension.get_entities([:controls])
-      |> Enum.map(fn %Jidoka.Agent.Dsl.OperationControl{} = control ->
-        normalize_dsl_value!(agent_module, [:controls, :operation], fn ->
-          Controls.Operation.new!(
-            control: control.control,
-            match: control.match
-          )
-        end)
+      entities
+      |> Enum.flat_map(fn
+        %Jidoka.Agent.Dsl.OperationControl{} = control ->
+          [
+            normalize_dsl_value!(agent_module, [:controls, :operation], fn ->
+              Controls.Operation.new!(
+                control: control.control,
+                match: control.match
+              )
+            end)
+          ]
+
+        _entity ->
+          []
+      end)
+
+    inputs =
+      entities
+      |> Enum.flat_map(fn
+        %Jidoka.Agent.Dsl.InputControl{} = input ->
+          [
+            normalize_dsl_value!(agent_module, [:controls, :input], fn ->
+              Controls.Input.new!(
+                control: input.control,
+                metadata: input.metadata || %{}
+              )
+            end)
+          ]
+
+        _entity ->
+          []
+      end)
+
+    results =
+      entities
+      |> Enum.flat_map(fn
+        %Jidoka.Agent.Dsl.ResultControl{} = result ->
+          [
+            normalize_dsl_value!(agent_module, [:controls, :result], fn ->
+              Controls.Result.new!(
+                control: result.control,
+                metadata: result.metadata || %{}
+              )
+            end)
+          ]
+
+        _entity ->
+          []
       end)
 
     normalize_dsl_value!(agent_module, [:controls], fn ->
-      Controls.new!(operations: operations)
+      Controls.new!(
+        max_turns: singleton_control_value(entities, Jidoka.Agent.Dsl.MaxTurnsControl),
+        timeout_ms: singleton_control_value(entities, Jidoka.Agent.Dsl.TimeoutControl),
+        inputs: inputs,
+        operations: operations,
+        results: results
+      )
     end)
+  end
+
+  defp singleton_control_value(entities, entity_module) do
+    entities
+    |> Enum.filter(&match?(%{__struct__: ^entity_module}, &1))
+    |> case do
+      [] -> nil
+      [%{value: value}] -> value
+    end
   end
 
   @doc """

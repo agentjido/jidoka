@@ -141,6 +141,7 @@ defmodule Jidoka.Error do
          :error <- normalize_context_reason(reason, context),
          :error <- normalize_turn_reason(reason, context),
          :error <- normalize_effect_reason(reason, context),
+         :error <- normalize_control_reason(reason, context),
          :error <- normalize_llm_reason(reason, context),
          :error <- normalize_operation_reason(reason, context),
          :error <- normalize_agent_server_reason(reason, context) do
@@ -217,6 +218,20 @@ defmodule Jidoka.Error do
      )}
   end
 
+  defp normalize_turn_reason({:turn_timeout_exceeded, timeout_ms, elapsed_ms} = reason, context) do
+    {:ok,
+     execution_error("Jidoka turn timed out.",
+       phase: :turn,
+       details:
+         details(context, %{
+           reason: :turn_timeout_exceeded,
+           timeout_ms: timeout_ms,
+           elapsed_ms: elapsed_ms,
+           cause: reason
+         })
+     )}
+  end
+
   defp normalize_turn_reason(_reason, _context), do: :error
 
   defp normalize_effect_reason(:missing_pending_effect, context) do
@@ -262,6 +277,64 @@ defmodule Jidoka.Error do
   end
 
   defp normalize_effect_reason(_reason, _context), do: :error
+
+  defp normalize_control_reason({:control_blocked, control, boundary, cause}, context) do
+    {:ok,
+     execution_error("Jidoka control blocked the turn.",
+       phase: :control,
+       details:
+         details(context, %{
+           reason: :control_blocked,
+           control: control_name(control),
+           boundary: boundary,
+           cause: cause
+         })
+     )}
+  end
+
+  defp normalize_control_reason({:control_interrupted, control, boundary, cause}, context) do
+    {:ok,
+     execution_error("Jidoka control interrupted the turn.",
+       phase: :control,
+       details:
+         details(context, %{
+           reason: :control_interrupted,
+           control: control_name(control),
+           boundary: boundary,
+           cause: cause
+         })
+     )}
+  end
+
+  defp normalize_control_reason({:control_failed, control, boundary, cause}, context) do
+    {:ok,
+     execution_error("Jidoka control failed.",
+       phase: :control,
+       details:
+         details(context, %{
+           reason: :control_failed,
+           control: control_name(control),
+           boundary: boundary,
+           cause: cause
+         })
+     )}
+  end
+
+  defp normalize_control_reason({:invalid_control_decision, control, boundary, decision}, context) do
+    {:ok,
+     execution_error("Jidoka control returned an invalid decision.",
+       phase: :control,
+       details:
+         details(context, %{
+           reason: :invalid_control_decision,
+           control: control_name(control),
+           boundary: boundary,
+           decision: decision
+         })
+     )}
+  end
+
+  defp normalize_control_reason(_reason, _context), do: :error
 
   defp normalize_llm_reason({:missing_prompt_payload, payload} = reason, context) do
     {:ok,
@@ -509,6 +582,15 @@ defmodule Jidoka.Error do
     |> Keyword.put_new(:details, %{})
   end
 
+  defp control_name(control) when is_atom(control) do
+    case Jidoka.Control.control_name(control) do
+      {:ok, name} -> name
+      {:error, _reason} -> inspect(control)
+    end
+  end
+
+  defp control_name(control), do: inspect(control)
+
   defp details(context, attrs) do
     context
     |> to_context_map()
@@ -568,7 +650,7 @@ defmodule Jidoka.Error do
   @omitted_key_patterns [:messages, :prompt, :raw_response, :request_body, :response_body]
 
   defp sanitize_payload(%_{} = exception) when is_exception(exception) do
-    %{exception: exception.__struct__, message: format(exception)}
+    %{exception: exception.__struct__, message: sanitize_text(Exception.message(exception))}
   end
 
   defp sanitize_payload(%_{} = struct), do: struct |> Map.from_struct() |> sanitize_payload()

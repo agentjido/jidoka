@@ -2,6 +2,7 @@ defmodule Jidoka.Turn.Plan do
   @moduledoc "Executable data compiled from `Jidoka.Agent.Spec`."
 
   alias Jidoka.Agent
+  alias Jidoka.Config
   alias Jidoka.Schema
 
   @phases [
@@ -19,6 +20,7 @@ defmodule Jidoka.Turn.Plan do
               spec: Zoi.lazy({Agent.Spec, :schema, []}),
               workflow_profile: Schema.atom_enum(@workflow_profiles) |> Zoi.default(:tool_loop),
               max_model_turns: Zoi.integer() |> Zoi.positive() |> Zoi.default(8),
+              timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.default(30_000),
               phases: Zoi.array(Schema.atom_enum(@phases)) |> Zoi.default(@phases),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
@@ -46,7 +48,16 @@ defmodule Jidoka.Turn.Plan do
     %{
       spec: spec,
       workflow_profile: default_value(defaults, :workflow_profile, :tool_loop),
-      max_model_turns: default_value(defaults, :max_model_turns, 8),
+      max_model_turns:
+        spec.controls.max_turns ||
+          default_value(defaults, :max_model_turns, Config.default_max_model_turns()),
+      timeout_ms:
+        spec.controls.timeout_ms ||
+          default_value(
+            defaults,
+            :timeout_ms,
+            default_value(defaults, :timeout, Config.default_turn_timeout_ms())
+          ),
       phases: default_value(defaults, :phases, @phases),
       metadata: default_value(defaults, :metadata, %{})
     }

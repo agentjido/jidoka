@@ -5,7 +5,7 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
 
   alias Jidoka.Schema
 
-  @valid_kinds [:action, :operation, :tool]
+  @valid_kinds [:action, :operation, :tool, :workflow, :subagent, :handoff]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -114,18 +114,116 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 end
 
-defmodule Jidoka.Agent.Spec.Controls do
+defmodule Jidoka.Agent.Spec.Controls.Input do
   @moduledoc """
-  Policy controls attached to a Jidoka agent definition.
+  Control attached to the input boundary.
   """
 
-  alias Jidoka.Agent.Spec.Controls.Operation
   alias Jidoka.Schema
 
   @schema Zoi.struct(
             __MODULE__,
             %{
+              control: Zoi.atom(),
+              metadata: Zoi.map() |> Zoi.default(%{})
+            },
+            coerce: true
+          )
+
+  @type t :: unquote(Zoi.type_spec(@schema))
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
+
+  @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
+  def new(attrs) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    with {:ok, %__MODULE__{} = input} <- Schema.parse(@schema, attrs),
+         :ok <- Jidoka.Control.validate_module(input.control) do
+      {:ok, input}
+    end
+  end
+
+  @spec new!(keyword() | map()) :: t()
+  def new!(attrs) do
+    case new(attrs) do
+      {:ok, input} -> input
+      {:error, reason} -> raise ArgumentError, "invalid input control: #{inspect(reason)}"
+    end
+  end
+
+  @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
+  def from_input(%__MODULE__{} = input), do: new(input)
+  def from_input(input), do: new(input)
+end
+
+defmodule Jidoka.Agent.Spec.Controls.Result do
+  @moduledoc """
+  Control attached to the final-result boundary.
+  """
+
+  alias Jidoka.Schema
+
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              control: Zoi.atom(),
+              metadata: Zoi.map() |> Zoi.default(%{})
+            },
+            coerce: true
+          )
+
+  @type t :: unquote(Zoi.type_spec(@schema))
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
+
+  @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
+  def new(attrs) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    with {:ok, %__MODULE__{} = result} <- Schema.parse(@schema, attrs),
+         :ok <- Jidoka.Control.validate_module(result.control) do
+      {:ok, result}
+    end
+  end
+
+  @spec new!(keyword() | map()) :: t()
+  def new!(attrs) do
+    case new(attrs) do
+      {:ok, result} -> result
+      {:error, reason} -> raise ArgumentError, "invalid result control: #{inspect(reason)}"
+    end
+  end
+
+  @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
+  def from_input(%__MODULE__{} = result), do: new(result)
+  def from_input(input), do: new(input)
+end
+
+defmodule Jidoka.Agent.Spec.Controls do
+  @moduledoc """
+  Policy controls attached to a Jidoka agent definition.
+  """
+
+  alias Jidoka.Agent.Spec.Controls.Input
+  alias Jidoka.Agent.Spec.Controls.Operation
+  alias Jidoka.Agent.Spec.Controls.Result
+  alias Jidoka.Schema
+
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              max_turns: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
+              timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
+              inputs: Zoi.array(Zoi.lazy({Input, :schema, []})) |> Zoi.default([]),
               operations: Zoi.array(Zoi.lazy({Operation, :schema, []})) |> Zoi.default([]),
+              results: Zoi.array(Zoi.lazy({Result, :schema, []})) |> Zoi.default([]),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -142,8 +240,32 @@ defmodule Jidoka.Agent.Spec.Controls do
   def new(attrs \\ []) do
     attrs = Schema.normalize_attrs(attrs)
 
-    with {:ok, operations} <- normalize_operations(Schema.get_key(attrs, :operations, [])) do
-      Schema.parse(@schema, Map.put(attrs, :operations, operations))
+    with {:ok, max_turns} <- normalize_positive_integer(Schema.get_key(attrs, :max_turns)),
+         {:ok, timeout_ms} <- normalize_positive_integer(timeout_value(attrs)),
+         {:ok, inputs} <- normalize_inputs(control_entries(attrs, :inputs, :input)),
+         {:ok, operations} <-
+           normalize_operations(control_entries(attrs, :operations, :operation)),
+         {:ok, results} <- normalize_results(control_entries(attrs, :results, :result)),
+         :ok <- validate_unique_boundary_controls(inputs, Input, :duplicate_input_control),
+         :ok <- validate_unique_operations(operations),
+         :ok <- validate_unique_boundary_controls(results, Result, :duplicate_result_control) do
+      attrs =
+        attrs
+        |> Map.delete(:timeout)
+        |> Map.delete("timeout")
+        |> Map.delete(:input)
+        |> Map.delete("input")
+        |> Map.delete(:operation)
+        |> Map.delete("operation")
+        |> Map.delete(:result)
+        |> Map.delete("result")
+        |> Map.put(:max_turns, max_turns)
+        |> Map.put(:timeout_ms, timeout_ms)
+        |> Map.put(:inputs, inputs)
+        |> Map.put(:operations, operations)
+        |> Map.put(:results, results)
+
+      Schema.parse(@schema, attrs)
     end
   end
 
@@ -159,6 +281,56 @@ defmodule Jidoka.Agent.Spec.Controls do
   def from_input(%__MODULE__{} = controls), do: new(controls)
   def from_input(input), do: new(input)
 
+  defp timeout_value(attrs) do
+    Schema.get_key(attrs, :timeout_ms) ||
+      Schema.get_key(attrs, :timeout)
+  end
+
+  defp control_entries(attrs, plural_key, singular_key) do
+    case Schema.fetch_key(attrs, plural_key) do
+      {:ok, value} -> value
+      :error -> Schema.get_key(attrs, singular_key, [])
+    end
+  end
+
+  defp normalize_positive_integer(nil), do: {:ok, nil}
+  defp normalize_positive_integer(value) when is_integer(value) and value > 0, do: {:ok, value}
+
+  defp normalize_positive_integer(value) when is_binary(value) do
+    case Integer.parse(String.trim(value)) do
+      {integer, ""} when integer > 0 -> {:ok, integer}
+      _other -> {:error, {:invalid_control_positive_integer, value}}
+    end
+  end
+
+  defp normalize_positive_integer(value), do: {:error, {:invalid_control_positive_integer, value}}
+
+  defp normalize_inputs(inputs),
+    do: normalize_boundary_controls(inputs, Input, :invalid_input_controls)
+
+  defp normalize_results(results),
+    do: normalize_boundary_controls(results, Result, :invalid_result_controls)
+
+  defp normalize_boundary_controls(controls, module, _error_reason) when is_list(controls) do
+    controls
+    |> Enum.reduce_while({:ok, []}, fn control, {:ok, controls} ->
+      case module.from_input(control) do
+        {:ok, control} -> {:cont, {:ok, [control | controls]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, controls} -> {:ok, Enum.reverse(controls)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp normalize_boundary_controls(%{} = control, module, error_reason),
+    do: normalize_boundary_controls([control], module, error_reason)
+
+  defp normalize_boundary_controls(controls, _module, error_reason),
+    do: {:error, {error_reason, controls}}
+
   defp normalize_operations(operations) when is_list(operations) do
     operations
     |> Enum.reduce_while({:ok, []}, fn operation, {:ok, operations} ->
@@ -173,5 +345,41 @@ defmodule Jidoka.Agent.Spec.Controls do
     end
   end
 
+  defp normalize_operations(%{} = operation), do: normalize_operations([operation])
+
   defp normalize_operations(operations), do: {:error, {:invalid_operation_controls, operations}}
+
+  defp validate_unique_boundary_controls(controls, module, reason) do
+    controls
+    |> Enum.reduce_while(MapSet.new(), fn %{__struct__: ^module, control: control}, seen ->
+      key = control
+
+      if MapSet.member?(seen, key) do
+        {:halt, {:error, {reason, control}}}
+      else
+        {:cont, MapSet.put(seen, key)}
+      end
+    end)
+    |> case do
+      %MapSet{} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp validate_unique_operations(operations) do
+    operations
+    |> Enum.reduce_while(MapSet.new(), fn %Operation{} = operation, seen ->
+      key = {operation.control, operation.match}
+
+      if MapSet.member?(seen, key) do
+        {:halt, {:error, {:duplicate_operation_control, operation.control, operation.match}}}
+      else
+        {:cont, MapSet.put(seen, key)}
+      end
+    end)
+    |> case do
+      %MapSet{} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
 end

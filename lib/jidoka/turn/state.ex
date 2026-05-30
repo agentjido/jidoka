@@ -16,10 +16,12 @@ defmodule Jidoka.Turn.State do
               prompt: Zoi.any() |> Zoi.nullish(),
               llm_result: Zoi.lazy({Effect.LLMDecision, :schema, []}) |> Zoi.nullish(),
               operation_plan: Zoi.lazy({Effect.OperationRequest, :schema, []}) |> Zoi.nullish(),
-              pending_effect: Zoi.lazy({Effect.Intent, :schema, []}) |> Zoi.nullish(),
+              pending_effects:
+                Zoi.array(Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default([]),
               result: Zoi.string() |> Zoi.nullish(),
               status: Schema.atom_enum([:running, :finished]) |> Zoi.default(:running),
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              started_at_ms: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
               events: Zoi.array(Zoi.lazy({Jidoka.Event, :schema, []})) |> Zoi.default([]),
               diagnostics: Zoi.array(Zoi.any()) |> Zoi.default([])
@@ -46,15 +48,78 @@ defmodule Jidoka.Turn.State do
   defp prepare_attrs(attrs) do
     attrs
     |> Schema.normalize_attrs()
+    |> normalize_pending_effects()
     |> Schema.put_default(:journal, Effect.Journal.new!())
   end
 
   @spec apply_effect_result(t(), Effect.Result.t()) :: {:ok, t()} | {:error, term()}
-  def apply_effect_result(%__MODULE__{pending_effect: %{kind: :llm}} = state, %Effect.Result{
-        status: :ok,
-        output: output
-      })
-      when is_map(output) do
+  def apply_effect_result(%__MODULE__{} = state, %Effect.Result{status: :ok} = result) do
+    case current_pending_effect(state) do
+      %Effect.Intent{kind: :llm} = effect ->
+        with :ok <- ensure_result_for_effect(effect, result) do
+          apply_llm_result(state, result.output)
+        end
+
+      %Effect.Intent{kind: :operation} = effect ->
+        with :ok <- ensure_result_for_effect(effect, result) do
+          apply_operation_result(state, effect, result.output)
+        end
+
+      nil ->
+        {:error, {:missing_pending_effect, state}}
+    end
+  end
+
+  def apply_effect_result(_state, %Effect.Result{status: :error, output: output}),
+    do: {:error, output}
+
+  def apply_effect_result(state, result), do: {:error, {:unexpected_effect_result, state, result}}
+
+  @spec current_pending_effect(t()) :: Effect.Intent.t() | nil
+  def current_pending_effect(%__MODULE__{pending_effects: [effect | _rest]}), do: effect
+  def current_pending_effect(%__MODULE__{}), do: nil
+
+  @spec pending_effect?(t()) :: boolean()
+  def pending_effect?(%__MODULE__{} = state), do: not is_nil(current_pending_effect(state))
+
+  @spec set_pending_effects(t(), [Effect.Intent.t()]) :: t()
+  def set_pending_effects(%__MODULE__{} = state, effects) when is_list(effects) do
+    %__MODULE__{state | pending_effects: effects}
+  end
+
+  @spec pop_pending_effect(t()) :: t()
+  def pop_pending_effect(%__MODULE__{pending_effects: [_effect | rest]} = state) do
+    %__MODULE__{state | pending_effects: rest}
+  end
+
+  def pop_pending_effect(%__MODULE__{} = state), do: state
+
+  defp normalize_pending_effects(%{} = attrs) do
+    cond do
+      Map.has_key?(attrs, :pending_effects) or Map.has_key?(attrs, "pending_effects") ->
+        attrs
+
+      Map.has_key?(attrs, :pending_effect) or Map.has_key?(attrs, "pending_effect") ->
+        pending_effect = Map.get(attrs, :pending_effect, Map.get(attrs, "pending_effect"))
+
+        attrs
+        |> Map.delete(:pending_effect)
+        |> Map.delete("pending_effect")
+        |> Map.put(:pending_effects, pending_effects_from_legacy(pending_effect))
+
+      true ->
+        attrs
+    end
+  end
+
+  defp normalize_pending_effects(attrs), do: attrs
+
+  defp pending_effects_from_legacy(nil), do: []
+  defp pending_effects_from_legacy(effect), do: [effect]
+
+  defp apply_llm_result(%__MODULE__{} = state, output) when is_map(output) do
+    state = pop_pending_effect(state)
+
     case Effect.LLMDecision.from_input(output) do
       {:ok, %Effect.LLMDecision{type: :final, content: content}} ->
         finish_turn(state, content)
@@ -67,14 +132,12 @@ defmodule Jidoka.Turn.State do
     end
   end
 
-  def apply_effect_result(
-        %__MODULE__{pending_effect: %{kind: :operation}} = state,
-        %Effect.Result{
-          status: :ok,
-          output: output
-        }
-      ) do
-    with {:ok, observation} <- Effect.OperationResult.from_effect(state.pending_effect, output) do
+  defp apply_llm_result(_state, output), do: {:error, {:invalid_llm_output, output}}
+
+  defp apply_operation_result(%__MODULE__{} = state, %Effect.Intent{} = effect, output) do
+    with {:ok, observation} <- Effect.OperationResult.from_effect(effect, output) do
+      state = pop_pending_effect(state)
+
       agent_state =
         state.agent_state
         |> append_message(Effect.OperationResult.to_message(observation))
@@ -83,8 +146,7 @@ defmodule Jidoka.Turn.State do
       state =
         %__MODULE__{
           state
-          | pending_effect: nil,
-            operation_plan: nil,
+          | operation_plan: nil,
             agent_state: agent_state
         }
         |> transition()
@@ -100,10 +162,11 @@ defmodule Jidoka.Turn.State do
     end
   end
 
-  def apply_effect_result(_state, %Effect.Result{status: :error, output: output}),
-    do: {:error, output}
+  defp ensure_result_for_effect(%Effect.Intent{id: id}, %Effect.Result{intent_id: id}), do: :ok
 
-  def apply_effect_result(state, result), do: {:error, {:unexpected_effect_result, state, result}}
+  defp ensure_result_for_effect(%Effect.Intent{} = effect, %Effect.Result{} = result) do
+    {:error, {:effect_result_mismatch, effect, result}}
+  end
 
   defp append_message(%Agent.State{messages: messages} = state, message) do
     %Agent.State{state | messages: messages ++ [message]}
@@ -116,23 +179,14 @@ defmodule Jidoka.Turn.State do
   defp finish_turn(%__MODULE__{} = state, content) do
     message = Agent.Message.assistant(content)
 
-    state =
-      %__MODULE__{
-        state
-        | pending_effect: nil,
-          result: content,
-          status: :finished,
-          agent_state: append_message(state.agent_state, message)
-      }
-      |> transition()
-      |> transition_event(:turn_finished,
-        agent_id: state.spec.id,
-        request_id: state.request.request_id,
-        loop_index: state.loop_index
-      )
-      |> Turn.Transition.commit()
-
-    {:ok, state}
+    {:ok,
+     %__MODULE__{
+       state
+       | pending_effects: [],
+         result: content,
+         status: :finished,
+         agent_state: append_message(state.agent_state, message)
+     }}
   end
 
   defp plan_operation_turn(
@@ -183,7 +237,7 @@ defmodule Jidoka.Turn.State do
       state
       | llm_result: decision,
         operation_plan: operation_request,
-        pending_effect: effect
+        pending_effects: [effect]
     }
     |> transition()
     |> transition_event(:effect_planned,

@@ -28,7 +28,9 @@ This is the V2 kernel. It currently supports:
 - Zoi-backed `Agent.Spec`, turn, effect, and snapshot structs;
 - model normalization through ReqLLM/LLMDB;
 - Jido actions as model-callable tools;
-- operation controls as data on `Agent.Spec.Controls`;
+- `input`, `operation`, and `result` controls as data on `Agent.Spec.Controls`;
+- runtime execution for input and result controls;
+- `max_turns` and `timeout` turn limits under `controls`;
 - default process hosting through `Jidoka.Jido` and `Jido.AgentServer`;
 - a constrained JSON model-decision protocol;
 - a Runic-backed ReAct-style loop;

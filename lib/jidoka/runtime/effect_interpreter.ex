@@ -14,10 +14,27 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
   @spec interpret_pending(Turn.State.t(), Capabilities.t()) ::
           {:ok, Effect.Result.t(), Turn.State.t()} | {:error, term()}
-  def interpret_pending(
-        %Turn.State{pending_effect: %Effect.Intent{} = intent} = state,
-        %Capabilities{} = capabilities
-      ) do
+  def interpret_pending(%Turn.State{} = state, %Capabilities{} = capabilities) do
+    case Turn.State.current_pending_effect(state) do
+      %Effect.Intent{} = intent ->
+        interpret_intent(state, intent, capabilities)
+
+      nil ->
+        {:error,
+         Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
+    end
+  end
+
+  def interpret_pending(_state, _capabilities) do
+    {:error,
+     Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
+  end
+
+  defp interpret_intent(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Capabilities{} = capabilities
+       ) do
     case Effect.Journal.result_for(state.journal, intent) do
       %Effect.Result{} = result ->
         {:ok, result, append_effect_trace(state, intent, :effect_replayed)}
@@ -37,11 +54,6 @@ defmodule Jidoka.Runtime.EffectInterpreter do
           {:ok, result, state}
         end
     end
-  end
-
-  def interpret_pending(_state, _capabilities) do
-    {:error,
-     Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
   end
 
   defp call_capability(%Effect.Intent{kind: :llm} = intent, %Capabilities{llm: llm}, journal) do

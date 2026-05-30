@@ -67,6 +67,10 @@ defmodule Jidoka.ProjectionTest do
                }
              ],
              controls: %{
+               max_turns: nil,
+               timeout_ms: nil,
+               inputs: [],
+               results: [],
                operations: [
                  %{
                    control: "support_control",
@@ -141,7 +145,7 @@ defmodule Jidoka.ProjectionTest do
       )
 
     intent = Effect.Intent.new(:llm, %{request_id: request.request_id}, id: "llm:1")
-    state = %Turn.State{state | pending_effect: intent}
+    state = Turn.State.set_pending_effects(state, [intent])
     snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.before_effect(intent))
 
     assert %{
@@ -153,7 +157,7 @@ defmodule Jidoka.ProjectionTest do
              },
              turn_state: %{
                spec_id: "snapshot_projection_agent",
-               pending_effect: %{id: "llm:1", kind: :llm},
+               pending_effects: [%{id: "llm:1", kind: :llm}],
                plan: %{spec_id: "snapshot_projection_agent"}
              }
            } = Jidoka.projection(snapshot)

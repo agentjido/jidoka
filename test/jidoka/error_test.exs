@@ -71,9 +71,14 @@ defmodule Jidoka.ErrorTest do
   test "normalizes known execution reasons" do
     cases = [
       {{:max_model_turns_exceeded, 3}, :turn, :max_model_turns_exceeded},
+      {{:turn_timeout_exceeded, 1_000, 1_001}, :turn, :turn_timeout_exceeded},
       {{:missing_pending_effect, %{}}, :effect, :missing_pending_effect},
       {{:unsupported_effect_kind, :stream}, :effect, :unsupported_effect_kind},
       {{:invalid_capability_result, :ok}, :effect, :invalid_capability_result},
+      {{:control_blocked, Jidoka.ErrorTest.Support.NonSplodeClass, :input, :nope}, :control,
+       :control_blocked},
+      {{:invalid_control_decision, Jidoka.ErrorTest.Support.NonSplodeClass, :input, :wat},
+       :control, :invalid_control_decision},
       {{:missing_prompt_payload, %{}}, :llm, :missing_prompt_payload},
       {{:invalid_prompt_payload, "bad"}, :llm, :invalid_prompt_payload},
       {{:invalid_llm_decision_type, "bad"}, :llm_decision, :invalid_llm_decision_type},

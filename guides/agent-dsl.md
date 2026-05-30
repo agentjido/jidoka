@@ -47,10 +47,23 @@ Jidoka converts actions into `Agent.Spec.Operation` entries.
 
 ## Controls Block
 
-The first controls slice supports operation controls. This preserves the V1 DSL
-shape while keeping execution policy as data on the agent spec:
+Controls describe policy at explicit turn boundaries:
+
+- `input` runs before the first model call;
+- `operation` describes policy around model-callable work;
+- `result` runs before the final answer is returned;
+- `max_turns` and `timeout` bound the turn loop.
 
 ```elixir
+defmodule MyApp.NoSecrets do
+  use Jidoka.Control, name: "no_secrets"
+
+  @impl true
+  def call(%{input: input}) do
+    if String.contains?(input, "secret"), do: {:block, :secret_input}, else: :cont
+  end
+end
+
 defmodule MyApp.RequireApproval do
   use Jidoka.Control, name: "require_approval"
 
@@ -58,14 +71,29 @@ defmodule MyApp.RequireApproval do
   def call(_operation), do: :cont
 end
 
+defmodule MyApp.SafeReply do
+  use Jidoka.Control, name: "safe_reply"
+
+  @impl true
+  def call(_result), do: :cont
+end
+
 controls do
+  max_turns 8
+  timeout 30_000
+
+  input MyApp.NoSecrets
+
   operation MyApp.RequireApproval,
     when: [kind: :action, name: :local_time]
+
+  result MyApp.SafeReply
 end
 ```
 
-Operation controls are compiled into `Agent.Spec.Controls`. Runtime approval,
-blocking, and interrupt execution are intentionally separate follow-up work.
+Input and result controls run in declaration order. Operation controls compile
+into `Agent.Spec.Controls`; runtime approval, blocking, and interrupt execution
+for operations remain follow-up work.
 
 ## Compiled Shape
 
@@ -102,11 +130,17 @@ tools:
   actions:
     - local_time
 controls:
+  max_turns: 8
+  timeout: 30000
+  inputs:
+    - control: no_secrets
   operations:
     - control: require_approval
       when:
         kind: action
         name: local_time
+  results:
+    - control: safe_reply
 ```
 
 ```elixir
@@ -121,18 +155,28 @@ tools:
   actions:
     - local_time
 controls:
+  max_turns: 8
+  timeout: 30000
+  inputs:
+    - control: no_secrets
   operations:
     - control: require_approval
       when:
         kind: action
         name: local_time
+  results:
+    - control: safe_reply
 """
 
 {:ok, spec} =
   Jidoka.import(yaml,
     registries: %{
       actions: %{"local_time" => MyApp.LocalTime},
-      controls: %{"require_approval" => MyApp.RequireApproval},
+      controls: %{
+        "no_secrets" => MyApp.NoSecrets,
+        "require_approval" => MyApp.RequireApproval,
+        "safe_reply" => MyApp.SafeReply
+      },
       context_schemas: %{"support_context" => Zoi.object(%{tenant_id: Zoi.string()})}
     }
   )
@@ -141,5 +185,6 @@ controls:
 ## Intentionally Absent
 
 The current DSL does not expose memory, handoffs, workflows, sessions, approval
-queues, input/result controls, or native provider tool-calling. Those should
-land after the `Agent.Spec`, harness, and runtime contracts are stable.
+queues, operation-control runtime execution, or native provider tool-calling.
+Those should land after the `Agent.Spec`, harness, and runtime contracts are
+stable.

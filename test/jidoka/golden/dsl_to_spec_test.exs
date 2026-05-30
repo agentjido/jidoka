@@ -67,6 +67,10 @@ defmodule Jidoka.Golden.DslToSpecTest do
              context_schema?: false,
              operations: [],
              controls: %{
+               max_turns: nil,
+               timeout_ms: nil,
+               inputs: [],
+               results: [],
                operations: [],
                metadata: %{}
              },
@@ -102,6 +106,10 @@ defmodule Jidoka.Golden.DslToSpecTest do
                }
              ],
              controls: %{
+               max_turns: nil,
+               timeout_ms: nil,
+               inputs: [],
+               results: [],
                operations: [
                  %{
                    control: "require_local_time_approval",
@@ -127,6 +135,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
              spec_id: "golden_time_agent",
              workflow_profile: :tool_loop,
              max_model_turns: 8,
+             timeout_ms: 30_000,
              phases: [
                :assemble_prompt,
                :plan_model_effect,

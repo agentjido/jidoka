@@ -50,8 +50,28 @@ defmodule Jidoka.Projection do
 
   def project(%Agent.Spec.Controls{} = controls) do
     %{
+      max_turns: controls.max_turns,
+      timeout_ms: controls.timeout_ms,
+      inputs: Enum.map(controls.inputs, &project/1),
       operations: Enum.map(controls.operations, &project/1),
+      results: Enum.map(controls.results, &project/1),
       metadata: project_value(controls.metadata)
+    }
+  end
+
+  def project(%Agent.Spec.Controls.Input{} = input) do
+    %{
+      control: control_name(input.control),
+      module: inspect(input.control),
+      metadata: project_value(input.metadata)
+    }
+  end
+
+  def project(%Agent.Spec.Controls.Result{} = result) do
+    %{
+      control: control_name(result.control),
+      module: inspect(result.control),
+      metadata: project_value(result.metadata)
     }
   end
 
@@ -69,6 +89,7 @@ defmodule Jidoka.Projection do
       spec_id: plan.spec.id,
       workflow_profile: plan.workflow_profile,
       max_model_turns: plan.max_model_turns,
+      timeout_ms: plan.timeout_ms,
       phases: plan.phases,
       metadata: project_value(plan.metadata)
     }
@@ -103,10 +124,11 @@ defmodule Jidoka.Projection do
       prompt: project_value(state.prompt),
       llm_result: project_value(state.llm_result),
       operation_plan: project_value(state.operation_plan),
-      pending_effect: project_nullable(state.pending_effect),
+      pending_effects: Enum.map(state.pending_effects, &project/1),
       result: state.result,
       status: state.status,
       loop_index: state.loop_index,
+      started_at_ms: state.started_at_ms,
       journal: project(state.journal),
       events: project_value(state.events),
       diagnostics: project_value(state.diagnostics)
@@ -208,9 +230,6 @@ defmodule Jidoka.Projection do
   def project(%Event{} = event), do: Event.to_map(event)
 
   def project(value), do: project_value(value)
-
-  defp project_nullable(nil), do: nil
-  defp project_nullable(value), do: project(value)
 
   defp project_agent_metadata(metadata) when is_map(metadata) do
     metadata

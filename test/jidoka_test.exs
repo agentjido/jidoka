@@ -226,7 +226,7 @@ defmodule JidokaTest do
              )
 
     assert snapshot.cursor.phase == :after_prompt
-    assert snapshot.turn_state.pending_effect.kind == :llm
+    assert Turn.State.current_pending_effect(snapshot.turn_state).kind == :llm
 
     assert {:ok, %AgentSnapshot{} = restored_snapshot} =
              snapshot
@@ -277,7 +277,7 @@ defmodule JidokaTest do
              )
 
     assert prompt_snapshot.cursor.phase == :after_prompt
-    assert prompt_snapshot.turn_state.pending_effect.kind == :llm
+    assert Turn.State.current_pending_effect(prompt_snapshot.turn_state).kind == :llm
 
     assert {:hibernate, %AgentSnapshot{} = operation_snapshot} =
              Jidoka.resume(prompt_snapshot,
@@ -288,7 +288,7 @@ defmodule JidokaTest do
 
     assert operation_snapshot.cursor.phase == :before_effect
     assert operation_snapshot.cursor.metadata["effect_kind"] == :operation
-    assert operation_snapshot.turn_state.pending_effect.kind == :operation
+    assert Turn.State.current_pending_effect(operation_snapshot.turn_state).kind == :operation
 
     assert {:ok, %AgentSnapshot{} = restored_operation_snapshot} =
              operation_snapshot

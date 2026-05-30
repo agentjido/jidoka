@@ -80,7 +80,8 @@ mixed internal model:
   `result`;
 - imported specs still use `defaults`, `capabilities`, `lifecycle`, and
   `output`;
-- internals still carry `guardrails`, `tool`, and `output` compatibility terms;
+- internals are being moved away from `guardrails`, `tool`, and `output`
+  compatibility terms;
 - feature resolution is still centralized around operation expansion;
 - lifecycle ordering is explicit but manually enumerated;
 - the lower runtime loop is partly hidden behind Jido.AI ReAct callbacks.
@@ -1983,11 +1984,11 @@ Goal: compile the smallest useful agent into `AgentSpec`.
 
 Current checkpoint: the Spark DSL and JSON/YAML import runtime both compile
 into `Jidoka.Agent.Spec`. Import parity currently covers agent id, model,
-generation, default instructions, context schema refs, direct operations, and
-Jido action refs resolved through registries. A first operation-controls slice
-also preserves the V1 `controls do operation ... end` DSL shape as durable spec
-data, with JSON/YAML import parity through explicit control registries. The root
-import API is `Jidoka.import/2` for document strings, with
+generation, default instructions, context schema refs, direct operations, Jido
+action refs resolved through registries, and the `controls` surface for
+`input`, `operation`, `result`, `max_turns`, and `timeout`. Operation controls
+are durable spec data for now; input and result controls execute at runtime. The
+root import API is `Jidoka.import/2` for document strings, with
 `Jidoka.Import.load/2` retained for already-decoded maps.
 
 Deliverables:
@@ -2011,8 +2012,8 @@ Residual hardening:
   `Turn.State`, `Effect.Journal`, `Turn.Result`, and `AgentSnapshot`;
 - decide whether `description` belongs in `Agent.Spec` or remains only a DSL
   bridge into Jido agent metadata;
-- keep imported `result`, input/result controls, and JSON-schema-shaped context
-  out of Phase 1 until the corresponding runtime contracts exist.
+- keep imported `result` and JSON-schema-shaped context out of Phase 1 until
+  the corresponding runtime contracts exist.
 
 ### Phase 2: Runic Chat Kernel
 
@@ -2091,11 +2092,11 @@ Deliverables:
 
 - [x] operation controls as spec/import/DSL data;
 - [ ] operation control runtime execution;
-- input and result control contracts;
+- [x] input and result control contracts;
 - review/wait interrupt shape;
 - result validation and bounded repair loop;
-- budget/time limits;
-- control trace events.
+- [x] budget/time limits for `max_turns` and wall-clock timeout;
+- [x] control trace events for currently executed input/result controls.
 
 Exit criteria:
 

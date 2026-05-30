@@ -52,11 +52,42 @@ defmodule Jidoka.Turn.StateTest do
     assert {:error, :llm_failed} =
              Turn.State.apply_effect_result(state, Effect.Result.error(intent, :llm_failed))
 
-    assert {:error, {:unexpected_effect_result, %Turn.State{}, %Effect.Result{}}} =
+    assert {:error, {:missing_pending_effect, %Turn.State{}}} =
              Turn.State.apply_effect_result(
-               %{state | pending_effect: nil},
+               Turn.State.set_pending_effects(state, []),
                Effect.Result.ok(operation_intent, %{ok: true})
              )
+  end
+
+  test "applies pending effects in FIFO order" do
+    {state, llm_intent} = state_with_pending_llm()
+    operation_intent = Effect.Intent.new(:operation, %{name: "weather", arguments: %{}})
+
+    state = Turn.State.set_pending_effects(state, [operation_intent, llm_intent])
+
+    assert {:ok, next_state} =
+             Turn.State.apply_effect_result(
+               state,
+               Effect.Result.ok(operation_intent, %{temperature: 72})
+             )
+
+    assert Turn.State.current_pending_effect(next_state) == llm_intent
+    assert next_state.pending_effects == [llm_intent]
+  end
+
+  test "rejects out-of-order effect results" do
+    {state, llm_intent} = state_with_pending_llm()
+    operation_intent = Effect.Intent.new(:operation, %{name: "weather", arguments: %{}})
+
+    state = Turn.State.set_pending_effects(state, [llm_intent, operation_intent])
+
+    assert {:error, {:effect_result_mismatch, ^llm_intent, %Effect.Result{intent_id: intent_id}}} =
+             Turn.State.apply_effect_result(
+               state,
+               Effect.Result.ok(operation_intent, %{ok: true})
+             )
+
+    assert intent_id == operation_intent.id
   end
 
   defp state_with_pending_llm do
@@ -80,6 +111,6 @@ defmodule Jidoka.Turn.StateTest do
         agent_state: request.agent_state
       )
 
-    {%{state | pending_effect: intent}, intent}
+    {Turn.State.set_pending_effects(state, [intent]), intent}
   end
 end

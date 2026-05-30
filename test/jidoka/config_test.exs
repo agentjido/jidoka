@@ -32,10 +32,38 @@ defmodule Jidoka.ConfigTest do
     assert %Generation{params: %{temperature: 0.3}} = Jidoka.Config.default_generation()
   end
 
+  test "reads runtime control defaults from application config" do
+    previous_max_turns = Application.get_env(:jidoka, :default_max_model_turns)
+    previous_timeout = Application.get_env(:jidoka, :default_turn_timeout_ms)
+
+    on_exit(fn ->
+      restore_env(:default_max_model_turns, previous_max_turns)
+      restore_env(:default_turn_timeout_ms, previous_timeout)
+    end)
+
+    Application.put_env(:jidoka, :default_max_model_turns, "5")
+    Application.put_env(:jidoka, :default_turn_timeout_ms, "2500")
+
+    assert Jidoka.Config.default_max_model_turns() == 5
+    assert Jidoka.Config.default_turn_timeout_ms() == 2_500
+
+    spec =
+      Jidoka.agent!(
+        id: "configured_control_defaults_agent",
+        instructions: "Use defaults.",
+        model: %{provider: :test, id: "model"}
+      )
+
+    assert %{max_model_turns: 5, timeout_ms: 2_500} = Jidoka.plan!(spec)
+  end
+
   test "model_ref accepts model input and normalized structs" do
     model = Jidoka.Config.normalize_model_spec!(%{provider: :test, id: "ref-model"})
 
     assert Jidoka.Config.model_ref(model) == "test:ref-model"
     assert Jidoka.Config.model_ref(%{provider: :test, id: "ref-model"}) == "test:ref-model"
   end
+
+  defp restore_env(key, nil), do: Application.delete_env(:jidoka, key)
+  defp restore_env(key, value), do: Application.put_env(:jidoka, key, value)
 end

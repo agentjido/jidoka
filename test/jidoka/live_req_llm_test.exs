@@ -36,15 +36,22 @@ defmodule Jidoka.LiveReqLLMTest do
       end
     end
 
+    defmodule RequireLocalTimeApproval do
+      use Jidoka.Control, name: "require_local_time_approval"
+
+      @impl true
+      def call(_operation), do: :cont
+    end
+
     defmodule TimeAgent do
       use Jidoka.Agent
 
+      @live_model System.get_env("JIDOKA_DEFAULT_MODEL") ||
+                    System.get_env("JIDOKA_LIVE_MODEL") ||
+                    Jidoka.Config.default_model()
+
       agent :live_time_agent do
-        model(
-          System.get_env("JIDOKA_DEFAULT_MODEL") ||
-            System.get_env("JIDOKA_LIVE_MODEL") ||
-            Jidoka.Config.default_model()
-        )
+        model @live_model
 
         instructions """
         You are a Jidoka live integration test agent.
@@ -56,9 +63,21 @@ defmodule Jidoka.LiveReqLLMTest do
       tools do
         action Jidoka.LiveReqLLMTest.LocalTime
       end
+
+      controls do
+        operation Jidoka.LiveReqLLMTest.RequireLocalTimeApproval,
+          when: [kind: :action, name: :local_time]
+      end
     end
 
     test "runs a real DSL-defined LLM operation loop through ReqLLM and Jido actions" do
+      assert [
+               %Jidoka.Agent.Spec.Controls.Operation{
+                 control: RequireLocalTimeApproval,
+                 match: %{kind: :action, name: "local_time"}
+               }
+             ] = TimeAgent.spec().controls.operations
+
       assert {:ok, %Turn.Result{} = result} =
                TimeAgent.run_turn("What time is it in Chicago? Use local_time.")
 

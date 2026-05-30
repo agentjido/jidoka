@@ -22,6 +22,9 @@ defmodule Jidoka.Event do
       status: :completed
     },
     capability_call_failed: %{category: :runtime, phase: :interpret_effect, status: :failed},
+    control_allowed: %{category: :control, phase: :control, status: :completed},
+    control_blocked: %{category: :control, phase: :control, status: :failed},
+    control_failed: %{category: :control, phase: :control, status: :failed},
     operation_observed: %{
       category: :operation,
       phase: :apply_operation_results,
@@ -29,8 +32,9 @@ defmodule Jidoka.Event do
     },
     turn_finished: %{category: :workflow, phase: :finish, status: :completed}
   }
-  @categories [:workflow, :effect, :runtime, :operation]
+  @categories [:workflow, :effect, :runtime, :operation, :control]
   @phases [
+    :control,
     :assemble_prompt,
     :plan_model_effect,
     :interpret_effect,

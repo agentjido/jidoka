@@ -77,7 +77,7 @@ defmodule Jidoka.Workflow.Steps do
 
     %Turn.State{
       state
-      | pending_effect: effect
+      | pending_effects: [effect]
     }
     |> transition()
     |> transition_event(:effect_planned,
