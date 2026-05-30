@@ -75,7 +75,7 @@ defmodule Jidoka.Projection do
       timeout_ms: controls.timeout_ms,
       inputs: Enum.map(controls.inputs, &project/1),
       operations: Enum.map(controls.operations, &project/1),
-      outputs: Enum.map(controls.results, &project/1),
+      outputs: Enum.map(controls.outputs, &project/1),
       metadata: project_value(controls.metadata)
     }
   end
@@ -88,11 +88,11 @@ defmodule Jidoka.Projection do
     }
   end
 
-  def project(%Agent.Spec.Controls.Result{} = result) do
+  def project(%Agent.Spec.Controls.Output{} = output) do
     %{
-      control: control_name(result.control),
-      module: inspect(result.control),
-      metadata: project_value(result.metadata)
+      control: control_name(output.control),
+      module: inspect(output.control),
+      metadata: project_value(output.metadata)
     }
   end
 

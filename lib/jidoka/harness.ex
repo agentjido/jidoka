@@ -2,10 +2,10 @@ defmodule Jidoka.Harness do
   @moduledoc """
   Thin execution harness around Jidoka's data-first agent kernel.
 
-  This is intentionally small for V2 MVP. The harness is the named boundary
-  where executable turn data, runtime capabilities, checkpoint policy, and resume meet.
-  Future session queues, stores, replay, eval cases, and approval flows belong
-  here rather than in the root `Jidoka` facade or the pure workflow steps.
+  The harness is the named boundary where executable turn data, runtime
+  capabilities, checkpoint policy, sessions, stores, replay, eval cases, memory,
+  and review flows meet. Those operational concerns belong here rather than in
+  the root `Jidoka` facade or the pure workflow steps.
   """
 
   alias Jidoka.Agent

@@ -138,7 +138,7 @@ defmodule Jidoka.Runtime.TurnRunner do
            :ok <- enforce_timeout(state, opts) do
         case state.status do
           :finished ->
-            with {:ok, state} <- Controls.run_result_controls(state),
+            with {:ok, state} <- Controls.run_output_controls(state),
                  :ok <- enforce_timeout(state, opts) do
               {:ok, state |> append_turn_finished() |> Turn.Result.from_turn_state!()}
             end

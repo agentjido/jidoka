@@ -191,7 +191,7 @@ defmodule Jidoka.Agent do
         %Jidoka.Agent.Dsl.OutputControl{} = output ->
           [
             normalize_dsl_value!(agent_module, [:controls, :output], fn ->
-              Controls.Result.new!(
+              Controls.Output.new!(
                 control: output.control,
                 metadata: output.metadata || %{}
               )

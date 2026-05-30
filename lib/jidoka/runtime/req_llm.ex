@@ -2,7 +2,7 @@ defmodule Jidoka.Runtime.ReqLLM do
   @moduledoc """
   ReqLLM runtime support for Jidoka's LLM effect boundary.
 
-  The MVP runtime uses a constrained JSON protocol instead of native provider
+  The runtime uses a constrained JSON protocol instead of native provider
   tool-calling. That keeps Jidoka's Runic spine provider-neutral while still
   letting a real model choose between final answers and operation calls.
   """

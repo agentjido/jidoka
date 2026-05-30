@@ -89,11 +89,11 @@ defmodule Jidoka.Agent.DslTest do
            ] = agent_module.spec().controls.operations
 
     assert [
-             %Jidoka.Agent.Spec.Controls.Result{
+             %Jidoka.Agent.Spec.Controls.Output{
                control: ^control_module,
                metadata: %{}
              }
-           ] = agent_module.spec().controls.results
+           ] = agent_module.spec().controls.outputs
 
     assert control_module.name() == "compiled_control_#{suffix}"
 

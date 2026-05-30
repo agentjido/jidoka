@@ -200,7 +200,7 @@ defmodule Jidoka.ImportTest do
              }
            ] = spec.controls.operations
 
-    assert [%Agent.Spec.Controls.Result{control: EchoControl}] = spec.controls.results
+    assert [%Agent.Spec.Controls.Output{control: EchoControl}] = spec.controls.outputs
   end
 
   test "rejects legacy result control import keys" do

@@ -8,23 +8,23 @@ defmodule Jidoka.Runtime.Controls do
 
   alias Jidoka.Agent.Spec.Controls.Input
   alias Jidoka.Agent.Spec.Controls.Operation, as: OperationControl
-  alias Jidoka.Agent.Spec.Controls.Result
+  alias Jidoka.Agent.Spec.Controls.Output
   alias Jidoka.Effect
   alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.Controls.Decision
   alias Jidoka.Runtime.Controls.Operation
   alias Jidoka.Turn
 
-  @type boundary_control :: Input.t() | Result.t()
+  @type boundary_control :: Input.t() | Output.t()
   @type operation_control :: OperationControl.t()
 
   @spec run_input_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
   def run_input_controls(%Turn.State{} = state),
     do: run_controls(state, :input, state.spec.controls.inputs)
 
-  @spec run_result_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
-  def run_result_controls(%Turn.State{} = state),
-    do: run_controls(state, :output, state.spec.controls.results)
+  @spec run_output_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
+  def run_output_controls(%Turn.State{} = state),
+    do: run_controls(state, :output, state.spec.controls.outputs)
 
   @spec run_operation_controls(Turn.State.t(), Effect.Intent.t()) ::
           {:ok, Turn.State.t()} | {:interrupt, Interrupt.t(), Turn.State.t()} | {:error, term()}

@@ -126,7 +126,7 @@ defmodule Jidoka.DataStructsTest do
   end
 
   test "control specs accept output controls as the public data key" do
-    assert %Controls{results: [%Controls.Result{control: AllowControl}]} =
+    assert %Controls{outputs: [%Controls.Output{control: AllowControl}]} =
              Controls.new!(
                outputs: [
                  %{control: AllowControl}

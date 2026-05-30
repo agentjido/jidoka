@@ -2,9 +2,9 @@ defmodule Jidoka.Extensions do
   @moduledoc """
   Registry for built-in Jidoka extensions.
 
-  This is deliberately static for now. Extensions are regular modules that
-  contribute narrow contracts; Jidoka does not yet provide dynamic package
-  loading or per-agent extension registries.
+  Extensions are regular modules that contribute narrow contracts. The registry
+  is intentionally explicit so extension order and capability surfaces stay
+  reviewable.
   """
 
   @builtins [Jidoka.Extensions.Trace]

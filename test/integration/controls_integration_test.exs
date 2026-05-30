@@ -517,8 +517,8 @@ defmodule Jidoka.ControlsIntegrationTest do
     """)
 
     assert [
-             %Agent.Spec.Controls.Result{control: result_control}
-           ] = agent_module.spec().controls.results
+             %Agent.Spec.Controls.Output{control: result_control}
+           ] = agent_module.spec().controls.outputs
 
     assert result_control.name() == "block_output_control_#{suffix}"
     control_name = "block_output_control_#{suffix}"

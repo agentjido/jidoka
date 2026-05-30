@@ -3,7 +3,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyControls do
 
   use Spark.Dsl.Verifier
 
-  alias Jidoka.Agent.Spec.Controls.{Input, Operation, Result}
+  alias Jidoka.Agent.Spec.Controls.{Input, Operation, Output}
 
   @impl true
   def verify(dsl_state) do
@@ -12,7 +12,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyControls do
     dsl_state
     |> Spark.Dsl.Verifier.get_entities([:controls])
     |> Enum.reduce_while(
-      {:ok, %{inputs: MapSet.new(), operations: MapSet.new(), results: MapSet.new()}},
+      {:ok, %{inputs: MapSet.new(), operations: MapSet.new(), outputs: MapSet.new()}},
       fn
         %Jidoka.Agent.Dsl.InputControl{} = control_ref, {:ok, seen} ->
           verify_boundary(module, control_ref, seen, Input, :inputs, [:controls, :input])
@@ -21,7 +21,7 @@ defmodule Jidoka.Agent.Verifiers.VerifyControls do
           verify_operation(module, control_ref, seen)
 
         %Jidoka.Agent.Dsl.OutputControl{} = control_ref, {:ok, seen} ->
-          verify_boundary(module, control_ref, seen, Result, :results, [:controls, :output])
+          verify_boundary(module, control_ref, seen, Output, :outputs, [:controls, :output])
 
         _entity, {:ok, seen} ->
           {:cont, {:ok, seen}}

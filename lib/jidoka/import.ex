@@ -12,6 +12,7 @@ defmodule Jidoka.Import do
   alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Error
   alias Jidoka.Import.AgentDocument
+  alias Jidoka.Import.Registry
   alias Jidoka.Runtime.JidoActions
   alias Jidoka.Schema
 
@@ -141,11 +142,11 @@ defmodule Jidoka.Import do
       %{} = context ->
         case Schema.get_key(context, :ref) || Schema.get_key(context, :schema_ref) do
           nil -> {:error, {:invalid_context_ref, context}}
-          ref -> fetch_registry(:context_schemas, ref, opts)
+          ref -> Registry.fetch(:context_schemas, ref, opts)
         end
 
       ref when is_binary(ref) or is_atom(ref) ->
-        fetch_registry(:context_schemas, ref, opts)
+        Registry.fetch(:context_schemas, ref, opts)
 
       other ->
         {:error, {:invalid_context_ref, other}}
@@ -161,7 +162,7 @@ defmodule Jidoka.Import do
         resolve_result_map(result, opts)
 
       ref when is_binary(ref) or is_atom(ref) ->
-        with {:ok, schema} <- fetch_registry(:result_schemas, ref, opts) do
+        with {:ok, schema} <- Registry.fetch(:result_schemas, ref, opts) do
           Spec.Result.new(
             schema: schema,
             metadata: %{"schema_ref" => to_string(ref)}
@@ -179,7 +180,7 @@ defmodule Jidoka.Import do
         {:error, {:invalid_result_ref, result}}
 
       ref ->
-        with {:ok, schema} <- fetch_registry(:result_schemas, ref, opts) do
+        with {:ok, schema} <- Registry.fetch(:result_schemas, ref, opts) do
           Spec.Result.new(
             schema: schema,
             max_repairs: Schema.get_key(result, :max_repairs, 1),
@@ -227,7 +228,7 @@ defmodule Jidoka.Import do
   end
 
   defp resolve_action(ref, opts) when is_binary(ref) do
-    case fetch_registry(:actions, ref, opts) do
+    case Registry.fetch(:actions, ref, opts) do
       {:ok, action} -> {:ok, action}
       {:error, reason} -> {:error, reason}
     end
@@ -283,7 +284,7 @@ defmodule Jidoka.Import do
              controls,
              opts,
              [:outputs, :output],
-             Controls.Result,
+             Controls.Output,
              :invalid_output_control
            ) do
       Controls.new(
@@ -390,7 +391,7 @@ defmodule Jidoka.Import do
     end
   end
 
-  defp resolve_control(ref, opts) when is_binary(ref), do: fetch_registry(:controls, ref, opts)
+  defp resolve_control(ref, opts) when is_binary(ref), do: Registry.fetch(:controls, ref, opts)
 
   defp resolve_control(other, _opts), do: {:error, {:invalid_control_ref, other}}
 
@@ -420,95 +421,6 @@ defmodule Jidoka.Import do
 
   defp maybe_put_source(metadata, nil), do: metadata
   defp maybe_put_source(metadata, source), do: Map.put(metadata, "source_ref", source)
-
-  defp fetch_registry(name, ref, opts) do
-    registry = registry(name, opts)
-
-    case registry_lookup(registry, ref) do
-      {:ok, value} -> {:ok, value}
-      :error -> {:error, {:unknown_registry_ref, name, ref}}
-    end
-  end
-
-  defp registry(:actions, opts) do
-    Keyword.get(opts, :actions) ||
-      Keyword.get(opts, :action_registry) ||
-      nested_registry(opts, :actions) ||
-      %{}
-  end
-
-  defp registry(:controls, opts) do
-    Keyword.get(opts, :controls) ||
-      Keyword.get(opts, :control_registry) ||
-      nested_registry(opts, :controls) ||
-      %{}
-  end
-
-  defp registry(:context_schemas, opts) do
-    Keyword.get(opts, :context_schemas) ||
-      Keyword.get(opts, :context_schema_registry) ||
-      nested_registry(opts, :context_schemas) ||
-      %{}
-  end
-
-  defp registry(:result_schemas, opts) do
-    Keyword.get(opts, :result_schemas) ||
-      Keyword.get(opts, :result_schema_registry) ||
-      nested_registry(opts, :result_schemas) ||
-      %{}
-  end
-
-  defp nested_registry(opts, key) do
-    opts
-    |> Keyword.get(:registries, %{})
-    |> registry_get(key)
-  end
-
-  defp registry_lookup(registry, ref) when is_map(registry) do
-    registry
-    |> Enum.find(fn {key, _value} -> same_ref?(key, ref) end)
-    |> case do
-      {_key, value} -> {:ok, value}
-      nil -> :error
-    end
-  end
-
-  defp registry_lookup(registry, ref) when is_list(registry) do
-    registry
-    |> Enum.find(fn {key, _value} -> same_ref?(key, ref) end)
-    |> case do
-      {_key, value} -> {:ok, value}
-      nil -> :error
-    end
-  end
-
-  defp registry_lookup(_registry, _ref), do: :error
-
-  defp registry_get(registry, key) when is_map(registry) do
-    Map.get(registry, key) || Map.get(registry, Atom.to_string(key))
-  end
-
-  defp registry_get(registry, key) when is_list(registry) do
-    registry
-    |> Enum.find(fn {registry_key, _value} -> same_ref?(registry_key, key) end)
-    |> case do
-      {_registry_key, value} -> value
-      nil -> nil
-    end
-  end
-
-  defp registry_get(_registry, _key), do: nil
-
-  defp same_ref?(left, right) when is_binary(left) and is_binary(right), do: left == right
-  defp same_ref?(left, right) when is_atom(left) and is_atom(right), do: left == right
-
-  defp same_ref?(left, right) when is_atom(left) and is_binary(right),
-    do: Atom.to_string(left) == right
-
-  defp same_ref?(left, right) when is_binary(left) and is_atom(right),
-    do: left == Atom.to_string(right)
-
-  defp same_ref?(_left, _right), do: false
 
   defp string_format(contents, opts) do
     case Keyword.get(opts, :format) || detect_string_format(contents) do

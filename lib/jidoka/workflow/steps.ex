@@ -1,5 +1,5 @@
 defmodule Jidoka.Workflow.Steps do
-  @moduledoc "Pure phase functions used by the MVP Runic turn workflow."
+  @moduledoc "Pure phase functions used by the Runic turn workflow."
 
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
