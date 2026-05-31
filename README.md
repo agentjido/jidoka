@@ -119,6 +119,20 @@ agent:
   model: openai:gpt-4o-mini
 ```
 
+## Example App
+
+The Phoenix showcase app lives in [`example/`](example). It depends on this
+package by path and exposes one LiveView route per agent example.
+
+```bash
+cd example
+mix deps.get
+mix phx.server
+```
+
+The example app loads live LLM keys from `.env` files in the package root,
+`example/`, or the process environment.
+
 ```elixir
 yaml = """
 agent:

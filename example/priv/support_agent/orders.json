@@ -1,0 +1,23 @@
+{
+  "A1001": {
+    "status": "in_transit",
+    "carrier": "UPS",
+    "eta": "2026-06-03",
+    "summary": "The order left the Chicago regional hub this morning.",
+    "recommended_action": "Tell the customer the package is on schedule and ask them to watch for delivery updates."
+  },
+  "B2002": {
+    "status": "delayed",
+    "carrier": "FedEx",
+    "eta": "2026-06-05",
+    "summary": "Weather delayed the package at the Denver sort facility.",
+    "recommended_action": "Apologize, explain the weather delay, and offer to monitor the shipment."
+  },
+  "C3003": {
+    "status": "delivered",
+    "carrier": "USPS",
+    "eta": "2026-05-30",
+    "summary": "The package was delivered to the front desk.",
+    "recommended_action": "Ask the customer to check with the front desk or building mailroom."
+  }
+}

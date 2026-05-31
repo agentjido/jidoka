@@ -14,11 +14,12 @@ defmodule Jidoka.Workflow.Steps do
     messages =
       [
         Agent.Message.system(state.spec.instructions),
-        memory_message(state.memory),
-        Agent.Message.user(state.request.input)
+        memory_message(state.memory)
       ]
       |> Enum.reject(&is_nil/1)
-      |> Kernel.++(state.agent_state.messages)
+      |> Kernel.++(state.request.agent_state.messages)
+      |> Kernel.++([Agent.Message.user(state.request.input)])
+      |> Kernel.++(current_turn_messages(state))
 
     messages = Enum.map(messages, &Agent.Message.to_map/1)
 
@@ -147,6 +148,10 @@ defmodule Jidoka.Workflow.Steps do
       entries: Enum.map(memory.entries, &Jidoka.projection/1),
       count: length(memory.entries)
     }
+  end
+
+  defp current_turn_messages(%Turn.State{} = state) do
+    Enum.drop(state.agent_state.messages, length(state.request.agent_state.messages))
   end
 
   defp stable_key(parts) do

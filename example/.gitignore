@@ -1,0 +1,12 @@
+/_build/
+/cover/
+/deps/
+/doc/
+/tmp/
+
+.env
+.env.*
+!.env.example
+
+erl_crash.dump
+

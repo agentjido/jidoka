@@ -81,6 +81,9 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
         1 ->
           assert journal_has_operation_result?(journal, "lookup_order")
+          messages = prompt_messages(intent)
+          assert_message_before_tool(messages, "Check order order_123", "lookup_order")
+
           {:ok, %{type: :final, content: "Order order_123 has shipped via UPS."}}
       end
     end
@@ -107,6 +110,15 @@ defmodule Jidoka.MultiTurnIntegrationTest do
           assert message_with_content?(messages, "Order order_123 has shipped via UPS.")
           assert tool_observation?(messages, "lookup_order", "order_123")
 
+          assert_message_before_message?(
+            messages,
+            "Order order_123 has shipped via UPS.",
+            "Refund it for the customer."
+          )
+
+          assert_tool_before_message(messages, "lookup_order", "Refund it for the customer.")
+          assert List.last(messages) |> message_content() == "Refund it for the customer."
+
           {:ok,
            %{
              type: :operation,
@@ -116,6 +128,11 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
         1 ->
           assert journal_has_operation_result?(journal, "refund_order")
+          messages = prompt_messages(intent)
+
+          assert_tool_before_message(messages, "lookup_order", "Refund it for the customer.")
+          assert_message_before_tool(messages, "Refund it for the customer.", "refund_order")
+
           {:ok, %{type: :final, content: "Refund refund_001 is queued for order_123."}}
       end
     end
@@ -351,6 +368,32 @@ defmodule Jidoka.MultiTurnIntegrationTest do
     Enum.any?(messages, &(Map.get(&1, :content) == content || Map.get(&1, "content") == content))
   end
 
+  defp message_content(message), do: Map.get(message, :content) || Map.get(message, "content")
+
+  defp assert_message_before_message?(messages, before_content, after_content) do
+    assert message_index(messages, &(&1 |> message_content() == before_content)) <
+             message_index(messages, &(&1 |> message_content() == after_content))
+  end
+
+  defp assert_message_before_tool(messages, content, operation) do
+    assert message_index(messages, &(&1 |> message_content() == content)) <
+             message_index(messages, &tool_message?(&1, operation))
+  end
+
+  defp assert_tool_before_message(messages, operation, content) do
+    assert message_index(messages, &tool_message?(&1, operation)) <
+             message_index(messages, &(&1 |> message_content() == content))
+  end
+
+  defp message_index(messages, predicate) do
+    index = Enum.find_index(messages, predicate)
+
+    assert is_integer(index),
+           "expected to find message in prompt history, got: #{inspect(messages, pretty: true)}"
+
+    index
+  end
+
   defp operation_names(operation_results) do
     Enum.map(operation_results, fn %Effect.OperationResult{operation: operation} -> operation end)
   end
@@ -362,6 +405,10 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
       observed_operation == operation and output_contains?(output, expected_fragment)
     end)
+  end
+
+  defp tool_message?(message, operation) do
+    (Map.get(message, :operation) || Map.get(message, "operation")) == operation
   end
 
   defp output_contains?(output, expected_fragment) when is_binary(expected_fragment) do
