@@ -6,7 +6,8 @@ defmodule JidokaExample.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      JidokaExample.AgentSessions,
+      JidokaExample.Jido,
+      {JidokaExample.SupportAgent.Agent, jido: JidokaExample.Jido},
       {Phoenix.PubSub, name: JidokaExample.PubSub},
       JidokaExampleWeb.Endpoint
     ]

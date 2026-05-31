@@ -12,6 +12,18 @@ defmodule JidokaExampleWeb.Endpoint do
     longpoll: [connect_info: [session: @session_options]]
 
   plug Plug.Static,
+    at: "/vendor/phoenix",
+    from: {:phoenix, "priv/static"},
+    gzip: false,
+    only: ~w(phoenix.mjs)
+
+  plug Plug.Static,
+    at: "/vendor/phoenix_live_view",
+    from: {:phoenix_live_view, "priv/static"},
+    gzip: false,
+    only: ~w(phoenix_live_view.esm.js)
+
+  plug Plug.Static,
     at: "/",
     from: :jidoka_example,
     gzip: false,

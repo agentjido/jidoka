@@ -96,6 +96,7 @@ defmodule Jidoka.Agent.DslTest do
     """)
 
     assert agent_module.__jidoka_agent__().id == agent_id
+    assert agent_module.__jidoka_agent_id__() == agent_id
     assert agent_module.__jidoka_agent__().context_schema
     assert Jidoka.Config.model_ref(agent_module.__jidoka_agent__().model) == "test:model"
     assert agent_module.spec().generation.params == %{temperature: 0.1, max_tokens: 128}
@@ -132,6 +133,28 @@ defmodule Jidoka.Agent.DslTest do
     assert agent_module.spec().metadata["context_schema?"]
 
     assert %Jido.Agent{name: ^agent_id} = agent_module.new()
+
+    assert %{
+             id: ^agent_id,
+             start: {Jido.AgentServer, :start_link, [child_opts]},
+             type: :worker
+           } = agent_module.child_spec()
+
+    assert Keyword.fetch!(child_opts, :agent) == agent_module
+    assert Keyword.fetch!(child_opts, :jido) == Jidoka.Jido
+    assert Keyword.fetch!(child_opts, :id) == agent_id
+
+    assert %{
+             id: "custom_agent_child",
+             start: {Jido.AgentServer, :start_link, [custom_child_opts]}
+           } =
+             agent_module.child_spec(
+               id: "custom_agent_child",
+               jido: Jidoka.Agent.DslTest.FakeJido
+             )
+
+    assert Keyword.fetch!(custom_child_opts, :agent) == agent_module
+    assert Keyword.fetch!(custom_child_opts, :jido) == Jidoka.Agent.DslTest.FakeJido
   end
 
   test "supports a bare agent declaration with default instructions and no tools" do

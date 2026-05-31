@@ -3,28 +3,58 @@ defmodule JidokaExampleWeb.AgentLive.Support do
 
   use JidokaExampleWeb, :live_view
 
-  alias JidokaExample.AgentSessions
-  alias JidokaExampleWeb.AgentView.Support, as: View
-  alias JidokaExampleWeb.SourceExamples
+  alias JidokaExampleWeb.AgentLive.Support.View
 
   @default_question "Can you check order A1001 and tell me what I should do next?"
+  @example_root Path.expand("../../../..", __DIR__)
   @tabs ~w(activity source)
+  @sources [
+    %{
+      id: "jido",
+      label: "Jido",
+      path: "lib/jidoka_example/jido.ex"
+    },
+    %{
+      id: "application",
+      label: "Application",
+      path: "lib/jidoka_example/application.ex"
+    },
+    %{
+      id: "agent",
+      label: "Agent",
+      path: "lib/jidoka_example/support_agent/agent.ex"
+    },
+    %{
+      id: "action",
+      label: "Action",
+      path: "lib/jidoka_example/support_agent/actions/lookup_order.ex"
+    },
+    %{
+      id: "agent_view",
+      label: "AgentView",
+      path: "lib/jidoka_example_web/live/agent_live/support/view.ex"
+    },
+    %{
+      id: "live_view",
+      label: "LiveView",
+      path: "lib/jidoka_example_web/live/agent_live/support.ex"
+    }
+  ]
 
   @impl true
-  def mount(_params, session, socket) do
-    session_id = Map.fetch!(session, "jidoka_example_session_id")
-    agent_view = AgentSessions.get(session_id, fn -> initial_view(session_id) end)
+  def mount(params, _session, socket) do
+    session_id = Jidoka.Id.random("example_session")
 
     socket =
       assign(socket,
-        agent_view: agent_view,
-        active_tab: "activity",
-        active_source: "agent",
-        form: form(@default_question, JidokaExample.Env.model()),
-        live_ready?: JidokaExample.Env.live_ready?(),
+        agent_view: initial_view(session_id),
+        active_tab: active_tab(params),
+        active_source: active_source(params),
+        form: form(@default_question, default_model()),
+        live_ready?: live_llm_ready?(),
         page_title: "Support Agent",
         session_id: session_id,
-        source_examples: SourceExamples.support_agent_sources()
+        source_examples: source_examples()
       )
 
     {:ok, socket}
@@ -33,69 +63,53 @@ defmodule JidokaExampleWeb.AgentLive.Support do
   @impl true
   def handle_params(params, _uri, socket) do
     socket =
-      socket
-      |> assign(active_tab: active_tab(params))
-      |> assign(active_source: active_source(params))
-      |> maybe_reset_session(params)
-      |> maybe_run_prompt(params)
+      assign(socket,
+        active_tab: active_tab(params),
+        active_source: active_source(params)
+      )
 
     {:noreply, socket}
   end
 
-  defp maybe_reset_session(socket, %{"reset" => "1"}) do
-    view =
-      AgentSessions.reset(socket.assigns.session_id, fn ->
-        initial_view(socket.assigns.session_id)
-      end)
-
-    assign(socket,
-      agent_view: view,
-      form: form(@default_question, JidokaExample.Env.model())
-    )
+  @impl true
+  def handle_event("send_message", %{"prompt" => params}, socket) do
+    {:noreply, run_prompt(socket, params)}
   end
 
-  defp maybe_reset_session(socket, _params), do: socket
+  def handle_event("reset_session", _params, socket) do
+    session_id = Jidoka.Id.random("example_session")
 
-  defp maybe_run_prompt(socket, %{"prompt" => params}) when is_map(params) do
-    run_prompt(socket, params)
-  end
-
-  defp maybe_run_prompt(socket, _params), do: socket
-
-  defp run_prompt(socket, params) do
-    question = params |> Map.get("question", "") |> to_string() |> String.trim()
-    model = params |> Map.get("model", "") |> to_string() |> String.trim()
-
-    cond do
-      question == "" ->
-        assign(socket, form: form(question, model))
-
-      not socket.assigns.live_ready? ->
-        view =
-          socket.assigns.agent_view
-          |> View.before_turn(question)
-          |> View.after_turn({:error, :missing_live_llm_credentials})
-
-        AgentSessions.put(socket.assigns.session_id, view)
-
-        assign(socket, agent_view: view, form: form(question, model))
-
-      true ->
-        view =
-          View.run(socket.assigns.agent_view, question,
-            llm_opts: [model: model],
-            context: %{
-              surface: "phoenix_live_view",
-              example: "support_agent",
-              session_id: socket.assigns.session_id
-            }
+    case reset_agent_process() do
+      :ok ->
+        socket =
+          assign(socket,
+            agent_view: initial_view(session_id),
+            form: form(@default_question, default_model()),
+            session_id: session_id
           )
 
-        AgentSessions.put(socket.assigns.session_id, view)
+        {:noreply, socket}
 
-        assign(socket, agent_view: view, form: form("", model))
+      {:error, reason} ->
+        {:noreply, assign_reset_error(socket, reason)}
     end
   end
+
+  def handle_event("show_tab", %{"tab" => tab}, socket) do
+    {:noreply, assign(socket, active_tab: active_tab(%{"tab" => tab}))}
+  end
+
+  def handle_event("show_source", %{"source" => source}, socket) do
+    socket =
+      assign(socket,
+        active_tab: "source",
+        active_source: active_source(%{"source" => source})
+      )
+
+    {:noreply, socket}
+  end
+
+  def handle_event("send_message", _params, socket), do: {:noreply, socket}
 
   @impl true
   def render(assigns) do
@@ -110,7 +124,7 @@ defmodule JidokaExampleWeb.AgentLive.Support do
 
         <div class="header-actions">
           <.status status={@agent_view.status} />
-          <a class="quiet-link" href="/agents/support?reset=1">New session</a>
+          <button class="quiet-link" type="button" phx-click="reset_session">New session</button>
         </div>
       </header>
 
@@ -147,22 +161,13 @@ defmodule JidokaExampleWeb.AgentLive.Support do
               <div class="empty">{@agent_view.error_text}</div>
             <% end %>
 
-            <form
-              class="composer"
-              action="/agents/support"
-              method="get"
-              onsubmit="this.querySelector('button[type=submit]').disabled = true; this.querySelector('button[type=submit]').textContent = 'Running...';"
-            >
-              <input type="hidden" name="tab" value={@active_tab} />
-              <input type="hidden" name="source" value={@active_source} />
-
+            <.form for={@form} class="composer" phx-submit="send_message">
               <div class="form-row">
                 <label for="prompt_question">Message</label>
                 <textarea
                   id="prompt_question"
                   name="prompt[question]"
                   placeholder="Ask about order A1001..."
-                  onkeydown="if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); this.form.requestSubmit(); }"
                 ><%= @form[:question].value %></textarea>
               </div>
 
@@ -188,7 +193,7 @@ defmodule JidokaExampleWeb.AgentLive.Support do
                   Send
                 </button>
               </div>
-            </form>
+            </.form>
           </div>
         </section>
 
@@ -197,15 +202,22 @@ defmodule JidokaExampleWeb.AgentLive.Support do
             <div>
               <h2>Run internals</h2>
               <div class="tabs">
-                <a class={tab_class(@active_tab, "activity")} href="/agents/support?tab=activity">
+                <button
+                  class={tab_class(@active_tab, "activity")}
+                  type="button"
+                  phx-click="show_tab"
+                  phx-value-tab="activity"
+                >
                   Activity
-                </a>
-                <a
+                </button>
+                <button
                   class={tab_class(@active_tab, "source")}
-                  href={"/agents/support?tab=source&source=#{@active_source}"}
+                  type="button"
+                  phx-click="show_tab"
+                  phx-value-tab="source"
                 >
                   Source
-                </a>
+                </button>
               </div>
             </div>
 
@@ -235,28 +247,6 @@ defmodule JidokaExampleWeb.AgentLive.Support do
     </span>
     """
   end
-
-  defp form(question, model) do
-    Phoenix.Component.to_form(%{"question" => question, "model" => model}, as: :prompt)
-  end
-
-  defp pretty(value), do: Jason.encode!(value, pretty: true)
-
-  defp initial_view(session_id) do
-    {:ok, agent_view} = View.initial(%{conversation_id: session_id})
-    agent_view
-  end
-
-  defp active_tab(%{"tab" => tab}) when tab in @tabs, do: tab
-  defp active_tab(_params), do: "activity"
-
-  defp active_source(%{"source" => source}) when is_binary(source), do: source
-  defp active_source(_params), do: "agent"
-
-  defp tab_class(active_tab, tab), do: ["tab", active_tab == tab && "active"]
-
-  defp tab_count("source", _agent_view, examples), do: "#{length(examples)} files"
-  defp tab_count(_tab, agent_view, _examples), do: "#{length(agent_view.events)} events"
 
   attr :events, :list, required: true
 
@@ -334,6 +324,176 @@ defmodule JidokaExampleWeb.AgentLive.Support do
     """
   end
 
+  attr :examples, :list, required: true
+  attr :active_source, :string, required: true
+
+  defp source_examples(assigns) do
+    assigns =
+      assign(assigns,
+        selected: selected_source(assigns.examples, assigns.active_source)
+      )
+
+    ~H"""
+    <div class="source-nav">
+      <%= for example <- @examples do %>
+        <button
+          class={source_tab_class(@selected.id, example.id)}
+          type="button"
+          phx-click="show_source"
+          phx-value-source={example.id}
+        >
+          {example.label}
+        </button>
+      <% end %>
+    </div>
+
+    <section class="source-file">
+      <div class="source-file-header">
+        <h3>{@selected.label}</h3>
+        <span>{@selected.path}</span>
+      </div>
+
+      <pre class="code-block"><code><%= raw(highlight_elixir(@selected.source)) %></code></pre>
+    </section>
+    """
+  end
+
+  defp run_prompt(socket, params) do
+    question = params |> Map.get("question", "") |> to_string() |> String.trim()
+    model = params |> Map.get("model", "") |> to_string() |> String.trim()
+
+    socket
+    |> assign(form: form(question, model))
+    |> run_prompt_with(question, model)
+  end
+
+  defp run_prompt_with(socket, "", model), do: assign(socket, form: form("", model))
+
+  defp run_prompt_with(socket, question, model) do
+    if socket.assigns.live_ready? do
+      run_live_prompt(socket, question, model)
+    else
+      run_missing_credentials_prompt(socket, question, model)
+    end
+  end
+
+  defp run_live_prompt(socket, question, model) do
+    running = View.before_turn(socket.assigns.agent_view, question)
+
+    result =
+      with {:ok, pid} <- support_agent_pid() do
+        Jidoka.run_turn(pid, question,
+          llm_opts: [model: model],
+          context: %{
+            surface: "phoenix_live_view",
+            example: "support_agent",
+            session_id: socket.assigns.session_id
+          }
+        )
+      end
+
+    view = View.after_turn(running, result)
+
+    assign(socket, agent_view: view, form: form("", model))
+  end
+
+  defp run_missing_credentials_prompt(socket, question, model) do
+    view =
+      socket.assigns.agent_view
+      |> View.before_turn(question)
+      |> View.after_turn({:error, :missing_live_llm_credentials})
+
+    assign(socket, agent_view: view, form: form(question, model))
+  end
+
+  defp source_examples do
+    Enum.map(@sources, fn source ->
+      source
+      |> Map.put(:source, read_source(source.path))
+      |> Map.put(:path, source.path)
+    end)
+  end
+
+  defp read_source(path) do
+    case File.read(Path.join(@example_root, path)) do
+      {:ok, source} -> source
+      {:error, reason} -> "# Unable to read #{path}: #{inspect(reason)}"
+    end
+  end
+
+  defp default_model do
+    Application.get_env(:jidoka_example, :default_model, "openai:gpt-4o-mini")
+  end
+
+  defp live_llm_ready? do
+    Application.get_env(:jidoka_example, :live_llm_ready?, false)
+  end
+
+  defp form(question, model) do
+    Phoenix.Component.to_form(%{"question" => question, "model" => model}, as: :prompt)
+  end
+
+  defp pretty(value), do: Jason.encode!(value, pretty: true)
+
+  defp initial_view(session_id) do
+    {:ok, agent_view} = View.initial(%{conversation_id: session_id})
+    agent_view
+  end
+
+  defp support_agent_pid do
+    case JidokaExample.Jido.whereis(support_agent_id()) do
+      pid when is_pid(pid) -> {:ok, pid}
+      nil -> {:error, :support_agent_not_started}
+    end
+  end
+
+  defp reset_agent_process do
+    agent_id = support_agent_id()
+
+    with :ok <- Supervisor.terminate_child(JidokaExample.Supervisor, agent_id),
+         {:ok, _pid} <- Supervisor.restart_child(JidokaExample.Supervisor, agent_id) do
+      :ok
+    else
+      {:ok, _pid, _info} -> :ok
+      {:error, :running} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp support_agent_id, do: JidokaExample.SupportAgent.Agent.spec().id
+
+  defp assign_reset_error(socket, reason) do
+    view = %{
+      socket.assigns.agent_view
+      | status: :error,
+        error: reason,
+        error_text: Jidoka.format_error(reason)
+    }
+
+    assign(socket, agent_view: view)
+  end
+
+  defp active_tab(%{"tab" => tab}) when tab in @tabs, do: tab
+  defp active_tab(_params), do: "activity"
+
+  defp active_source(%{"source" => source}) when is_binary(source) do
+    if Enum.any?(@sources, &(&1.id == source)), do: source, else: "agent"
+  end
+
+  defp active_source(_params), do: "agent"
+
+  defp tab_class(active_tab, tab), do: ["tab", active_tab == tab && "active"]
+
+  defp tab_count("source", _agent_view, examples), do: "#{length(examples)} files"
+  defp tab_count(_tab, agent_view, _examples), do: "#{length(agent_view.events)} events"
+
+  defp selected_source(examples, active_source) do
+    Enum.find(examples, &(&1.id == active_source)) || hd(examples)
+  end
+
+  defp source_tab_class(active_source, source),
+    do: ["source-nav-link", active_source == source && "active"]
+
   defp payload_value(payload, path) when is_list(path) do
     Enum.reduce_while(path, payload, fn key, acc ->
       case payload_value(acc, key) do
@@ -352,45 +512,6 @@ defmodule JidokaExampleWeb.AgentLive.Support do
 
   defp payload_value(%{} = payload, key) when is_binary(key), do: Map.get(payload, key)
   defp payload_value(_payload, _key), do: nil
-
-  attr :examples, :list, required: true
-  attr :active_source, :string, required: true
-
-  defp source_examples(assigns) do
-    assigns =
-      assign(assigns,
-        selected: selected_source(assigns.examples, assigns.active_source)
-      )
-
-    ~H"""
-    <div class="source-nav">
-      <%= for example <- @examples do %>
-        <a
-          class={source_tab_class(@selected.id, example.id)}
-          href={"/agents/support?tab=source&source=#{example.id}"}
-        >
-          {example.label}
-        </a>
-      <% end %>
-    </div>
-
-    <section class="source-file">
-      <div class="source-file-header">
-        <h3>{@selected.label}</h3>
-        <span>{@selected.path}</span>
-      </div>
-
-      <pre class="code-block"><code><%= raw(highlight_elixir(@selected.source)) %></code></pre>
-    </section>
-    """
-  end
-
-  defp selected_source(examples, active_source) do
-    Enum.find(examples, &(&1.id == active_source)) || hd(examples)
-  end
-
-  defp source_tab_class(active_source, source),
-    do: ["source-nav-link", active_source == source && "active"]
 
   defp highlight_elixir(source) do
     source

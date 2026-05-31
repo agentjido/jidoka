@@ -5,6 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="csrf-token" content={get_csrf_token()} />
     <title>Jidoka Example</title>
+    <script type="importmap">
+      {
+        "imports": {
+          "phoenix": "/vendor/phoenix/phoenix.mjs",
+          "phoenix_live_view": "/vendor/phoenix_live_view/phoenix_live_view.esm.js"
+        }
+      }
+    </script>
+    <script type="module" src="/assets/app.js">
+    </script>
     <style>
       :root {
         color-scheme: light;
@@ -310,7 +320,11 @@
       }
 
       .quiet-link {
+        border: 0;
+        padding: 0;
+        background: transparent;
         color: var(--muted);
+        cursor: pointer;
         font-size: 13px;
         font-weight: 650;
       }
@@ -451,9 +465,12 @@
         display: inline-flex;
         align-items: center;
         min-height: 30px;
+        border: 0;
         border-radius: 6px;
         padding: 0 10px;
+        background: transparent;
         color: var(--muted);
+        cursor: pointer;
         font-size: 13px;
         font-weight: 650;
       }
@@ -556,6 +573,7 @@
         padding: 0 10px;
         color: var(--muted);
         background: var(--panel);
+        cursor: pointer;
         font-size: 13px;
         font-weight: 650;
         white-space: nowrap;

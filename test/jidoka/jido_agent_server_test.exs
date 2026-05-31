@@ -82,6 +82,21 @@ defmodule Jidoka.JidoAgentServerTest do
     assert :ok = Jidoka.stop_agent(pid)
   end
 
+  test "Jidoka agents can be supervised directly as AgentServer children" do
+    id = "jidoka_supervised_child_#{System.unique_integer([:positive])}"
+
+    pid = start_supervised!({TimeAgent, id: id})
+
+    assert Jidoka.whereis(id) == pid
+
+    assert {:ok, "Supervised child responded."} =
+             Jidoka.chat(pid, "Confirm direct supervision.",
+               llm: fn _intent, _journal ->
+                 {:ok, %{type: :final, content: "Supervised child responded."}}
+               end
+             )
+  end
+
   defp count_results(%Effect.Journal{results: results}, kind) do
     results
     |> Map.values()

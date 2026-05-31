@@ -68,6 +68,9 @@ defmodule Jidoka.Agent do
       @doc "Returns the compiled Jidoka DSL definition for this agent module."
       def __jidoka_agent__, do: Jidoka.Agent.definition!(__MODULE__)
 
+      @doc false
+      def __jidoka_agent_id__, do: unquote(definition.id)
+
       @doc "Returns `{action_module, opts}` action declarations for this agent."
       def __jidoka_tools__, do: Enum.map(Jidoka.Agent.action_modules(__MODULE__), &{&1, []})
 
@@ -82,6 +85,43 @@ defmodule Jidoka.Agent do
 
       @doc "Starts this agent under the default `Jidoka.Jido` process tree."
       def start(opts \\ []), do: Jidoka.start_agent(__MODULE__, opts)
+
+      @doc "Returns a `Jido.AgentServer` child spec for supervising this agent."
+      def child_spec(opts \\ []) do
+        __MODULE__
+        |> Jidoka.Agent.agent_server_child_opts(opts)
+        |> Jido.AgentServer.child_spec()
+      end
+    end
+  end
+
+  @doc false
+  @spec agent_server_child_opts(module(), keyword() | map()) :: keyword() | map()
+  def agent_server_child_opts(agent_module, opts) when is_atom(agent_module) and is_list(opts) do
+    opts
+    |> Keyword.put_new(:agent, agent_module)
+    |> Keyword.put_new(:jido, Jidoka.Jido)
+    |> Keyword.put_new(:id, default_agent_id(agent_module))
+  end
+
+  def agent_server_child_opts(agent_module, opts) when is_atom(agent_module) and is_map(opts) do
+    opts
+    |> Map.put_new(:agent, agent_module)
+    |> Map.put_new(:jido, Jidoka.Jido)
+    |> Map.put_new(:id, default_agent_id(agent_module))
+  end
+
+  defp default_agent_id(agent_module) do
+    cond do
+      Code.ensure_loaded?(agent_module) and
+          function_exported?(agent_module, :__jidoka_agent_id__, 0) ->
+        agent_module.__jidoka_agent_id__()
+
+      true ->
+        agent_module
+        |> Module.split()
+        |> List.last()
+        |> Macro.underscore()
     end
   end
 
