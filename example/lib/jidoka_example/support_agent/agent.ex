@@ -1,7 +1,19 @@
 defmodule JidokaExample.SupportAgent.Agent do
-  @moduledoc false
+  @guide """
+  The Support Agent is the first rung in the example ladder: one supervised
+  Jidoka agent, one deterministic action, one visible tool call.
+
+  Try asking about order A1001. The agent should call lookup_order, answer from
+  the returned order status, and show the tool projection in the Activity tab.
+
+  This example also keeps basic operational controls close to the agent
+  definition so new developers can see where turn limits and timeouts live.
+  """
+  @moduledoc @guide
 
   use Jidoka.Agent
+
+  def guide, do: @guide
 
   agent :support_agent do
     instructions """
@@ -16,6 +28,11 @@ defmodule JidokaExample.SupportAgent.Agent do
     """
 
     generation %{params: %{temperature: 0.0, max_tokens: 700}}
+  end
+
+  controls do
+    max_turns 4
+    timeout 20_000
   end
 
   tools do

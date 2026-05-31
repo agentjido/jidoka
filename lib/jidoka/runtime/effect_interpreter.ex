@@ -10,18 +10,21 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Error
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Controls
+  alias Jidoka.Stream, as: EventStream
   alias Jidoka.Effect
   alias Jidoka.Review.Interrupt
   alias Jidoka.Turn
 
-  @spec interpret_pending(Turn.State.t(), Capabilities.t()) ::
+  @spec interpret_pending(Turn.State.t(), Capabilities.t(), keyword()) ::
           {:ok, Effect.Result.t(), Turn.State.t()}
           | {:interrupt, Interrupt.t(), Turn.State.t()}
           | {:error, term()}
-  def interpret_pending(%Turn.State{} = state, %Capabilities{} = capabilities) do
+  def interpret_pending(state, capabilities, opts \\ [])
+
+  def interpret_pending(%Turn.State{} = state, %Capabilities{} = capabilities, opts) do
     case Turn.State.current_pending_effect(state) do
       %Effect.Intent{} = intent ->
-        interpret_intent(state, intent, capabilities)
+        interpret_intent(state, intent, capabilities, opts)
 
       nil ->
         {:error,
@@ -29,7 +32,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  def interpret_pending(_state, _capabilities) do
+  def interpret_pending(_state, _capabilities, _opts) do
     {:error,
      Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
   end
@@ -37,19 +40,20 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   defp interpret_intent(
          %Turn.State{} = state,
          %Effect.Intent{} = intent,
-         %Capabilities{} = capabilities
+         %Capabilities{} = capabilities,
+         opts
        ) do
     case Effect.Journal.result_for(state.journal, intent) do
       %Effect.Result{} = result ->
-        {:ok, result, append_effect_trace(state, intent, :effect_replayed)}
+        {:ok, result, append_effect_trace(state, intent, :effect_replayed, [], opts)}
 
       nil ->
         with :ok <- validate_incomplete_effect_replay(state, intent) do
           journal = Effect.Journal.put_intent(state.journal, intent)
           state = %Turn.State{state | journal: journal}
-          state = append_effect_trace(state, intent, :effect_started)
+          state = append_effect_trace(state, intent, :effect_started, [], opts)
 
-          interpret_after_controls(state, intent, capabilities, journal)
+          interpret_after_controls(state, intent, capabilities, journal, opts)
         end
     end
   end
@@ -86,17 +90,18 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Turn.State{} = state,
          %Effect.Intent{} = intent,
          %Capabilities{} = capabilities,
-         %Effect.Journal{} = journal
+         %Effect.Journal{} = journal,
+         opts
        ) do
-    case run_effect_controls(state, intent) do
+    case run_effect_controls(state, intent, opts) do
       {:ok, %Turn.State{} = state} ->
-        state = append_effect_trace(state, intent, :capability_call_started)
+        state = append_effect_trace(state, intent, :capability_call_started, [], opts)
 
         with {:ok, result} <- call_capability(intent, capabilities, journal) do
           journal = Effect.Journal.put_result(journal, result)
           state = %Turn.State{state | journal: journal}
-          state = append_capability_result_trace(state, intent, result)
-          state = append_effect_result_trace(state, intent, result)
+          state = append_capability_result_trace(state, intent, result, opts)
+          state = append_effect_result_trace(state, intent, result, opts)
 
           {:ok, result, state}
         end
@@ -109,12 +114,20 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp run_effect_controls(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent) do
+  defp run_effect_controls(
+         %Turn.State{} = state,
+         %Effect.Intent{kind: :operation} = intent,
+         opts
+       ) do
+    event_count = length(state.events)
+
     case Controls.run_operation_controls(state, intent) do
       {:ok, %Turn.State{} = state} ->
+        emit_events(Enum.drop(state.events, event_count), opts)
         {:ok, state}
 
       {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
+        emit_events(Enum.drop(state.events, event_count), opts)
         {:interrupt, interrupt, state}
 
       {:error, reason} ->
@@ -130,7 +143,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp run_effect_controls(%Turn.State{} = state, %Effect.Intent{}), do: {:ok, state}
+  defp run_effect_controls(%Turn.State{} = state, %Effect.Intent{}, _opts), do: {:ok, state}
 
   defp call_capability(%Effect.Intent{kind: :llm} = intent, %Capabilities{llm: llm}, journal) do
     case invoke_capability(llm, intent, journal) do
@@ -187,27 +200,43 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     )
   end
 
-  defp append_capability_result_trace(%Turn.State{} = state, %Effect.Intent{} = intent, result) do
+  defp append_capability_result_trace(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         result,
+         opts
+       ) do
     event =
       case result.status do
         :ok -> :capability_call_completed
         :error -> :capability_call_failed
       end
 
-    append_effect_trace(state, intent, event, error: result_error(result))
+    append_effect_trace(state, intent, event, [error: result_error(result)], opts)
   end
 
-  defp append_effect_result_trace(%Turn.State{} = state, %Effect.Intent{} = intent, result) do
+  defp append_effect_result_trace(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         result,
+         opts
+       ) do
     event =
       case result.status do
         :ok -> :effect_completed
         :error -> :effect_failed
       end
 
-    append_effect_trace(state, intent, event, error: result_error(result))
+    append_effect_trace(state, intent, event, [error: result_error(result)], opts)
   end
 
-  defp append_effect_trace(%Turn.State{} = state, %Effect.Intent{} = intent, event, attrs \\ []) do
+  defp append_effect_trace(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         event,
+         attrs,
+         opts
+       ) do
     trace_attrs =
       [
         agent_id: state.spec.id,
@@ -231,8 +260,14 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       |> Turn.Transition.event(event, trace_attrs)
       |> Turn.Transition.commit()
 
+    state.events
+    |> List.last()
+    |> then(&EventStream.emit(&1, opts))
+
     state
   end
+
+  defp emit_events(events, opts), do: EventStream.emit_events(events, opts)
 
   defp effect_request_id(%Turn.State{} = state, %Effect.Intent{} = intent) do
     Map.get(intent.payload, :request_id) ||

@@ -8,11 +8,13 @@ defmodule Jidoka.Runtime.TurnRunner do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Event
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
   alias Jidoka.Runtime.Review
+  alias Jidoka.Stream, as: EventStream
   alias Jidoka.Effect
   alias Jidoka.Review.Interrupt
   alias Jidoka.Turn
@@ -31,21 +33,25 @@ defmodule Jidoka.Runtime.TurnRunner do
         %Capabilities{} = capabilities,
         opts \\ []
       ) do
-    with :ok <- Agent.Spec.validate_operation_policies(plan.spec),
-         state <-
-           Turn.State.new!(
-             spec: plan.spec,
-             plan: plan,
-             request: request,
-             agent_state: request.agent_state,
-             memory: Keyword.get(opts, :memory),
-             compactions: Keyword.get(opts, :compactions, []),
-             started_at_ms: clock_ms(opts)
-           ),
-         {:ok, state} <- Controls.run_input_controls(state),
-         :ok <- enforce_timeout(state, opts) do
-      run_loop(state, capabilities, opts)
-    end
+    result =
+      with :ok <- Agent.Spec.validate_operation_policies(plan.spec),
+           state <-
+             Turn.State.new!(
+               spec: plan.spec,
+               plan: plan,
+               request: request,
+               agent_state: request.agent_state,
+               memory: Keyword.get(opts, :memory),
+               compactions: Keyword.get(opts, :compactions, []),
+               started_at_ms: clock_ms(opts)
+             ),
+           :ok <- emit_turn_started(state, opts),
+           {:ok, state} <- run_and_emit(state, opts, &Controls.run_input_controls/1),
+           :ok <- enforce_timeout(state, opts) do
+        run_loop(state, capabilities, opts)
+      end
+
+    maybe_emit_turn_failed(result, plan, request, opts)
   end
 
   @spec resume(AgentSnapshot.t(), Capabilities.t(), keyword()) :: run_result()
@@ -71,7 +77,10 @@ defmodule Jidoka.Runtime.TurnRunner do
         response = Review.ensure_responded_at(response, clock_ms(opts))
 
         with :ok <- Review.validate_response(interrupt, response),
-             {:ok, state} <- Review.apply_response(state, interrupt, response) do
+             {:ok, state} <-
+               run_and_emit(state, opts, fn state ->
+                 Review.apply_response(state, interrupt, response)
+               end) do
           continue_after_pending_effect(state, capabilities, opts)
         end
 
@@ -96,6 +105,7 @@ defmodule Jidoka.Runtime.TurnRunner do
           |> Workflow.react_until_satisfied(state)
           |> latest_state(:plan_model_effect)
 
+        emit_new_events(state, planned_state, opts)
         maybe_hibernate_after_prompt(planned_state, capabilities, opts)
       end
     end
@@ -134,13 +144,17 @@ defmodule Jidoka.Runtime.TurnRunner do
     if Turn.State.pending_effect?(state) do
       with :ok <- enforce_timeout(state, opts),
            {:ok, effect_result, state} <- interpret_or_hibernate(state, capabilities, opts),
+           state_before_apply <- state,
            {:ok, %Turn.State{} = state} <- Turn.State.apply_effect_result(state, effect_result),
+           :ok <- emit_new_events(state_before_apply, state, opts),
            :ok <- enforce_timeout(state, opts) do
         case state.status do
           :finished ->
-            with {:ok, state} <- Controls.run_output_controls(state),
+            with {:ok, state} <- run_and_emit(state, opts, &Controls.run_output_controls/1),
                  :ok <- enforce_timeout(state, opts) do
-              {:ok, state |> append_turn_finished() |> Turn.Result.from_turn_state!()}
+              finished_state = append_turn_finished(state)
+              emit_new_events(state, finished_state, opts)
+              {:ok, Turn.Result.from_turn_state!(finished_state)}
             end
 
           :running ->
@@ -157,7 +171,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp interpret_or_hibernate(%Turn.State{} = state, capabilities, opts) do
-    case EffectInterpreter.interpret_pending(state, capabilities) do
+    case EffectInterpreter.interpret_pending(state, capabilities, opts) do
       {:ok, %Effect.Result{} = result, %Turn.State{} = state} ->
         {:ok, result, state}
 
@@ -170,15 +184,20 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp hibernate_for_interrupt(%Turn.State{} = state, %Interrupt{} = interrupt, opts) do
+    event_count = length(state.events)
+
     with {:ok, approval_ttl_ms} <- Review.approval_ttl_ms(opts),
          {:ok, state, interrupt} <-
            Review.put_pending_interrupt(state, interrupt, clock_ms(opts), approval_ttl_ms) do
+      emit_events(Enum.drop(state.events, event_count), opts)
       hibernate(state, Turn.Cursor.review(interrupt), opts)
     end
   end
 
   defp hibernate(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts) do
-    {:hibernate, AgentSnapshot.from_turn_state!(state, cursor, snapshot_opts(opts))}
+    hibernated_state = append_turn_hibernated(state, cursor)
+    emit_new_events(state, hibernated_state, opts)
+    {:hibernate, AgentSnapshot.from_turn_state!(hibernated_state, cursor, snapshot_opts(opts))}
   end
 
   defp checkpoint_policy(opts), do: Keyword.get(opts, :checkpoint, :none)
@@ -193,6 +212,61 @@ defmodule Jidoka.Runtime.TurnRunner do
     )
     |> Turn.Transition.commit()
   end
+
+  defp emit_turn_started(%Turn.State{} = state, opts) do
+    Event.build(:turn_started, state.events,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index
+    )
+    |> EventStream.emit(opts)
+  end
+
+  defp append_turn_hibernated(%Turn.State{} = state, %Turn.Cursor{} = cursor) do
+    state
+    |> Turn.Transition.new!()
+    |> Turn.Transition.event(:turn_hibernated,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index,
+      data: %{cursor: Jidoka.projection(cursor)}
+    )
+    |> Turn.Transition.commit()
+  end
+
+  defp maybe_emit_turn_failed({:error, reason} = result, %Turn.Plan{} = plan, request, opts) do
+    Event.build(:turn_failed, [],
+      agent_id: plan.spec.id,
+      request_id: request.request_id,
+      data: %{reason: inspect(reason)}
+    )
+    |> EventStream.emit(opts)
+
+    result
+  end
+
+  defp maybe_emit_turn_failed(result, _plan, _request, _opts), do: result
+
+  defp run_and_emit(%Turn.State{} = state, opts, fun) when is_function(fun, 1) do
+    event_count = length(state.events)
+
+    case fun.(state) do
+      {:ok, %Turn.State{} = next_state} = ok ->
+        emit_events(Enum.drop(next_state.events, event_count), opts)
+        ok
+
+      other ->
+        other
+    end
+  end
+
+  defp emit_new_events(%Turn.State{} = old_state, %Turn.State{} = new_state, opts) do
+    new_state.events
+    |> Enum.drop(length(old_state.events))
+    |> emit_events(opts)
+  end
+
+  defp emit_events(events, opts) when is_list(events), do: EventStream.emit_events(events, opts)
 
   defp enforce_timeout(%Turn.State{plan: %{timeout_ms: timeout_ms}} = state, opts)
        when is_integer(timeout_ms) do

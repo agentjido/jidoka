@@ -64,6 +64,7 @@ defmodule Jidoka.Workflow.Steps do
   @spec plan_model_effect(Turn.State.t()) :: Turn.State.t()
   def plan_model_effect(%Turn.State{} = state) do
     payload = %{
+      agent_id: state.spec.id,
       model: state.spec.model,
       generation: state.spec.generation,
       prompt: state.prompt,

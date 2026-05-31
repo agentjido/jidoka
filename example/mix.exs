@@ -25,6 +25,7 @@ defmodule JidokaExample.MixProject do
       {:bandit, "~> 1.6"},
       {:dotenvy, "~> 1.1"},
       {:jason, "~> 1.4"},
+      {:mdex, "~> 0.12.2"},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.1"}

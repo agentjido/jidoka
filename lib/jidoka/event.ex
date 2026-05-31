@@ -9,6 +9,7 @@ defmodule Jidoka.Event do
   alias Jidoka.Schema
 
   @event_defaults %{
+    turn_started: %{category: :workflow, phase: :start, status: :started},
     prompt_assembled: %{category: :workflow, phase: :assemble_prompt, status: :completed},
     effect_planned: %{category: :effect, status: :planned},
     effect_started: %{category: :effect, phase: :interpret_effect, status: :started},
@@ -39,7 +40,10 @@ defmodule Jidoka.Event do
       phase: :apply_operation_results,
       status: :completed
     },
-    turn_finished: %{category: :workflow, phase: :finish, status: :completed}
+    llm_delta: %{category: :runtime, phase: :interpret_effect, status: :started},
+    turn_finished: %{category: :workflow, phase: :finish, status: :completed},
+    turn_hibernated: %{category: :workflow, phase: :finish, status: :pending},
+    turn_failed: %{category: :workflow, phase: :finish, status: :failed}
   }
   @categories [
     :workflow,
@@ -53,6 +57,7 @@ defmodule Jidoka.Event do
     :compaction
   ]
   @phases [
+    :start,
     :control,
     :review,
     :memory,

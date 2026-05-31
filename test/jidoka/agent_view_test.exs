@@ -3,6 +3,7 @@ defmodule Jidoka.AgentViewTest do
 
   alias Jidoka.Agent
   alias Jidoka.AgentView
+  alias Jidoka.Event
   alias Jidoka.Effect
   alias Jidoka.Turn
 
@@ -85,5 +86,29 @@ defmodule Jidoka.AgentViewTest do
     assert AgentView.normalize_id(nil, "fallback") == "fallback"
     assert AgentView.request_id() =~ "agent_view_"
     assert AgentView.lifecycle_hooks() == [:before_turn, :after_turn, :snapshot]
+  end
+
+  test "streamed events update an in-flight assistant draft and debug activity" do
+    {:ok, view} = DemoView.initial(%{conversation_id: "case_123"})
+    running = DemoView.before_turn(view, "Need help")
+
+    delta =
+      Event.new!(
+        event: :llm_delta,
+        request_id: "req_agent_view",
+        data: %{chunk_type: :content, delta: "Working"}
+      )
+
+    updated = DemoView.apply_event(running, delta)
+
+    assert [
+             %{role: :user, content: "Need help"},
+             %{role: :assistant, content: "Working", streaming?: true}
+           ] = DemoView.visible_messages(updated)
+
+    event = Event.build(:effect_started, [], request_id: "req_agent_view", effect_kind: :llm)
+    updated = DemoView.apply_event(updated, event)
+
+    assert [%{kind: :effect_started, refs: %{request_id: "req_agent_view"}}] = updated.events
   end
 end

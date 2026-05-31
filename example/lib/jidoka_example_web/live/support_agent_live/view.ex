@@ -1,4 +1,4 @@
-defmodule JidokaExampleWeb.AgentLive.Support.View do
+defmodule JidokaExampleWeb.SupportAgentLive.View do
   @moduledoc false
 
   use Jidoka.AgentView, agent: JidokaExample.SupportAgent.Agent

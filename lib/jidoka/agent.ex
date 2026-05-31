@@ -343,8 +343,11 @@ defmodule Jidoka.Agent do
     spec.generation
     |> Generation.to_req_llm_opts()
     |> Keyword.merge(Keyword.get(opts, :llm_opts, []))
+    |> Keyword.merge(stream_opts(opts))
     |> Keyword.put_new(:model, spec.model)
   end
+
+  defp stream_opts(opts), do: Keyword.take(opts, [:stream, :stream_to, :on_event])
 
   defp fetch_agent!(agent_module) do
     case Spark.Dsl.Extension.get_entities(agent_module, [:jidoka]) do

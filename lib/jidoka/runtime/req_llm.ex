@@ -9,9 +9,11 @@ defmodule Jidoka.Runtime.ReqLLM do
 
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Config
+  alias Jidoka.Event
   alias Jidoka.Effect
   alias Jidoka.Runtime.ReqLLM.Decision
   alias Jidoka.Schema
+  alias Jidoka.Stream, as: EventStream
 
   @type option ::
           {:model, ReqLLM.model_input()}
@@ -21,6 +23,9 @@ defmodule Jidoka.Runtime.ReqLLM do
           | {:receive_timeout, timeout()}
           | {:provider_options, map()}
           | {:cache, term()}
+          | {:stream, boolean()}
+          | {:stream_to, pid() | {:pid, pid()}}
+          | {:on_event, (Event.t() -> term())}
 
   @doc """
   Returns an LLM function suitable for `Jidoka.run_turn/3`.
@@ -38,18 +43,15 @@ defmodule Jidoka.Runtime.ReqLLM do
   @doc false
   @spec generate(Effect.Intent.t(), Effect.Journal.t(), [option()]) ::
           {:ok, Effect.LLMDecision.t()} | {:error, term()}
-  def generate(%Effect.Intent{kind: :llm, payload: payload}, _journal, opts) do
+  def generate(%Effect.Intent{kind: :llm, payload: payload} = intent, _journal, opts) do
     llm_opts =
       payload
       |> generation_opts()
-      |> Keyword.merge(Keyword.drop(opts, [:model]))
+      |> Keyword.merge(provider_opts(opts))
 
     with {:ok, model} <- fetch_model(payload, opts),
-         {:ok, messages} <- build_messages(payload),
-         {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts) do
-      response
-      |> ReqLLM.Response.text()
-      |> Decision.parse_text()
+         {:ok, messages} <- build_messages(payload) do
+      generate_response(model, messages, llm_opts, intent, opts)
     end
   end
 
@@ -96,6 +98,202 @@ defmodule Jidoka.Runtime.ReqLLM do
   rescue
     exception -> {:error, {:invalid_prompt_payload, exception}}
   end
+
+  defp provider_opts(opts) do
+    Keyword.drop(opts, [:model, :stream, :stream_to, :on_event])
+  end
+
+  defp generate_response(model, messages, llm_opts, %Effect.Intent{} = intent, opts) do
+    if stream_enabled?(opts) do
+      generate_streaming_response(model, messages, llm_opts, intent, opts)
+    else
+      with {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts) do
+        response
+        |> ReqLLM.Response.text()
+        |> Decision.parse_text()
+      end
+    end
+  end
+
+  defp generate_streaming_response(model, messages, llm_opts, %Effect.Intent{} = intent, opts) do
+    stream_state_key = {__MODULE__, :stream_state, make_ref()}
+    Process.put(stream_state_key, %{raw: "", content: "", seq: 0})
+
+    result =
+      with {:ok, stream_response} <- ReqLLM.Generation.stream_text(model, messages, llm_opts),
+           {:ok, response} <-
+             ReqLLM.StreamResponse.process_stream(
+               stream_response,
+               on_result: &handle_stream_content_delta(stream_state_key, intent, opts, &1),
+               on_thinking: &handle_stream_thinking_delta(stream_state_key, intent, opts, &1)
+             ),
+           text <- response_text(stream_state_key, response),
+           {:ok, decision} <- Decision.parse_text(text) do
+        emit_remaining_final_delta(stream_state_key, intent, decision, opts)
+        {:ok, decision}
+      end
+
+    Process.delete(stream_state_key)
+    result
+  end
+
+  defp response_text(stream_state_key, response) do
+    text = ReqLLM.Response.text(response)
+    state = Process.get(stream_state_key, %{raw: ""})
+
+    cond do
+      is_binary(text) and String.trim(text) != "" -> text
+      is_binary(state.raw) and String.trim(state.raw) != "" -> state.raw
+      true -> text
+    end
+  end
+
+  defp stream_enabled?(opts) do
+    Keyword.get(opts, :stream) == true or Keyword.has_key?(opts, :stream_to) or
+      Keyword.has_key?(opts, :on_event)
+  end
+
+  defp handle_stream_content_delta(stream_state_key, %Effect.Intent{} = intent, opts, delta)
+       when is_binary(delta) do
+    state = Process.get(stream_state_key, %{raw: "", content: "", seq: 0})
+    raw = state.raw <> delta
+
+    state =
+      case content_prefix(raw) do
+        content when is_binary(content) ->
+          emit_new_content(intent, opts, %{state | raw: raw}, content)
+
+        _other ->
+          %{state | raw: raw}
+      end
+
+    Process.put(stream_state_key, state)
+  end
+
+  defp handle_stream_thinking_delta(stream_state_key, %Effect.Intent{} = intent, opts, delta)
+       when is_binary(delta) and delta != "" do
+    state = Process.get(stream_state_key, %{raw: "", content: "", seq: 0})
+    emit_delta(intent, opts, :thinking, delta, state.seq)
+    Process.put(stream_state_key, %{state | seq: state.seq + 1})
+  end
+
+  defp handle_stream_thinking_delta(_stream_state_key, _intent, _opts, _delta), do: :ok
+
+  defp emit_remaining_final_delta(
+         stream_state_key,
+         %Effect.Intent{} = intent,
+         %Effect.LLMDecision{type: :final, content: content},
+         opts
+       )
+       when is_binary(content) do
+    state = Process.get(stream_state_key, %{raw: "", content: "", seq: 0})
+    emit_new_content(intent, opts, state, content)
+  end
+
+  defp emit_remaining_final_delta(_stream_state_key, _intent, _decision, _opts), do: :ok
+
+  defp emit_new_content(%Effect.Intent{} = intent, opts, state, content) do
+    cond do
+      content == state.content ->
+        state
+
+      String.starts_with?(content, state.content) ->
+        delta = String.replace_prefix(content, state.content, "")
+        emit_delta(intent, opts, :content, delta, state.seq)
+        %{state | content: content, seq: state.seq + 1}
+
+      true ->
+        %{state | content: content}
+    end
+  end
+
+  defp emit_delta(_intent, _opts, _chunk_type, "", _seq), do: :ok
+
+  defp emit_delta(%Effect.Intent{} = intent, opts, chunk_type, delta, seq) do
+    payload = intent.payload
+
+    Event.new!(
+      event: :llm_delta,
+      seq: seq,
+      agent_id: Schema.get_key(payload, :agent_id),
+      request_id: Schema.get_key(payload, :request_id),
+      loop_index: Schema.get_key(payload, :loop_index),
+      effect_id: intent.id,
+      effect_kind: :llm,
+      data: %{chunk_type: chunk_type, delta: delta}
+    )
+    |> EventStream.emit(opts)
+  end
+
+  defp content_prefix(raw) when is_binary(raw) do
+    case Regex.run(~r/"content"\s*:\s*"/, raw, return: :index) do
+      [{start, length}] ->
+        offset = start + length
+        binary_part(raw, offset, byte_size(raw) - offset) |> decode_json_string_prefix()
+
+      _other ->
+        nil
+    end
+  end
+
+  defp decode_json_string_prefix(binary), do: decode_json_string_prefix(binary, [])
+
+  defp decode_json_string_prefix(<<"\"", _rest::binary>>, acc), do: acc_to_binary(acc)
+
+  defp decode_json_string_prefix(<<"\\\"", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?\" | acc])
+
+  defp decode_json_string_prefix(<<"\\\\", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?\\ | acc])
+
+  defp decode_json_string_prefix(<<"\\/", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?/ | acc])
+
+  defp decode_json_string_prefix(<<"\\b", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?\b | acc])
+
+  defp decode_json_string_prefix(<<"\\f", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?\f | acc])
+
+  defp decode_json_string_prefix(<<"\\n", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?\n | acc])
+
+  defp decode_json_string_prefix(<<"\\r", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?\r | acc])
+
+  defp decode_json_string_prefix(<<"\\t", rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [?\t | acc])
+
+  defp decode_json_string_prefix(<<"\\u", hex::binary-size(4), rest::binary>>, acc) do
+    if hex?(hex) do
+      decode_unicode_escape(hex, rest, acc)
+    else
+      acc_to_binary(acc)
+    end
+  end
+
+  defp decode_json_string_prefix(<<"\\", _rest::binary>>, acc), do: acc_to_binary(acc)
+
+  defp decode_json_string_prefix(<<char::utf8, rest::binary>>, acc),
+    do: decode_json_string_prefix(rest, [<<char::utf8>> | acc])
+
+  defp decode_json_string_prefix(<<>>, acc), do: acc_to_binary(acc)
+
+  defp acc_to_binary(acc), do: acc |> Enum.reverse() |> IO.iodata_to_binary()
+
+  defp decode_unicode_escape(hex, rest, acc) do
+    case String.to_integer(hex, 16) do
+      codepoint when codepoint in 0xD800..0xDFFF ->
+        acc_to_binary(acc)
+
+      codepoint ->
+        decode_json_string_prefix(rest, [<<codepoint::utf8>> | acc])
+    end
+  rescue
+    ArgumentError -> acc_to_binary(acc)
+  end
+
+  defp hex?(hex), do: String.match?(hex, ~r/\A[0-9a-fA-F]{4}\z/)
 
   defp runtime_system_prompt do
     """

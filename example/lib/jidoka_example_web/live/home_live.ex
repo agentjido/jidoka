@@ -3,15 +3,24 @@ defmodule JidokaExampleWeb.HomeLive do
 
   use JidokaExampleWeb, :live_view
 
-  @agent_examples %{
-    support: %{
+  @agent_examples [
+    %{
+      id: :support,
       title: "Support Agent",
-      description: "Customer support",
+      description: "One action and basic controls",
       path: "/agents/support",
       status: "Ready",
       status_class: "idle"
+    },
+    %{
+      id: :research,
+      title: "Research Agent",
+      description: "Browser search and page reads",
+      path: "/agents/research",
+      status: "Ready",
+      status_class: "idle"
     }
-  }
+  ]
 
   @impl true
   def mount(_params, _session, socket) do
@@ -30,7 +39,7 @@ defmodule JidokaExampleWeb.HomeLive do
       </header>
 
       <div class="route-list">
-        <%= for {_id, example} <- @agent_examples do %>
+        <%= for example <- @agent_examples do %>
           <a class="route-row" href={example.path}>
             <div>
               <h2>{example.title}</h2>

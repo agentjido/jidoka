@@ -8,11 +8,12 @@ defmodule JidokaExample.Application do
     children = [
       JidokaExample.Jido,
       {JidokaExample.SupportAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.ResearchAgent.Agent, jido: JidokaExample.Jido},
       {Phoenix.PubSub, name: JidokaExample.PubSub},
       JidokaExampleWeb.Endpoint
     ]
 
-    opts = [strategy: :one_for_one, name: JidokaExample.Supervisor]
+    opts = [strategy: :rest_for_one, name: JidokaExample.Supervisor]
     Supervisor.start_link(children, opts)
   end
 

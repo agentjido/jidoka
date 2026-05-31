@@ -1,10 +1,13 @@
-defmodule JidokaExampleWeb.AgentLive.Support do
+defmodule JidokaExampleWeb.SupportAgentLive.Index do
   @moduledoc false
 
   use JidokaExampleWeb, :live_view
 
-  alias JidokaExampleWeb.AgentLive.Support.View
+  import JidokaExampleWeb.AgentComponents
 
+  alias JidokaExampleWeb.SupportAgentLive.View
+
+  @stream_message_tag Jidoka.Stream.message_tag()
   @default_question "Can you check order A1001 and tell me what I should do next?"
   @example_root Path.expand("../../../..", __DIR__)
   @tabs ~w(activity source)
@@ -32,12 +35,12 @@ defmodule JidokaExampleWeb.AgentLive.Support do
     %{
       id: "agent_view",
       label: "AgentView",
-      path: "lib/jidoka_example_web/live/agent_live/support/view.ex"
+      path: "lib/jidoka_example_web/live/support_agent_live/view.ex"
     },
     %{
       id: "live_view",
       label: "LiveView",
-      path: "lib/jidoka_example_web/live/agent_live/support.ex"
+      path: "lib/jidoka_example_web/live/support_agent_live/index.ex"
     }
   ]
 
@@ -50,7 +53,9 @@ defmodule JidokaExampleWeb.AgentLive.Support do
         agent_view: initial_view(session_id),
         active_tab: active_tab(params),
         active_source: active_source(params),
+        active_request_id: nil,
         form: form(@default_question, default_model()),
+        guide: agent_guide(),
         live_ready?: live_llm_ready?(),
         page_title: "Support Agent",
         session_id: session_id,
@@ -84,6 +89,7 @@ defmodule JidokaExampleWeb.AgentLive.Support do
         socket =
           assign(socket,
             agent_view: initial_view(session_id),
+            active_request_id: nil,
             form: form(@default_question, default_model()),
             session_id: session_id
           )
@@ -112,6 +118,30 @@ defmodule JidokaExampleWeb.AgentLive.Support do
   def handle_event("send_message", _params, socket), do: {:noreply, socket}
 
   @impl true
+  def handle_info({@stream_message_tag, %Jidoka.Event{} = event}, socket) do
+    if current_request?(socket, event.request_id) do
+      {:noreply, assign(socket, agent_view: View.apply_event(socket.assigns.agent_view, event))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_info({:jidoka_turn_result, request_id, result, model}, socket) do
+    if current_request?(socket, request_id) do
+      view = View.after_turn(socket.assigns.agent_view, result)
+
+      {:noreply,
+       assign(socket,
+         agent_view: view,
+         active_request_id: nil,
+         form: form("", model)
+       )}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
   def render(assigns) do
     ~H"""
     <section class="page">
@@ -128,6 +158,8 @@ defmodule JidokaExampleWeb.AgentLive.Support do
         </div>
       </header>
 
+      <.guide guide={@guide} />
+
       <div class="grid">
         <section class="panel conversation-panel">
           <div class="panel-header">
@@ -138,23 +170,11 @@ defmodule JidokaExampleWeb.AgentLive.Support do
           </div>
 
           <div class="panel-body">
-            <div class="messages">
-              <%= if @agent_view.visible_messages == [] do %>
-                <div class="empty">
-                  <strong>Start with the sample order.</strong>
-                  <span>
-                    The first response should call the lookup tool and explain the next step.
-                  </span>
-                </div>
-              <% end %>
-
-              <%= for message <- @agent_view.visible_messages do %>
-                <article class={"message #{message.role}"}>
-                  <div class="message-role">{message.role}</div>
-                  <div>{message.content}</div>
-                </article>
-              <% end %>
-            </div>
+            <.messages
+              messages={View.visible_messages(@agent_view)}
+              empty_title="Start with the sample order."
+              empty_body="The first response should call the lookup tool and explain the next step."
+            />
 
             <%= if @agent_view.error_text do %>
               <div style="height: 12px"></div>
@@ -202,22 +222,12 @@ defmodule JidokaExampleWeb.AgentLive.Support do
             <div>
               <h2>Run internals</h2>
               <div class="tabs">
-                <button
-                  class={tab_class(@active_tab, "activity")}
-                  type="button"
-                  phx-click="show_tab"
-                  phx-value-tab="activity"
-                >
+                <.tab_button active_tab={@active_tab} tab="activity">
                   Activity
-                </button>
-                <button
-                  class={tab_class(@active_tab, "source")}
-                  type="button"
-                  phx-click="show_tab"
-                  phx-value-tab="source"
-                >
+                </.tab_button>
+                <.tab_button active_tab={@active_tab} tab="source">
                   Source
-                </button>
+                </.tab_button>
               </div>
             </div>
 
@@ -226,7 +236,11 @@ defmodule JidokaExampleWeb.AgentLive.Support do
 
           <div class="panel-body">
             <%= if @active_tab == "activity" do %>
-              <.activity events={@agent_view.events} />
+              <.activity events={@agent_view.events}>
+                <:operation_result :let={event}>
+                  <.operation_payload payload={event.payload} />
+                </:operation_result>
+              </.activity>
             <% else %>
               <.source_examples examples={@source_examples} active_source={@active_source} />
             <% end %>
@@ -237,45 +251,7 @@ defmodule JidokaExampleWeb.AgentLive.Support do
     """
   end
 
-  attr :status, :atom, required: true
-
-  defp status(assigns) do
-    ~H"""
-    <span class={"status #{@status}"}>
-      <span class="status-dot"></span>
-      {@status}
-    </span>
-    """
-  end
-
-  attr :events, :list, required: true
-
-  defp activity(assigns) do
-    ~H"""
-    <%= if @events == [] do %>
-      <div class="empty">No activity yet.</div>
-    <% else %>
-      <div class="event-list">
-        <%= for event <- @events do %>
-          <article class="event">
-            <div class="event-topline">
-              <div>
-                <h3>{event.label}</h3>
-                <p class="subtle">{event.kind}</p>
-              </div>
-
-              <span class="pill">{event.refs.operation}</span>
-            </div>
-
-            <.operation_payload payload={event.payload} />
-          </article>
-        <% end %>
-      </div>
-    <% end %>
-    """
-  end
-
-  attr :payload, :map, required: true
+  attr(:payload, :map, required: true)
 
   defp operation_payload(assigns) do
     assigns =
@@ -324,40 +300,6 @@ defmodule JidokaExampleWeb.AgentLive.Support do
     """
   end
 
-  attr :examples, :list, required: true
-  attr :active_source, :string, required: true
-
-  defp source_examples(assigns) do
-    assigns =
-      assign(assigns,
-        selected: selected_source(assigns.examples, assigns.active_source)
-      )
-
-    ~H"""
-    <div class="source-nav">
-      <%= for example <- @examples do %>
-        <button
-          class={source_tab_class(@selected.id, example.id)}
-          type="button"
-          phx-click="show_source"
-          phx-value-source={example.id}
-        >
-          {example.label}
-        </button>
-      <% end %>
-    </div>
-
-    <section class="source-file">
-      <div class="source-file-header">
-        <h3>{@selected.label}</h3>
-        <span>{@selected.path}</span>
-      </div>
-
-      <pre class="code-block"><code><%= raw(highlight_elixir(@selected.source)) %></code></pre>
-    </section>
-    """
-  end
-
   defp run_prompt(socket, params) do
     question = params |> Map.get("question", "") |> to_string() |> String.trim()
     model = params |> Map.get("model", "") |> to_string() |> String.trim()
@@ -379,22 +321,29 @@ defmodule JidokaExampleWeb.AgentLive.Support do
 
   defp run_live_prompt(socket, question, model) do
     running = View.before_turn(socket.assigns.agent_view, question)
+    request_id = View.request_id()
+    parent = self()
 
-    result =
-      with {:ok, pid} <- support_agent_pid() do
-        Jidoka.run_turn(pid, question,
-          llm_opts: [model: model],
-          context: %{
-            surface: "phoenix_live_view",
-            example: "support_agent",
-            session_id: socket.assigns.session_id
-          }
-        )
-      end
+    Task.start(fn ->
+      result =
+        with {:ok, pid} <- support_agent_pid() do
+          Jidoka.run_turn(pid, question,
+            request_id: request_id,
+            stream: true,
+            stream_to: parent,
+            llm_opts: [model: model],
+            context: %{
+              surface: "phoenix_live_view",
+              example: "support_agent",
+              session_id: socket.assigns.session_id
+            }
+          )
+        end
 
-    view = View.after_turn(running, result)
+      send(parent, {:jidoka_turn_result, request_id, result, model})
+    end)
 
-    assign(socket, agent_view: view, form: form("", model))
+    assign(socket, agent_view: running, active_request_id: request_id, form: form("", model))
   end
 
   defp run_missing_credentials_prompt(socket, question, model) do
@@ -413,6 +362,8 @@ defmodule JidokaExampleWeb.AgentLive.Support do
       |> Map.put(:path, source.path)
     end)
   end
+
+  defp agent_guide, do: JidokaExample.SupportAgent.Agent.guide()
 
   defp read_source(path) do
     case File.read(Path.join(@example_root, path)) do
@@ -473,6 +424,10 @@ defmodule JidokaExampleWeb.AgentLive.Support do
     assign(socket, agent_view: view)
   end
 
+  defp current_request?(socket, request_id) do
+    is_binary(request_id) and socket.assigns[:active_request_id] == request_id
+  end
+
   defp active_tab(%{"tab" => tab}) when tab in @tabs, do: tab
   defp active_tab(_params), do: "activity"
 
@@ -482,17 +437,8 @@ defmodule JidokaExampleWeb.AgentLive.Support do
 
   defp active_source(_params), do: "agent"
 
-  defp tab_class(active_tab, tab), do: ["tab", active_tab == tab && "active"]
-
   defp tab_count("source", _agent_view, examples), do: "#{length(examples)} files"
   defp tab_count(_tab, agent_view, _examples), do: "#{length(agent_view.events)} events"
-
-  defp selected_source(examples, active_source) do
-    Enum.find(examples, &(&1.id == active_source)) || hd(examples)
-  end
-
-  defp source_tab_class(active_source, source),
-    do: ["source-nav-link", active_source == source && "active"]
 
   defp payload_value(payload, path) when is_list(path) do
     Enum.reduce_while(path, payload, fn key, acc ->
@@ -512,17 +458,4 @@ defmodule JidokaExampleWeb.AgentLive.Support do
 
   defp payload_value(%{} = payload, key) when is_binary(key), do: Map.get(payload, key)
   defp payload_value(_payload, _key), do: nil
-
-  defp highlight_elixir(source) do
-    source
-    |> Phoenix.HTML.html_escape()
-    |> Phoenix.HTML.safe_to_string()
-    |> String.replace(~r/(&quot;.*?&quot;)/, ~s(<span class="code-string">\\1</span>))
-    |> String.replace(~r/(#.*)$/m, ~s(<span class="code-comment">\\1</span>))
-    |> String.replace(
-      ~r/\b(defmodule|defp?|use|alias|do|end|agent|tools|action|instructions|generation)\b/,
-      ~s(<span class="code-keyword">\\1</span>)
-    )
-    |> String.replace(~r/(:[a-zA-Z_][a-zA-Z0-9_?!]*)/, ~s(<span class="code-atom">\\1</span>))
-  end
 end

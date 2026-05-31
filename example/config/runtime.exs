@@ -17,6 +17,9 @@ config :req_llm,
   anthropic_api_key: env["ANTHROPIC_API_KEY"],
   openai_api_key: env["OPENAI_API_KEY"]
 
+config :jido_browser,
+  brave_api_key: env["BRAVE_SEARCH_API_KEY"]
+
 present? = fn value -> is_binary(value) and String.trim(value) != "" end
 
 default_model =
@@ -36,4 +39,7 @@ end
 
 config :jidoka_example,
   default_model: default_model,
-  live_llm_ready?: present?.(env["OPENAI_API_KEY"]) or present?.(env["ANTHROPIC_API_KEY"])
+  live_llm_ready?: present?.(env["OPENAI_API_KEY"]) or present?.(env["ANTHROPIC_API_KEY"]),
+  live_research_ready?:
+    (present?.(env["OPENAI_API_KEY"]) or present?.(env["ANTHROPIC_API_KEY"])) and
+      present?.(env["BRAVE_SEARCH_API_KEY"])

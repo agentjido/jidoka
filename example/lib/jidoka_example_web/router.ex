@@ -14,6 +14,7 @@ defmodule JidokaExampleWeb.Router do
     pipe_through :browser
 
     live "/", HomeLive, :index
-    live "/agents/support", AgentLive.Support, :index
+    live "/agents/support", SupportAgentLive.Index, :index
+    live "/agents/research", ResearchAgentLive.Index, :index
   end
 end
