@@ -24,8 +24,10 @@ defmodule Jidoka.Runtime.Controls.OperationContext do
               operation_kind:
                 Schema.atom_enum(Jidoka.Agent.Spec.Controls.Operation.valid_kinds())
                 |> Zoi.default(:operation),
+              source: Zoi.string() |> Zoi.nullish(),
               arguments: Zoi.map() |> Zoi.default(%{}),
               operation_match: Zoi.map() |> Zoi.default(%{}),
+              operation_metadata: Zoi.map() |> Zoi.default(%{}),
               idempotency:
                 Schema.atom_enum(Jidoka.Agent.Spec.Operation.valid_idempotencies())
                 |> Zoi.nullish(),

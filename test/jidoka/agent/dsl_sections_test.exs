@@ -18,15 +18,27 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert Keyword.has_key?(entity.schema, :context)
   end
 
-  test "tools section declares action entities" do
+  test "tools section declares tool source entities" do
     section = Sections.Tools.section()
-    [entity] = section.entities
+    entities = Map.new(section.entities, &{&1.name, &1})
 
     assert section.name == :tools
-    assert entity.name == :action
-    assert entity.target == Jidoka.Agent.Dsl.Tool
-    assert entity.args == [:module]
-    assert get_in(entity.schema, [:module, :type]) == :atom
+
+    assert entities.action.target == Jidoka.Agent.Dsl.Tool
+    assert entities.action.args == [:module]
+    assert get_in(entities.action.schema, [:module, :type]) == :atom
+
+    assert entities.ash_resource.target == Jidoka.Agent.Dsl.AshResource
+    assert entities.ash_resource.args == [:resource]
+    assert get_in(entities.ash_resource.schema, [:actions, :default]) == []
+
+    assert entities.browser.target == Jidoka.Agent.Dsl.Browser
+    assert entities.browser.args == [:name]
+    assert get_in(entities.browser.schema, [:mode, :default]) == :read_only
+
+    assert entities.catalog.target == Jidoka.Agent.Dsl.Catalog
+    assert entities.catalog.args == [:name]
+    assert get_in(entities.catalog.schema, [:via, :required])
   end
 
   test "controls section declares runtime and operation control entities" do

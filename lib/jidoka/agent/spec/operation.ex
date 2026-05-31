@@ -8,7 +8,17 @@ defmodule Jidoka.Agent.Spec.Operation do
   @type idempotency :: :pure | :idempotent | :dedupe | :reconcile | :unsafe_once
 
   @valid_idempotency [:pure, :idempotent, :dedupe, :reconcile, :unsafe_once]
-  @known_kinds [:action, :operation, :tool, :workflow, :subagent, :handoff]
+  @known_kinds [
+    :action,
+    :operation,
+    :tool,
+    :ash_resource,
+    :browser,
+    :catalog,
+    :workflow,
+    :subagent,
+    :handoff
+  ]
   @idempotency_schema Schema.atom_enum(@valid_idempotency)
 
   @schema Zoi.struct(

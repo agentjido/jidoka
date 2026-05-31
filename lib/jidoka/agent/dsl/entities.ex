@@ -20,6 +20,50 @@ defmodule Jidoka.Agent.Dsl.Tool do
   defstruct [:module, :__spark_metadata__]
 end
 
+defmodule Jidoka.Agent.Dsl.AshResource do
+  @moduledoc false
+
+  defstruct [
+    :resource,
+    :actions,
+    :description,
+    :idempotency,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
+defmodule Jidoka.Agent.Dsl.Browser do
+  @moduledoc false
+
+  defstruct [
+    :name,
+    :mode,
+    :allow,
+    :description,
+    :idempotency,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
+defmodule Jidoka.Agent.Dsl.Catalog do
+  @moduledoc false
+
+  defstruct [
+    :name,
+    :via,
+    :providers,
+    :only,
+    :except,
+    :max_results,
+    :description,
+    :idempotency,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
 defmodule Jidoka.Agent.Dsl.OperationControl do
   @moduledoc false
 

@@ -50,11 +50,35 @@ error.
 ```elixir
 tools do
   action MyApp.LocalTime
+  browser :docs, allow: ["https://docs.example.com"]
+  catalog :support_ops, via: :connect, providers: [:github], max_results: 8
 end
 ```
 
 Each action must be a Jido action or compatible module exposing `to_tool/0`.
 Jidoka converts actions into `Agent.Spec.Operation` entries.
+
+The `tools` block is authoring vocabulary. Internally these entries normalize
+to model-callable operations:
+
+- `action MyApp.Action` uses the built-in Jido action runtime.
+- `ash_resource MyApp.Resource` records an Ash resource source. AshJido
+  generated actions are imported as `:ash_resource` operations.
+  `actions:` filters the generated AshJido actions exposed to the model:
+
+  ```elixir
+  tools do
+    ash_resource MyApp.Accounts.User, actions: [:read, :create]
+  end
+  ```
+
+- `browser :docs` expands to constrained `:browser` operations backed by
+  Jido action wrappers for the `jido_browser` read-only tools: `search_web`,
+  `read_page`, and `snapshot_url` in `:read_only` mode.
+- `catalog :support_ops` publishes a constrained `:catalog` lookup operation
+  such as `catalog_support_ops`. By default it searches the Jido Discovery
+  action catalog and returns matching action metadata; it does not execute
+  discovered actions.
 
 ## Controls Block
 
@@ -141,7 +165,8 @@ projection of this shape.
 
 JSON/YAML imports compile into the same `Jidoka.Agent.Spec` shape. Portable
 documents stay data-only, so action modules and Zoi context schemas are named in
-the document and resolved with registries:
+the document and resolved with registries. The import surface mirrors the
+current minimal DSL: `agent`, `tools`, and `controls`.
 
 ```yaml
 agent:
@@ -156,6 +181,19 @@ agent:
 tools:
   actions:
     - local_time
+  ash_resources:
+    - ref: account_resource
+      actions:
+        - read_account
+  browsers:
+    - name: docs
+      mode: search
+      allow:
+        - docs.example.com
+  catalogs:
+    - name: support_ops
+      providers:
+        - support
 controls:
   max_turns: 8
   timeout: 30000
@@ -184,6 +222,9 @@ agent:
 tools:
   actions:
     - local_time
+  browsers:
+    - name: docs
+      mode: search
 controls:
   max_turns: 8
   timeout: 30000
@@ -202,6 +243,7 @@ controls:
   Jidoka.import(yaml,
     registries: %{
       actions: %{"local_time" => MyApp.LocalTime},
+      ash_resources: %{"account_resource" => MyApp.AccountResource},
       controls: %{
         "no_secrets" => MyApp.NoSecrets,
         "require_approval" => MyApp.RequireApproval,
@@ -213,8 +255,12 @@ controls:
   )
 ```
 
+String refs are resolved only through explicit registries; imports do not create
+atoms or modules from untrusted input.
+
 ## Intentionally Absent
 
 The current DSL does not expose handoffs, workflows, session queues, approval
-queues, or native provider tool-calling. Those should land after the
-`Agent.Spec`, harness, and runtime contracts are stable.
+queues, extensions, or native provider tool-calling. Runtime extensions remain
+plain Elixir modules registered by package/application code, not author-facing
+DSL.

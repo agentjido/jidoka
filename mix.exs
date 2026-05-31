@@ -4,7 +4,7 @@ defmodule Jidoka.MixProject do
   def project do
     [
       app: :jidoka,
-      version: "0.1.0",
+      version: "1.0.0-beta.1",
       elixir: "~> 1.19",
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
@@ -33,9 +33,11 @@ defmodule Jidoka.MixProject do
   defp deps do
     [
       {:dotenvy, "~> 1.1"},
+      {:ash_jido, "~> 1.0"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:jason, "~> 1.4"},
-      {:jido, path: "../jido"},
+      {:jido, "~> 2.3"},
+      {:jido_browser, "~> 2.1"},
       {:req_llm, "~> 1.12"},
       {:runic, "~> 0.1.0-alpha.7"},
       {:splode, "~> 0.3.0"},

@@ -27,14 +27,15 @@ defmodule Jidoka.Runtime.Controls.Operation do
     with {:ok, request} <- Effect.OperationRequest.from_input(intent.payload) do
       operation = operation_for(state, request.name)
       operation_kind = operation_kind(operation, request)
+      operation_match = operation_match_data(operation, request, operation_kind, intent)
 
       controls =
         Enum.filter(
           state.spec.controls.operations,
-          &OperationControl.matches?(&1, request.name, operation_kind)
+          &OperationControl.matches?(&1, operation_match)
         )
 
-      run_controls(state, controls, request, operation, operation_kind, intent)
+      run_controls(state, controls, request, operation, operation_match, intent)
     end
   end
 
@@ -43,25 +44,25 @@ defmodule Jidoka.Runtime.Controls.Operation do
          controls,
          %Effect.OperationRequest{} = request,
          operation,
-         operation_kind,
+         operation_match,
          %Effect.Intent{} = intent
        )
        when is_list(controls) do
     Enum.reduce_while(controls, {:ok, state}, fn control, {:ok, state} ->
-      case call_control(control, state, request, operation, operation_kind, intent)
+      case call_control(control, state, request, operation, operation_match, intent)
            |> Decision.normalize() do
         :allow ->
-          {:cont, {:ok, append_control_event(state, control, request, operation_kind)}}
+          {:cont, {:ok, append_control_event(state, control, request, operation_match)}}
 
         {:block, reason} ->
           {:halt, {:error, {:control_blocked, control.control, :operation, reason}}}
 
         {:interrupt, reason} ->
           interrupt =
-            operation_interrupt(control, state, request, operation_kind, intent, reason)
+            operation_interrupt(control, state, request, operation_match, intent, reason)
 
           state =
-            append_control_event(state, control, request, operation_kind, interrupt)
+            append_control_event(state, control, request, operation_match, interrupt)
 
           {:halt, {:interrupt, interrupt, state}}
 
@@ -79,7 +80,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
          %Turn.State{} = state,
          %Effect.OperationRequest{} = request,
          operation,
-         operation_kind,
+         operation_match,
          %Effect.Intent{} = intent
        ) do
     control.control.call(
@@ -91,10 +92,12 @@ defmodule Jidoka.Runtime.Controls.Operation do
         metadata: control.metadata,
         request_metadata: state.request.metadata,
         operation: request.name,
-        kind: operation_kind,
-        operation_kind: operation_kind,
+        kind: operation_match.kind,
+        operation_kind: operation_match.kind,
+        source: operation_match.source,
         arguments: request.arguments,
         operation_match: control.match,
+        operation_metadata: operation_match.metadata,
         idempotency: intent.idempotency,
         idempotency_key: intent.idempotency_key,
         spec: state.spec,
@@ -118,7 +121,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
          %Turn.State{} = state,
          %OperationControl{} = control,
          %Effect.OperationRequest{} = request,
-         operation_kind,
+         operation_match,
          interrupt \\ nil
        ) do
     state
@@ -133,7 +136,8 @@ defmodule Jidoka.Runtime.Controls.Operation do
           boundary: :operation,
           control: control_name(control.control),
           operation: request.name,
-          operation_kind: operation_kind,
+          operation_kind: operation_match.kind,
+          source: operation_match.source,
           interrupt_id: interrupt_id(interrupt)
         }
         |> Enum.reject(fn {_key, value} -> is_nil(value) end)
@@ -168,7 +172,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
          %OperationControl{} = control,
          %Turn.State{} = state,
          %Effect.OperationRequest{} = request,
-         operation_kind,
+         operation_match,
          %Effect.Intent{} = intent,
          reason
        ) do
@@ -191,7 +195,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
       effect_id: intent.id,
       effect_kind: intent.kind,
       operation: request.name,
-      operation_kind: operation_kind,
+      operation_kind: operation_match.kind,
       arguments: request.arguments,
       idempotency: intent.idempotency,
       idempotency_key: intent.idempotency_key,
@@ -216,6 +220,41 @@ defmodule Jidoka.Runtime.Controls.Operation do
 
   defp operation_kind(nil, %Effect.OperationRequest{metadata: metadata}) do
     kind_from_metadata(metadata) || :operation
+  end
+
+  defp operation_match_data(
+         operation,
+         %Effect.OperationRequest{} = request,
+         operation_kind,
+         intent
+       ) do
+    metadata = operation_metadata(operation, request)
+
+    %{
+      name: request.name,
+      kind: operation_kind,
+      source: source_from_metadata(metadata),
+      idempotency: operation_idempotency(operation, intent),
+      metadata: metadata
+    }
+  end
+
+  defp operation_metadata(%OperationSpec{metadata: metadata}, _request) when is_map(metadata),
+    do: metadata
+
+  defp operation_metadata(_operation, %Effect.OperationRequest{metadata: metadata})
+       when is_map(metadata),
+       do: metadata
+
+  defp operation_idempotency(%OperationSpec{idempotency: idempotency}, _intent), do: idempotency
+
+  defp operation_idempotency(_operation, %Effect.Intent{idempotency: idempotency}),
+    do: idempotency
+
+  defp source_from_metadata(metadata) when is_map(metadata) do
+    metadata
+    |> get_any([:source, "source", :runtime, "runtime"])
+    |> normalize_source()
   end
 
   defp kind_from_metadata(metadata) do
@@ -246,6 +285,12 @@ defmodule Jidoka.Runtime.Controls.Operation do
   end
 
   defp normalize_kind(_kind), do: nil
+
+  defp normalize_source(source) when is_atom(source) and not is_nil(source),
+    do: Atom.to_string(source)
+
+  defp normalize_source(source) when is_binary(source), do: source
+  defp normalize_source(_source), do: nil
 
   defp approved_interrupt_id(%Effect.Intent{metadata: metadata}) when is_map(metadata) do
     get_any(metadata, [:approved_interrupt_id, "approved_interrupt_id"])

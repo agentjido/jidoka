@@ -3,9 +3,21 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
   Policy control attached to model-callable operations.
   """
 
+  alias Jidoka.Agent.Spec.Operation, as: OperationSpec
   alias Jidoka.Schema
 
-  @valid_kinds [:action, :operation, :tool, :workflow, :subagent, :handoff]
+  @valid_kinds [
+    :action,
+    :operation,
+    :tool,
+    :ash_resource,
+    :browser,
+    :catalog,
+    :workflow,
+    :subagent,
+    :handoff
+  ]
+  @valid_idempotencies OperationSpec.valid_idempotencies()
 
   @schema Zoi.struct(
             __MODULE__,
@@ -27,13 +39,44 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
   @spec valid_kinds() :: [atom()]
   def valid_kinds, do: @valid_kinds
 
+  @doc "Returns true when this operation control applies to an operation spec or match data."
+  @spec matches?(t(), OperationSpec.t() | map()) :: boolean()
+  def matches?(%__MODULE__{} = control, %OperationSpec{} = operation) do
+    matches?(control, %{
+      name: operation.name,
+      kind: OperationSpec.kind(operation),
+      source: source_from_metadata(operation.metadata),
+      idempotency: operation.idempotency,
+      metadata: operation.metadata
+    })
+  end
+
+  def matches?(%__MODULE__{match: match}, operation) when is_map(operation) do
+    Enum.all?(match, fn
+      {:kind, kind} ->
+        get_any(operation, [:kind, "kind", :operation_kind, "operation_kind"]) == kind
+
+      {:name, name} ->
+        same_value?(get_any(operation, [:name, "name", :operation, "operation"]), name)
+
+      {:source, source} ->
+        same_value?(operation_source(operation), source)
+
+      {:idempotency, idempotency} ->
+        get_any(operation, [:idempotency, "idempotency"]) == idempotency
+
+      {:metadata, metadata} ->
+        metadata_matches?(get_any(operation, [:metadata, "metadata"]) || %{}, metadata)
+    end)
+  end
+
   @doc "Returns true when this operation control applies to an operation name/kind."
   @spec matches?(t(), String.t(), atom()) :: boolean()
   def matches?(%__MODULE__{match: match}, operation_name, operation_kind) do
-    Enum.all?(match, fn
-      {:kind, kind} -> kind == operation_kind
-      {:name, name} -> name == operation_name
-    end)
+    matches?(%__MODULE__{match: match, control: nil}, %{
+      name: operation_name,
+      kind: operation_kind
+    })
   end
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
@@ -71,16 +114,36 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
   end
 
   defp normalize_match(%{} = match) do
-    allowed_keys = [:kind, "kind", :name, "name"]
+    allowed_keys = [
+      :kind,
+      "kind",
+      :name,
+      "name",
+      :source,
+      "source",
+      :idempotency,
+      "idempotency",
+      :metadata,
+      "metadata"
+    ]
 
     case Enum.reject(Map.keys(match), &(&1 in allowed_keys)) do
       [] ->
         with {:ok, kind_match} <- normalize_kind(Map.get(match, :kind, Map.get(match, "kind"))),
-             {:ok, name_match} <- normalize_name(Map.get(match, :name, Map.get(match, "name"))) do
+             {:ok, name_match} <- normalize_name(Map.get(match, :name, Map.get(match, "name"))),
+             {:ok, source_match} <-
+               normalize_source(Map.get(match, :source, Map.get(match, "source"))),
+             {:ok, idempotency_match} <-
+               normalize_idempotency(Map.get(match, :idempotency, Map.get(match, "idempotency"))),
+             {:ok, metadata_match} <-
+               normalize_metadata_match(Map.get(match, :metadata, Map.get(match, "metadata"))) do
           {:ok,
            %{}
            |> maybe_put(:kind, kind_match)
-           |> maybe_put(:name, name_match)}
+           |> maybe_put(:name, name_match)
+           |> maybe_put(:source, source_match)
+           |> maybe_put(:idempotency, idempotency_match)
+           |> maybe_put(:metadata, metadata_match)}
         end
 
       unknown ->
@@ -119,6 +182,106 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
 
   defp normalize_name(name), do: {:error, {:invalid_operation_control_name, name}}
 
+  defp normalize_source(nil), do: {:ok, nil}
+
+  defp normalize_source(source) when is_atom(source) and not is_nil(source) do
+    source
+    |> Atom.to_string()
+    |> normalize_source()
+  end
+
+  defp normalize_source(source) when is_binary(source) do
+    case String.trim(source) do
+      "" -> {:error, {:invalid_operation_control_source, source}}
+      source -> {:ok, source}
+    end
+  end
+
+  defp normalize_source(source), do: {:error, {:invalid_operation_control_source, source}}
+
+  defp normalize_idempotency(nil), do: {:ok, nil}
+
+  defp normalize_idempotency(idempotency) when idempotency in @valid_idempotencies,
+    do: {:ok, idempotency}
+
+  defp normalize_idempotency(idempotency) when is_binary(idempotency) do
+    normalized = idempotency |> String.trim() |> String.downcase()
+
+    OperationSpec.valid_idempotencies()
+    |> Enum.find(&(Atom.to_string(&1) == normalized))
+    |> case do
+      nil -> {:error, {:invalid_operation_control_idempotency, idempotency}}
+      idempotency -> {:ok, idempotency}
+    end
+  end
+
+  defp normalize_idempotency(idempotency),
+    do: {:error, {:invalid_operation_control_idempotency, idempotency}}
+
+  defp normalize_metadata_match(nil), do: {:ok, nil}
+  defp normalize_metadata_match(metadata) when is_map(metadata), do: {:ok, metadata}
+
+  defp normalize_metadata_match(metadata),
+    do: {:error, {:invalid_operation_control_metadata, metadata}}
+
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp operation_source(operation) do
+    get_any(operation, [:source, "source"]) ||
+      operation
+      |> get_any([:metadata, "metadata"])
+      |> source_from_metadata()
+  end
+
+  defp source_from_metadata(metadata) when is_map(metadata) do
+    metadata
+    |> get_any([:source, "source", :runtime, "runtime"])
+    |> normalize_source_value()
+  end
+
+  defp source_from_metadata(_metadata), do: nil
+
+  defp normalize_source_value(source) when is_atom(source) and not is_nil(source),
+    do: Atom.to_string(source)
+
+  defp normalize_source_value(source) when is_binary(source), do: source
+  defp normalize_source_value(_source), do: nil
+
+  defp metadata_matches?(metadata, match) when is_map(metadata) and is_map(match) do
+    Enum.all?(match, fn {key, expected} ->
+      metadata
+      |> fetch_any(key)
+      |> case do
+        {:ok, actual} -> same_value?(actual, expected)
+        :error -> false
+      end
+    end)
+  end
+
+  defp metadata_matches?(_metadata, _match), do: false
+
+  defp fetch_any(map, key) when is_map(map) do
+    Enum.find_value(map, :error, fn {candidate_key, value} ->
+      if same_key?(candidate_key, key), do: {:ok, value}
+    end)
+  end
+
+  defp same_key?(left, right) when is_atom(left) and is_binary(right),
+    do: Atom.to_string(left) == right
+
+  defp same_key?(left, right) when is_binary(left) and is_atom(right),
+    do: left == Atom.to_string(right)
+
+  defp same_key?(left, right), do: left == right
+
+  defp same_value?(left, right) when is_atom(left) and is_binary(right),
+    do: Atom.to_string(left) == right
+
+  defp same_value?(left, right) when is_binary(left) and is_atom(right),
+    do: left == Atom.to_string(right)
+
+  defp same_value?(left, right), do: left == right
+
+  defp get_any(map, keys) when is_map(map), do: Enum.find_value(keys, &Map.get(map, &1))
 end

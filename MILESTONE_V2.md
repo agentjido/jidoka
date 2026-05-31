@@ -1,6 +1,6 @@
 # Jidoka V2 Milestone Plan
 
-Status: complete
+Status: 1.0 beta complete
 
 Date: 2026-05-30
 
@@ -15,6 +15,8 @@ Jidoka V2 has crossed the first important milestone:
 
 - Spark DSL agents compile into `Jidoka.Agent.Spec`.
 - JSON/YAML imports compile into the same spec contract through `Jidoka.import/2`.
+- JSON/YAML import parity covers the current minimal tool source surface:
+  `action`, `ash_resource`, `browser`, and `catalog`.
 - Specs, plans, effects, state, results, and snapshots are Zoi-backed data.
 - The Runic turn spine can execute a ReAct-style model/tool loop.
 - ReqLLM can make live LLM calls.
@@ -24,6 +26,8 @@ Jidoka V2 has crossed the first important milestone:
 - Input/output controls execute at runtime.
 - Operation controls compile into durable spec data and execute before
   operation capabilities.
+- Operation controls match by operation kind, name, source, idempotency, and
+  metadata.
 - `max_turns` and `timeout` are first-class control limits.
 - Structured result schemas validate `Turn.Result.value` with bounded repair.
 - Snapshots can hibernate/resume at safe boundaries.
@@ -437,13 +441,25 @@ Status:
   through the existing `Effect.Intent` / `Effect.Result` path.
 - Integration coverage proves a `:tool` source runs through the normal turn
   loop and operation controls match it by `kind` and `name`.
+- Native DSL now accepts `tools do ash_resource ...`, `browser ...`, and
+  `catalog ...` entries. Browser entries expand to Jido action wrappers backed
+  by the hard Hex `jido_browser` dependency. Catalog entries compile to a Jido
+  Discovery-backed operation source. Ash resources compile generated AshJido
+  actions from the hard Hex `ash_jido` dependency; `actions:` filters those
+  generated actions.
+- JSON/YAML import now accepts the same current tool source family:
+  `tools.actions`, `tools.ash_resources`, `tools.browsers`, and
+  `tools.catalogs`. Executable module/resource references are resolved only
+  through explicit registries.
+- Operation controls can match non-action sources by source, idempotency, and
+  operation metadata while preserving the same `Effect.Intent` execution path.
 
 Deferred:
 
-- Jido subagent/workflow/handoff/Ash/MCP sources remain future source
+- Jido subagent/workflow/handoff/MCP sources remain future source
   implementations; the spine is now ready for them.
-- The public DSL still exposes `tools do action ... end`; richer source DSL
-  sugar can be added after source demand is clearer.
+- Full host-specific catalog routes remain a future polish item.
+- Extensions remain runtime/package code, not a DSL surface.
 
 ## Epic 8: Observability, Inspection, And Evals
 

@@ -23,9 +23,9 @@ defmodule Jidoka.Agent do
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Agent.Spec.Memory
   alias Jidoka.Agent.Spec.Result
+  alias Jidoka.Agent.ToolSources
   alias Jidoka.Config
   alias Jidoka.Runtime.Actions.RunTurn
-  alias Jidoka.Runtime.JidoActions
   alias Jidoka.Runtime.ReqLLM
   alias Jidoka.Runtime.Signals
 
@@ -98,13 +98,16 @@ defmodule Jidoka.Agent do
           required(:result) => Result.t() | nil,
           required(:memory) => Memory.t() | nil,
           required(:actions) => [module()],
+          required(:operations) => [Spec.Operation.t()],
+          required(:tool_sources) => [map()],
           required(:controls) => Controls.t()
         }
   def definition!(agent_module) when is_atom(agent_module) do
     agent = fetch_agent!(agent_module)
     actions = action_modules(agent_module)
+    operations = ToolSources.operations!(agent_module)
+    tool_sources = ToolSources.source_metadata!(agent_module)
     controls = controls!(agent_module)
-    validate_action_modules!(agent_module, actions)
 
     %{
       id: normalize_id!(agent.id),
@@ -116,19 +119,20 @@ defmodule Jidoka.Agent do
       result: normalize_result!(agent_module, agent.result),
       memory: normalize_memory!(agent_module, agent.memory),
       actions: actions,
+      operations: operations,
+      tool_sources: tool_sources,
       controls: controls
     }
   end
 
   defp compile_definition!(agent_module) when is_atom(agent_module) do
     agent = fetch_agent!(agent_module)
-    actions = action_modules(agent_module)
 
     unless is_nil(agent.model), do: normalize_model!(agent_module, agent.model)
     unless is_nil(agent.generation), do: normalize_generation!(agent_module, agent.generation)
     unless is_nil(agent.result), do: normalize_result!(agent_module, agent.result)
     unless is_nil(agent.memory), do: normalize_memory!(agent_module, agent.memory)
-    validate_action_modules!(agent_module, actions)
+    ToolSources.validate!(agent_module)
     controls!(agent_module)
 
     %{
@@ -141,9 +145,7 @@ defmodule Jidoka.Agent do
   @doc false
   @spec action_modules(module()) :: [module()]
   def action_modules(agent_module) when is_atom(agent_module) do
-    agent_module
-    |> Spark.Dsl.Extension.get_entities([:tools])
-    |> Enum.map(fn %Jidoka.Agent.Dsl.Tool{module: action} -> action end)
+    ToolSources.action_modules(agent_module)
   end
 
   @doc false
@@ -237,15 +239,17 @@ defmodule Jidoka.Agent do
       context_schema: definition.context_schema,
       result: definition.result,
       memory: definition.memory,
-      operations: JidoActions.operations_from_actions(definition.actions),
+      operations: definition.operations,
       controls: definition.controls,
       runtime_defaults: %{},
-      metadata: %{
-        "dsl_module" => inspect(agent_module),
-        "jido_agent" => true,
-        "context_schema?" => not is_nil(definition.context_schema),
-        "result_schema?" => not is_nil(definition.result)
-      }
+      metadata:
+        %{
+          "dsl_module" => inspect(agent_module),
+          "jido_agent" => true,
+          "context_schema?" => not is_nil(definition.context_schema),
+          "result_schema?" => not is_nil(definition.result)
+        }
+        |> maybe_put_tool_sources(definition.tool_sources)
     )
   end
 
@@ -270,14 +274,19 @@ defmodule Jidoka.Agent do
   end
 
   defp runtime_opts(agent_module, %Spec{} = spec, opts) do
-    actions = action_modules(agent_module)
-
     opts
     |> Keyword.put_new(
       :operations,
-      JidoActions.operations(actions, context: operation_context(agent_module, spec, opts))
+      default_operation_capability(agent_module, spec, opts)
     )
     |> Keyword.put_new(:llm, ReqLLM.llm(default_llm_opts(spec, opts)))
+  end
+
+  defp default_operation_capability(agent_module, %Spec{} = spec, opts) do
+    ToolSources.operation_capability(
+      agent_module,
+      context: operation_context(agent_module, spec, opts)
+    )
   end
 
   defp operation_context(agent_module, %Spec{} = spec, opts) do
@@ -410,60 +419,8 @@ defmodule Jidoka.Agent do
   defp normalize_instructions!(instructions),
     do: raise(ArgumentError, "agent instructions must be a string, got: #{inspect(instructions)}")
 
-  defp validate_action_modules!(agent_module, actions) do
-    action_names =
-      Enum.map(actions, fn action ->
-        {action, action_tool_name!(agent_module, action)}
-      end)
+  defp maybe_put_tool_sources(metadata, []), do: metadata
 
-    duplicates =
-      action_names
-      |> Enum.map(fn {_action, name} -> name end)
-      |> Enum.frequencies()
-      |> Enum.filter(fn {_name, count} -> count > 1 end)
-      |> Enum.map(fn {name, _count} -> name end)
-
-    case duplicates do
-      [] ->
-        :ok
-
-      [name | _rest] ->
-        raise Spark.Error.DslError.exception(
-                message: "tool #{inspect(name)} is defined more than once",
-                path: [:tools, :action],
-                module: agent_module
-              )
-    end
-  end
-
-  defp action_tool_name!(agent_module, action) do
-    with {:module, _module} <- Code.ensure_compiled(action),
-         true <- function_exported?(action, :to_tool, 0) do
-      action.to_tool().name
-    else
-      {:error, reason} ->
-        raise Spark.Error.DslError.exception(
-                message: "could not compile action #{inspect(action)}: #{inspect(reason)}",
-                path: [:tools, :action],
-                module: agent_module
-              )
-
-      false ->
-        raise Spark.Error.DslError.exception(
-                message: "#{inspect(action)} must expose `to_tool/0`",
-                path: [:tools, :action],
-                module: agent_module
-              )
-    end
-  rescue
-    error in [Spark.Error.DslError] ->
-      reraise error, __STACKTRACE__
-
-    error ->
-      raise Spark.Error.DslError.exception(
-              message: Exception.message(error),
-              path: [:tools, :action],
-              module: agent_module
-            )
-  end
+  defp maybe_put_tool_sources(metadata, tool_sources),
+    do: Map.put(metadata, "tool_sources", tool_sources)
 end

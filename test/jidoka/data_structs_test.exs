@@ -80,6 +80,15 @@ defmodule Jidoka.DataStructsTest do
     assert Operation.kind(Operation.new!(name: "lookup", metadata: %{kind: "workflow"})) ==
              :workflow
 
+    assert Operation.kind(Operation.new!(name: "lookup", metadata: %{kind: "browser"})) ==
+             :browser
+
+    assert Operation.kind(Operation.new!(name: "lookup", metadata: %{"kind" => "catalog"})) ==
+             :catalog
+
+    assert Operation.kind(Operation.new!(name: "lookup", metadata: %{"kind" => "ash_resource"})) ==
+             :ash_resource
+
     assert Operation.requires_control?(:unsafe_once)
     refute Operation.requires_control?(:idempotent)
 
@@ -123,6 +132,39 @@ defmodule Jidoka.DataStructsTest do
 
     assert :ok = Agent.Spec.validate_operation_policies(controlled_spec)
     assert {:ok, %Turn.Plan{}} = Turn.Plan.new(controlled_spec)
+  end
+
+  test "operation controls can match by source, idempotency, and metadata" do
+    operation =
+      Operation.new!(
+        name: "charge_card",
+        idempotency: :unsafe_once,
+        metadata: %{
+          "source" => "payments",
+          "kind" => "tool",
+          "risk" => "high",
+          mode: :live
+        }
+      )
+
+    matching =
+      Controls.Operation.new!(
+        control: AllowControl,
+        match: %{
+          source: :payments,
+          idempotency: "unsafe_once",
+          metadata: %{"risk" => "high", "mode" => "live"}
+        }
+      )
+
+    non_matching =
+      Controls.Operation.new!(
+        control: AllowControl,
+        match: %{source: :browser}
+      )
+
+    assert Controls.Operation.matches?(matching, operation)
+    refute Controls.Operation.matches?(non_matching, operation)
   end
 
   test "control specs accept output controls as the public data key" do

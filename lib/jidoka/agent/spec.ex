@@ -214,11 +214,9 @@ defmodule Jidoka.Agent.Spec do
          %__MODULE__{controls: %Controls{} = controls},
          %Operation{} = operation
        ) do
-    kind = Operation.kind(operation)
-
     Enum.any?(
       controls.operations,
-      &Controls.Operation.matches?(&1, operation.name, kind)
+      &Controls.Operation.matches?(&1, operation)
     )
   end
 

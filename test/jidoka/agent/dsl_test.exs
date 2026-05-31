@@ -1,6 +1,38 @@
 defmodule Jidoka.Agent.DslTest do
   use ExUnit.Case, async: false
 
+  defmodule FakeAshJidoTools do
+    @moduledoc false
+
+    def actions(resource) do
+      if Code.ensure_loaded?(resource) and
+           function_exported?(resource, :__jidoka_ash_jido_actions__, 0) do
+        resource.__jidoka_ash_jido_actions__()
+      else
+        []
+      end
+    end
+  end
+
+  defmodule FakeBrowserReadAction do
+    @moduledoc false
+
+    def run(params, _context), do: {:ok, %{content: "Read complete.", params: params}}
+  end
+
+  setup do
+    previous = Application.get_env(:jidoka, :ash_jido_tools)
+    Application.put_env(:jidoka, :ash_jido_tools, FakeAshJidoTools)
+
+    on_exit(fn ->
+      if is_nil(previous) do
+        Application.delete_env(:jidoka, :ash_jido_tools)
+      else
+        Application.put_env(:jidoka, :ash_jido_tools, previous)
+      end
+    end)
+  end
+
   test "rejects old keyword opts in favor of the Spark DSL" do
     suffix = System.unique_integer([:positive])
 
@@ -138,6 +170,285 @@ defmodule Jidoka.Agent.DslTest do
     end
 
     assert {:ok, "hello"} = agent_module.chat("Say hello", llm: llm)
+  end
+
+  test "compiles ash_resource, browser, and catalog tool sources into operation data" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "SourceDslAgent#{suffix}")
+
+    Code.compile_string("""
+    defmodule JidokaTest.SourceAshReadAction#{suffix} do
+      use Jidoka.Action,
+        name: "read",
+        description: "Generated AshJido read action.",
+        schema: Zoi.object(%{})
+
+      @impl true
+      def run(_params, _context), do: {:ok, %{ok: true}}
+    end
+
+    defmodule JidokaTest.SourceAshCreateAction#{suffix} do
+      use Jidoka.Action,
+        name: "create",
+        description: "Generated AshJido create action.",
+        schema: Zoi.object(%{})
+
+      @impl true
+      def run(_params, _context), do: {:ok, %{ok: true}}
+    end
+
+    defmodule JidokaTest.SourceAshResource#{suffix} do
+      def __jidoka_ash_jido_actions__ do
+        [
+          JidokaTest.SourceAshReadAction#{suffix},
+          JidokaTest.SourceAshCreateAction#{suffix}
+        ]
+      end
+    end
+
+    defmodule JidokaTest.SourceDslControl#{suffix} do
+      use Jidoka.Control, name: "source_control_#{suffix}"
+
+      @impl true
+      def call(_operation), do: :cont
+    end
+
+    defmodule JidokaTest.SourceDslAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :source_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+        instructions "Use declared tool sources when appropriate."
+      end
+
+      tools do
+        ash_resource JidokaTest.SourceAshResource#{suffix},
+          actions: [:read, :create]
+
+        browser :docs,
+          allow: ["https://docs.example.com"],
+          mode: :read_only
+
+        catalog :support_ops,
+          via: :connect,
+          providers: [:github],
+          max_results: 8
+      end
+
+      controls do
+        operation JidokaTest.SourceDslControl#{suffix}, when: [kind: :browser]
+        operation JidokaTest.SourceDslControl#{suffix}, when: [kind: :catalog]
+        operation JidokaTest.SourceDslControl#{suffix}, when: [kind: :ash_resource]
+      end
+    end
+    """)
+
+    operations = Map.new(agent_module.spec().operations, &{&1.name, &1})
+    ash_resource = "JidokaTest.SourceAshResource#{suffix}"
+
+    assert %Jidoka.Agent.Spec.Operation{
+             metadata: %{
+               "kind" => "ash_resource",
+               "source" => "ash_resource",
+               "resource" => ^ash_resource,
+               "action" => "read"
+             }
+           } = operations["read"]
+
+    assert %Jidoka.Agent.Spec.Operation{
+             metadata: %{
+               "kind" => "ash_resource",
+               "source" => "ash_resource",
+               "resource" => ^ash_resource,
+               "action" => "create"
+             }
+           } = operations["create"]
+
+    assert %Jidoka.Agent.Spec.Operation{
+             name: "read_page",
+             metadata: %{
+               "kind" => "browser",
+               "source" => "browser",
+               "browser" => "docs",
+               "mode" => "read_only",
+               "allow" => ["https://docs.example.com"]
+             }
+           } = operations["read_page"]
+
+    assert %Jidoka.Agent.Spec.Operation{metadata: %{"kind" => "browser"}} =
+             operations["search_web"]
+
+    assert %Jidoka.Agent.Spec.Operation{metadata: %{"kind" => "browser"}} =
+             operations["snapshot_url"]
+
+    assert %Jidoka.Agent.Spec.Operation{
+             metadata: %{
+               "kind" => "catalog",
+               "source" => "catalog",
+               "catalog" => "support_ops",
+               "via" => "connect",
+               "providers" => ["github"],
+               "max_results" => 8
+             }
+           } = operations["catalog_support_ops"]
+
+    assert Jidoka.Browser.Tools.ReadPage in agent_module.__jidoka_agent__().actions
+
+    assert [
+             %{
+               "source" => "ash_resource",
+               "actions" => ["read", "create"]
+             },
+             %{"source" => "browser", "name" => "docs"},
+             %{"source" => "catalog", "name" => "support_ops"}
+           ] = agent_module.spec().metadata["tool_sources"]
+  end
+
+  test "records unresolved ash_resource sources without publishing fake operations" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "UnresolvedAshDslAgent#{suffix}")
+
+    Code.compile_string("""
+    defmodule JidokaTest.UnresolvedAshResource#{suffix} do
+    end
+
+    defmodule JidokaTest.UnresolvedAshDslAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :unresolved_ash_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+      end
+
+      tools do
+        ash_resource JidokaTest.UnresolvedAshResource#{suffix}
+      end
+    end
+    """)
+
+    assert agent_module.spec().operations == []
+    ash_resource = "JidokaTest.UnresolvedAshResource#{suffix}"
+
+    assert [
+             %{
+               "source" => "ash_resource",
+               "resource" => ^ash_resource,
+               "actions" => [],
+               "expanded?" => false
+             }
+           ] = agent_module.spec().metadata["tool_sources"]
+  end
+
+  test "normalizes tool source defaults and filters" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "ToolSourceDefaultsAgent#{suffix}")
+
+    Code.compile_string("""
+    defmodule JidokaTest.ToolSourceDefaultsReadAction#{suffix} do
+      use Jidoka.Action,
+        name: "read",
+        description: "Generated AshJido read action.",
+        schema: Zoi.object(%{})
+
+      @impl true
+      def run(_params, _context), do: {:ok, %{ok: true}}
+    end
+
+    defmodule JidokaTest.ToolSourceDefaultsResource#{suffix} do
+      def __jidoka_ash_jido_actions__, do: [JidokaTest.ToolSourceDefaultsReadAction#{suffix}]
+    end
+
+    defmodule JidokaTest.ToolSourceDefaultsCatalog#{suffix} do
+    end
+
+    defmodule JidokaTest.ToolSourceDefaultsAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :tool_source_defaults_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+      end
+
+      tools do
+        ash_resource JidokaTest.ToolSourceDefaultsResource#{suffix}, actions: :read
+        browser :web
+
+        catalog :ops,
+          via: {:module, JidokaTest.ToolSourceDefaultsCatalog#{suffix}},
+          only: [:lookup],
+          except: :delete,
+          metadata: %{risk: "low"}
+      end
+    end
+    """)
+
+    operations = Map.new(agent_module.spec().operations, &{&1.name, &1})
+
+    assert %Jidoka.Agent.Spec.Operation{
+             name: "read",
+             metadata: %{"kind" => "ash_resource", "action" => "read"}
+           } = operations["read"]
+
+    assert %Jidoka.Agent.Spec.Operation{
+             metadata: %{"mode" => "read_only", "allow" => []}
+           } = operations["read_page"]
+
+    assert %Jidoka.Agent.Spec.Operation{metadata: metadata} = operations["catalog_ops"]
+
+    assert %{"kind" => "catalog", "only" => ["lookup"], "except" => ["delete"], "via" => via} =
+             metadata
+
+    assert metadata[:risk] == "low"
+    assert via == "{:module, JidokaTest.ToolSourceDefaultsCatalog#{suffix}}"
+  end
+
+  test "default runtime routes browser tool sources through the Jido action path" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "BrowserRuntimeMissingAgent#{suffix}")
+    previous_browser_actions = Application.get_env(:jidoka, :browser_actions)
+
+    Application.put_env(:jidoka, :browser_actions, %{
+      read_page: FakeBrowserReadAction
+    })
+
+    on_exit(fn ->
+      if is_nil(previous_browser_actions) do
+        Application.delete_env(:jidoka, :browser_actions)
+      else
+        Application.put_env(:jidoka, :browser_actions, previous_browser_actions)
+      end
+    end)
+
+    Code.compile_string("""
+    defmodule JidokaTest.BrowserRuntimeMissingAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :browser_runtime_missing_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+      end
+
+      tools do
+        browser :docs
+      end
+    end
+    """)
+
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+    llm = fn _intent, _journal ->
+      case Agent.get_and_update(counter, &{&1, &1 + 1}) do
+        0 ->
+          {:ok,
+           %{
+             type: :operation,
+             name: "read_page",
+             arguments: %{"url" => "https://example.com"}
+           }}
+
+        _calls ->
+          {:ok, %{type: :final, content: "Read complete."}}
+      end
+    end
+
+    assert {:ok, "Read complete."} = agent_module.chat("Read the docs", llm: llm)
   end
 
   test "compiles a structured result schema from the agent DSL" do
@@ -287,6 +598,53 @@ defmodule Jidoka.Agent.DslTest do
         tools do
           action JidokaTest.DuplicateDslAction#{suffix}
           action JidokaTest.DuplicateDslAction#{suffix}
+        end
+      end
+      """)
+    end
+  end
+
+  test "rejects duplicate operation names across tool sources" do
+    suffix = System.unique_integer([:positive])
+
+    assert_raise Spark.Error.DslError, ~r/tool "read_page" is defined more than once/, fn ->
+      Code.compile_string("""
+      defmodule JidokaTest.DuplicateSourceAction#{suffix} do
+        use Jidoka.Action,
+          name: "read_page",
+          description: "Duplicate source action.",
+          schema: Zoi.object(%{})
+
+        @impl true
+        def run(_params, _context), do: {:ok, %{ok: true}}
+      end
+
+      defmodule JidokaTest.DuplicateSourceAgent#{suffix} do
+        use Jidoka.Agent
+
+        agent :duplicate_source_agent_#{suffix}
+
+        tools do
+          action JidokaTest.DuplicateSourceAction#{suffix}
+          browser :docs
+        end
+      end
+      """)
+    end
+  end
+
+  test "rejects invalid tool source names" do
+    suffix = System.unique_integer([:positive])
+
+    assert_raise Spark.Error.DslError, ~r/browser name must be lower snake case/, fn ->
+      Code.compile_string("""
+      defmodule JidokaTest.InvalidBrowserNameAgent#{suffix} do
+        use Jidoka.Agent
+
+        agent :invalid_browser_name_agent_#{suffix}
+
+        tools do
+          browser "Docs"
         end
       end
       """)

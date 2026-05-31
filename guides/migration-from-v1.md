@@ -14,7 +14,7 @@ Use the V2 vocabulary consistently:
 | tool execution branch | operation effect |
 | output | result |
 | guardrail | control |
-| plugin | extension |
+| plugin DSL | no V2 DSL equivalent; use runtime/package code |
 | generated runtime module | data contract plus runtime capability |
 
 The core loop does not use `Jido.AI.ReAct`. Jidoka models a ReAct-style flow as
@@ -67,6 +67,10 @@ Build back complexity in this order:
 3. input/operation/output controls;
 4. structured result schema;
 5. session/replay/memory where the application needs durability.
+
+Do not migrate V1 `plugin`, `skill`, or `load_path` DSL entries directly.
+Jidoka V2 keeps extension-style behavior in normal Elixir code and runtime
+registration rather than adding author-facing DSL.
 
 ## Versioned Contracts
 

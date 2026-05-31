@@ -30,8 +30,12 @@ This is the V2 kernel. It currently supports:
 - Jido actions as model-callable tools;
 - operation source contracts that normalize non-action sources onto the same
   operation spine;
+- DSL and JSON/YAML import parity for `action`, `ash_resource`, `browser`, and
+  `catalog` tool sources;
 - `input`, `operation`, and `output` controls as data on `Agent.Spec.Controls`;
 - runtime execution for input, operation, and output controls;
+- operation controls that match by operation kind, name, source, idempotency,
+  and metadata;
 - human-in-the-loop operation interrupts through durable approval snapshots;
 - harness sessions with a swappable store behaviour and in-memory store;
 - session replay projections over snapshots, journals, and trace events;
@@ -53,6 +57,9 @@ This is the V2 kernel. It currently supports:
   `Jidoka.preflight/3`;
 - deterministic eval cases through `Jidoka.Eval.run_case/2`;
 - deterministic unit tests and an opt-in live ReqLLM integration test.
+
+Extensions are package/runtime code only. They are not exposed as DSL entities;
+the public DSL stays limited to `agent`, `tools`, and `controls`.
 
 ## Quick Start
 
@@ -243,7 +250,7 @@ mix test --include live test/jidoka/live_req_llm_test.exs
 
 ## API Stability
 
-This is the V2 milestone baseline. Stable application-facing concepts are:
+This is the `1.0.0-beta.1` V2 baseline. Stable application-facing concepts are:
 
 - `Jidoka.Agent.Spec` as immutable agent definition data;
 - `Jidoka.Turn.Plan`, `Jidoka.Turn.Request`, and `Jidoka.Turn.Result`;
@@ -255,8 +262,8 @@ Current versioned data boundaries are import document `version: 1`, snapshot
 `schema_version: 1`, serialized snapshot prefix `jidoka:snapshot:v1:`, and
 harness session `schema_version: 1`.
 
-Production store/runtime integrations, handoffs, workflow DSL, and native
-provider tool-calling are still future surfaces.
+Production store/runtime integrations, handoffs, workflow DSL, MCP sources, and
+native provider tool-calling are still future surfaces.
 
 ## Guides
 

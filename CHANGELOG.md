@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.0.0-beta.1
+
+This beta locks the minimal V2 DSL and closes import/control parity for the
+current package surface.
+
+Highlights:
+
+- The public DSL remains limited to `agent`, `tools`, and `controls`.
+- `instructions` stays string-only; extensions are runtime/package code, not DSL.
+- JSON/YAML imports now support `action`, `ash_resource`, `browser`, and
+  `catalog` tool sources through data-safe registries.
+- Operation controls can match by kind, name, source, idempotency, and metadata.
+- Hard Hex dependencies are used for the Jido ecosystem packages.
+
 ## 0.1.0-v2 Milestone
 
 This is the first Jidoka V2 package baseline under the public `Jidoka`

@@ -4,6 +4,8 @@ defmodule Jidoka.IntegrationSupport.AccountLookupAction do
   use Jidoka.Action,
     name: "account_lookup",
     description: "Looks up account details for multi-turn process-hosted tests.",
+    category: "support",
+    tags: ["account", "lookup"],
     schema:
       Zoi.object(%{
         account_id: Zoi.string()

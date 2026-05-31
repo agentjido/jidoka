@@ -88,6 +88,21 @@ controls do
 end
 ```
 
+Operation matches can be broad or narrow. Supported match keys are `kind`,
+`name`, `source`, `idempotency`, and top-level `metadata` values:
+
+```elixir
+controls do
+  operation MyApp.RequireRefundApproval,
+    when: [
+      kind: :tool,
+      source: :payments,
+      idempotency: :unsafe_once,
+      metadata: %{risk: "high"}
+    ]
+end
+```
+
 If an operation control interrupts, the turn hibernates:
 
 ```elixir

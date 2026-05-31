@@ -13,6 +13,8 @@ defmodule Jidoka.Import do
   alias Jidoka.Error
   alias Jidoka.Import.AgentDocument
   alias Jidoka.Import.Registry
+  alias Jidoka.Operation.Source
+  alias Jidoka.Operation.Source.Catalog, as: CatalogSource
   alias Jidoka.Runtime.JidoActions
   alias Jidoka.Schema
 
@@ -23,6 +25,8 @@ defmodule Jidoka.Import do
           | {:registries, registry()}
           | {:actions, registry()}
           | {:action_registry, registry()}
+          | {:ash_resources, registry()}
+          | {:ash_resource_registry, registry()}
           | {:controls, registry()}
           | {:control_registry, registry()}
           | {:context_schemas, registry()}
@@ -94,7 +98,7 @@ defmodule Jidoka.Import do
   defp spec_attrs(%AgentDocument{} = document, opts) do
     with {:ok, context_schema} <- resolve_context_schema(document.agent, opts),
          {:ok, result} <- resolve_result(document.agent, opts),
-         {:ok, action_operations} <- action_operations(document.tools, opts),
+         {:ok, tool_source_data} <- tool_source_data(document.tools, opts),
          {:ok, explicit_operations} <- explicit_operations(document.operations),
          {:ok, controls} <- controls(document.controls, opts) do
       agent = document.agent
@@ -108,11 +112,12 @@ defmodule Jidoka.Import do
          context_schema: context_schema,
          result: result,
          memory: Schema.get_key(agent, :memory),
-         operations: action_operations ++ explicit_operations,
+         operations: tool_source_data.operations ++ explicit_operations,
          controls: controls,
          runtime_defaults:
            Schema.get_key(agent, :runtime_defaults, document.runtime_defaults) || %{},
-         metadata: import_metadata(document, context_schema, result, opts)
+         metadata:
+           import_metadata(document, context_schema, result, tool_source_data.sources, opts)
        }}
     end
   end
@@ -194,10 +199,22 @@ defmodule Jidoka.Import do
     end
   end
 
+  defp tool_source_data(tools, opts) when is_map(tools) do
+    with {:ok, actions} <- action_operations(tools, opts),
+         {:ok, ash_resources, ash_sources} <- ash_resource_operations(tools, opts),
+         {:ok, browsers, browser_sources} <- browser_operations(tools),
+         {:ok, catalogs, catalog_sources} <- catalog_operations(tools) do
+      {:ok,
+       %{
+         operations: actions ++ ash_resources ++ browsers ++ catalogs,
+         sources: ash_sources ++ browser_sources ++ catalog_sources
+       }}
+    end
+  end
+
   defp action_operations(tools, opts) when is_map(tools) do
     tools
-    |> Schema.get_key(:actions, [])
-    |> List.wrap()
+    |> tool_entries(:actions, :action)
     |> Enum.reduce_while({:ok, []}, fn action_ref, {:ok, operations} ->
       with {:ok, action} <- resolve_action(action_ref, opts),
            {:ok, operation} <- operation_from_action(action) do
@@ -206,10 +223,65 @@ defmodule Jidoka.Import do
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
-    |> case do
-      {:ok, operations} -> {:ok, Enum.reverse(operations)}
-      {:error, reason} -> {:error, reason}
-    end
+    |> reverse_result()
+  end
+
+  defp ash_resource_operations(tools, opts) when is_map(tools) do
+    tools
+    |> tool_entries(:ash_resources, :ash_resource)
+    |> Enum.reduce_while({:ok, [], []}, fn resource_ref, {:ok, operations, sources} ->
+      with {:ok, resource_data} <- normalize_ash_resource_ref(resource_ref, opts),
+           {:ok, resource_operations, source_metadata} <-
+             ash_resource_operations_from_ref(resource_data) do
+        {:cont, {:ok, operations ++ resource_operations, sources ++ [source_metadata]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp browser_operations(tools) when is_map(tools) do
+    tools
+    |> tool_entries(:browsers, :browser)
+    |> Enum.reduce_while({:ok, [], []}, fn browser_ref, {:ok, operations, sources} ->
+      with {:ok, browser} <- normalize_browser_ref(browser_ref),
+           {:ok, browser_operations} <- browser_operations_from_ref(browser) do
+        source = %{
+          "source" => "browser",
+          "name" => browser.name,
+          "mode" => Atom.to_string(browser.mode),
+          "allow" => browser.allow
+        }
+
+        {:cont, {:ok, operations ++ browser_operations, sources ++ [source]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp catalog_operations(tools) when is_map(tools) do
+    tools
+    |> tool_entries(:catalogs, :catalog)
+    |> Enum.reduce_while({:ok, [], []}, fn catalog_ref, {:ok, acc_operations, sources} ->
+      with {:ok, catalog} <- normalize_catalog_ref(catalog_ref),
+           {:ok, catalog_operations} <- Source.operations(catalog) do
+        source = %{
+          "source" => "catalog",
+          "name" => catalog.name,
+          "via" => metadata_value(catalog.via),
+          "providers" => catalog.providers,
+          "only" => catalog.only,
+          "except" => catalog.except,
+          "max_results" => catalog.max_results
+        }
+
+        {:cont,
+         {:ok, acc_operations ++ catalog_operations, sources ++ [reject_nil_values(source)]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp resolve_action(%{} = action_ref, opts) do
@@ -245,6 +317,215 @@ defmodule Jidoka.Import do
   rescue
     exception -> {:error, {:invalid_action_module, action, exception}}
   end
+
+  defp ash_resource_operations_from_ref(%{} = resource_data) do
+    actions = ash_jido_actions(resource_data.resource, resource_data.actions)
+
+    operations =
+      actions
+      |> Enum.map(&JidoActions.operation_from_action!/1)
+      |> Enum.map(&tag_ash_operation(&1, resource_data))
+
+    source = %{
+      "source" => "ash_resource",
+      "resource" => inspect(resource_data.resource),
+      "actions" => resource_data.actions,
+      "expanded?" => actions != []
+    }
+
+    {:ok, operations, source}
+  rescue
+    exception -> {:error, {:invalid_ash_resource, resource_data, exception}}
+  end
+
+  defp browser_operations_from_ref(%{} = browser) do
+    operations =
+      browser.mode
+      |> Jidoka.Browser.tool_modules()
+      |> Enum.map(&JidoActions.operation_from_action!/1)
+      |> Enum.map(&tag_browser_operation(&1, browser))
+
+    {:ok, operations}
+  rescue
+    exception -> {:error, {:invalid_browser_source, browser, exception}}
+  end
+
+  defp tag_ash_operation(%Spec.Operation{} = operation, resource_data) do
+    %Spec.Operation{
+      operation
+      | description: resource_data.description || operation.description,
+        idempotency: resource_data.idempotency || operation.idempotency,
+        metadata:
+          operation.metadata
+          |> Map.merge(resource_data.metadata)
+          |> Map.merge(%{
+            "source" => "ash_resource",
+            "kind" => "ash_resource",
+            "resource" => inspect(resource_data.resource),
+            "action" => operation.name
+          })
+    }
+  end
+
+  defp tag_browser_operation(%Spec.Operation{} = operation, browser) do
+    %Spec.Operation{
+      operation
+      | description: browser.description || operation.description,
+        idempotency: browser.idempotency || operation.idempotency,
+        metadata:
+          operation.metadata
+          |> Map.merge(browser.metadata)
+          |> Map.merge(%{
+            "source" => "browser",
+            "kind" => "browser",
+            "browser" => browser.name,
+            "mode" => Atom.to_string(browser.mode),
+            "allow" => browser.allow
+          })
+    }
+  end
+
+  defp ash_jido_actions(resource, requested_actions) do
+    with module <- ash_jido_tools_module(),
+         {:module, module} <- Code.ensure_compiled(module),
+         actions when is_list(actions) <- apply(module, :actions, [resource]) do
+      maybe_filter_ash_jido_actions(actions, requested_actions)
+    else
+      _reason -> []
+    end
+  rescue
+    _exception -> []
+  end
+
+  defp ash_jido_tools_module do
+    Application.get_env(:jidoka, :ash_jido_tools, AshJido.Tools)
+  end
+
+  defp maybe_filter_ash_jido_actions(actions, requested_actions)
+       when requested_actions in [nil, []],
+       do: actions
+
+  defp maybe_filter_ash_jido_actions(actions, requested_actions) do
+    requested = MapSet.new(requested_actions)
+
+    Enum.filter(actions, fn action ->
+      action_tool_name(action) in requested or action_module_name(action) in requested
+    end)
+  end
+
+  defp action_tool_name(action) do
+    case action.to_tool() do
+      %{name: name} -> to_string(name)
+      _tool -> nil
+    end
+  rescue
+    _exception -> nil
+  end
+
+  defp action_module_name(action) do
+    action
+    |> Module.split()
+    |> List.last()
+    |> Macro.underscore()
+  end
+
+  defp normalize_ash_resource_ref(%{} = attrs, opts) do
+    attrs = stringify_keys(attrs)
+
+    with {:ok, resource} <-
+           resolve_ash_resource(
+             Schema.get_key(attrs, :resource) || Schema.get_key(attrs, :ref),
+             opts
+           ),
+         {:ok, actions} <-
+           normalize_name_list(Schema.get_key(attrs, :actions, []), :ash_resource_actions),
+         {:ok, idempotency} <-
+           normalize_idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
+         {:ok, metadata} <- normalize_metadata(Schema.get_key(attrs, :metadata, %{})) do
+      {:ok,
+       %{
+         resource: resource,
+         actions: actions,
+         description: Schema.get_key(attrs, :description),
+         idempotency: idempotency,
+         metadata: metadata
+       }}
+    end
+  end
+
+  defp normalize_ash_resource_ref(ref, opts) do
+    normalize_ash_resource_ref(%{"resource" => ref}, opts)
+  end
+
+  defp resolve_ash_resource(nil, _opts), do: {:error, :missing_ash_resource_ref}
+
+  defp resolve_ash_resource(resource, _opts) when is_atom(resource) and not is_nil(resource),
+    do: {:ok, resource}
+
+  defp resolve_ash_resource(ref, opts) when is_binary(ref),
+    do: Registry.fetch(:ash_resources, ref, opts)
+
+  defp resolve_ash_resource(other, _opts), do: {:error, {:invalid_ash_resource_ref, other}}
+
+  defp normalize_browser_ref(%{} = attrs) do
+    attrs = stringify_keys(attrs)
+
+    with {:ok, name} <-
+           normalize_name(Schema.get_key(attrs, :name) || Schema.get_key(attrs, :ref)),
+         {:ok, mode} <- Jidoka.Browser.normalize_mode(Schema.get_key(attrs, :mode, :read_only)),
+         {:ok, allow} <- normalize_string_list(Schema.get_key(attrs, :allow, []), :browser_allow),
+         {:ok, idempotency} <-
+           normalize_idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
+         {:ok, metadata} <- normalize_metadata(Schema.get_key(attrs, :metadata, %{})) do
+      {:ok,
+       %{
+         name: name,
+         mode: mode,
+         allow: allow,
+         description: Schema.get_key(attrs, :description),
+         idempotency: idempotency,
+         metadata: metadata
+       }}
+    end
+  end
+
+  defp normalize_browser_ref(name), do: normalize_browser_ref(%{"name" => name})
+
+  defp normalize_catalog_ref(%{} = attrs) do
+    attrs = stringify_keys(attrs)
+
+    CatalogSource.new(
+      name: Schema.get_key(attrs, :name) || Schema.get_key(attrs, :ref),
+      via: Schema.get_key(attrs, :via, :jido_discovery),
+      providers: Schema.get_key(attrs, :providers, []),
+      only: Schema.get_key(attrs, :only, []),
+      except: Schema.get_key(attrs, :except, []),
+      max_results: Schema.get_key(attrs, :max_results),
+      description: Schema.get_key(attrs, :description),
+      idempotency: Schema.get_key(attrs, :idempotency, :idempotent),
+      metadata: Schema.get_key(attrs, :metadata, %{})
+    )
+  end
+
+  defp normalize_catalog_ref(name), do: normalize_catalog_ref(%{"name" => name})
+
+  defp tool_entries(tools, plural_key, singular_key) do
+    tools
+    |> first_value([plural_key, singular_key])
+    |> List.wrap()
+  end
+
+  defp first_value(map, keys) do
+    Enum.find_value(keys, [], fn key ->
+      case Schema.fetch_key(map, key) do
+        {:ok, value} -> value
+        :error -> nil
+      end
+    end)
+  end
+
+  defp reverse_result({:ok, values}), do: {:ok, Enum.reverse(values)}
+  defp reverse_result({:error, reason}), do: {:error, reason}
 
   defp explicit_operations(operations) when is_list(operations) do
     operations
@@ -409,15 +690,111 @@ defmodule Jidoka.Import do
     end
   end
 
-  defp import_metadata(%AgentDocument{} = document, context_schema, result, opts) do
+  defp normalize_name(value) when is_atom(value) and not is_nil(value) do
+    value
+    |> Atom.to_string()
+    |> normalize_name()
+  end
+
+  defp normalize_name(value) when is_binary(value) do
+    value = String.trim(value)
+
+    if Regex.match?(~r/^[a-z][a-z0-9_]*$/, value) do
+      {:ok, value}
+    else
+      {:error, {:invalid_lower_snake_name, value}}
+    end
+  end
+
+  defp normalize_name(value), do: {:error, {:invalid_name, value}}
+
+  defp normalize_name_list(nil, _field), do: {:ok, []}
+
+  defp normalize_name_list(values, field) when is_list(values) do
+    normalize_list(values, &normalize_name/1, field)
+  end
+
+  defp normalize_name_list(value, field), do: normalize_name_list([value], field)
+
+  defp normalize_string_list(nil, _field), do: {:ok, []}
+
+  defp normalize_string_list(values, field) when is_list(values) do
+    normalize_list(values, &normalize_string/1, field)
+  end
+
+  defp normalize_string_list(value, field), do: normalize_string_list([value], field)
+
+  defp normalize_string(value) when is_atom(value) and not is_nil(value),
+    do: {:ok, Atom.to_string(value)}
+
+  defp normalize_string(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> {:error, {:invalid_empty_string, value}}
+      value -> {:ok, value}
+    end
+  end
+
+  defp normalize_string(value), do: {:error, {:invalid_string, value}}
+
+  defp normalize_list(values, fun, field) do
+    values
+    |> Enum.reduce_while({:ok, []}, fn value, {:ok, values} ->
+      case fun.(value) do
+        {:ok, value} -> {:cont, {:ok, values ++ [value]}}
+        {:error, reason} -> {:halt, {:error, {field, reason}}}
+      end
+    end)
+  end
+
+  defp normalize_idempotency(value) when is_atom(value) do
+    if value in Spec.Operation.valid_idempotencies() do
+      {:ok, value}
+    else
+      {:error, {:invalid_idempotency, value}}
+    end
+  end
+
+  defp normalize_idempotency(value) when is_binary(value) do
+    normalized = value |> String.trim() |> String.downcase()
+
+    Spec.Operation.valid_idempotencies()
+    |> Enum.find(&(Atom.to_string(&1) == normalized))
+    |> case do
+      nil -> {:error, {:invalid_idempotency, value}}
+      idempotency -> {:ok, idempotency}
+    end
+  end
+
+  defp normalize_idempotency(value), do: {:error, {:invalid_idempotency, value}}
+
+  defp normalize_metadata(metadata) when is_map(metadata), do: {:ok, metadata}
+  defp normalize_metadata(metadata), do: {:error, {:invalid_metadata, metadata}}
+
+  defp metadata_value(value) when is_atom(value) and not is_nil(value), do: Atom.to_string(value)
+  defp metadata_value(value) when is_tuple(value), do: inspect(value)
+  defp metadata_value(value), do: value
+
+  defp reject_nil_values(map) do
+    map
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
+  end
+
+  defp import_metadata(%AgentDocument{} = document, context_schema, result, tool_sources, opts) do
     document.metadata
     |> stringify_keys()
     |> Map.put("source", "import")
     |> Map.put("import_version", document.version)
     |> Map.put("context_schema?", not is_nil(context_schema))
     |> Map.put("result_schema?", not is_nil(result))
+    |> maybe_put_tool_sources(tool_sources)
     |> maybe_put_source(Keyword.get(opts, :source))
   end
+
+  defp maybe_put_tool_sources(metadata, []), do: metadata
+
+  defp maybe_put_tool_sources(metadata, tool_sources),
+    do: Map.put(metadata, "tool_sources", tool_sources)
 
   defp maybe_put_source(metadata, nil), do: metadata
   defp maybe_put_source(metadata, source), do: Map.put(metadata, "source_ref", source)

@@ -21,6 +21,13 @@ defmodule Jidoka.Import.Registry do
       %{}
   end
 
+  defp registry(:ash_resources, opts) do
+    Keyword.get(opts, :ash_resources) ||
+      Keyword.get(opts, :ash_resource_registry) ||
+      nested_registry(opts, :ash_resources) ||
+      %{}
+  end
+
   defp registry(:controls, opts) do
     Keyword.get(opts, :controls) ||
       Keyword.get(opts, :control_registry) ||

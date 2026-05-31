@@ -107,7 +107,7 @@ search during this review, but `git ls-remote` and a shallow clone succeeded.
 
 Jidoka's public concepts are right:
 
-- `agent` describes identity, model, instructions, character, context, and
+- `agent` describes identity, model, string instructions, context, and
   structured result.
 - `tools` describes model-callable operations and integrations.
 - `controls` describes input, operation, and output policy.
@@ -258,8 +258,8 @@ V2 should make the boundary mechanical:
 - **tools** is authoring vocabulary. Developers write `tools do ... end`
   because that is familiar and ergonomic.
 - **operations** is the canonical internal and runtime vocabulary. Every
-  action, MCP tool, web tool, subagent, workflow, handoff, Ash operation, and
-  plugin-provided callable normalizes to `AgentSpec.Operation`.
+  action, MCP tool, browser tool, subagent, workflow, handoff, Ash operation,
+  and runtime/package-provided callable normalizes to `AgentSpec.Operation`.
 - **capabilities** are contributors that add operations, prompt sections,
   controls, phases, runtime requirements, or diagnostics. They are not what
   the model calls.
@@ -483,11 +483,10 @@ Each nested struct owns a Zoi schema and a constructor:
 ```elixir
 defmodule Jidoka.AgentSpec.Prompt do
   @enforce_keys [:instructions]
-  defstruct [:instructions, :character, sections: [], metadata: %{}]
+  defstruct [:instructions, sections: [], metadata: %{}]
 
   @schema Zoi.object(%{
-    instructions: Zoi.any(),
-    character: Zoi.any() |> Zoi.optional(),
+    instructions: Zoi.string(),
     sections: Zoi.list(Zoi.map()) |> Zoi.default([]),
     metadata: Zoi.map() |> Zoi.default(%{})
   })
@@ -599,9 +598,9 @@ Operation kinds should be open internally but normalized:
 
 - `:action`;
 - `:mcp_tool`;
-- `:web`;
-- `:plugin_action`;
-- `:ash_action`;
+- `:browser`;
+- `:catalog`;
+- `:ash_resource`;
 - `:subagent`;
 - `:workflow`;
 - `:handoff`.
@@ -1413,7 +1412,7 @@ The spec builder merges patches deterministically and checks invariants once:
 
 Implement capabilities in this order:
 
-1. `CoreAgent` - id, description, model, instructions, character.
+1. `CoreAgent` - id, description, model, string instructions.
 2. `Context` - runtime context schema/defaults.
 3. `Result` - structured final result and repair policy.
 4. `ActionOperation` - direct deterministic operation.
@@ -2194,10 +2193,10 @@ instead of adding separate runtime branches.
 
 Suggested order:
 
-1. web;
+1. browser;
 2. MCP;
-3. plugins;
-4. Ash resources;
+3. Ash resources;
+4. catalogs;
 5. subagents;
 6. workflows;
 7. handoffs;
