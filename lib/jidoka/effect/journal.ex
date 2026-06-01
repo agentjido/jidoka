@@ -7,10 +7,8 @@ defmodule Jidoka.Effect.Journal do
   @schema Zoi.struct(
             __MODULE__,
             %{
-              intents:
-                Zoi.map(Zoi.string(), Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default(%{}),
-              results:
-                Zoi.map(Zoi.string(), Zoi.lazy({Effect.Result, :schema, []})) |> Zoi.default(%{})
+              intents: Zoi.map(Zoi.string(), Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default(%{}),
+              results: Zoi.map(Zoi.string(), Zoi.lazy({Effect.Result, :schema, []})) |> Zoi.default(%{})
             },
             coerce: true
           )

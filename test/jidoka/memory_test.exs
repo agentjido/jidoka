@@ -131,8 +131,7 @@ defmodule Jidoka.MemoryTest do
     :ok = Jido.Memory.Store.ETS.ensure_ready(table: table)
 
     store =
-      {JidoMemory,
-       namespace: "jidoka:test", provider_opts: [store: {Jido.Memory.Store.ETS, [table: table]}]}
+      {JidoMemory, namespace: "jidoka:test", provider_opts: [store: {Jido.Memory.Store.ETS, [table: table]}]}
 
     entry =
       Memory.Entry.new!(

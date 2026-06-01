@@ -15,9 +15,7 @@ defmodule Jidoka.ControlsIntegrationTest do
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
-  @live_enabled? not is_nil(
-                   System.get_env("OPENAI_API_KEY") || System.get_env("ANTHROPIC_API_KEY")
-                 )
+  @live_enabled? not is_nil(System.get_env("OPENAI_API_KEY") || System.get_env("ANTHROPIC_API_KEY"))
 
   test "operation controls compile into spec data and run before operation capabilities" do
     spec = ControlledLookupAgent.spec()
@@ -72,11 +70,9 @@ defmodule Jidoka.ControlsIntegrationTest do
                operation_context: %{test_pid: self()}
              )
 
-    assert_receive {:operation_control_called, "require_approval", "controlled_lookup",
-                    %{"id" => "ctrl_123"}}
+    assert_receive {:operation_control_called, "require_approval", "controlled_lookup", %{"id" => "ctrl_123"}}
 
-    assert_receive {:operation_control_called, "audit_control", "controlled_lookup",
-                    %{"id" => "ctrl_123"}}
+    assert_receive {:operation_control_called, "audit_control", "controlled_lookup", %{"id" => "ctrl_123"}}
 
     assert result.content == "Controlled lookup ctrl_123 is controlled-value."
     assert_receive {:controlled_lookup_called, "ctrl_123"}
@@ -651,8 +647,7 @@ defmodule Jidoka.ControlsIntegrationTest do
 
       assert_received {:input_control_called, "Look up ctrl_live with controlled_lookup."}
 
-      assert_received {:operation_control_called, "require_approval", "controlled_lookup",
-                       %{"id" => "ctrl_live"}}
+      assert_received {:operation_control_called, "require_approval", "controlled_lookup", %{"id" => "ctrl_live"}}
 
       assert_received {:controlled_lookup_called, "ctrl_live"}
 

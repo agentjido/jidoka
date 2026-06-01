@@ -158,8 +158,8 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
     assert length(second_result.agent_state.messages) == 4
 
-    assert_received {:operation_called, "refund_order",
-                     %{"order_id" => "order_123", "reason" => "customer_request"}, :unsafe_once}
+    assert_received {:operation_called, "refund_order", %{"order_id" => "order_123", "reason" => "customer_request"},
+                     :unsafe_once}
   end
 
   test "durable hibernate/resume can drive a multi-effect turn through portable snapshots" do

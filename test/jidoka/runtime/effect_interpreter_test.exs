@@ -116,9 +116,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
   test "incomplete unsafe operation intents are not retried automatically" do
     intent =
-      Effect.Intent.new(:operation, %{name: "refund", arguments: %{order_id: "ord_1"}},
-        idempotency: :unsafe_once
-      )
+      Effect.Intent.new(:operation, %{name: "refund", arguments: %{order_id: "ord_1"}}, idempotency: :unsafe_once)
 
     journal =
       Effect.Journal.new!()

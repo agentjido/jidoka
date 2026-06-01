@@ -194,8 +194,7 @@ defmodule Jidoka.AgentView do
   def after_turn(%__MODULE__{} = view, {:ok, %Turn.Result{} = result}) do
     %{
       view
-      | visible_messages:
-          commit_pending(view.visible_messages) ++ [assistant_message(result.content)],
+      | visible_messages: commit_pending(view.visible_messages) ++ [assistant_message(result.content)],
         streaming_message: nil,
         events: append_operation_events(view.events, result),
         status: :idle,

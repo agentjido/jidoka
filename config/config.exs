@@ -19,3 +19,5 @@ config :spark, :formatter,
     type: Jidoka.Agent.SparkDsl,
     section_order: [:jidoka, :tools, :controls]
   ]
+
+import_config "#{config_env()}.exs"

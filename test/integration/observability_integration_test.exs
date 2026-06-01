@@ -38,9 +38,7 @@ defmodule Jidoka.ObservabilityIntegrationTest do
     {:ok, sink} = InMemory.start_link()
 
     assert :ok =
-             Trace.record(result.events, {InMemory, pid: sink},
-               policy: Policy.new!(redact_keys: [], omit_keys: [])
-             )
+             Trace.record(result.events, {InMemory, pid: sink}, policy: Policy.new!(redact_keys: [], omit_keys: []))
 
     assert Enum.any?(InMemory.list(sink), &(&1.event == :turn_finished))
 

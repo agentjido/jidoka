@@ -97,9 +97,7 @@ defmodule Jidoka.MemoryIntegrationTest do
       )
 
     assert {:ok, %Memory.WriteResult{}} =
-             Harness.write_memory(spec, "Ada prefers context-only memory.",
-               memory_store: memory_store
-             )
+             Harness.write_memory(spec, "Ada prefers context-only memory.", memory_store: memory_store)
 
     llm = fn %Effect.Intent{payload: payload}, _journal ->
       prompt = Jidoka.Schema.get_key(payload, :prompt)

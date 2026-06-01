@@ -416,9 +416,7 @@ defmodule Jidoka.StabilizationContractTest do
             }} = Jidoka.Workflow.definition(Support.WorkflowOk)
 
     assert {:ok, %{input: %{value: "A"}, context: %{tenant: "northwind"}}} =
-             Jidoka.Workflow.run(Support.WorkflowOk, [value: "A"],
-               context: %{tenant: "northwind"}
-             )
+             Jidoka.Workflow.run(Support.WorkflowOk, [value: "A"], context: %{tenant: "northwind"})
 
     assert {:ok, %{accepted: %{value: "B"}}} =
              Jidoka.Workflow.run(Support.WorkflowValue, %{value: "B"})

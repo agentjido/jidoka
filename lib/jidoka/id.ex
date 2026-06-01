@@ -10,6 +10,7 @@ defmodule Jidoka.Id do
   @type prefix :: String.t()
   @type generator :: (prefix() -> String.t())
 
+  @doc "Generates an ID for a prefix using either the default generator or a caller-supplied generator."
   @spec generate(prefix(), generator() | nil) :: {:ok, String.t()} | {:error, term()}
   def generate(prefix, generator \\ nil)
 
@@ -25,6 +26,7 @@ defmodule Jidoka.Id do
 
   def generate(prefix, generator), do: {:error, {:invalid_id_generator, prefix, generator}}
 
+  @doc "Generates an ID or raises when the generator returns an invalid value."
   @spec generate!(prefix(), generator() | nil) :: String.t()
   def generate!(prefix, generator \\ nil) do
     case generate(prefix, generator) do
@@ -33,6 +35,7 @@ defmodule Jidoka.Id do
     end
   end
 
+  @doc "Generates a random URL-safe identifier with the supplied prefix."
   @spec random(prefix()) :: String.t()
   def random(prefix) when is_binary(prefix) do
     prefix <> "_" <> Base.url_encode64(:crypto.strong_rand_bytes(8), padding: false)

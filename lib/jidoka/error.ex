@@ -104,16 +104,19 @@ defmodule Jidoka.Error do
   @type category :: :validation | :configuration | :execution | :internal | :unknown
   @type context :: keyword() | map()
 
+  @doc "Builds a Splode-backed validation error."
   @spec validation_error(String.t(), keyword() | map()) :: Exception.t()
   def validation_error(message, details \\ %{}) do
     ValidationError.exception(error_opts(details, message))
   end
 
+  @doc "Builds a Splode-backed configuration error."
   @spec config_error(String.t(), keyword() | map()) :: Exception.t()
   def config_error(message, details \\ %{}) do
     ConfigError.exception(error_opts(details, message))
   end
 
+  @doc "Builds a Splode-backed execution error."
   @spec execution_error(String.t(), keyword() | map()) :: Exception.t()
   def execution_error(message, details \\ %{}) do
     ExecutionError.exception(error_opts(details, message))
@@ -215,8 +218,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("Maximum model turns exceeded.",
        phase: :turn,
-       details:
-         details(context, %{reason: :max_model_turns_exceeded, max_model_turns: max, cause: max})
+       details: details(context, %{reason: :max_model_turns_exceeded, max_model_turns: max, cause: max})
      )}
   end
 
@@ -240,8 +242,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("Turn state is missing a pending effect.",
        phase: :effect,
-       details:
-         details(context, %{reason: :missing_pending_effect, cause: :missing_pending_effect})
+       details: details(context, %{reason: :missing_pending_effect, cause: :missing_pending_effect})
      )}
   end
 
@@ -257,8 +258,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("Unsupported effect kind #{inspect(kind)}.",
        phase: :effect,
-       details:
-         details(context, %{reason: :unsupported_effect_kind, effect_kind: kind, cause: reason})
+       details: details(context, %{reason: :unsupported_effect_kind, effect_kind: kind, cause: reason})
      )}
   end
 
@@ -468,8 +468,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("LLM effect is missing a prompt payload.",
        phase: :llm,
-       details:
-         details(context, %{reason: :missing_prompt_payload, payload: payload, cause: reason})
+       details: details(context, %{reason: :missing_prompt_payload, payload: payload, cause: reason})
      )}
   end
 
@@ -477,8 +476,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("LLM effect prompt payload is invalid.",
        phase: :llm,
-       details:
-         details(context, %{reason: :invalid_prompt_payload, payload: payload, cause: reason})
+       details: details(context, %{reason: :invalid_prompt_payload, payload: payload, cause: reason})
      )}
   end
 
@@ -499,8 +497,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("LLM final response content must be a string.",
        phase: :llm_decision,
-       details:
-         details(context, %{reason: :invalid_final_content, content: content, cause: reason})
+       details: details(context, %{reason: :invalid_final_content, content: content, cause: reason})
      )}
   end
 
@@ -508,8 +505,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("LLM operation name must be a string.",
        phase: :llm_decision,
-       details:
-         details(context, %{reason: :invalid_operation_name, operation_name: name, cause: reason})
+       details: details(context, %{reason: :invalid_operation_name, operation_name: name, cause: reason})
      )}
   end
 
@@ -532,8 +528,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("LLM requested an operation that is not defined for this agent.",
        phase: :operation,
-       details:
-         details(context, %{reason: :unknown_operation, operation_name: name, cause: reason})
+       details: details(context, %{reason: :unknown_operation, operation_name: name, cause: reason})
      )}
   end
 
@@ -590,8 +585,7 @@ defmodule Jidoka.Error do
     {:ok,
      execution_error("Jido action tool is not available.",
        phase: :operation,
-       details:
-         details(context, %{reason: :missing_jido_action, operation_name: name, cause: reason})
+       details: details(context, %{reason: :missing_jido_action, operation_name: name, cause: reason})
      )}
   end
 
@@ -641,6 +635,7 @@ defmodule Jidoka.Error do
     )
   end
 
+  @doc "Returns the Jidoka error category for a normalized exception or aggregate error."
   @spec category(term()) :: category()
   def category(%ValidationError{}), do: :validation
   def category(%Invalid{}), do: :validation
@@ -668,9 +663,11 @@ defmodule Jidoka.Error do
 
   def category(_error), do: :unknown
 
+  @doc "Returns whether an error term is already a Jidoka/Splode error."
   @spec normalized?(term()) :: boolean()
   def normalized?(error), do: category(error) != :unknown
 
+  @doc "Converts a Jidoka/Splode error into a serializable map."
   @spec to_map(term()) :: map()
   def to_map(%ValidationError{} = error) do
     error
@@ -713,6 +710,7 @@ defmodule Jidoka.Error do
 
   def to_map(error), do: fallback_error_map(error)
 
+  @doc "Formats a Jidoka/Splode error into a short human-readable message."
   @spec format(term()) :: String.t()
   def format(%struct{errors: errors} = error) when is_list(errors) do
     if function_exported?(struct, :error_class?, 0) and struct.error_class?() do

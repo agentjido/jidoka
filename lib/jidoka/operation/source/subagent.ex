@@ -164,8 +164,7 @@ defmodule Jidoka.Operation.Source.Subagent do
       agent: inspect(source.agent),
       content: result.content,
       value: result.value,
-      operation_results:
-        Enum.map(result.agent_state.operation_results, &project_operation_result/1)
+      operation_results: Enum.map(result.agent_state.operation_results, &project_operation_result/1)
     }
   end
 

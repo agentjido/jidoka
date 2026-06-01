@@ -33,9 +33,11 @@ defmodule Jidoka.Handoff do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a handoff request."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a validated handoff, generating an ID when one is not supplied."
   @spec new(keyword() | map(), keyword()) :: {:ok, t()} | {:error, term()}
   def new(attrs, opts \\ []) do
     attrs = Schema.normalize_attrs(attrs)
@@ -45,6 +47,7 @@ defmodule Jidoka.Handoff do
     end
   end
 
+  @doc "Builds a handoff or raises when validation fails."
   @spec new!(keyword() | map(), keyword()) :: t()
   def new!(attrs, opts \\ []) do
     case new(attrs, opts) do
@@ -53,6 +56,7 @@ defmodule Jidoka.Handoff do
     end
   end
 
+  @doc "Normalizes an existing handoff, keyword list, or map into a handoff struct."
   @spec from_input(t() | keyword() | map(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_input(input, opts \\ [])
   def from_input(%__MODULE__{} = handoff, opts), do: new(handoff, opts)

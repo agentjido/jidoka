@@ -27,8 +27,7 @@ defmodule Jidoka.Review.Interrupt do
               effect_id: Schema.non_empty_string(),
               effect_kind: Schema.atom_enum(@effect_kinds),
               operation: Schema.non_empty_string(),
-              operation_kind:
-                Schema.atom_enum(OperationControl.valid_kinds()) |> Zoi.default(:operation),
+              operation_kind: Schema.atom_enum(OperationControl.valid_kinds()) |> Zoi.default(:operation),
               arguments: Zoi.map() |> Zoi.default(%{}),
               idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.nullish(),
               idempotency_key: Zoi.string() |> Zoi.nullish(),

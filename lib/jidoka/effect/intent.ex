@@ -13,8 +13,7 @@ defmodule Jidoka.Effect.Intent do
               kind: Schema.atom_enum([:llm, :operation]),
               payload: Zoi.map(),
               idempotency_key: Schema.non_empty_string(),
-              idempotency:
-                Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
+              idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true

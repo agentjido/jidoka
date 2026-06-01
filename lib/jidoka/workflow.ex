@@ -24,6 +24,7 @@ defmodule Jidoka.Workflow do
           optional(:parameters_schema) => map() | nil
         }
 
+  @doc "Defines a deterministic workflow module for agent tool exposure."
   defmacro __using__(opts \\ []) do
     quote location: :keep do
       @behaviour Jidoka.Workflow
@@ -32,6 +33,7 @@ defmodule Jidoka.Workflow do
     end
   end
 
+  @doc false
   defmacro __before_compile__(_env) do
     quote location: :keep do
       @impl Jidoka.Workflow
@@ -61,6 +63,7 @@ defmodule Jidoka.Workflow do
     end
   end
 
+  @doc "Returns the normalized operation definition for a workflow module."
   @spec definition(module()) :: {:ok, definition()} | {:error, term()}
   def definition(workflow_module) when is_atom(workflow_module) do
     with {:module, _module} <- Code.ensure_compiled(workflow_module),
@@ -84,6 +87,7 @@ defmodule Jidoka.Workflow do
 
   def definition(workflow_module), do: {:error, {:invalid_workflow_module, workflow_module}}
 
+  @doc "Returns a workflow definition or raises when the workflow module is invalid."
   @spec definition!(module()) :: definition()
   def definition!(workflow_module) do
     case definition(workflow_module) do
@@ -92,6 +96,7 @@ defmodule Jidoka.Workflow do
     end
   end
 
+  @doc "Runs a workflow with normalized map input and optional context."
   @spec run(module(), map() | keyword(), keyword()) :: {:ok, term()} | {:error, term()}
   def run(workflow_module, input, opts \\ []) when is_atom(workflow_module) and is_list(opts) do
     with {:ok, definition} <- definition(workflow_module),

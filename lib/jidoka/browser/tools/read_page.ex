@@ -5,8 +5,7 @@ defmodule Jidoka.Browser.Tools.ReadPage do
 
   use Jidoka.Action,
     name: "read_page",
-    description:
-      "Read a public HTTP(S) page as markdown, text, or HTML. Local and private network URLs are blocked.",
+    description: "Read a public HTTP(S) page as markdown, text, or HTML. Local and private network URLs are blocked.",
     schema:
       Zoi.object(%{
         url: Zoi.string() |> Zoi.min(1),

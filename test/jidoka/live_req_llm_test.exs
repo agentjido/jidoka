@@ -4,9 +4,7 @@ defmodule Jidoka.LiveReqLLMTest do
   @moduletag :live
   @moduletag timeout: 120_000
 
-  @live_enabled? not is_nil(
-                   System.get_env("OPENAI_API_KEY") || System.get_env("ANTHROPIC_API_KEY")
-                 )
+  @live_enabled? not is_nil(System.get_env("OPENAI_API_KEY") || System.get_env("ANTHROPIC_API_KEY"))
 
   if @live_enabled? do
     alias Jidoka.Effect
@@ -15,8 +13,7 @@ defmodule Jidoka.LiveReqLLMTest do
     defmodule LocalTime do
       use Jidoka.Action,
         name: "local_time",
-        description:
-          "Returns the local time for a city plus a canary that must appear in the final answer.",
+        description: "Returns the local time for a city plus a canary that must appear in the final answer.",
         schema:
           Zoi.object(%{
             city: Zoi.string() |> Zoi.default("Chicago")

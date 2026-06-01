@@ -60,8 +60,6 @@ defmodule Jidoka.Effect.OperationResult do
 
   @spec to_message(t()) :: Agent.Message.t()
   def to_message(%__MODULE__{} = result) do
-    Agent.Message.tool(result.operation, result.output,
-      content: result.content || inspect(result.output)
-    )
+    Agent.Message.tool(result.operation, result.output, content: result.content || inspect(result.output))
   end
 end

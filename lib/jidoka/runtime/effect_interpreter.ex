@@ -27,14 +27,12 @@ defmodule Jidoka.Runtime.EffectInterpreter do
         interpret_intent(state, intent, capabilities, opts)
 
       nil ->
-        {:error,
-         Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
+        {:error, Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
     end
   end
 
   def interpret_pending(_state, _capabilities, _opts) do
-    {:error,
-     Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
+    {:error, Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
   end
 
   defp interpret_intent(

@@ -16,7 +16,10 @@ defmodule Jidoka.Control do
           | {:interrupt, term()}
           | {:error, term()}
 
+  @doc "Returns the stable control name used in specs, traces, and inspection output."
   @callback name() :: name()
+
+  @doc "Evaluates a control context and returns whether execution may continue."
   @callback call(term()) :: decision()
 
   @doc """

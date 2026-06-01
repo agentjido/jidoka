@@ -385,9 +385,7 @@ defmodule Jidoka.DataStructsTest do
     state = base_state()
 
     assert {:ok, %AgentSnapshot{snapshot_id: "snap_explicit"}} =
-             AgentSnapshot.from_turn_state(state, Turn.Cursor.after_prompt(),
-               snapshot_id: "snap_explicit"
-             )
+             AgentSnapshot.from_turn_state(state, Turn.Cursor.after_prompt(), snapshot_id: "snap_explicit")
 
     assert {:ok, %AgentSnapshot{snapshot_id: "snap_injected"}} =
              AgentSnapshot.from_turn_state(state, Turn.Cursor.after_prompt(),

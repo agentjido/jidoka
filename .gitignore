@@ -10,6 +10,18 @@
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/
 
+# Dialyzer PLT files.
+*.plt
+*.plt.hash
+
+# Editor and IDE state.
+.elixir_ls/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
 # Temporary files, for example, from tests.
 /tmp/
 

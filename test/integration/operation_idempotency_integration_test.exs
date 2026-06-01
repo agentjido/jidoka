@@ -113,8 +113,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
     assert [%Effect.OperationResult{operation: "refund_order"}] =
              result.agent_state.operation_results
 
-    assert_receive {:operation_control_called, "require_approval", "refund_order",
-                    %{"order_id" => "order_123"}}
+    assert_receive {:operation_control_called, "require_approval", "refund_order", %{"order_id" => "order_123"}}
 
     assert_receive {:refund_called, %{"order_id" => "order_123"}, :unsafe_once}
   end
@@ -178,9 +177,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
     journal =
       operation_snapshot.turn_state.journal
       |> Effect.Journal.put_intent(pending_effect)
-      |> Effect.Journal.put_result(
-        Effect.Result.ok(pending_effect, %{"city" => "Paris", "condition" => "sunny"})
-      )
+      |> Effect.Journal.put_result(Effect.Result.ok(pending_effect, %{"city" => "Paris", "condition" => "sunny"}))
 
     %Turn.State{} = operation_state = operation_snapshot.turn_state
 

@@ -12,6 +12,7 @@ defmodule Jidoka.Skill do
 
   @type ref :: module() | String.t()
 
+  @doc "Validates a skill reference from the DSL or imported agent spec."
   @spec validate_ref(ref()) :: :ok | {:error, String.t()}
   def validate_ref(module) when is_atom(module), do: validate_module(module)
 
@@ -23,8 +24,7 @@ defmodule Jidoka.Skill do
         {:error, "skill names must not be empty"}
 
       not Regex.match?(~r/^[a-z0-9]+(-[a-z0-9]+)*$/, name) ->
-        {:error,
-         "invalid skill name #{inspect(name)}; expected lowercase words separated by hyphens"}
+        {:error, "invalid skill name #{inspect(name)}; expected lowercase words separated by hyphens"}
 
       true ->
         :ok
@@ -34,6 +34,7 @@ defmodule Jidoka.Skill do
   def validate_ref(other),
     do: {:error, "skill entries must be modules or skill-name strings, got: #{inspect(other)}"}
 
+  @doc "Validates a skill load path before it is expanded relative to an agent source file."
   @spec validate_load_path(term()) :: :ok | {:error, String.t()}
   def validate_load_path(path) when is_binary(path) do
     if String.trim(path) == "" do
@@ -46,6 +47,7 @@ defmodule Jidoka.Skill do
   def validate_load_path(other),
     do: {:error, "skill load paths must be strings, got: #{inspect(other)}"}
 
+  @doc "Returns action modules contributed by a list of skill references."
   @spec action_modules([ref()], keyword()) :: [module()]
   def action_modules(refs, opts \\ []) when is_list(refs) and is_list(opts) do
     refs
@@ -63,6 +65,7 @@ defmodule Jidoka.Skill do
     |> Enum.uniq()
   end
 
+  @doc "Renders prompt text contributed by a list of skill references."
   @spec prompt([ref()], keyword()) :: {:ok, String.t() | nil} | {:error, term()}
   def prompt(refs, opts \\ []) when is_list(refs) and is_list(opts) do
     with {:ok, refs} <- load_and_resolve(refs, opts) do
@@ -75,6 +78,7 @@ defmodule Jidoka.Skill do
     end
   end
 
+  @doc "Returns serializable metadata for resolved skill references."
   @spec metadata([ref()], keyword()) :: {:ok, [map()]} | {:error, term()}
   def metadata(refs, opts \\ []) when is_list(refs) and is_list(opts) do
     with {:ok, refs} <- load_and_resolve(refs, opts) do
@@ -94,6 +98,7 @@ defmodule Jidoka.Skill do
     end
   end
 
+  @doc "Expands skill load paths relative to a base directory."
   @spec normalize_load_paths([String.t()], String.t()) :: [String.t()]
   def normalize_load_paths(paths, base_dir) when is_list(paths) and is_binary(base_dir) do
     paths

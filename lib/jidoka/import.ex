@@ -114,10 +114,8 @@ defmodule Jidoka.Import do
          memory: Schema.get_key(agent, :memory),
          operations: tool_source_data.operations ++ explicit_operations,
          controls: controls,
-         runtime_defaults:
-           Schema.get_key(agent, :runtime_defaults, document.runtime_defaults) || %{},
-         metadata:
-           import_metadata(document, context_schema, result, tool_source_data.sources, opts)
+         runtime_defaults: Schema.get_key(agent, :runtime_defaults, document.runtime_defaults) || %{},
+         metadata: import_metadata(document, context_schema, result, tool_source_data.sources, opts)
        }}
     end
   end
@@ -276,8 +274,7 @@ defmodule Jidoka.Import do
           "max_results" => catalog.max_results
         }
 
-        {:cont,
-         {:ok, acc_operations ++ catalog_operations, sources ++ [reject_nil_values(source)]}}
+        {:cont, {:ok, acc_operations ++ catalog_operations, sources ++ [reject_nil_values(source)]}}
       else
         {:error, reason} -> {:halt, {:error, reason}}
       end

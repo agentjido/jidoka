@@ -31,8 +31,7 @@ defmodule Jidoka.Workflow.Steps do
           name: operation.name,
           description: operation.description,
           idempotency: operation.idempotency,
-          parameters_schema:
-            Map.get(metadata, "parameters_schema") || Map.get(metadata, :parameters_schema)
+          parameters_schema: Map.get(metadata, "parameters_schema") || Map.get(metadata, :parameters_schema)
         }
       end)
 

@@ -19,8 +19,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Agent do
         model: [
           type: :any,
           required: false,
-          doc:
-            "Optional ReqLLM model input, such as `openai:gpt-4o-mini` or an inline LLMDB model map."
+          doc: "Optional ReqLLM model input, such as `openai:gpt-4o-mini` or an inline LLMDB model map."
         ],
         generation: [
           type: :any,
@@ -45,8 +44,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Agent do
         result: [
           type: :any,
           required: false,
-          doc:
-            "Optional Zoi schema or `Jidoka.Agent.Spec.Result` data for structured turn results."
+          doc: "Optional Zoi schema or `Jidoka.Agent.Spec.Result` data for structured turn results."
         ],
         memory: [
           type: :any,

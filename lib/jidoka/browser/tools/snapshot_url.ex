@@ -14,8 +14,7 @@ defmodule Jidoka.Browser.Tools.SnapshotUrl do
         include_links: Zoi.boolean() |> Zoi.default(true),
         include_headings: Zoi.boolean() |> Zoi.default(true),
         include_forms: Zoi.boolean() |> Zoi.default(false),
-        max_content_length:
-          Zoi.integer() |> Zoi.default(Jidoka.Browser.Runtime.max_content_chars())
+        max_content_length: Zoi.integer() |> Zoi.default(Jidoka.Browser.Runtime.max_content_chars())
       })
 
   @impl true

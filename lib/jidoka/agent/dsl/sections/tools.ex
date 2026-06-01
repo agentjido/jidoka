@@ -211,8 +211,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
           type: :any,
           required: false,
           default: [],
-          doc:
-            "Optional static MCP tool metadata when discovery is not available at compile time."
+          doc: "Optional static MCP tool metadata when discovery is not available at compile time."
         ],
         required: [
           type: :boolean,

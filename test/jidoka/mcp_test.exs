@@ -140,9 +140,8 @@ defmodule Jidoka.MCPTest do
 
     bad_list = MCP.new!(endpoint: :bad_list_response, client: FakeMCPClient, required: true)
 
-    assert {:error,
-            {:mcp_tool_discovery_failed, :bad_list_response,
-             {:invalid_mcp_tools_response, :bad_response}}} = Source.operations(bad_list)
+    assert {:error, {:mcp_tool_discovery_failed, :bad_list_response, {:invalid_mcp_tools_response, :bad_response}}} =
+             Source.operations(bad_list)
 
     bad_call =
       MCP.new!(

@@ -63,8 +63,7 @@ defmodule Jidoka.SessionTest do
       {:ok, %{type: :final, content: "stored session ok"}}
     end
 
-    assert {:ok, %HarnessSession{status: :finished} = session,
-            %Turn.Result{content: "stored session ok"}} =
+    assert {:ok, %HarnessSession{status: :finished} = session, %Turn.Result{content: "stored session ok"}} =
              Session.run("stored-123", "Hello", store: store, llm: llm)
 
     assert {:ok, %HarnessSession{status: :finished, result: %Turn.Result{}}} =

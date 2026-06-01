@@ -111,8 +111,7 @@ defmodule Jidoka.SubagentTest do
 
     assert_receive {:llm_called, "parent_agent", %{}}
 
-    assert_receive {:llm_called, "evidence_agent",
-                    %{:tenant => "acme", "task_scope" => "runtime"}}
+    assert_receive {:llm_called, "evidence_agent", %{:tenant => "acme", "task_scope" => "runtime"}}
 
     refute_received {:llm_called, "evidence_agent", %{secret: "hidden"}}
   end

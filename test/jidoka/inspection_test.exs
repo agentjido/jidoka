@@ -54,9 +54,7 @@ defmodule Jidoka.InspectionTest do
     llm = fn _intent, _journal -> {:ok, %{type: :final, content: "inspection ok"}} end
 
     assert {:ok, result} =
-             Jidoka.run_turn(Agent.spec(), [input: "Hello", context: %{tenant_id: "tenant_1"}],
-               llm: llm
-             )
+             Jidoka.run_turn(Agent.spec(), [input: "Hello", context: %{tenant_id: "tenant_1"}], llm: llm)
 
     assert %{
              kind: :turn,
@@ -91,9 +89,7 @@ defmodule Jidoka.InspectionTest do
              Harness.start_session(Agent.spec(), session_id: "sess_inspection")
 
     assert {:ok, %Session{} = session, _result} =
-             Harness.run_session(session, [input: "Inspect session", context: %{tenant_id: "t"}],
-               llm: llm
-             )
+             Harness.run_session(session, [input: "Inspect session", context: %{tenant_id: "t"}], llm: llm)
 
     assert %{
              kind: :session,

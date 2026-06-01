@@ -153,8 +153,7 @@ defmodule Jidoka.Agent do
       id: normalize_id!(agent.id),
       model: normalize_model!(agent_module, agent.model),
       generation: normalize_generation!(agent_module, agent.generation),
-      instructions:
-        normalize_instructions!(agent.instructions, ToolSources.skill_prompt!(agent_module)),
+      instructions: normalize_instructions!(agent.instructions, ToolSources.skill_prompt!(agent_module)),
       description: agent.description,
       context_schema: agent.context,
       result: normalize_result!(agent_module, agent.result),

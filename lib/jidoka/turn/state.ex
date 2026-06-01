@@ -14,15 +14,12 @@ defmodule Jidoka.Turn.State do
               request: Zoi.lazy({Turn.Request, :schema, []}),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
               memory: Zoi.lazy({Jidoka.Memory.RecallResult, :schema, []}) |> Zoi.nullish(),
-              compactions:
-                Zoi.array(Zoi.lazy({Jidoka.Memory.Compaction, :schema, []})) |> Zoi.default([]),
+              compactions: Zoi.array(Zoi.lazy({Jidoka.Memory.Compaction, :schema, []})) |> Zoi.default([]),
               prompt: Zoi.any() |> Zoi.nullish(),
               llm_result: Zoi.lazy({Effect.LLMDecision, :schema, []}) |> Zoi.nullish(),
               operation_plan: Zoi.lazy({Effect.OperationRequest, :schema, []}) |> Zoi.nullish(),
-              pending_effects:
-                Zoi.array(Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default([]),
-              pending_interrupt:
-                Zoi.lazy({Jidoka.Review.Interrupt, :schema, []}) |> Zoi.nullish(),
+              pending_effects: Zoi.array(Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default([]),
+              pending_interrupt: Zoi.lazy({Jidoka.Review.Interrupt, :schema, []}) |> Zoi.nullish(),
               result: Zoi.string() |> Zoi.nullish(),
               result_value: Zoi.any() |> Zoi.nullish(),
               result_repair_count: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),

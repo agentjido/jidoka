@@ -28,8 +28,7 @@ defmodule Jidoka.Harness.Session do
               requests: Zoi.array(Zoi.lazy({Turn.Request, :schema, []})) |> Zoi.default([]),
               snapshots: Zoi.array(Zoi.lazy({AgentSnapshot, :schema, []})) |> Zoi.default([]),
               result: Zoi.lazy({Turn.Result, :schema, []}) |> Zoi.nullish(),
-              pending_reviews:
-                Zoi.array(Zoi.lazy({Review.Request, :schema, []})) |> Zoi.default([]),
+              pending_reviews: Zoi.array(Zoi.lazy({Review.Request, :schema, []})) |> Zoi.default([]),
               error: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },

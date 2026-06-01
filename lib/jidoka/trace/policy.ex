@@ -30,8 +30,7 @@ defmodule Jidoka.Trace.Policy do
             %{
               enabled: Zoi.boolean() |> Zoi.default(true),
               sample_rate: Zoi.number() |> Zoi.gte(0.0) |> Zoi.lte(1.0) |> Zoi.default(1.0),
-              redact_keys:
-                Zoi.array(Zoi.string(coerce: true)) |> Zoi.default(@default_redact_keys),
+              redact_keys: Zoi.array(Zoi.string(coerce: true)) |> Zoi.default(@default_redact_keys),
               omit_keys: Zoi.array(Zoi.string(coerce: true)) |> Zoi.default(@default_omit_keys),
               metadata: Zoi.map() |> Zoi.default(%{})
             },

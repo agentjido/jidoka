@@ -35,5 +35,6 @@
     workflow: 1,
     workflow: 2
   ],
-  inputs: ["{mix,.formatter}.exs", "{config,lib,test}/**/*.{ex,exs}"]
+  inputs: ["{mix,.formatter,.credo,.doctor}.exs", "{config,lib,test}/**/*.{ex,exs}"],
+  line_length: 120
 ]
