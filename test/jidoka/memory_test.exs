@@ -5,6 +5,30 @@ defmodule Jidoka.MemoryTest do
   alias Jidoka.Memory
   alias Jidoka.Memory.Store.InMemory
   alias Jidoka.Memory.Store.JidoMemory
+  alias Jidoka.Turn
+
+  test "memory facade delegates to runtime policies" do
+    spec =
+      Agent.Spec.new!(
+        id: "memory_facade_agent",
+        instructions: "Remember useful context.",
+        model: %{provider: :test, id: "model"},
+        memory: %{enabled: true, scope: :session, capture: "off"}
+      )
+
+    request = Turn.Request.new!(input: "What do you remember?")
+
+    result =
+      Turn.Result.new!(
+        content: "Nothing yet.",
+        agent_state: Agent.State.new!(),
+        journal: Jidoka.Effect.Journal.new!()
+      )
+
+    assert {:ok, nil} = Memory.recall(spec, request)
+    assert {:error, :missing_memory_store} = Memory.write(spec, "Ada prefers terse replies.")
+    assert {:ok, nil} = Memory.capture_turn(spec, request, result)
+  end
 
   test "memory policy normalizes boolean and string values" do
     assert {:ok, %Agent.Spec.Memory{scope: :agent, max_entries: 5}} =

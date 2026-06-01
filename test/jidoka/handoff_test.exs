@@ -4,6 +4,7 @@ defmodule Jidoka.HandoffTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Handoff
+  alias Jidoka.Handoff.OwnerStore
   alias Jidoka.Turn
 
   import Jidoka.TestSupport, only: [count_results: 2]
@@ -91,6 +92,23 @@ defmodule Jidoka.HandoffTest do
            ] = RouterAgent.spec().metadata["tool_sources"]
 
     assert source_agent =~ "BillingAgent"
+  end
+
+  test "handoff data and owner store facades handle invalid boundaries" do
+    assert Handoff.schema()
+
+    assert {:error, _reason} =
+             Handoff.new(%{
+               from_agent: RouterAgent,
+               to_agent: BillingAgent,
+               to_agent_id: "billing_agent",
+               name: "billing_specialist",
+               message: ""
+             })
+
+    assert OwnerStore.owner(:not_a_conversation) == nil
+    assert OwnerStore.put_owner(nil, :not_a_handoff) == :ok
+    assert OwnerStore.reset(nil) == :ok
   end
 
   test "handoff operations record a conversation owner" do

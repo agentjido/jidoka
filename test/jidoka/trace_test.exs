@@ -48,7 +48,10 @@ defmodule Jidoka.TraceTest do
 
   test "trace policy and sink errors stay explicit data" do
     assert {:ok, %Policy{enabled: true, sample_rate: 1.0}} = Policy.from_input(nil)
+    assert {:ok, %Policy{enabled: true}} = Policy.from_input(Policy.new!())
     assert {:error, _reason} = Policy.new(sample_rate: 2.0)
+    assert "api_key" in Policy.default_redact_keys()
+    assert "prompt" in Policy.default_omit_keys()
 
     assert %{
              enabled: false,

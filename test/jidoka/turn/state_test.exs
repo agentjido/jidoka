@@ -4,6 +4,7 @@ defmodule Jidoka.Turn.StateTest do
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
+  alias Jidoka.Event
   alias Jidoka.Turn
 
   test "rejects malformed final model decisions" do
@@ -73,6 +74,27 @@ defmodule Jidoka.Turn.StateTest do
 
     assert Turn.State.current_pending_effect(next_state) == llm_intent
     assert next_state.pending_effects == [llm_intent]
+  end
+
+  test "transition accumulates events and diagnostics before commit" do
+    state = %{events: [Event.build(:turn_started, [], request_id: "req_transition")]}
+
+    transition =
+      state
+      |> Turn.Transition.new!()
+      |> Turn.Transition.event(:prompt_assembled, request_id: "req_transition")
+      |> Turn.Transition.diagnostic({:note, "checked"})
+
+    committed = Turn.Transition.commit(transition)
+
+    assert Enum.map(committed.events, & &1.event) == [:turn_started, :prompt_assembled]
+    assert committed.diagnostics == [{:note, "checked"}]
+
+    assert {:ok, %Turn.Transition{state: %{}}} = Turn.Transition.new(%{})
+
+    assert_raise ArgumentError, ~r/invalid turn transition/, fn ->
+      Turn.Transition.new!(%{}, events: [:bad_event])
+    end
   end
 
   test "rejects out-of-order effect results" do

@@ -193,8 +193,6 @@ defmodule Jidoka.Export do
     |> portable_value()
   end
 
-  defp export_metadata(metadata), do: portable_value(metadata)
-
   defp control_ref(module) when is_atom(module) do
     case Jidoka.Control.control_name(module) do
       {:ok, name} -> name

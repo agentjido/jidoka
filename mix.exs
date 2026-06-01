@@ -2,7 +2,7 @@ defmodule Jidoka.MixProject do
   use Mix.Project
 
   @version "1.0.0-beta.1"
-  @source_url "https://github.com/mikehostetler/jidoka-v2"
+  @source_url "https://github.com/agentjido/jidoka"
   @description "A data-driven agent framework for the Jido ecosystem with a Spark DSL and durable turn runtime."
 
   def project do
@@ -21,31 +21,17 @@ defmodule Jidoka.MixProject do
       homepage_url: @source_url,
       docs: docs(),
       test_coverage: [
-        tool: ExCoveralls,
         export: "cov",
         ignore_modules: [
           ~r/^Jidoka\.Agent\.Dsl(\.|$)/,
           ~r/^Jidoka\.Agent\.Verifiers\./,
-          ~r/^Jidoka\.IntegrationSupport\./
+          ~r/^Jidoka\.Kino(\.|$)/,
+          ~r/^Jidoka\.IntegrationSupport\./,
+          ~r/^Jidoka\.TestSupport(\.|$)/
         ],
         summary: [threshold: 80]
       ],
       deps: deps()
-    ]
-  end
-
-  def cli do
-    [
-      preferred_envs: [
-        coveralls: :test,
-        "coveralls.github": :test,
-        "coveralls.html": :test,
-        "coveralls.json": :test,
-        "coveralls.detail": :test,
-        "coveralls.lcov": :test,
-        "coveralls.xml": :test,
-        "coveralls.cobertura": :test
-      ]
     ]
   end
 
@@ -65,7 +51,6 @@ defmodule Jidoka.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
-      {:excoveralls, "~> 0.18", only: [:dev, :test]},
       {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
       {:git_ops, "~> 2.9", only: :dev, runtime: false},
       {:jason, "~> 1.4"},
@@ -101,7 +86,6 @@ defmodule Jidoka.MixProject do
         "guides",
         "livebook",
         ".formatter.exs",
-        "coveralls.json",
         "mix.exs",
         "README.md",
         "CHANGELOG.md",

@@ -151,14 +151,11 @@ defmodule Jidoka.StabilizationContractTest do
   end
 
   test "enum parsing rejects unknown strings without creating atoms" do
-    before_count = :erlang.system_info(:atom_count)
-
     for index <- 1..20 do
       value = "jidoka_unknown_enum_#{System.unique_integer([:positive])}_#{index}"
       assert {:error, _reason} = Schema.parse_atom_enum(value, [:ok, :error], [])
+      assert_raise ArgumentError, fn -> String.to_existing_atom(value) end
     end
-
-    assert :erlang.system_info(:atom_count) == before_count
   end
 
   test "id generation keeps entropy and injected generator failures at the boundary" do

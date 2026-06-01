@@ -159,7 +159,7 @@ defmodule Jidoka.Runtime.ReqLLM do
       |> maybe_put(:model, model_ref(model))
       |> maybe_put(:finish_reason, ReqLLM.Response.finish_reason(response))
 
-    %Effect.LLMDecision{decision | metadata: Map.merge(decision.metadata || %{}, metadata)}
+    %Effect.LLMDecision{decision | metadata: Map.merge(decision.metadata, metadata)}
   end
 
   defp response_usage(response) do
@@ -170,7 +170,6 @@ defmodule Jidoka.Runtime.ReqLLM do
   end
 
   defp model_ref(%LLMDB.Model{} = model), do: LLMDB.Model.spec(model)
-  defp model_ref(model), do: inspect(model)
 
   defp empty_to_nil(%{} = map) when map_size(map) == 0, do: nil
   defp empty_to_nil(value), do: value
