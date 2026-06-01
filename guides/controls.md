@@ -107,7 +107,7 @@ If an operation control interrupts, the turn hibernates:
 
 ```elixir
 {:hibernate, snapshot} =
-  Jidoka.run_turn(spec, "Refund order_123",
+  Jidoka.turn(spec, "Refund order_123",
     llm: llm,
     operations: operations
   )

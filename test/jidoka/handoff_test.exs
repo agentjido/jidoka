@@ -6,6 +6,8 @@ defmodule Jidoka.HandoffTest do
   alias Jidoka.Handoff
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   defmodule BillingAgent do
     @moduledoc false
 
@@ -147,12 +149,6 @@ defmodule Jidoka.HandoffTest do
              agent: BillingAgent,
              agent_id: "conv-handoff-test:billing_specialist",
              handoff: %Handoff{name: "billing_specialist"}
-           } = Jidoka.handoff_owner("conv-handoff-test")
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
+           } = Jidoka.handoff("conv-handoff-test")
   end
 end

@@ -4,10 +4,44 @@ defmodule Jidoka.HarnessSessionTest do
   alias Jidoka.Agent
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
+  alias Jidoka.Harness.Store
   alias Jidoka.Harness.Store.InMemory
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
+
+  defmodule FallbackStore do
+    @moduledoc false
+
+    @behaviour Store
+
+    def start_link do
+      Elixir.Agent.start_link(fn -> %{} end)
+    end
+
+    @impl true
+    def put_session(%Session{} = session, opts) do
+      pid = Keyword.fetch!(opts, :pid)
+      Elixir.Agent.update(pid, &Map.put(&1, session.session_id, session))
+      {:ok, session}
+    end
+
+    @impl true
+    def get_session(session_id, opts) do
+      pid = Keyword.fetch!(opts, :pid)
+
+      case Elixir.Agent.get(pid, &Map.get(&1, session_id)) do
+        %Session{} = session -> {:ok, session}
+        nil -> {:error, {:session_not_found, session_id}}
+      end
+    end
+
+    @impl true
+    def list_sessions(opts) do
+      pid = Keyword.fetch!(opts, :pid)
+      {:ok, Elixir.Agent.get(pid, &Map.values/1)}
+    end
+  end
 
   test "sessions can be started and persisted in the in-memory store" do
     {:ok, pid} = InMemory.start_link()
@@ -20,6 +54,52 @@ defmodule Jidoka.HarnessSessionTest do
     assert {:ok, ^session} = Harness.store_get_session(store, "sess_1")
     assert {:ok, [%Session{session_id: "sess_1"}]} = Harness.store_list_sessions(store)
     assert {:ok, []} = Harness.pending_reviews(store)
+  end
+
+  test "in-memory stores atomically claim a session before running a turn" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    request = Turn.Request.new!(input: "First turn", request_id: "turn_claim_1")
+
+    assert {:ok, %Session{session_id: "sess_claim"}} =
+             Harness.start_session(spec(), session_id: "sess_claim", store: store)
+
+    assert {:ok,
+            %Session{
+              session_id: "sess_claim",
+              status: :running,
+              requests: [%Turn.Request{request_id: "turn_claim_1"}]
+            }} = Store.claim_session(store, "sess_claim", request)
+
+    assert {:error, {:session_already_running, "sess_claim"}} =
+             Store.claim_session(store, "sess_claim", Turn.Request.new!(input: "Second turn"))
+
+    assert {:error, {:session_not_found, "missing_claim"}} =
+             Store.claim_session(store, "missing_claim", Turn.Request.new!(input: "Missing turn"))
+
+    assert {:ok, %Session{status: :running, requests: [%Turn.Request{input: "First turn"}]}} =
+             Harness.store_get_session(store, "sess_claim")
+  end
+
+  test "store claim fallback keeps older store implementations compatible" do
+    {:ok, pid} = FallbackStore.start_link()
+    store = {FallbackStore, pid: pid}
+    request = Turn.Request.new!(input: "Fallback turn", request_id: "turn_fallback_1")
+
+    assert {:ok, %Session{session_id: "sess_fallback"} = session} =
+             Session.start(spec(), session_id: "sess_fallback")
+
+    assert {:ok, ^session} = Store.put_session(store, session)
+
+    assert {:ok,
+            %Session{
+              session_id: "sess_fallback",
+              status: :running,
+              requests: [%Turn.Request{request_id: "turn_fallback_1"}]
+            }} = Store.claim_session(store, "sess_fallback", request)
+
+    assert {:error, {:session_already_running, "sess_fallback"}} =
+             Store.claim_session(store, "sess_fallback", Turn.Request.new!(input: "Duplicate turn"))
   end
 
   test "sessions collect snapshots and pending review requests" do

@@ -5,15 +5,23 @@ defmodule Jidoka.IntegrationSupport.OperationDecisionControl do
 
   @impl true
   def call(%Jidoka.Runtime.Controls.OperationContext{} = operation) do
-    if pid =
-         operation.context[:test_pid] || operation.context["test_pid"] ||
-           operation.request_metadata[:test_pid] || operation.request_metadata["test_pid"] do
-      send(pid, {:operation_decision_control_called, context_observation(operation)})
-    end
+    send_observation(operation)
 
     operation
     |> configured_decision()
     |> resolve_decision()
+  end
+
+  defp send_observation(operation) do
+    case test_pid(operation) do
+      nil -> :ok
+      pid -> send(pid, {:operation_decision_control_called, context_observation(operation)})
+    end
+  end
+
+  defp test_pid(operation) do
+    operation.context[:test_pid] || operation.context["test_pid"] ||
+      operation.request_metadata[:test_pid] || operation.request_metadata["test_pid"]
   end
 
   defp context_observation(operation) do

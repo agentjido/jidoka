@@ -110,14 +110,17 @@ defmodule Jidoka.Skill do
     load_paths = Keyword.get(opts, :load_paths, [])
 
     with :ok <- load_paths(load_paths) do
-      refs
-      |> Enum.reduce_while({:ok, []}, fn ref, {:ok, acc} ->
-        case resolve_ref(ref) do
-          {:ok, resolved} -> {:cont, {:ok, acc ++ [resolved]}}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
-      end)
+      resolve_refs(refs)
     end
+  end
+
+  defp resolve_refs(refs) do
+    Enum.reduce_while(refs, {:ok, []}, fn ref, {:ok, acc} ->
+      case resolve_ref(ref) do
+        {:ok, resolved} -> {:cont, {:ok, acc ++ [resolved]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp maybe_load_paths(refs, opts) do

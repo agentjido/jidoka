@@ -9,6 +9,8 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   defmodule SourceAuditControl do
     @moduledoc false
 
@@ -90,7 +92,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
       )
 
     assert {:ok, %Turn.Result{content: "Refund policy summarized."} = result} =
-             Jidoka.run_turn(spec, request,
+             Jidoka.turn(spec, request,
                llm: llm("summarize_policy", %{"topic" => "refunds"}, "Refund policy summarized."),
                operations: capability
              )
@@ -148,7 +150,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
       )
 
     assert {:ok, %Turn.Result{content: "Ticket T-200 routes to billing."} = result} =
-             Jidoka.run_turn(spec, request,
+             Jidoka.turn(spec, request,
                llm:
                  llm(
                    "run_triage_workflow",
@@ -212,7 +214,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
       )
 
     assert {:hibernate, %AgentSnapshot{} = snapshot} =
-             Jidoka.run_turn(spec, request,
+             Jidoka.turn(spec, request,
                llm:
                  llm(
                    "handoff_to_billing",
@@ -274,12 +276,6 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
         1 -> {:ok, %{type: :final, content: final_content}}
       end
     end
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 
   defp clock(now_ms), do: fn -> now_ms end

@@ -8,12 +8,16 @@ defmodule Jidoka.IntegrationSupport.AuditInputControl do
     context = Map.get(attrs, :context, %{})
     request_metadata = Map.get(attrs, :request_metadata, %{})
 
-    if pid =
-         context[:test_pid] || context["test_pid"] || request_metadata[:test_pid] ||
-           request_metadata["test_pid"] do
-      send(pid, {:input_control_called, input})
-    end
+    send_observation(test_pid(context, request_metadata), input)
 
     :allow
+  end
+
+  defp send_observation(nil, _input), do: :ok
+  defp send_observation(pid, input), do: send(pid, {:input_control_called, input})
+
+  defp test_pid(context, request_metadata) do
+    context[:test_pid] || context["test_pid"] || request_metadata[:test_pid] ||
+      request_metadata["test_pid"]
   end
 end

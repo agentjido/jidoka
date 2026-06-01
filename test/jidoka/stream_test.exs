@@ -62,7 +62,7 @@ defmodule Jidoka.StreamTest do
     request = Turn.Request.new!(input: "Hello", request_id: "req_stream_turn")
 
     assert {:ok, %Turn.Result{} = result} =
-             Jidoka.run_turn(spec, request, llm: llm, stream_to: self())
+             Jidoka.turn(spec, request, llm: llm, stream_to: self())
 
     assert_receive {tag, %Event{event: :turn_started, request_id: "req_stream_turn"}}
     assert tag == Stream.message_tag()
@@ -99,7 +99,7 @@ defmodule Jidoka.StreamTest do
     request = Turn.Request.new!(input: "Hello", request_id: "req_ordered_stream")
 
     assert {:ok, %Turn.Result{content: "ordered"}} =
-             Jidoka.run_turn(spec, request, llm: llm, stream_to: self())
+             Jidoka.turn(spec, request, llm: llm, stream_to: self())
 
     tag = Stream.message_tag()
 

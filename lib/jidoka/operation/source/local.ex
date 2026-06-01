@@ -73,22 +73,20 @@ defmodule Jidoka.Operation.Source.Local do
     attrs = Schema.normalize_attrs(operation)
     handler = Schema.get_key(attrs, :handler)
 
-    cond do
-      not valid_handler?(handler) ->
-        {:error, {:invalid_operation_handler, handler}}
-
-      true ->
-        with {:ok, spec} <- operation_spec(attrs) do
-          {:ok,
-           %{
-             name: spec.name,
-             description: spec.description,
-             idempotency: spec.idempotency,
-             kind: Operation.kind(spec),
-             metadata: spec.metadata,
-             handler: handler
-           }}
-        end
+    if valid_handler?(handler) do
+      with {:ok, spec} <- operation_spec(attrs) do
+        {:ok,
+         %{
+           name: spec.name,
+           description: spec.description,
+           idempotency: spec.idempotency,
+           kind: Operation.kind(spec),
+           metadata: spec.metadata,
+           handler: handler
+         }}
+      end
+    else
+      {:error, {:invalid_operation_handler, handler}}
     end
   end
 

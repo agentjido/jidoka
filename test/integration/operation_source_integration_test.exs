@@ -8,6 +8,8 @@ defmodule Jidoka.OperationSourceIntegrationTest do
   alias Jidoka.Operation.Source.Local
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   defmodule SourceAuditControl do
     @moduledoc false
 
@@ -92,7 +94,7 @@ defmodule Jidoka.OperationSourceIntegrationTest do
       )
 
     assert {:ok, %Turn.Result{content: "Ticket T-100 is open."} = result} =
-             Jidoka.run_turn(spec, request, llm: llm, operations: capability)
+             Jidoka.turn(spec, request, llm: llm, operations: capability)
 
     assert [%Effect.OperationResult{operation: "lookup_ticket"}] =
              result.agent_state.operation_results
@@ -162,14 +164,8 @@ defmodule Jidoka.OperationSourceIntegrationTest do
       )
 
     assert {:ok, %Turn.Result{content: "Charge ch_123 approved."}} =
-             Jidoka.run_turn(spec, request, llm: llm, operations: capability)
+             Jidoka.turn(spec, request, llm: llm, operations: capability)
 
     assert_receive {:source_match_control, "payments", :unsafe_once, "high"}
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

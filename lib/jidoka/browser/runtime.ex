@@ -230,30 +230,24 @@ defmodule Jidoka.Browser.Runtime do
 
   defp private_ipv6?(host) do
     case :inet.parse_address(String.to_charlist(host)) do
-      {:ok, {0, 0, 0, 0, 0, 0, 0, 0}} ->
-        true
-
-      {:ok, {0, 0, 0, 0, 0, 0, 0, 1}} ->
-        true
-
-      {:ok, {0, 0, 0, 0, 0, ipv4_marker, high, low}}
-      when ipv4_marker in [0, 0xFFFF] ->
-        {a, b, c, d} = ipv4_octets(high, low)
-        private_ipv4_address?({a, b, c, d})
-
-      {:ok, {first, _, _, _, _, _, _, _}} when first >= 0xFC00 and first <= 0xFDFF ->
-        true
-
-      {:ok, {first, _, _, _, _, _, _, _}} when first >= 0xFE80 and first <= 0xFEFF ->
-        true
-
-      {:ok, {first, _, _, _, _, _, _, _}} when first >= 0xFF00 and first <= 0xFFFF ->
-        true
-
-      _other ->
-        false
+      {:ok, address} -> private_ipv6_address?(address)
+      _other -> false
     end
   end
+
+  defp private_ipv6_address?({0, 0, 0, 0, 0, 0, 0, 0}), do: true
+  defp private_ipv6_address?({0, 0, 0, 0, 0, 0, 0, 1}), do: true
+
+  defp private_ipv6_address?({0, 0, 0, 0, 0, ipv4_marker, high, low})
+       when ipv4_marker in [0, 0xFFFF] do
+    {a, b, c, d} = ipv4_octets(high, low)
+    private_ipv4_address?({a, b, c, d})
+  end
+
+  defp private_ipv6_address?({first, _, _, _, _, _, _, _}) when first >= 0xFC00 and first <= 0xFDFF, do: true
+  defp private_ipv6_address?({first, _, _, _, _, _, _, _}) when first >= 0xFE80 and first <= 0xFEFF, do: true
+  defp private_ipv6_address?({first, _, _, _, _, _, _, _}) when first >= 0xFF00 and first <= 0xFFFF, do: true
+  defp private_ipv6_address?(_address), do: false
 
   defp private_ipv4_address?({10, _, _, _}), do: true
   defp private_ipv4_address?({127, _, _, _}), do: true

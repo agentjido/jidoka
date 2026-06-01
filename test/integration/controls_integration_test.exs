@@ -1,8 +1,7 @@
 defmodule Jidoka.ControlsIntegrationTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Jidoka.Agent
-  alias Jidoka.Config
   alias Jidoka.Effect
   alias Jidoka.IntegrationSupport.ApprovalControl
   alias Jidoka.IntegrationSupport.AuditControl
@@ -14,6 +13,9 @@ defmodule Jidoka.ControlsIntegrationTest do
   alias Jidoka.IntegrationSupport.OperationDecisionAgent
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
+
+  import Jidoka.TestSupport,
+    only: [count_results: 2, operation_capability_index: 2, operation_control_index: 2, timeline: 1]
 
   @live_enabled? not is_nil(System.get_env("OPENAI_API_KEY") || System.get_env("ANTHROPIC_API_KEY"))
 
@@ -41,7 +43,7 @@ defmodule Jidoka.ControlsIntegrationTest do
                  %{control: "audit_control", match: %{}}
                ]
              }
-           } = Jidoka.projection(spec)
+           } = Jidoka.project(spec)
 
     llm = fn _intent, %Effect.Journal{} = journal ->
       case count_results(journal, :llm) do
@@ -77,7 +79,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     assert result.content == "Controlled lookup ctrl_123 is controlled-value."
     assert_receive {:controlled_lookup_called, "ctrl_123"}
 
-    timeline = Jidoka.Extensions.Trace.timeline(result.events)
+    timeline = timeline(result.events)
 
     require_approval_index = operation_control_index(timeline, "require_approval")
     audit_index = operation_control_index(timeline, "audit_control")
@@ -149,7 +151,7 @@ defmodule Jidoka.ControlsIntegrationTest do
              %{event: :control_allowed, data: %{control: "audit_input_control"}},
              %{event: :control_allowed, data: %{control: "block_input_control"}}
              | _events
-           ] = Jidoka.Extensions.Trace.timeline(result.events)
+           ] = timeline(result.events)
   end
 
   test "input controls block the turn before LLM or operation effects run" do
@@ -371,7 +373,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     end
 
     assert {:ok, %Turn.Result{content: "local done"} = result} =
-             Jidoka.run_turn(spec, operation_request("local", :cont),
+             Jidoka.turn(spec, operation_request("local", :cont),
                llm: llm,
                operations: operations
              )
@@ -390,7 +392,7 @@ defmodule Jidoka.ControlsIntegrationTest do
 
     assert_receive {:local_lookup_called, "local"}
 
-    timeline = Jidoka.Extensions.Trace.timeline(result.events)
+    timeline = timeline(result.events)
     control_index = operation_control_index(timeline, "operation_decision_control")
     capability_index = operation_capability_index(timeline, "local_lookup")
 
@@ -567,7 +569,7 @@ defmodule Jidoka.ControlsIntegrationTest do
              %{event: :turn_finished}
            ] =
              result.events
-             |> Jidoka.Extensions.Trace.timeline()
+             |> timeline()
              |> Enum.take(-2)
   end
 
@@ -606,7 +608,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     test "live ReqLLM turn runs controls before a real model tool loop" do
       suffix = System.unique_integer([:positive])
       agent_module = Module.concat(JidokaTest, "LiveControlsAgent#{suffix}")
-      model = live_model_spec()
+      model = Jidoka.Config.model_ref(Jidoka.Config.default_model())
 
       Code.compile_string("""
       defmodule #{inspect(agent_module)} do
@@ -656,7 +658,7 @@ defmodule Jidoka.ControlsIntegrationTest do
       assert [%Effect.OperationResult{operation: "controlled_lookup"}] =
                result.agent_state.operation_results
 
-      timeline = Jidoka.Extensions.Trace.timeline(result.events)
+      timeline = timeline(result.events)
 
       assert [
                %{event: :control_allowed, data: %{control: "audit_input_control"}}
@@ -750,7 +752,7 @@ defmodule Jidoka.ControlsIntegrationTest do
 
   defp semantic_projection(spec) do
     spec
-    |> Jidoka.projection()
+    |> Jidoka.project()
     |> Map.drop([:metadata])
   end
 
@@ -768,44 +770,6 @@ defmodule Jidoka.ControlsIntegrationTest do
   defp operation_llm(id) do
     fn _intent, _journal ->
       {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => id}}}
-    end
-  end
-
-  defp operation_control_index(timeline, control_name) do
-    Enum.find_index(
-      timeline,
-      &match?(
-        %{event: :control_allowed, data: %{boundary: :operation, control: ^control_name}},
-        &1
-      )
-    )
-  end
-
-  defp operation_capability_index(timeline, operation) do
-    Enum.find_index(
-      timeline,
-      &match?(
-        %{event: :capability_call_started, effect_kind: :operation, operation: ^operation},
-        &1
-      )
-    )
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
-  end
-
-  defp live_model_spec do
-    model =
-      System.get_env("JIDOKA_DEFAULT_MODEL") ||
-        System.get_env("JIDOKA_LIVE_MODEL") ||
-        Config.default_model()
-
-    case model do
-      %LLMDB.Model{} -> Config.model_ref(model)
-      model -> model
     end
   end
 end

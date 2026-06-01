@@ -106,9 +106,8 @@ defmodule Jidoka.Operation.Source.Subagent do
        %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
               :ok <- ensure_operation_name(source, request.name),
-              {:ok, task} <- task_from_arguments(request.arguments),
-              {:ok, result} <- run_child(source, task, request.arguments, context) do
-           {:ok, result}
+              {:ok, task} <- task_from_arguments(request.arguments) do
+           run_child(source, task, request.arguments, context)
          end
 
        %Effect.Intent{kind: kind}, _journal ->

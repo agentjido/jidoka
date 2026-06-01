@@ -74,15 +74,7 @@ defmodule Jidoka.Runtime.TurnRunner do
         {:hibernate, snapshot}
 
       {:ok, %Jidoka.Review.Response{} = response} ->
-        response = Review.ensure_responded_at(response, clock_ms(opts))
-
-        with :ok <- Review.validate_response(interrupt, response),
-             {:ok, state} <-
-               run_and_emit(state, opts, fn state ->
-                 Review.apply_response(state, interrupt, response)
-               end) do
-          continue_after_pending_effect(state, capabilities, opts)
-        end
+        resume_with_approval_response(state, interrupt, response, capabilities, opts)
 
       {:error, reason} ->
         {:error, reason}
@@ -91,6 +83,15 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   defp resume_from_snapshot(%Turn.State{} = state, _snapshot, capabilities, opts) do
     continue_after_pending_effect(state, capabilities, opts)
+  end
+
+  defp resume_with_approval_response(state, interrupt, response, capabilities, opts) do
+    response = Review.ensure_responded_at(response, clock_ms(opts))
+
+    with :ok <- Review.validate_response(interrupt, response),
+         {:ok, state} <- run_and_emit(state, opts, &Review.apply_response(&1, interrupt, response)) do
+      continue_after_pending_effect(state, capabilities, opts)
+    end
   end
 
   defp run_loop(%Turn.State{loop_index: loop_index, plan: plan} = state, capabilities, opts) do
@@ -140,34 +141,40 @@ defmodule Jidoka.Runtime.TurnRunner do
     end
   end
 
-  defp continue_after_pending_effect(%Turn.State{} = state, capabilities, opts) do
-    if Turn.State.pending_effect?(state) do
-      with :ok <- enforce_timeout(state, opts),
-           {:ok, effect_result, state} <- interpret_or_hibernate(state, capabilities, opts),
-           state_before_apply <- state,
-           {:ok, %Turn.State{} = state} <- Turn.State.apply_effect_result(state, effect_result),
-           :ok <- emit_new_events(state_before_apply, state, opts),
-           :ok <- enforce_timeout(state, opts) do
-        case state.status do
-          :finished ->
-            with {:ok, state} <- run_and_emit(state, opts, &Controls.run_output_controls/1),
-                 :ok <- enforce_timeout(state, opts) do
-              finished_state = append_turn_finished(state)
-              emit_new_events(state, finished_state, opts)
-              {:ok, Turn.Result.from_turn_state!(finished_state)}
-            end
+  defp continue_after_pending_effect(%Turn.State{pending_effects: []} = state, _capabilities, _opts) do
+    {:error, {:missing_pending_effect, state}}
+  end
 
-          :running ->
-            if Turn.State.pending_effect?(state) do
-              maybe_hibernate_before_effect(state, capabilities, opts)
-            else
-              run_loop(%Turn.State{state | loop_index: state.loop_index + 1}, capabilities, opts)
-            end
-        end
-      end
-    else
-      {:error, {:missing_pending_effect, state}}
+  defp continue_after_pending_effect(%Turn.State{} = state, capabilities, opts) do
+    with :ok <- enforce_timeout(state, opts),
+         {:ok, effect_result, state} <- interpret_or_hibernate(state, capabilities, opts),
+         state_before_apply <- state,
+         {:ok, %Turn.State{} = state} <- Turn.State.apply_effect_result(state, effect_result),
+         :ok <- emit_new_events(state_before_apply, state, opts),
+         :ok <- enforce_timeout(state, opts) do
+      continue_after_effect_applied(state, capabilities, opts)
     end
+  end
+
+  defp continue_after_effect_applied(%Turn.State{status: :finished} = state, _capabilities, opts) do
+    with {:ok, state} <- run_and_emit(state, opts, &Controls.run_output_controls/1),
+         :ok <- enforce_timeout(state, opts) do
+      finished_state = append_turn_finished(state)
+      emit_new_events(state, finished_state, opts)
+      {:ok, Turn.Result.from_turn_state!(finished_state)}
+    end
+  end
+
+  defp continue_after_effect_applied(%Turn.State{status: :running} = state, capabilities, opts) do
+    continue_running_state(state, capabilities, opts)
+  end
+
+  defp continue_running_state(%Turn.State{pending_effects: [_effect | _rest]} = state, capabilities, opts) do
+    maybe_hibernate_before_effect(state, capabilities, opts)
+  end
+
+  defp continue_running_state(%Turn.State{} = state, capabilities, opts) do
+    run_loop(%Turn.State{state | loop_index: state.loop_index + 1}, capabilities, opts)
   end
 
   defp interpret_or_hibernate(%Turn.State{} = state, capabilities, opts) do
@@ -229,7 +236,7 @@ defmodule Jidoka.Runtime.TurnRunner do
       agent_id: state.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
-      data: %{cursor: Jidoka.projection(cursor)}
+      data: %{cursor: Jidoka.project(cursor)}
     )
     |> Turn.Transition.commit()
   end

@@ -147,24 +147,26 @@ defmodule Jidoka.Runtime.Controls.Operation do
   end
 
   defp append_approval_reused_event(%Turn.State{} = state, %Effect.Intent{} = intent) do
-    with {:ok, request} <- Effect.OperationRequest.from_input(intent.payload) do
-      state
-      |> Turn.Transition.new!()
-      |> Turn.Transition.event(:approval_applied,
-        agent_id: state.spec.id,
-        request_id: request.request_id || state.request.request_id,
-        loop_index: request.loop_index,
-        effect_id: intent.id,
-        effect_kind: intent.kind,
-        operation: request.name,
-        data: %{
-          interrupt_id: approved_interrupt_id(intent),
-          operation: request.name
-        }
-      )
-      |> Turn.Transition.commit()
-    else
-      {:error, _reason} -> state
+    case Effect.OperationRequest.from_input(intent.payload) do
+      {:ok, request} ->
+        state
+        |> Turn.Transition.new!()
+        |> Turn.Transition.event(:approval_applied,
+          agent_id: state.spec.id,
+          request_id: request.request_id || state.request.request_id,
+          loop_index: request.loop_index,
+          effect_id: intent.id,
+          effect_kind: intent.kind,
+          operation: request.name,
+          data: %{
+            interrupt_id: approved_interrupt_id(intent),
+            operation: request.name
+          }
+        )
+        |> Turn.Transition.commit()
+
+      {:error, _reason} ->
+        state
     end
   end
 

@@ -138,23 +138,30 @@ defmodule Jidoka.Import do
   end
 
   defp resolve_context_schema(agent, opts) do
+    agent
+    |> context_schema_ref()
+    |> fetch_context_schema_ref(opts)
+  end
+
+  defp context_schema_ref(agent) do
     case Schema.get_key(agent, :context) || Schema.get_key(agent, :context_schema) do
       nil ->
-        {:ok, nil}
+        nil
 
       %{} = context ->
-        case Schema.get_key(context, :ref) || Schema.get_key(context, :schema_ref) do
-          nil -> {:error, {:invalid_context_ref, context}}
-          ref -> Registry.fetch(:context_schemas, ref, opts)
-        end
+        Schema.get_key(context, :ref) || Schema.get_key(context, :schema_ref) || {:invalid_context_ref, context}
 
       ref when is_binary(ref) or is_atom(ref) ->
-        Registry.fetch(:context_schemas, ref, opts)
+        ref
 
       other ->
-        {:error, {:invalid_context_ref, other}}
+        {:invalid_context_ref, other}
     end
   end
+
+  defp fetch_context_schema_ref(nil, _opts), do: {:ok, nil}
+  defp fetch_context_schema_ref({:invalid_context_ref, ref}, _opts), do: {:error, {:invalid_context_ref, ref}}
+  defp fetch_context_schema_ref(ref, opts), do: Registry.fetch(:context_schemas, ref, opts)
 
   defp resolve_result(agent, opts) do
     case Schema.get_key(agent, :result) || Schema.get_key(agent, :result_schema) do
@@ -593,9 +600,8 @@ defmodule Jidoka.Import do
     |> first_control_entries(keys)
     |> List.wrap()
     |> Enum.reduce_while({:ok, []}, fn attrs, {:ok, boundary_controls} ->
-      with {:ok, boundary_control} <- boundary_control(attrs, opts, module, reason) do
-        {:cont, {:ok, [boundary_control | boundary_controls]}}
-      else
+      case boundary_control(attrs, opts, module, reason) do
+        {:ok, boundary_control} -> {:cont, {:ok, [boundary_control | boundary_controls]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
@@ -619,9 +625,8 @@ defmodule Jidoka.Import do
     |> first_control_entries([:operations, :operation])
     |> List.wrap()
     |> Enum.reduce_while({:ok, []}, fn attrs, {:ok, operations} ->
-      with {:ok, operation} <- control_operation(attrs, opts) do
-        {:cont, {:ok, [operation | operations]}}
-      else
+      case control_operation(attrs, opts) do
+        {:ok, operation} -> {:cont, {:ok, [operation | operations]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)

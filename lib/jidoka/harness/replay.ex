@@ -50,7 +50,7 @@ defmodule Jidoka.Harness.Replay do
       snapshots: Enum.map(session.snapshots, &snapshot_summary/1),
       timeline: timeline(session),
       journal: latest_journal(session),
-      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.projection/1),
+      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.project/1),
       result: project_result(session.result),
       metadata: session.metadata
     )
@@ -62,7 +62,7 @@ defmodule Jidoka.Harness.Replay do
       agent_id: snapshot.agent_id,
       snapshots: [snapshot_summary(snapshot)],
       timeline: timeline([snapshot.turn_state], nil),
-      journal: Jidoka.projection(snapshot.turn_state.journal),
+      journal: Jidoka.project(snapshot.turn_state.journal),
       pending_reviews: pending_reviews(snapshot),
       metadata: snapshot.metadata
     )
@@ -72,10 +72,10 @@ defmodule Jidoka.Harness.Replay do
     %{
       snapshot_id: snapshot.snapshot_id,
       agent_id: snapshot.agent_id,
-      cursor: Jidoka.projection(snapshot.cursor),
+      cursor: Jidoka.project(snapshot.cursor),
       status: snapshot.turn_state.status,
       loop_index: snapshot.turn_state.loop_index,
-      pending_effects: Enum.map(snapshot.turn_state.pending_effects, &Jidoka.projection/1)
+      pending_effects: Enum.map(snapshot.turn_state.pending_effects, &Jidoka.project/1)
     }
   end
 
@@ -103,16 +103,16 @@ defmodule Jidoka.Harness.Replay do
   end
 
   defp latest_journal(%Session{result: %Turn.Result{} = result}),
-    do: Jidoka.projection(result.journal)
+    do: Jidoka.project(result.journal)
 
   defp latest_journal(%Session{} = session) do
     case Session.latest_snapshot(session) do
-      %AgentSnapshot{} = snapshot -> Jidoka.projection(snapshot.turn_state.journal)
+      %AgentSnapshot{} = snapshot -> Jidoka.project(snapshot.turn_state.journal)
       nil -> %{intents: [], results: []}
     end
   end
 
-  defp project_result(%Turn.Result{} = result), do: Jidoka.projection(result)
+  defp project_result(%Turn.Result{} = result), do: Jidoka.project(result)
   defp project_result(nil), do: nil
 
   defp snapshot_states(%Session{snapshots: snapshots}), do: Enum.map(snapshots, & &1.turn_state)
@@ -122,6 +122,6 @@ defmodule Jidoka.Harness.Replay do
     |> Map.get("pending_review", Map.get(snapshot.metadata, :pending_review))
     |> List.wrap()
     |> Enum.reject(&is_nil/1)
-    |> Enum.map(&Jidoka.projection/1)
+    |> Enum.map(&Jidoka.project/1)
   end
 end

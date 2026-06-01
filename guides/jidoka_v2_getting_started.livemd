@@ -1,12 +1,19 @@
 # Jidoka V2 Getting Started
 
+## Section
+
 ```elixir
 Mix.install(
   [
+    {:kino, "~> 0.14"},
     {:jidoka, path: Path.expand("..", __DIR__)}
   ],
   consolidate_protocols: false
 )
+```
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:notebook-model", check_provider?: false)
 ```
 
 ## Define A Jido Action
@@ -61,11 +68,12 @@ spec = NotebookTimeAgent.spec()
 ```
 
 ```elixir
-Jidoka.inspect(NotebookTimeAgent)
+{:ok, _inspection} = Jidoka.Kino.debug_agent(NotebookTimeAgent)
+{:ok, _diagram} = Jidoka.Kino.agent_diagram(NotebookTimeAgent)
 ```
 
 ```elixir
-{:ok, preflight} = Jidoka.preflight(NotebookTimeAgent, "What time is it in Chicago?")
+{:ok, preflight} = Jidoka.Kino.preflight(NotebookTimeAgent, "What time is it in Chicago?")
 preflight.prompt.messages
 ```
 
@@ -107,6 +115,11 @@ result.content
 
 Jidoka.Trace.Sink.InMemory.list(trace_sink)
 |> Enum.map(& &1.event)
+```
+
+```elixir
+{:ok, _timeline} = Jidoka.Kino.timeline(result)
+{:ok, _graph} = Jidoka.Kino.call_graph(result)
 ```
 
 ```elixir
@@ -188,14 +201,19 @@ snapshot.cursor
 ```
 
 ```elixir
-{:ok, resumed_result} = Jidoka.resume(snapshot, llm: fake_llm)
+{:ok, resumed_result} =
+  Jidoka.resume(snapshot,
+    llm: fake_llm,
+    operations: Jidoka.Runtime.JidoActions.operations([NotebookLocalTime])
+  )
+
 resumed_result.content
 ```
 
 ## Live Mode
 
-After adding `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` to `.env`, define an agent
-with a real model:
+After exporting `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the Livebook runtime
+environment, define an agent with a real model:
 
 ```elixir
 # defmodule LiveTimeAgent do

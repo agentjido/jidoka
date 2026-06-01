@@ -1,9 +1,11 @@
 defmodule Jidoka.StructuredResultIntegrationTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Turn
+
+  import Jidoka.TestSupport, only: [event_index: 2, final_llm: 1, final_llm: 2, timeline: 1]
 
   defmodule CaptureOutputControl do
     use Jidoka.Control, name: "capture_structured_result"
@@ -19,24 +21,17 @@ defmodule Jidoka.StructuredResultIntegrationTest do
 
   test "valid structured final output produces app-facing result value" do
     assert {:ok, %Turn.Result{} = result} =
-             Jidoka.run_turn(
+             Jidoka.turn(
                spec(),
                request(),
-               llm: fn _intent, _journal ->
-                 {:ok,
-                  %{
-                    type: :final,
-                    content: "Ada is ready.",
-                    result: %{"answer" => "Ada", "score" => 10}
-                  }}
-               end
+               llm: final_llm("Ada is ready.", result: %{"answer" => "Ada", "score" => 10})
              )
 
     assert result.content == "Ada is ready."
     assert result.value == %{answer: "Ada", score: 10}
     assert_receive {:output_control_value, %{answer: "Ada", score: 10}}
 
-    timeline = Jidoka.Extensions.Trace.timeline(result.events)
+    timeline = timeline(result.events)
     result_validated_index = event_index(timeline, :result_validated)
     result_control_index = event_index(timeline, :control_allowed)
 
@@ -47,12 +42,10 @@ defmodule Jidoka.StructuredResultIntegrationTest do
     content = Jason.encode!(%{"answer" => "Ada", "score" => 10})
 
     assert {:ok, %Turn.Result{} = result} =
-             Jidoka.run_turn(
+             Jidoka.turn(
                spec(),
                request(),
-               llm: fn _intent, _journal ->
-                 {:ok, %{type: :final, content: content}}
-               end
+               llm: final_llm(content)
              )
 
     assert result.content == content
@@ -61,11 +54,11 @@ defmodule Jidoka.StructuredResultIntegrationTest do
 
   test "invalid structured final output repairs within the configured bound" do
     assert {:ok, %Turn.Result{} = result} =
-             Jidoka.run_turn(spec(max_repairs: 1), request(), llm: repairing_llm())
+             Jidoka.turn(spec(max_repairs: 1), request(), llm: repairing_llm())
 
     assert result.value == %{answer: "Ada", score: 10}
 
-    timeline = Jidoka.Extensions.Trace.timeline(result.events)
+    timeline = timeline(result.events)
     assert Enum.any?(timeline, &match?(%{event: :result_repair_requested}, &1))
     assert Enum.any?(timeline, &match?(%{event: :result_validated}, &1))
 
@@ -89,7 +82,7 @@ defmodule Jidoka.StructuredResultIntegrationTest do
                 max_repairs: 0
               }
             }} =
-             Jidoka.run_turn(spec(max_repairs: 0), request(),
+             Jidoka.turn(spec(max_repairs: 0), request(),
                llm: fn _intent, _journal ->
                  {:ok,
                   %{
@@ -147,9 +140,5 @@ defmodule Jidoka.StructuredResultIntegrationTest do
            }}
       end
     end
-  end
-
-  defp event_index(timeline, event) do
-    Enum.find_index(timeline, &(&1.event == event))
   end
 end

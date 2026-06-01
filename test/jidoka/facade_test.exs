@@ -4,15 +4,14 @@ defmodule Jidoka.FacadeTest do
   alias Jidoka.Agent
   alias Jidoka.Turn
 
-  test "agent/1 and new_agent/1 expose the same validated spec constructor" do
+  test "agent/1 exposes the validated spec constructor" do
     attrs = [
       id: "facade_agent",
       instructions: "Answer through the facade.",
       model: %{provider: :test, id: "model"}
     ]
 
-    assert {:ok, %Agent.Spec{} = spec} = Jidoka.agent(attrs)
-    assert {:ok, ^spec} = Jidoka.new_agent(attrs)
+    assert {:ok, %Agent.Spec{id: "facade_agent"}} = Jidoka.agent(attrs)
   end
 
   test "plan/1 accepts existing plans and builds plans from specs" do

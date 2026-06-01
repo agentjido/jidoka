@@ -201,12 +201,13 @@ defmodule Jidoka.Turn.State do
          %__MODULE__{spec: %Agent.Spec{result: %Agent.Spec.Result{} = result}} = state,
          %Effect.LLMDecision{} = decision
        ) do
-    with {:ok, value} <- Agent.Spec.validate_result(state.spec, structured_final_value(decision)) do
-      state =
-        append_result_validated(state, value)
+    case Agent.Spec.validate_result(state.spec, structured_final_value(decision)) do
+      {:ok, value} ->
+        state =
+          append_result_validated(state, value)
 
-      finish_turn(state, decision.content, value)
-    else
+        finish_turn(state, decision.content, value)
+
       {:error, {:invalid_result, reason}} ->
         maybe_repair_result(state, decision, result, reason)
     end
@@ -277,9 +278,7 @@ defmodule Jidoka.Turn.State do
   end
 
   defp repair_reason(reason) when is_list(reason) do
-    reason
-    |> Enum.map(&repair_reason/1)
-    |> Enum.join("; ")
+    Enum.map_join(reason, "; ", &repair_reason/1)
   end
 
   defp repair_reason(%{path: path, message: message}) do

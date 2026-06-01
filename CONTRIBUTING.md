@@ -33,8 +33,9 @@ mix test --cover
 mix hex.build --unpack
 ```
 
-Live provider tests are opt-in and require keys in `.env` or the process
-environment:
+Live provider tests are opt-in and require provider keys in the process
+environment. The package does not load `.env` files itself; use your shell or
+host app config to provide credentials:
 
 ```bash
 mix test --include live test/jidoka/live_req_llm_test.exs

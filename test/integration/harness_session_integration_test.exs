@@ -13,6 +13,8 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2, final_llm: 1]
+
   defmodule RequireReviewControl do
     @moduledoc false
 
@@ -30,7 +32,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
     assert {:ok, %Session{session_id: "sess_chat"}} =
              Harness.start_session(spec, session_id: "sess_chat", store: store)
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "stored hello"}} end
+    llm = final_llm("stored hello")
 
     assert {:hibernate, %Session{status: :hibernated} = hibernated, %AgentSnapshot{} = snapshot} =
              Harness.run_session("sess_chat", "Say hello",
@@ -193,11 +195,5 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
         ),
       runtime_defaults: %{max_model_turns: 4}
     )
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

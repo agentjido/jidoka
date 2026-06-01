@@ -55,7 +55,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
   alias Jidoka.GoldenTest.Support.{MinimalAgent, TimeAgent}
 
   test "minimal DSL agent compiles to the expected Agent.Spec projection" do
-    assert Jidoka.projection(MinimalAgent.spec()) == %{
+    assert Jidoka.project(MinimalAgent.spec()) == %{
              id: "golden_minimal_agent",
              instructions: Jidoka.Agent.default_instructions(),
              model: "test:golden-minimal-model",
@@ -86,7 +86,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
   end
 
   test "tool DSL agent compiles to the expected Agent.Spec projection" do
-    assert Jidoka.projection(TimeAgent.spec()) == %{
+    assert Jidoka.project(TimeAgent.spec()) == %{
              id: "golden_time_agent",
              instructions: "Call local_time when asked for the time.",
              model: "test:golden-tool-model",
@@ -150,6 +150,6 @@ defmodule Jidoka.Golden.DslToSpecTest do
                :apply_operation_results
              ],
              metadata: %{}
-           } == Jidoka.projection(plan)
+           } == Jidoka.project(plan)
   end
 end

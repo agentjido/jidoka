@@ -41,7 +41,7 @@ defmodule Jidoka.Workflow.Steps do
       operations: operations,
       result: result_contract(state.spec.result),
       memory: memory_contract(state.memory),
-      compactions: Enum.map(state.compactions, &Jidoka.projection/1),
+      compactions: Enum.map(state.compactions, &Jidoka.project/1),
       context: state.request.context,
       generation: state.spec.generation.params,
       loop_index: state.loop_index
@@ -173,7 +173,7 @@ defmodule Jidoka.Workflow.Steps do
 
   defp memory_contract(memory) do
     %{
-      entries: Enum.map(memory.entries, &Jidoka.projection/1),
+      entries: Enum.map(memory.entries, &Jidoka.project/1),
       count: length(memory.entries)
     }
   end

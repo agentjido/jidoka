@@ -84,35 +84,38 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
 
   defp parse_operation(object, fallback_name \\ nil) do
     nested = nested_operation_object(object)
+    name = operation_name(object, nested, fallback_name)
+    arguments = operation_arguments(object, nested, fallback_name)
 
-    name =
-      Schema.get_key(object, :name) ||
-        Schema.get_key(object, :operation) ||
-        Schema.get_key(object, :tool) ||
-        Schema.get_key(object, :tool_name) ||
-        Schema.get_key(object, :function) ||
-        Schema.get_key(object, :function_name) ||
-        nested_name(nested) ||
-        fallback_name
+    build_operation_decision(name, arguments)
+  end
 
-    arguments =
-      Schema.get_key(object, :arguments) ||
-        Schema.get_key(object, :params) ||
-        Schema.get_key(object, :parameters) ||
-        Schema.get_key(object, :args) ||
-        nested_arguments(nested) ||
-        shorthand_arguments(object, fallback_name) ||
-        %{}
+  defp operation_name(object, nested, fallback_name) do
+    Schema.get_key(object, :name) ||
+      Schema.get_key(object, :operation) ||
+      Schema.get_key(object, :tool) ||
+      Schema.get_key(object, :tool_name) ||
+      Schema.get_key(object, :function) ||
+      Schema.get_key(object, :function_name) ||
+      nested_name(nested) ||
+      fallback_name
+  end
 
+  defp operation_arguments(object, nested, fallback_name) do
+    Schema.get_key(object, :arguments) ||
+      Schema.get_key(object, :params) ||
+      Schema.get_key(object, :parameters) ||
+      Schema.get_key(object, :args) ||
+      nested_arguments(nested) ||
+      shorthand_arguments(object, fallback_name) ||
+      %{}
+  end
+
+  defp build_operation_decision(name, arguments) do
     cond do
-      not is_binary(name) ->
-        {:error, {:invalid_operation_name, name}}
-
-      not is_map(arguments) ->
-        {:error, {:invalid_operation_arguments, arguments}}
-
-      true ->
-        {:ok, LLMDecision.operation(name, arguments)}
+      not is_binary(name) -> {:error, {:invalid_operation_name, name}}
+      not is_map(arguments) -> {:error, {:invalid_operation_arguments, arguments}}
+      true -> {:ok, LLMDecision.operation(name, arguments)}
     end
   end
 

@@ -10,6 +10,8 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   test "unsafe once operations fail preflight and runtime planning without a control" do
     spec =
       Agent.Spec.new!(
@@ -46,7 +48,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
                 operation_name: "refund_order",
                 idempotency: :unsafe_once
               }
-            }} = Jidoka.run_turn(spec, "Refund order_123", llm: llm)
+            }} = Jidoka.turn(spec, "Refund order_123", llm: llm)
   end
 
   test "controlled unsafe once operations can execute through the normal turn loop" do
@@ -103,7 +105,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
       })
 
     assert {:ok, %Turn.Result{content: "Refund refund_123 is queued."} = result} =
-             Jidoka.run_turn(
+             Jidoka.turn(
                spec,
                Turn.Request.new!(input: "Refund order_123", metadata: %{test_pid: test_pid}),
                llm: llm,
@@ -158,7 +160,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
     end
 
     assert {:hibernate, %AgentSnapshot{} = prompt_snapshot} =
-             Jidoka.run_turn(spec, "Weather in Paris?",
+             Jidoka.turn(spec, "Weather in Paris?",
                llm: llm,
                operations: operations,
                checkpoint: :after_each_phase
@@ -196,12 +198,6 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
     assert_receive {:llm_called, 0}
     assert_receive {:llm_called, 1}
     refute_received {:llm_called, _count}
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 
   defp journal_has_operation_result?(%Effect.Journal{intents: intents, results: results}, name) do

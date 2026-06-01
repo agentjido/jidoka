@@ -4,6 +4,8 @@ defmodule Jidoka.SkillTest do
   alias Jidoka.Effect
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   defmodule PolicyLookupAction do
     @moduledoc false
 
@@ -136,11 +138,5 @@ defmodule Jidoka.SkillTest do
 
     assert {:error, {:invalid_skill, "missing-skill", _reason}} =
              Jidoka.Skill.prompt(["missing-skill"])
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

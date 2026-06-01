@@ -1,15 +1,22 @@
 # Jidoka V2 Contracts And Runic Spine
 
+## Section
+
 This notebook shows the V2 center of gravity: agent definition data, a compiled
 turn plan, preflight inspection, a deterministic tool loop, and hibernate/resume.
 
 ```elixir
 Mix.install(
   [
+    {:kino, "~> 0.14"},
     {:jidoka, path: Path.expand("..", __DIR__)}
   ],
   consolidate_protocols: false
 )
+```
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:notebook-model", check_provider?: false)
 ```
 
 ## Define A Small Agent
@@ -50,11 +57,13 @@ end
 ```elixir
 spec = ContractAgent.spec()
 {:ok, plan} = Jidoka.plan(spec)
-{:ok, preflight} = Jidoka.preflight(plan, "Check contract C-100.")
+{:ok, _inspection} = Jidoka.Kino.debug_agent(ContractAgent)
+{:ok, _diagram} = Jidoka.Kino.agent_diagram(ContractAgent)
+{:ok, preflight} = Jidoka.Kino.preflight(plan, "Check contract C-100.")
 
 %{
-  spec: Jidoka.projection(spec),
-  plan: Jidoka.projection(plan),
+  spec: Jidoka.project(spec),
+  plan: Jidoka.project(plan),
   prompt_messages: preflight.prompt.messages
 }
 ```
@@ -81,9 +90,14 @@ end
 
 %{
   content: result.content,
-  operations: Enum.map(result.agent_state.operation_results, &Jidoka.projection/1),
+  operations: Enum.map(result.agent_state.operation_results, &Jidoka.project/1),
   journal: Jidoka.inspect(result.journal)
 }
+```
+
+```elixir
+{:ok, _timeline} = Jidoka.Kino.timeline(result)
+{:ok, _graph} = Jidoka.Kino.call_graph(result)
 ```
 
 ## Hibernate And Resume
@@ -99,6 +113,13 @@ end
 ```
 
 ```elixir
-{:ok, resumed} = Jidoka.resume(snapshot, llm: fake_llm)
+{:ok, resumed} =
+  Jidoka.resume(snapshot,
+    llm: fake_llm,
+    operations: Jidoka.Runtime.JidoActions.operations([ContractLookup])
+  )
+
 resumed.content
 ```
+
+<!-- livebook:{"offset":2645,"stamp":{"token":"XCP.SSJ-R7d0g5DhKoK0stFdj6WbLjFh3rd5Q2eldCzOM82EohFJ9X4DPDRC2d1e5LqxdLxctZR5Zq3y_BKY9qX_0mVvA-g2Jx_QZQ7KA55Mon0Vc9lG05mnwq5KHEA","version":2}} -->

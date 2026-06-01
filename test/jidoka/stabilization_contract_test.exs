@@ -89,14 +89,14 @@ defmodule Jidoka.StabilizationContractTest do
       session: 1,
       session: 2,
       session: 3,
-      handoff_owner: 1,
+      handoff: 1,
       reset_handoff: 1,
       plan: 1,
       plan!: 1,
       chat: 2,
       chat: 3,
-      run_turn: 2,
-      run_turn: 3,
+      turn: 2,
+      turn: 3,
       await_agent: 1,
       await_agent: 2,
       resume: 1,
@@ -107,7 +107,7 @@ defmodule Jidoka.StabilizationContractTest do
       inspect: 2,
       preflight: 2,
       preflight: 3,
-      projection: 1,
+      project: 1,
       normalize_error: 1,
       normalize_error: 2
     ]
@@ -128,7 +128,13 @@ defmodule Jidoka.StabilizationContractTest do
       await_chat_request: 2,
       schedule_agent: 3,
       inspect_agent: 1,
-      prompt_preflight: 2
+      prompt_preflight: 2,
+      new_agent: 1,
+      compile_turn_plan!: 1,
+      handoff_owner: 1,
+      run_turn: 2,
+      run_turn: 3,
+      projection: 1
     ]
 
     for {function, arity} <- removed_v1_exports do

@@ -13,7 +13,7 @@ Use these rules when generating code that depends on Jidoka.
 ## Runtime
 
 - Use `Jidoka.chat/3` for a simple one-turn text result.
-- Use `Jidoka.run_turn/3` when callers need the full `Jidoka.Turn.Result`,
+- Use `Jidoka.turn/3` when callers need the full `Jidoka.Turn.Result`,
   journal, state, events, or hibernation snapshot.
 - Use `Jidoka.session/2` or `Jidoka.Session` for durable, multi-turn flows.
 - Use injected runtime capabilities in tests instead of live provider calls.

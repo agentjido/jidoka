@@ -109,9 +109,8 @@ defmodule Jidoka.Operation.Source.Catalog do
      fn
        %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
-              :ok <- ensure_operation_name(source, request.name),
-              {:ok, catalog} <- search_catalog(source, request.arguments) do
-           {:ok, catalog}
+              :ok <- ensure_operation_name(source, request.name) do
+           search_catalog(source, request.arguments)
          end
 
        %Effect.Intent{kind: kind}, _journal ->

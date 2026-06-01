@@ -4,6 +4,8 @@ defmodule Jidoka.MinimalDslIntegrationTest do
   alias Jidoka.Effect
   alias Jidoka.IntegrationSupport.MinimalChatAgent
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   test "bare DSL agent can make one chat call without tools" do
     assert MinimalChatAgent.__jidoka_agent__().instructions == Jidoka.Agent.default_instructions()
     assert MinimalChatAgent.__jidoka_agent__().actions == []
@@ -37,11 +39,5 @@ defmodule Jidoka.MinimalDslIntegrationTest do
               phase: :operation,
               details: %{reason: :unknown_operation, operation_name: "lookup_order"}
             }} = MinimalChatAgent.run_turn("Look up order order_123", llm: llm)
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

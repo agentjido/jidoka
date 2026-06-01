@@ -204,7 +204,7 @@ defmodule Jidoka.AgentView do
         metadata:
           view.metadata
           |> Map.put(:agent_state, result.agent_state)
-          |> Map.put(:last_result, Jidoka.projection(result))
+          |> Map.put(:last_result, Jidoka.project(result))
     }
   end
 
@@ -217,7 +217,7 @@ defmodule Jidoka.AgentView do
         error: nil,
         error_text: "Agent hibernated for review.",
         outcome: {:hibernate, snapshot},
-        metadata: Map.put(view.metadata, :last_snapshot, Jidoka.projection(snapshot))
+        metadata: Map.put(view.metadata, :last_snapshot, Jidoka.project(snapshot))
     }
   end
 
@@ -326,12 +326,10 @@ defmodule Jidoka.AgentView do
       %{input: message, context: view.runtime_context}
       |> maybe_put_agent_state(Map.get(view.metadata, :agent_state))
 
-    cond do
-      loaded_agent_module?(agent) and function_exported?(agent, :run_turn, 2) ->
-        apply(agent, :run_turn, [request_input, opts])
-
-      true ->
-        Jidoka.run_turn(agent, request_input, opts)
+    if loaded_agent_module?(agent) and function_exported?(agent, :run_turn, 2) do
+      apply(agent, :run_turn, [request_input, opts])
+    else
+      Jidoka.turn(agent, request_input, opts)
     end
   end
 
@@ -344,16 +342,14 @@ defmodule Jidoka.AgentView do
   end
 
   defp agent_projection(agent) when is_atom(agent) do
-    cond do
-      loaded_agent_module?(agent) and function_exported?(agent, :spec, 0) ->
-        Jidoka.projection(agent.spec())
-
-      true ->
-        %{module: inspect(agent)}
+    if loaded_agent_module?(agent) and function_exported?(agent, :spec, 0) do
+      Jidoka.project(agent.spec())
+    else
+      %{module: inspect(agent)}
     end
   end
 
-  defp agent_projection(agent), do: Jidoka.projection(agent)
+  defp agent_projection(agent), do: Jidoka.project(agent)
 
   defp user_message(content, opts) do
     %{
@@ -492,7 +488,7 @@ defmodule Jidoka.AgentView do
 
   defp operation_events(%Turn.Result{} = result) do
     Enum.map(result.agent_state.operation_results, fn operation_result ->
-      projection = Jidoka.projection(operation_result)
+      projection = Jidoka.project(operation_result)
 
       %{
         id: operation_result.effect_id || message_id("operation"),

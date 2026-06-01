@@ -56,7 +56,7 @@ defmodule Jidoka.TraceTest do
              redact_keys: ["secret"],
              omit_keys: ["payload"]
            } =
-             Jidoka.projection(
+             Jidoka.project(
                Policy.new!(
                  enabled: false,
                  sample_rate: 0.5,

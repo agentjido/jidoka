@@ -45,7 +45,7 @@ defmodule Jidoka.ProjectionTest do
         }
       )
 
-    assert Jidoka.projection(spec) == %{
+    assert Jidoka.project(spec) == %{
              id: "projection_agent",
              instructions: "Project this spec.",
              model: "test:projection-model",
@@ -111,7 +111,7 @@ defmodule Jidoka.ProjectionTest do
                %{intent_id: "a", kind: :llm, output: %{value: 1}},
                %{intent_id: "b", kind: :operation, output: %{value: 2}}
              ]
-           } = Jidoka.projection(journal)
+           } = Jidoka.project(journal)
   end
 
   test "projects structured result contracts without exposing raw Zoi schema data" do
@@ -128,13 +128,13 @@ defmodule Jidoka.ProjectionTest do
       )
 
     assert %{result: %{schema?: true, max_repairs: 2, metadata: %{owner: "unit"}}} =
-             Jidoka.projection(spec)
+             Jidoka.project(spec)
   end
 
   test "summarizes raw LLMDB models and Zoi schemas in nested projection data" do
     {:ok, model} = Jidoka.Config.normalize_model_spec(%{provider: :test, id: "nested-model"})
 
-    assert Jidoka.projection(%{
+    assert Jidoka.project(%{
              model: model,
              schema: Zoi.object(%{tenant_id: Zoi.string()})
            }) == %{
@@ -179,6 +179,6 @@ defmodule Jidoka.ProjectionTest do
                pending_effects: [%{id: "llm:1", kind: :llm}],
                plan: %{spec_id: "snapshot_projection_agent"}
              }
-           } = Jidoka.projection(snapshot)
+           } = Jidoka.project(snapshot)
   end
 end

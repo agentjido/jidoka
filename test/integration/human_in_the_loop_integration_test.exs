@@ -1,5 +1,5 @@
 defmodule Jidoka.HumanInTheLoopIntegrationTest do
-  use ExUnit.Case, async: false
+  use ExUnit.Case, async: true
 
   alias Jidoka.Agent
   alias Jidoka.Effect
@@ -7,6 +7,8 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
+
+  import Jidoka.TestSupport, only: [count_results: 2, event_index: 2, operation_capability_index: 2, timeline: 1]
 
   test "operation interrupt hibernates with a durable approval request" do
     assert {:hibernate, %AgentSnapshot{} = snapshot} =
@@ -36,7 +38,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
     assert approval_request.arguments == %{"id" => "reviewed"}
     assert approval_request.expires_at_ms == 31_000
 
-    timeline = Jidoka.Extensions.Trace.timeline(snapshot.turn_state.events)
+    timeline = timeline(snapshot.turn_state.events)
     assert Enum.any?(timeline, &match?(%{event: :control_interrupted}, &1))
     assert Enum.any?(timeline, &match?(%{event: :approval_requested}, &1))
 
@@ -74,7 +76,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
     assert [%Effect.OperationResult{operation: "review_lookup"}] =
              result.agent_state.operation_results
 
-    timeline = Jidoka.Extensions.Trace.timeline(result.events)
+    timeline = timeline(result.events)
     approval_responded_index = event_index(timeline, :approval_responded)
     approval_applied_index = event_index(timeline, :approval_applied)
     capability_index = operation_capability_index(timeline, "review_lookup")
@@ -190,7 +192,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   defp run_interrupted_turn(reason, opts) do
-    Jidoka.run_turn(
+    Jidoka.turn(
       spec(),
       request({:interrupt, reason}),
       [llm: llm(), operations: operations()] ++ opts
@@ -254,24 +256,4 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   defp clock(now_ms), do: fn -> now_ms end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
-  end
-
-  defp event_index(timeline, event) do
-    Enum.find_index(timeline, &match?(%{event: ^event}, &1))
-  end
-
-  defp operation_capability_index(timeline, operation) do
-    Enum.find_index(
-      timeline,
-      &match?(
-        %{event: :capability_call_started, effect_kind: :operation, operation: ^operation},
-        &1
-      )
-    )
-  end
 end

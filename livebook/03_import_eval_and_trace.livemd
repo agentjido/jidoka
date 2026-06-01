@@ -1,15 +1,22 @@
 # Import, Eval, And Trace
 
+## Section
+
 This notebook shows a data-authored agent imported from YAML, explicit registries
 for executable references, deterministic evals, and trace recording.
 
 ```elixir
 Mix.install(
   [
+    {:kino, "~> 0.14"},
     {:jidoka, path: Path.expand("..", __DIR__)}
   ],
   consolidate_protocols: false
 )
+```
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:notebook-model", check_provider?: false)
 ```
 
 ## Register Executable References
@@ -56,7 +63,8 @@ controls:
     actions: %{"echo" => NotebookEcho}
   )
 
-Jidoka.inspect(spec)
+{:ok, _inspection} = Jidoka.Kino.debug_agent(spec)
+{:ok, _diagram} = Jidoka.Kino.agent_diagram(spec)
 ```
 
 ## Run And Trace The Turn
@@ -75,7 +83,7 @@ fake_llm = fn _intent, journal ->
 end
 
 {:ok, result} =
-  Jidoka.run_turn(spec, "Echo Ada.",
+  Jidoka.turn(spec, "Echo Ada.",
     llm: fake_llm,
     operations: Jidoka.Runtime.JidoActions.operations([NotebookEcho])
   )
@@ -89,6 +97,11 @@ end
 
 Jidoka.Trace.Sink.InMemory.list(trace_pid)
 |> Enum.map(& &1.event)
+```
+
+```elixir
+{:ok, _timeline} = Jidoka.Kino.timeline(result)
+{:ok, _graph} = Jidoka.Kino.call_graph(result)
 ```
 
 ## Turn The Flow Into An Eval

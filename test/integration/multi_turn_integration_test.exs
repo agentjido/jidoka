@@ -11,6 +11,8 @@ defmodule Jidoka.MultiTurnIntegrationTest do
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   test "caller-managed agent state carries tool observations across separate turns" do
     test_pid = self()
 
@@ -89,7 +91,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
     end
 
     assert {:ok, %Turn.Result{} = first_result} =
-             Jidoka.run_turn(spec, Turn.Request.new!(input: "Check order order_123"),
+             Jidoka.turn(spec, Turn.Request.new!(input: "Check order order_123"),
                llm: first_turn_llm,
                operations: operations
              )
@@ -138,7 +140,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
     end
 
     assert {:ok, %Turn.Result{} = second_result} =
-             Jidoka.run_turn(
+             Jidoka.turn(
                spec,
                Turn.Request.new!(
                  input: "Refund it for the customer.",
@@ -246,7 +248,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
       })
 
     first_step =
-      Jidoka.run_turn(spec, Turn.Request.new!(input: "Weather near Millennium Park"),
+      Jidoka.turn(spec, Turn.Request.new!(input: "Weather near Millennium Park"),
         llm: llm,
         operations: operations,
         checkpoint: :after_each_phase
@@ -309,7 +311,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
     assert {:ok, pid} = AccountAgent.start(id: id)
 
     assert {:ok, %Turn.Result{content: "Account acct_123 is on the Pro plan."}} =
-             Jidoka.run_turn(pid, "Check acct_123",
+             Jidoka.turn(pid, "Check acct_123",
                llm: first_turn_llm,
                operation_context: %{test_pid: test_pid}
              )
@@ -351,12 +353,6 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
   defp drain_snapshots({:hibernate, %AgentSnapshot{}}, _opts, _cursors, 0),
     do: flunk("snapshot drain exceeded the maximum number of resume steps")
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
-  end
 
   defp prompt_messages(%Effect.Intent{payload: payload}) do
     payload

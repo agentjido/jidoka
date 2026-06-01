@@ -88,7 +88,7 @@ defmodule Jidoka.Harness do
              Keyword.put(opts, :session_id, session.session_id)
            ),
          {:ok, capabilities} <- normalize_capabilities(opts),
-         {:ok, session} <- session |> Session.put_request(request) |> persist_session(opts) do
+         {:ok, session} <- claim_session(session_input, session, request, opts) do
       session
       |> run_session_turn(
         plan,
@@ -231,6 +231,18 @@ defmodule Jidoka.Harness do
       {:ok, store} -> Store.put_session(store, session)
       :error -> {:ok, session}
     end
+  end
+
+  defp claim_session(session_id, _session, %Turn.Request{} = request, opts) when is_binary(session_id) do
+    with {:ok, store} <- fetch_store(opts) do
+      Store.claim_session(store, session_id, request)
+    end
+  end
+
+  defp claim_session(_session_input, %Session{} = session, %Turn.Request{} = request, opts) do
+    session
+    |> Session.put_request(request)
+    |> persist_session(opts)
   end
 
   defp resolve_session(%Session{} = session, _opts), do: {:ok, session}

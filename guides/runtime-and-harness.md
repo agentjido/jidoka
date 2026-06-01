@@ -208,7 +208,7 @@ spec =
     operations: compiled.operations
   )
 
-Jidoka.run_turn(spec, "Check ticket T-100",
+Jidoka.turn(spec, "Check ticket T-100",
   llm: llm,
   operations: compiled.capability
 )
@@ -280,7 +280,7 @@ Jidoka snapshots semantic state:
 
 ```elixir
 {:hibernate, snapshot} =
-  Jidoka.run_turn(spec, "Hello",
+  Jidoka.turn(spec, "Hello",
     llm: llm,
     checkpoint: :after_prompt
   )

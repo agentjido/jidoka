@@ -38,12 +38,8 @@ defmodule Jidoka.Agent.ToolSources do
   @spec skill_prompt!(module()) :: String.t() | nil
   def skill_prompt!(agent_module) when is_atom(agent_module) do
     operation_from_dsl!(agent_module, [:tools, :skill], fn ->
-      with {:ok, prompt} <-
-             Jidoka.Skill.prompt(skill_refs(agent_module),
-               load_paths: skill_load_paths(agent_module)
-             ) do
-        prompt
-      else
+      case Jidoka.Skill.prompt(skill_refs(agent_module), load_paths: skill_load_paths(agent_module)) do
+        {:ok, prompt} -> prompt
         {:error, reason} -> raise ArgumentError, "invalid skill prompt: #{inspect(reason)}"
       end
     end)
@@ -113,14 +109,12 @@ defmodule Jidoka.Agent.ToolSources do
   defp operations_from_entity!(agent_module, %AshResource{} = ash_resource) do
     generated_actions = ash_jido_actions(ash_resource)
 
-    cond do
-      generated_actions != [] ->
-        generated_actions
-        |> Enum.map(&operation_from_action!(agent_module, &1, [:tools, :ash_resource]))
-        |> Enum.map(&tag_ash_operation(&1, ash_resource))
-
-      true ->
-        []
+    if generated_actions != [] do
+      generated_actions
+      |> Enum.map(&operation_from_action!(agent_module, &1, [:tools, :ash_resource]))
+      |> Enum.map(&tag_ash_operation(&1, ash_resource))
+    else
+      []
     end
   end
 
@@ -358,11 +352,12 @@ defmodule Jidoka.Agent.ToolSources do
       reraise error, __STACKTRACE__
 
     exception ->
-      raise Spark.Error.DslError.exception(
-              message: Exception.message(exception),
-              path: path,
-              module: agent_module
-            )
+      reraise Spark.Error.DslError.exception(
+                message: Exception.message(exception),
+                path: path,
+                module: agent_module
+              ),
+              __STACKTRACE__
   end
 
   defp tag_ash_operation(

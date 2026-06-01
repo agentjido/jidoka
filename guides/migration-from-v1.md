@@ -28,7 +28,7 @@ Start with these V2 entrypoints:
 - `use Jidoka.Agent` for the Spark DSL.
 - `Jidoka.import/2` for JSON/YAML strings.
 - `Jidoka.plan/1` / `Jidoka.plan!/1` for executable turn plans.
-- `Jidoka.run_turn/3` for full typed results.
+- `Jidoka.turn/3` for full typed results.
 - `Jidoka.chat/3` for final text only.
 - `Jidoka.resume/2` for hibernated snapshots.
 - `Jidoka.inspect/1` and `Jidoka.preflight/3` for debugging.

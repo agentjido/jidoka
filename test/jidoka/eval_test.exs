@@ -7,6 +7,8 @@ defmodule Jidoka.EvalTest do
   alias Jidoka.Eval
   alias Jidoka.Runtime.LocalOperations
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   test "run_case evaluates content and operation assertions" do
     spec =
       Agent.Spec.new!(
@@ -151,11 +153,5 @@ defmodule Jidoka.EvalTest do
                llm: llm,
                checkpoint: :after_prompt
              )
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

@@ -18,6 +18,8 @@ defmodule Jidoka.ExtensionTest do
   alias Jidoka.Extensions.Trace
   alias Jidoka.Runtime.LocalOperations
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   test "extension behaviour supplies narrow defaults" do
     assert EmptyExtension.name() == :empty
     assert EmptyExtension.dsl_sections() == []
@@ -111,7 +113,7 @@ defmodule Jidoka.ExtensionTest do
         end
       })
 
-    assert {:ok, result} = Jidoka.run_turn(spec, "Lookup A-1", llm: llm, operations: operations)
+    assert {:ok, result} = Jidoka.turn(spec, "Lookup A-1", llm: llm, operations: operations)
 
     timeline = Trace.timeline(result.events)
 
@@ -146,10 +148,6 @@ defmodule Jidoka.ExtensionTest do
              %{event: :capability_call_completed, effect_kind: :operation, operation: "lookup"},
              %{event: :effect_completed, effect_kind: :operation, operation: "lookup"}
            ] = Enum.filter(timeline, &(&1[:effect_kind] == :operation))
-  end
-
-  defp count_results(%Effect.Journal{} = journal, kind) do
-    Enum.count(journal.results, fn {_id, result} -> result.kind == kind end)
   end
 
   defp append_event(events, event, attrs) do

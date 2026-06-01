@@ -12,18 +12,14 @@ mix deps.get
 mix test
 ```
 
-For live LLM calls, create a `.env` file:
+For live LLM calls, provide one provider key in the process environment or in
+your host application's ReqLLM config. The Jidoka package does not load `.env`
+files itself.
 
 ```bash
-cp .env.example .env
-```
-
-Then add one provider key:
-
-```bash
-OPENAI_API_KEY=...
+export OPENAI_API_KEY=...
 # or
-ANTHROPIC_API_KEY=...
+export ANTHROPIC_API_KEY=...
 ```
 
 ## Define A Tool

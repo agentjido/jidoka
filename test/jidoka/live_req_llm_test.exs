@@ -43,9 +43,7 @@ defmodule Jidoka.LiveReqLLMTest do
     defmodule TimeAgent do
       use Jidoka.Agent
 
-      @live_model System.get_env("JIDOKA_DEFAULT_MODEL") ||
-                    System.get_env("JIDOKA_LIVE_MODEL") ||
-                    Jidoka.Config.default_model()
+      @live_model Jidoka.Config.model_ref(Jidoka.Config.default_model())
 
       agent :live_time_agent do
         model @live_model

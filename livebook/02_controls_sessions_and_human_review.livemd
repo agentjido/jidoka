@@ -1,15 +1,22 @@
 # Controls, Sessions, And Human Review
 
+## Section
+
 This notebook demonstrates operation controls, durable session snapshots, pending
 review requests, and approval-based resume.
 
 ```elixir
 Mix.install(
   [
+    {:kino, "~> 0.14"},
     {:jidoka, path: Path.expand("..", __DIR__)}
   ],
   consolidate_protocols: false
 )
+```
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:notebook-model", check_provider?: false)
 ```
 
 ## Define A Reviewed Operation
@@ -47,7 +54,7 @@ defmodule RefundAgent do
   end
 
   tools do
-    action IssueRefund, idempotency: :unsafe_once
+    action IssueRefund
   end
 
   controls do
@@ -64,6 +71,7 @@ end
 store = {Jidoka.Harness.Store.InMemory, pid: store_pid}
 
 {:ok, session} = Jidoka.Harness.start_session(RefundAgent.spec(), session_id: "refund-demo", store: store)
+{:ok, _inspection} = Jidoka.Kino.debug_agent(RefundAgent)
 session.status
 ```
 
@@ -108,7 +116,8 @@ approval = Jidoka.Review.Response.approve(review.interrupt_id)
   Jidoka.Harness.resume_session("refund-demo",
     store: store,
     approval: approval,
-    llm: fake_llm
+    llm: fake_llm,
+    operations: Jidoka.Runtime.JidoActions.operations([IssueRefund])
   )
 
 %{
@@ -116,4 +125,9 @@ approval = Jidoka.Review.Response.approve(review.interrupt_id)
   content: result.content,
   replay: Jidoka.inspect(finished).replay
 }
+```
+
+```elixir
+{:ok, _timeline} = Jidoka.Kino.timeline(finished)
+{:ok, _graph} = Jidoka.Kino.call_graph(finished)
 ```

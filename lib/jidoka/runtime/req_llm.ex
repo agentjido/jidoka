@@ -28,10 +28,10 @@ defmodule Jidoka.Runtime.ReqLLM do
           | {:on_event, (Event.t() -> term())}
 
   @doc """
-  Returns an LLM function suitable for `Jidoka.run_turn/3`.
+  Returns an LLM function suitable for `Jidoka.turn/3`.
 
       llm = Jidoka.Runtime.ReqLLM.llm(model: "openai:gpt-4o-mini", temperature: 0.0)
-      Jidoka.run_turn(agent, "Use the available tool.", llm: llm, operations: ops)
+      Jidoka.turn(agent, "Use the available tool.", llm: llm, operations: ops)
   """
   @spec llm([option()]) :: Jidoka.Runtime.Capabilities.llm_capability()
   def llm(opts \\ []) when is_list(opts) do
@@ -81,9 +81,8 @@ defmodule Jidoka.Runtime.ReqLLM do
   end
 
   defp build_messages(payload) when is_map(payload) do
-    with {:ok, prompt} when is_map(prompt) <- Schema.fetch_key(payload, :prompt) do
-      build_prompt_messages(prompt)
-    else
+    case Schema.fetch_key(payload, :prompt) do
+      {:ok, prompt} when is_map(prompt) -> build_prompt_messages(prompt)
       {:ok, prompt} -> {:error, {:invalid_prompt_payload, prompt}}
       :error -> {:error, {:missing_prompt_payload, payload}}
     end

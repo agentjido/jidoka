@@ -287,7 +287,7 @@ defmodule JidokaExampleWeb.AgentLive do
             |> maybe_put_memory_store(memory_store)
             |> maybe_put_operation_context(operation_context)
 
-          Jidoka.run_turn(pid, question, run_opts)
+          Jidoka.turn(pid, question, run_opts)
         end
 
       send(parent, {:jidoka_turn_result, request_id, result, model})

@@ -9,6 +9,7 @@ defmodule Jidoka.Harness.Store.InMemory do
   @behaviour Jidoka.Harness.Store
 
   alias Jidoka.Harness.Session
+  alias Jidoka.Turn
 
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
@@ -43,6 +44,25 @@ defmodule Jidoka.Harness.Store.InMemory do
       |> Enum.sort_by(& &1.session_id)
 
     {:ok, sessions}
+  end
+
+  @impl true
+  def claim_session(session_id, %Turn.Request{} = request, opts) when is_binary(session_id) do
+    pid = fetch_pid!(opts)
+
+    Agent.get_and_update(pid, fn sessions ->
+      case Map.get(sessions, session_id) do
+        nil ->
+          {{:error, {:session_not_found, session_id}}, sessions}
+
+        %Session{status: :running} ->
+          {{:error, {:session_already_running, session_id}}, sessions}
+
+        %Session{} = session ->
+          claimed = Session.put_request(session, request)
+          {{:ok, claimed}, Map.put(sessions, session_id, claimed)}
+      end
+    end)
   end
 
   defp fetch_pid!(opts) do

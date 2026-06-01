@@ -6,6 +6,8 @@ defmodule Jidoka.DocumentedExamplesIntegrationTest do
   alias Jidoka.IntegrationSupport.InputControlledLookupAgent
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   test "getting started one-tool loop remains executable" do
     test_pid = self()
 
@@ -56,11 +58,5 @@ defmodule Jidoka.DocumentedExamplesIntegrationTest do
 
     assert {:error, %Jidoka.Error.ExecutionError{details: %{reason: :control_blocked}}} =
              InputControlledLookupAgent.run_turn("blocked input", llm: llm)
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

@@ -70,7 +70,7 @@ defmodule JidokaTest do
     end
 
     assert {:ok, %Turn.Result{content: "echo"}} = Jidoka.Harness.run_turn(plan, "Echo", llm: llm)
-    assert {:ok, %Turn.Result{content: "echo"}} = Jidoka.run_turn(plan, "Echo", llm: llm)
+    assert {:ok, %Turn.Result{content: "echo"}} = Jidoka.turn(plan, "Echo", llm: llm)
     assert {:ok, "echo"} = Jidoka.chat(spec, "Echo", capabilities: [llm: llm])
   end
 
@@ -92,7 +92,7 @@ defmodule JidokaTest do
 
     assert spec.generation.params == %{temperature: 0.0, max_tokens: 500}
     assert [%Operation{name: "weather", idempotency: :idempotent}] = spec.operations
-    assert Jidoka.compile_turn_plan!(spec).max_model_turns == 2
+    assert Jidoka.plan!(spec).max_model_turns == 2
 
     assert {:error, [%Zoi.Error{path: [:operations, 0, :idempotency]}]} =
              Agent.Spec.new(%{
@@ -147,7 +147,7 @@ defmodule JidokaTest do
       })
 
     assert {:ok, %Turn.Result{} = result} =
-             Jidoka.run_turn(spec, Turn.Request.new!(input: "Weather in Paris?"),
+             Jidoka.turn(spec, Turn.Request.new!(input: "Weather in Paris?"),
                llm: llm,
                operations: operations
              )
@@ -218,7 +218,7 @@ defmodule JidokaTest do
     end
 
     assert {:hibernate, %AgentSnapshot{} = snapshot} =
-             Jidoka.run_turn(spec, Turn.Request.new!(input: "Say hello"),
+             Jidoka.turn(spec, Turn.Request.new!(input: "Say hello"),
                llm: llm,
                operations: operations,
                checkpoint: :after_prompt
@@ -269,7 +269,7 @@ defmodule JidokaTest do
       })
 
     assert {:hibernate, %AgentSnapshot{} = prompt_snapshot} =
-             Jidoka.run_turn(spec, Turn.Request.new!(input: "Weather in Paris?"),
+             Jidoka.turn(spec, Turn.Request.new!(input: "Weather in Paris?"),
                llm: llm,
                operations: operations,
                checkpoint: :after_each_phase
@@ -309,10 +309,10 @@ defmodule JidokaTest do
     llm = fn _intent, _journal -> {:ok, %{type: :final, content: "ok"}} end
 
     assert {:error, %Jidoka.Error.ValidationError{field: :context}} =
-             Jidoka.run_turn(spec, Turn.Request.new!(input: "Hello", context: %{}), llm: llm)
+             Jidoka.turn(spec, Turn.Request.new!(input: "Hello", context: %{}), llm: llm)
 
     assert {:ok, %Turn.Result{content: "ok"}} =
-             Jidoka.run_turn(
+             Jidoka.turn(
                spec,
                Turn.Request.new!(input: "Hello", context: %{tenant_id: "tenant_123"}),
                llm: llm

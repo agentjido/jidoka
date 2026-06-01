@@ -5,6 +5,8 @@ defmodule Jidoka.WorkflowTest do
   alias Jidoka.Effect
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   defmodule MathWorkflow do
     @moduledoc false
 
@@ -98,11 +100,5 @@ defmodule Jidoka.WorkflowTest do
                }
              }
            ] = result.agent_state.operation_results
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

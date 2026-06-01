@@ -125,7 +125,7 @@ defmodule Jidoka.Golden.ImportToSpecTest do
 
   defp semantic_projection(spec) do
     spec
-    |> Jidoka.projection()
+    |> Jidoka.project()
     |> Map.drop([:metadata])
   end
 end

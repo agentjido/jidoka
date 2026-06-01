@@ -39,7 +39,12 @@ defmodule Jidoka.MixProject do
       preferred_envs: [
         coveralls: :test,
         "coveralls.github": :test,
-        "coveralls.html": :test
+        "coveralls.html": :test,
+        "coveralls.json": :test,
+        "coveralls.detail": :test,
+        "coveralls.lcov": :test,
+        "coveralls.xml": :test,
+        "coveralls.cobertura": :test
       ]
     ]
   end
@@ -55,7 +60,6 @@ defmodule Jidoka.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:dotenvy, "~> 1.1"},
       {:ash_jido, "~> 1.0"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
@@ -96,6 +100,7 @@ defmodule Jidoka.MixProject do
         "guides",
         "livebook",
         ".formatter.exs",
+        "coveralls.json",
         "mix.exs",
         "README.md",
         "CHANGELOG.md",
@@ -139,7 +144,7 @@ defmodule Jidoka.MixProject do
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
-        "credo --min-priority higher",
+        "credo",
         "dialyzer",
         "doctor --raise"
       ]

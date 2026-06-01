@@ -5,6 +5,8 @@ defmodule Jidoka.SubagentTest do
   alias Jidoka.Effect
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   defmodule EvidenceAgent do
     @moduledoc false
 
@@ -114,11 +116,5 @@ defmodule Jidoka.SubagentTest do
     assert_receive {:llm_called, "evidence_agent", %{:tenant => "acme", "task_scope" => "runtime"}}
 
     refute_received {:llm_called, "evidence_agent", %{secret: "hidden"}}
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

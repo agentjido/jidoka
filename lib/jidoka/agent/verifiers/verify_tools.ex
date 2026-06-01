@@ -9,50 +9,42 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
 
     dsl_state
     |> Spark.Dsl.Verifier.get_entities([:tools])
-    |> Enum.reduce_while({:ok, MapSet.new()}, fn
-      %Jidoka.Agent.Dsl.Tool{} = tool_ref, {:ok, seen_names} ->
-        with {:ok, tool_name} <- tool_name(tool_ref.module) do
-          if MapSet.member?(seen_names, tool_name) do
-            {:halt,
-             {:error,
-              dsl_error(
-                "tool #{inspect(tool_name)} is defined more than once",
-                module,
-                [:tools, :action],
-                tool_ref
-              )}}
-          else
-            {:cont, {:ok, MapSet.put(seen_names, tool_name)}}
-          end
-        else
-          {:error, message} ->
-            {:halt, {:error, dsl_error(message, module, [:tools, :action], tool_ref)}}
-        end
-
-      %Jidoka.Agent.Dsl.SkillRef{} = skill_ref, {:ok, seen_names} ->
-        case Jidoka.Skill.validate_ref(skill_ref.skill) do
-          :ok ->
-            {:cont, {:ok, seen_names}}
-
-          {:error, message} ->
-            {:halt, {:error, dsl_error(message, module, [:tools, :skill], skill_ref)}}
-        end
-
-      %Jidoka.Agent.Dsl.SkillPath{} = skill_path, {:ok, seen_names} ->
-        case Jidoka.Skill.validate_load_path(skill_path.path) do
-          :ok ->
-            {:cont, {:ok, seen_names}}
-
-          {:error, message} ->
-            {:halt, {:error, dsl_error(message, module, [:tools, :load_path], skill_path)}}
-        end
-
-      _tool_source, {:ok, seen_names} ->
-        {:cont, {:ok, seen_names}}
-    end)
+    |> Enum.reduce_while({:ok, MapSet.new()}, &verify_tool_source(&1, &2, module))
     |> case do
       {:ok, _seen_names} -> :ok
       {:error, error} -> {:error, error}
+    end
+  end
+
+  defp verify_tool_source(%Jidoka.Agent.Dsl.Tool{} = tool_ref, {:ok, seen_names}, module) do
+    case tool_name(tool_ref.module) do
+      {:ok, tool_name} -> verify_unique_tool_name(tool_ref, tool_name, seen_names, module)
+      {:error, message} -> {:halt, {:error, dsl_error(message, module, [:tools, :action], tool_ref)}}
+    end
+  end
+
+  defp verify_tool_source(%Jidoka.Agent.Dsl.SkillRef{} = skill_ref, {:ok, seen_names}, module) do
+    case Jidoka.Skill.validate_ref(skill_ref.skill) do
+      :ok -> {:cont, {:ok, seen_names}}
+      {:error, message} -> {:halt, {:error, dsl_error(message, module, [:tools, :skill], skill_ref)}}
+    end
+  end
+
+  defp verify_tool_source(%Jidoka.Agent.Dsl.SkillPath{} = skill_path, {:ok, seen_names}, module) do
+    case Jidoka.Skill.validate_load_path(skill_path.path) do
+      :ok -> {:cont, {:ok, seen_names}}
+      {:error, message} -> {:halt, {:error, dsl_error(message, module, [:tools, :load_path], skill_path)}}
+    end
+  end
+
+  defp verify_tool_source(_tool_source, {:ok, seen_names}, _module), do: {:cont, {:ok, seen_names}}
+
+  defp verify_unique_tool_name(tool_ref, tool_name, seen_names, module) do
+    if MapSet.member?(seen_names, tool_name) do
+      {:halt,
+       {:error, dsl_error("tool #{inspect(tool_name)} is defined more than once", module, [:tools, :action], tool_ref)}}
+    else
+      {:cont, {:ok, MapSet.put(seen_names, tool_name)}}
     end
   end
 

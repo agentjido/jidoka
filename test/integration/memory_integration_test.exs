@@ -39,7 +39,7 @@ defmodule Jidoka.MemoryIntegrationTest do
     end
 
     assert {:ok, %Turn.Result{content: "Concise answer."} = result} =
-             Jidoka.run_turn(spec, "How should I answer?", llm: llm, memory_store: memory_store)
+             Jidoka.turn(spec, "How should I answer?", llm: llm, memory_store: memory_store)
 
     assert [:memory_recalled, :prompt_assembled | _rest] = Enum.map(result.events, & &1.event)
   end
@@ -109,7 +109,7 @@ defmodule Jidoka.MemoryIntegrationTest do
     end
 
     assert {:ok, %Turn.Result{content: "Context memory seen."}} =
-             Jidoka.run_turn(spec, "How should memory be injected?",
+             Jidoka.turn(spec, "How should memory be injected?",
                llm: llm,
                memory_store: memory_store
              )
@@ -132,7 +132,7 @@ defmodule Jidoka.MemoryIntegrationTest do
     end
 
     assert {:ok, %Turn.Result{content: "Captured response."}} =
-             Jidoka.run_turn(spec, "Capture this request",
+             Jidoka.turn(spec, "Capture this request",
                llm: llm,
                memory_store: memory_store,
                id_generator: fn

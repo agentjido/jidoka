@@ -52,6 +52,7 @@ defmodule Jidoka.Agent do
   end
 
   @doc false
+  # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defmacro __before_compile__(env) do
     definition = compile_definition!(env.module)
 
@@ -112,16 +113,13 @@ defmodule Jidoka.Agent do
   end
 
   defp default_agent_id(agent_module) do
-    cond do
-      Code.ensure_loaded?(agent_module) and
-          function_exported?(agent_module, :__jidoka_agent_id__, 0) ->
-        agent_module.__jidoka_agent_id__()
-
-      true ->
-        agent_module
-        |> Module.split()
-        |> List.last()
-        |> Macro.underscore()
+    if Code.ensure_loaded?(agent_module) and function_exported?(agent_module, :__jidoka_agent_id__, 0) do
+      agent_module.__jidoka_agent_id__()
+    else
+      agent_module
+      |> Module.split()
+      |> List.last()
+      |> Macro.underscore()
     end
   end
 
@@ -299,7 +297,7 @@ defmodule Jidoka.Agent do
   @spec run_turn(module(), Jidoka.request_input(), keyword()) :: Jidoka.run_result()
   def run_turn(agent_module, input, opts \\ []) when is_atom(agent_module) and is_list(opts) do
     spec = spec(agent_module)
-    Jidoka.run_turn(spec, input, runtime_opts(agent_module, spec, opts))
+    Jidoka.turn(spec, input, runtime_opts(agent_module, spec, opts))
   end
 
   @doc """
@@ -428,11 +426,12 @@ defmodule Jidoka.Agent do
     fun.()
   rescue
     exception ->
-      raise Spark.Error.DslError.exception(
-              message: normalize_dsl_error_message(path, exception),
-              path: path,
-              module: agent_module
-            )
+      reraise Spark.Error.DslError.exception(
+                message: normalize_dsl_error_message(path, exception),
+                path: path,
+                module: agent_module
+              ),
+              __STACKTRACE__
   end
 
   defp normalize_dsl_error_message([:agent, :model], exception) do

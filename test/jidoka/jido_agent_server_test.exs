@@ -36,6 +36,8 @@ defmodule Jidoka.JidoAgentServerTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Effect
+
+  import Jidoka.TestSupport, only: [count_results: 2]
   alias Jidoka.JidoAgentServerTest.Support.TimeAgent
   alias Jidoka.Turn
 
@@ -62,7 +64,7 @@ defmodule Jidoka.JidoAgentServerTest do
     assert Jidoka.whereis(id) == pid
 
     assert {:ok, %Turn.Result{content: "It is 09:30 in Chicago."}} =
-             Jidoka.run_turn(pid, "What time is it?",
+             Jidoka.turn(pid, "What time is it?",
                llm: llm,
                operation_context: %{test_pid: test_pid}
              )
@@ -95,11 +97,5 @@ defmodule Jidoka.JidoAgentServerTest do
                  {:ok, %{type: :final, content: "Supervised child responded."}}
                end
              )
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

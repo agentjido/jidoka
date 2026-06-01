@@ -57,7 +57,7 @@ defmodule Jidoka.Eval do
     Run.new(
       case_id: eval_case.id,
       status: :error,
-      error: %{reason: :hibernated, snapshot: Jidoka.projection(snapshot)},
+      error: %{reason: :hibernated, snapshot: Jidoka.project(snapshot)},
       assertions: [],
       metadata: eval_case.metadata
     )

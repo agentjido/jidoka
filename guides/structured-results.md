@@ -70,7 +70,7 @@ answer:
 result schema: Zoi.object(%{score: Zoi.integer()}), max_repairs: 1
 ```
 
-If the repair bound is exhausted, `run_turn/3` returns a result-phase execution
+If the repair bound is exhausted, `Jidoka.turn/3` returns a result-phase execution
 error. The error includes the validation reason and repair count.
 
 ## Output Controls

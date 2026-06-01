@@ -98,7 +98,7 @@ To run the same agent as a supervised Jido process:
 
 ```elixir
 {:ok, pid} = MyApp.TimeAgent.start(id: "time-agent-1")
-{:ok, result} = Jidoka.run_turn(pid, "What time is it in Chicago?")
+{:ok, result} = Jidoka.turn(pid, "What time is it in Chicago?")
 {:ok, text} = Jidoka.chat("time-agent-1", "What time is it in Chicago?")
 ```
 
@@ -133,7 +133,8 @@ mix deps.get
 mix phx.server
 ```
 
-The example app loads live LLM keys from `.env` files in the package root,
+The package itself does not load `.env` files. The example app opts into dotenv
+loading and reads live LLM keys from `.env` files in the package root,
 `example/`, or the process environment.
 
 ## Livebooks
@@ -165,11 +166,20 @@ Jidoka.inspect(MyApp.Assistant)
 {:ok, preflight} = Jidoka.preflight(MyApp.Assistant, "What can you do?")
 ```
 
+In Livebook, `Jidoka.Kino` renders the same V2 contracts as tables and Mermaid
+diagrams while remaining optional outside notebooks:
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:notebook-model", check_provider?: false)
+{:ok, _inspection} = Jidoka.Kino.debug_agent(MyApp.Assistant)
+{:ok, _preflight} = Jidoka.Kino.preflight(MyApp.Assistant, "What can you do?")
+```
+
 Trace capture is caller-owned:
 
 ```elixir
 {:ok, pid} = Jidoka.Trace.Sink.InMemory.start_link()
-{:ok, result} = Jidoka.run_turn(spec, "Hello", llm: llm)
+{:ok, result} = Jidoka.turn(spec, "Hello", llm: llm)
 
 :ok =
   Jidoka.Trace.record(result.events, {Jidoka.Trace.Sink.InMemory, pid: pid},
@@ -221,7 +231,7 @@ end
 An interrupt returns a hibernated snapshot:
 
 ```elixir
-{:hibernate, snapshot} = Jidoka.run_turn(spec, "Refund order_123", llm: llm, operations: ops)
+{:hibernate, snapshot} = Jidoka.turn(spec, "Refund order_123", llm: llm, operations: ops)
 approval = Jidoka.Review.Response.approve(snapshot.turn_state.pending_interrupt)
 {:ok, result} = Jidoka.resume(snapshot, approval: approval, llm: llm, operations: ops)
 ```
@@ -270,8 +280,7 @@ mix test --cover
 Live ReqLLM integration is opt-in:
 
 ```bash
-cp .env.example .env
-# edit .env with OPENAI_API_KEY or ANTHROPIC_API_KEY
+# export OPENAI_API_KEY or ANTHROPIC_API_KEY in this shell
 mix test --include live test/jidoka/live_req_llm_test.exs
 ```
 
@@ -308,7 +317,7 @@ native provider tool-calling are still future surfaces.
 
 The public DSL-to-spec contract is locked by golden tests in
 `test/jidoka/golden/dsl_to_spec_test.exs`. These tests intentionally compare a
-stable `Jidoka.projection/1` view of `Agent.Spec` and `Turn.Plan` rather than
+stable `Jidoka.project/1` view of `Agent.Spec` and `Turn.Plan` rather than
 the full LLMDB or Spark internals.
 
 ## Design Notes

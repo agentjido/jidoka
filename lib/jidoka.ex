@@ -11,6 +11,16 @@ defmodule Jidoka do
   * an `Effect.Intent` / `Effect.Result` interpreter boundary;
   * a thin `Jidoka.Harness` execution boundary;
   * hibernate/resume from a phase-boundary snapshot.
+
+  The facade intentionally uses short, stable verbs for the main workflow:
+
+  * `agent/1` builds definition data;
+  * `plan/1` compiles definition data into executable turn data;
+  * `turn/3` runs one full model/tool turn;
+  * `chat/3` runs a turn and returns only final assistant text;
+  * `session/2` starts durable multi-turn state;
+  * `resume/2` continues from a hibernated snapshot;
+  * `inspect/2`, `preflight/3`, and `project/1` expose debugging views.
   """
 
   alias Jidoka.Agent
@@ -43,29 +53,30 @@ defmodule Jidoka do
   @doc """
   Builds a validated agent definition.
 
-  This is the root-level convenience wrapper around `Jidoka.Agent.Spec.new/1`.
-  The returned `Agent.Spec` is immutable definition data, not a process or
-  session.
+  Use this when constructing an agent from data at runtime, in tests, or from
+  tooling that does not use the Spark DSL. The returned `Agent.Spec` is
+  immutable definition data: it contains the agent id, model, instructions,
+  controls, operations, context schema, result schema, and memory policy. It is
+  not a process, session, provider client, or live capability bundle.
   """
   @spec agent(keyword() | map()) :: {:ok, Agent.Spec.t()} | {:error, term()}
   def agent(attrs), do: Agent.Spec.new(attrs)
 
   @doc """
-  Builds a validated agent definition and raises on invalid input.
+  Builds a validated agent definition and raises when validation fails.
+
+  This is useful for compile-time examples, tests, and boot-time application
+  setup where invalid agent data should fail fast.
   """
   @spec agent!(keyword() | map()) :: Agent.Spec.t()
   def agent!(attrs), do: Agent.Spec.new!(attrs)
 
   @doc """
-  Alias for `agent/1`.
+  Imports a JSON or YAML agent document string into `Jidoka.Agent.Spec`.
 
-  Kept as a convenience alias. Prefer `agent/1` in new code.
-  """
-  @spec new_agent(keyword() | map()) :: {:ok, Agent.Spec.t()} | {:error, term()}
-  def new_agent(attrs), do: agent(attrs)
-
-  @doc """
-  Imports a JSON/YAML agent document string into `Jidoka.Agent.Spec`.
+  Import is intentionally string-only at the facade. File loading, registries,
+  and trust boundaries belong to the caller; Jidoka owns parsing, normalization,
+  schema validation, and data-safe conversion into `Agent.Spec`.
   """
   @spec import(String.t(), keyword()) :: {:ok, Agent.Spec.t()} | {:error, term()}
   def import(contents, opts \\ []), do: Jidoka.Import.import(contents, opts)
@@ -81,19 +92,27 @@ defmodule Jidoka do
     Jidoka.Jido.start_agent(agent, opts)
   end
 
-  @doc "Stops a Jidoka agent process by pid or registered Jido agent id."
+  @doc """
+  Stops a process-hosted Jidoka agent by pid or registered Jido agent id.
+  """
   @spec stop_agent(pid() | String.t(), keyword()) :: :ok | {:error, :not_found}
   def stop_agent(pid_or_id, opts \\ []), do: Jidoka.Jido.stop_agent(pid_or_id, opts)
 
-  @doc "Looks up a running Jidoka agent process by registered Jido agent id."
+  @doc """
+  Looks up a running Jidoka agent process by registered Jido agent id.
+
+  This is intentionally a process-hosting helper. It does not build specs,
+  create sessions, or run turns.
+  """
   @spec whereis(String.t(), keyword()) :: pid() | nil
   def whereis(id, opts \\ []), do: Jidoka.Jido.whereis(id, opts)
 
   @doc """
   Starts a durable Jidoka session for an agent, spec, or plan.
 
-  This is the root-level convenience wrapper around `Jidoka.Session.start/2`.
-  The returned value is a `Jidoka.Harness.Session` data struct.
+  A session stores semantic conversation state, the latest turn result,
+  hibernation snapshots, and replay data. Use it when a caller needs durable
+  multi-turn behavior instead of a one-off `turn/3`.
   """
   @spec session(Jidoka.Session.agent_input()) :: {:ok, Jidoka.Session.t()} | {:error, term()}
   @spec session(Jidoka.Session.agent_input(), keyword() | String.t()) ::
@@ -102,6 +121,9 @@ defmodule Jidoka do
 
   @doc """
   Starts a durable Jidoka session with an explicit session id.
+
+  Prefer this arity when the caller already has an application-level
+  conversation id and wants Jidoka session state to be addressable by that id.
   """
   @spec session(Jidoka.Session.agent_input(), String.t(), keyword()) ::
           {:ok, Jidoka.Session.t()} | {:error, term()}
@@ -109,19 +131,30 @@ defmodule Jidoka do
     Jidoka.Session.start(agent_or_plan, session_id, opts)
   end
 
-  @doc "Returns the current handoff owner for a conversation, if one has been recorded."
-  @spec handoff_owner(String.t()) :: Jidoka.Handoff.OwnerStore.owner() | nil
-  def handoff_owner(conversation_id), do: Jidoka.Handoff.OwnerStore.owner(conversation_id)
+  @doc """
+  Returns the current handoff owner for a conversation, if one has been recorded.
 
-  @doc "Clears the current handoff owner for a conversation."
+  Handoffs are durable routing data. They indicate which agent should own
+  future turns for a conversation after a handoff operation succeeds.
+  """
+  @spec handoff(String.t()) :: Jidoka.Handoff.OwnerStore.owner() | nil
+  def handoff(conversation_id), do: Jidoka.Handoff.OwnerStore.owner(conversation_id)
+
+  @doc """
+  Clears the current handoff owner for a conversation.
+
+  Use this when an application wants to return routing control to its default
+  agent selection logic.
+  """
   @spec reset_handoff(String.t()) :: :ok
   def reset_handoff(conversation_id), do: Jidoka.Handoff.OwnerStore.reset(conversation_id)
 
   @doc """
   Compiles an agent definition into executable turn data.
 
-  `Turn.Plan` remains data. It contains no live capabilities, processes, provider
-  clients, or credentials.
+  `Turn.Plan` is still pure data. It contains no live capabilities, processes,
+  provider clients, or credentials. Use it when you want to inspect or cache the
+  normalized runtime contract before executing a turn.
   """
   @spec plan(plan_input()) :: {:ok, Turn.Plan.t()} | {:error, term()}
   def plan(%Turn.Plan{} = plan), do: {:ok, plan}
@@ -134,27 +167,23 @@ defmodule Jidoka do
 
   @doc """
   Compiles an agent definition into executable turn data and raises on failure.
+
+  This mirrors `plan/1`, but is intended for setup paths where invalid agent
+  data should stop execution immediately.
   """
   @spec plan!(plan_input()) :: Turn.Plan.t()
   def plan!(%Turn.Plan{} = plan), do: plan
   def plan!(spec_input), do: spec_input |> Agent.Spec.from_input() |> plan_from_agent!()
 
   @doc """
-  Alias for `plan!/1`.
-
-  Kept as a convenience alias. Prefer `plan!/1` in new code.
-  """
-  @spec compile_turn_plan!(Agent.Spec.t()) :: Turn.Plan.t()
-  def compile_turn_plan!(%Agent.Spec{} = spec), do: plan!(spec)
-
-  @doc """
   Runs one turn and returns final assistant text.
 
-  For caller-managed sessions, the updated session is returned alongside the
-  text so durable state is not lost.
+  `chat/3` is the ergonomic path for product code that only needs the final
+  assistant answer. For caller-managed sessions, the updated session is returned
+  alongside the text so durable state is not lost.
 
-  Use `run_turn/3` when callers need the full `Turn.Result`, journal, state, or
-  checkpoint response.
+  Use `turn/3` when callers need the full `Turn.Result`, event journal, agent
+  state, operation results, stream events, or hibernation snapshot.
   """
   @spec chat(chat_input(), String.t(), runtime_opts()) ::
           {:ok, String.t()}
@@ -174,13 +203,13 @@ defmodule Jidoka do
 
   def chat(server, input, opts)
       when is_binary(input) and is_server_ref(server) and is_list(opts) do
-    with {:ok, %Turn.Result{content: content}} <- run_turn(server, input, opts) do
+    with {:ok, %Turn.Result{content: content}} <- turn(server, input, opts) do
       {:ok, content}
     end
   end
 
   def chat(spec_input, input, opts) when is_binary(input) do
-    with {:ok, %Turn.Result{content: content}} <- run_turn(spec_input, input, opts) do
+    with {:ok, %Turn.Result{content: content}} <- turn(spec_input, input, opts) do
       {:ok, content}
     end
   end
@@ -190,13 +219,17 @@ defmodule Jidoka do
 
   This is the stable core runtime entrypoint. It accepts an `Agent.Spec` or
   `Turn.Plan`, normalizes the request, runs pure workflow planning, interprets
-  external effects through explicit runtime capabilities, and returns a typed result or
-  snapshot.
-  """
-  @spec run_turn(runnable_input(), request_input(), runtime_opts()) :: run_result()
-  def run_turn(spec_or_server, request_input, opts \\ [])
+  external effects through explicit runtime capabilities, and returns a typed
+  result or snapshot.
 
-  def run_turn(server, input, opts)
+  Use `turn/3` for deterministic tests with injected capabilities, live ReqLLM
+  calls, process-hosted agents, controls, tools, hibernation, streaming, and
+  trace/event inspection.
+  """
+  @spec turn(runnable_input(), request_input(), runtime_opts()) :: run_result()
+  def turn(spec_or_server, request_input, opts \\ [])
+
+  def turn(server, input, opts)
       when is_binary(input) and is_server_ref(server) and is_list(opts) do
     timeout = Keyword.get(opts, :timeout, 30_000)
 
@@ -229,7 +262,7 @@ defmodule Jidoka do
       {:error, reason} ->
         {:error,
          Error.normalize(reason,
-           operation: :run_turn,
+           operation: :turn,
            phase: :agent_server,
            target: server,
            request_id: Keyword.get(opts, :request_id)
@@ -237,7 +270,7 @@ defmodule Jidoka do
     end
   end
 
-  def run_turn(spec_or_plan, request_input, opts) do
+  def turn(spec_or_plan, request_input, opts) do
     case Harness.run_turn(spec_or_plan, request_input, opts) do
       {:ok, _result} = ok ->
         ok
@@ -246,12 +279,15 @@ defmodule Jidoka do
         hibernate
 
       {:error, reason} ->
-        {:error, Error.normalize(reason, operation: :run_turn, phase: :harness)}
+        {:error, Error.normalize(reason, operation: :turn, phase: :harness)}
     end
   end
 
   @doc """
   Awaits terminal Jido status for a process-hosted Jidoka agent.
+
+  This helper is only for process-hosted agents started through Jido. It is not
+  needed for direct `turn/3` or `chat/3` calls.
   """
   @spec await_agent(server_ref(), keyword()) :: {:ok, map()} | {:error, term()}
   def await_agent(server, opts \\ []) do
@@ -274,6 +310,8 @@ defmodule Jidoka do
 
   The snapshot may be an `AgentSnapshot` struct, map-shaped snapshot data, or
   the opaque string returned by `Jidoka.Runtime.AgentSnapshot.serialize/1`.
+  Resume continues through the same harness boundary as `turn/3`, so callers
+  provide the same runtime capabilities plus any required approval response.
   """
   @spec resume(AgentSnapshot.t() | keyword() | map() | String.t(), runtime_opts()) :: run_result()
   def resume(snapshot_input, opts \\ []) do
@@ -291,12 +329,17 @@ defmodule Jidoka do
 
   @doc """
   Formats a Jidoka error or arbitrary error term for display.
+
+  This is intended for UI/logging boundaries that need a concise message rather
+  than a full Splode error struct.
   """
   @spec format_error(term()) :: String.t()
   def format_error(error), do: Error.format(error)
 
   @doc """
   Converts a Jidoka error or arbitrary error term into a display-oriented map.
+
+  Values likely to contain credentials are sanitized before being returned.
   """
   @spec error_to_map(term()) :: map()
   def error_to_map(error), do: Error.to_map(error)
@@ -304,12 +347,18 @@ defmodule Jidoka do
   @doc """
   Returns a stable inspection view for an agent, plan, turn, snapshot, journal,
   or other Jidoka data value.
+
+  `inspect/2` is the human-facing debug surface. It favors grouped, readable
+  maps over raw structs.
   """
   @spec inspect(term(), keyword()) :: term()
   def inspect(value, opts \\ []), do: Inspection.inspect(value, opts)
 
   @doc """
   Assembles the prompt for a turn without calling an LLM or tools.
+
+  Use preflight to debug prompt assembly, tool metadata, memory injection, and
+  request normalization before running live effects.
   """
   @spec preflight(plan_input() | module(), request_input(), runtime_opts()) ::
           {:ok, Inspection.Preflight.t()} | {:error, term()}
@@ -325,12 +374,20 @@ defmodule Jidoka do
 
   @doc """
   Projects a Jidoka data contract into a stable inspection map.
+
+  `project/1` is the data-facing companion to `inspect/2`. It returns compact,
+  deterministic maps that are useful for tests, golden files, traces, and UI
+  rendering.
   """
-  @spec projection(term()) :: term()
-  def projection(value), do: Jidoka.Projection.project(value)
+  @spec project(term()) :: term()
+  def project(value), do: Jidoka.Projection.project(value)
 
   @doc """
   Normalizes any error term into a Splode-backed `Jidoka.Error` exception.
+
+  Prefer returning normalized errors from facade boundaries so callers see a
+  consistent error shape even when the underlying cause came from a provider,
+  store, control, or runtime capability.
   """
   @spec normalize_error(term(), keyword() | map()) :: Exception.t()
   def normalize_error(reason, context \\ %{}), do: Error.normalize(reason, context)
@@ -346,7 +403,7 @@ defmodule Jidoka do
         AgentServerState.to_run_result(agent_server_state)
 
       {:error, reason} ->
-        {:error, Error.normalize(reason, operation: :run_turn, phase: :agent_server)}
+        {:error, Error.normalize(reason, operation: :turn, phase: :agent_server)}
     end
   end
 

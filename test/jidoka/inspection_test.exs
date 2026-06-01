@@ -54,7 +54,7 @@ defmodule Jidoka.InspectionTest do
     llm = fn _intent, _journal -> {:ok, %{type: :final, content: "inspection ok"}} end
 
     assert {:ok, result} =
-             Jidoka.run_turn(Agent.spec(), [input: "Hello", context: %{tenant_id: "tenant_1"}], llm: llm)
+             Jidoka.turn(Agent.spec(), [input: "Hello", context: %{tenant_id: "tenant_1"}], llm: llm)
 
     assert %{
              kind: :turn,

@@ -7,6 +7,8 @@ defmodule Jidoka.MCPTest do
   alias Jidoka.Operation.Source.MCP
   alias Jidoka.Turn
 
+  import Jidoka.TestSupport, only: [count_results: 2]
+
   defmodule FakeMCPClient do
     @moduledoc false
 
@@ -224,11 +226,5 @@ defmodule Jidoka.MCPTest do
     assert_raise ArgumentError, ~r/invalid MCP source/, fn ->
       MCP.new!(endpoint: "")
     end
-  end
-
-  defp count_results(%Effect.Journal{results: results}, kind) do
-    results
-    |> Map.values()
-    |> Enum.count(&(&1.kind == kind))
   end
 end

@@ -4,21 +4,14 @@ Live tests are opt-in so normal unit tests remain deterministic.
 
 ## Configure Keys
 
-```bash
-cp .env.example .env
-```
-
-Then add at least one key:
+Jidoka does not load `.env` files from the package runtime. Export at least one
+provider key in the shell running the live test, or configure ReqLLM in the host
+application:
 
 ```bash
-OPENAI_API_KEY=...
-ANTHROPIC_API_KEY=...
-```
-
-Optionally choose a model:
-
-```bash
-JIDOKA_DEFAULT_MODEL=openai:gpt-4o-mini
+export OPENAI_API_KEY=...
+# or
+export ANTHROPIC_API_KEY=...
 ```
 
 ## Run The Live Test

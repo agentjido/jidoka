@@ -137,7 +137,7 @@ The LiveView should render projection state and call the supervised process:
 
 ```elixir
 with {:ok, pid} <- support_agent_pid() do
-  Jidoka.run_turn(pid, input, opts)
+  Jidoka.turn(pid, input, opts)
 end
 ```
 
@@ -170,6 +170,10 @@ order:
 3. the host process environment
 
 The host process environment should win over file values.
+
+Keep `.env` focused on provider credentials such as `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, and `BRAVE_SEARCH_API_KEY`. Jidoka defaults belong in
+application config or agent DSL, not `JIDOKA_*` environment variables.
 
 Never commit real `.env` files. Commit `.env.example` files only.
 

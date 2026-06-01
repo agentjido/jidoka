@@ -96,10 +96,8 @@ defmodule Jidoka.Operation.Source.MCP do
        fn
          %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
            with {:ok, request} <- Effect.OperationRequest.from_input(payload),
-                {:ok, remote_name} <- fetch_remote_tool(routes, request.name),
-                {:ok, output} <-
-                  call_tool(client, source, remote_name, request.arguments, call_opts(source)) do
-             {:ok, output}
+                {:ok, remote_name} <- fetch_remote_tool(routes, request.name) do
+             call_tool(client, source, remote_name, request.arguments, call_opts(source))
            end
 
          %Effect.Intent{kind: kind}, _journal ->
