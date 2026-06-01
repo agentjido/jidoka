@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0-beta.1
+## 0.8.0-beta.1 - 2026-06-01
 
 This beta locks the minimal V2 DSL and closes import/control parity for the
 current package surface.

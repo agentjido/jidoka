@@ -28,6 +28,9 @@ defmodule Jidoka.Usage do
   ]
 
   @numeric_keys @token_keys ++ @cost_keys
+  @string_key_aliases Map.new(@numeric_keys ++ [:input, :output], fn key ->
+                        {Atom.to_string(key), key}
+                      end)
 
   @doc """
   Normalizes a provider usage map into Jidoka's canonical usage keys.
@@ -110,25 +113,7 @@ defmodule Jidoka.Usage do
     Map.new(usage, fn {key, value} -> {normalize_key(key), value} end)
   end
 
-  defp normalize_key(key) when is_binary(key) do
-    case key do
-      "input_tokens" -> :input_tokens
-      "output_tokens" -> :output_tokens
-      "total_tokens" -> :total_tokens
-      "cached_tokens" -> :cached_tokens
-      "cache_read_input_tokens" -> :cache_read_input_tokens
-      "cache_creation_input_tokens" -> :cache_creation_input_tokens
-      "cache_creation_tokens" -> :cache_creation_tokens
-      "reasoning_tokens" -> :reasoning_tokens
-      "input_cost" -> :input_cost
-      "output_cost" -> :output_cost
-      "reasoning_cost" -> :reasoning_cost
-      "total_cost" -> :total_cost
-      "input" -> :input
-      "output" -> :output
-      _other -> key
-    end
-  end
+  defp normalize_key(key) when is_binary(key), do: Map.get(@string_key_aliases, key, key)
 
   defp normalize_key(key), do: key
 

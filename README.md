@@ -1,5 +1,15 @@
 # Jidoka
 
+[![Hex.pm](https://img.shields.io/hexpm/v/jidoka.svg)](https://hex.pm/packages/jidoka)
+[![Hex Docs](https://img.shields.io/badge/hex-docs-lightgreen.svg)](https://hexdocs.pm/jidoka/)
+[![CI](https://github.com/agentjido/jidoka/actions/workflows/ci.yml/badge.svg)](https://github.com/agentjido/jidoka/actions/workflows/ci.yml)
+[![License](https://img.shields.io/hexpm/l/jidoka.svg)](https://github.com/agentjido/jidoka/blob/main/LICENSE)
+[![Website](https://img.shields.io/badge/website-jido.run-0f172a.svg)](https://jido.run)
+[![Ecosystem](https://img.shields.io/badge/ecosystem-jido.run-0ea5e9.svg)](https://jido.run/ecosystem)
+[![Discord](https://img.shields.io/badge/discord-join-5865F2.svg?logo=discord&logoColor=white)](https://jido.run/discord)
+
+> **A data-driven agent framework for the Jido ecosystem with a Spark DSL and durable turn runtime.**
+
 Jidoka is a small Elixir agent framework for the Jido ecosystem.
 
 Use it when you want an application agent that can call a real LLM, expose
@@ -20,10 +30,19 @@ events.
 
 ## Install
 
+If your project uses [Igniter](https://hex.pm/packages/igniter), install the
+current beta from Hex:
+
+```bash
+mix igniter.install jidoka@0.8.0-beta.1
+```
+
+For manual installation, add `jidoka` to your dependencies:
+
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 1.0.0-beta.1"}
+    {:jidoka, "~> 0.8.0-beta"}
   ]
 end
 ```
@@ -42,6 +61,9 @@ export ANTHROPIC_API_KEY=...
 
 Jidoka does not load `.env` files for applications. Put that policy in your
 app, release config, example app, or shell.
+
+Jidoka is beta software. The `0.8.x` beta line is intended for early adopters
+while the public API is still allowed to change before a stable release.
 
 ## Define An Agent
 

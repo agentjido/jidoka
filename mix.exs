@@ -1,7 +1,7 @@
 defmodule Jidoka.MixProject do
   use Mix.Project
 
-  @version "1.0.0-beta.1"
+  @version "0.8.0-beta.1"
   @source_url "https://github.com/agentjido/jidoka"
   @description "A data-driven agent framework for the Jido ecosystem with a Spark DSL and durable turn runtime."
 

@@ -107,14 +107,14 @@ defmodule Jidoka.Runtime.ReqLLM do
     if stream_enabled?(opts) do
       generate_streaming_response(model, messages, llm_opts, intent, opts)
     else
-      with {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts) do
-        with {:ok, decision} <-
-               response
-               |> ReqLLM.Response.text()
-               |> Decision.parse_text() do
-          {:ok, attach_response_metadata(decision, model, response)}
-        end
-      end
+      generate_text_response(model, messages, llm_opts)
+    end
+  end
+
+  defp generate_text_response(model, messages, llm_opts) do
+    with {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts),
+         {:ok, decision} <- response |> ReqLLM.Response.text() |> Decision.parse_text() do
+      {:ok, attach_response_metadata(decision, model, response)}
     end
   end
 
