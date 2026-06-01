@@ -3,6 +3,8 @@ defmodule JidokaExampleWeb.AgentComponents do
 
   use JidokaExampleWeb, :html
 
+  alias JidokaExampleWeb.AgentActivityComponents
+  alias JidokaExampleWeb.AgentSourceComponents
   alias JidokaExampleWeb.Markdown
 
   attr :status, :atom, required: true
@@ -75,98 +77,179 @@ defmodule JidokaExampleWeb.AgentComponents do
     """
   end
 
-  attr :examples, :list, required: true
+  attr :title, :string, required: true
+  attr :subtitle, :string, required: true
+  attr :guide, :string, required: true
+  attr :status, :atom, required: true
+  attr :panel_title, :string, required: true
+  attr :panel_subtitle, :string, required: true
+  attr :messages, :list, required: true
+  attr :empty_title, :string, required: true
+  attr :empty_body, :string, required: true
+  attr :error_text, :string, default: nil
+  attr :form, :any, required: true
+  attr :field_label, :string, required: true
+  attr :field_placeholder, :string, required: true
+  attr :button_label, :string, required: true
+  attr :active_tab, :string, required: true
   attr :active_source, :string, required: true
+  attr :agent_view, :any, required: true
+  attr :source_examples, :list, required: true
+  slot :conversation_extra
+  slot :operation_result
 
-  def source_examples(assigns) do
-    assigns =
-      assign(assigns,
-        selected: selected_source(assigns.examples, assigns.active_source)
-      )
-
+  def agent_page(assigns) do
     ~H"""
-    <div class="source-nav">
-      <%= for example <- @examples do %>
-        <button
-          class={source_tab_class(@selected.id, example.id)}
-          type="button"
-          phx-click="show_source"
-          phx-value-source={example.id}
+    <section class="page">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Agent route</p>
+          <h1>{@title}</h1>
+          <p class="subtle">{@subtitle}</p>
+        </div>
+
+        <div class="header-actions">
+          <.status status={@status} />
+          <button class="quiet-link" type="button" phx-click="reset_session">New session</button>
+        </div>
+      </header>
+
+      <.guide guide={@guide} />
+
+      <div class="grid">
+        <section class="panel conversation-panel">
+          <div class="panel-header">
+            <div>
+              <h2>{@panel_title}</h2>
+              <p class="subtle">{@panel_subtitle}</p>
+            </div>
+          </div>
+
+          <div class="panel-body">
+            <.messages
+              messages={@messages}
+              empty_title={@empty_title}
+              empty_body={@empty_body}
+            />
+
+            {render_slot(@conversation_extra)}
+
+            <.agent_error error_text={@error_text} />
+
+            <.composer
+              form={@form}
+              field_label={@field_label}
+              field_placeholder={@field_placeholder}
+              button_label={@button_label}
+              running?={@status == :running}
+            />
+          </div>
+        </section>
+
+        <.inspector_panel
+          active_tab={@active_tab}
+          active_source={@active_source}
+          agent_view={@agent_view}
+          source_examples={@source_examples}
         >
-          {example.label}
-        </button>
-      <% end %>
-    </div>
-
-    <section class="source-file">
-      <div class="source-file-header">
-        <h3>{@selected.label}</h3>
-        <span>{@selected.path}</span>
+          <:operation_result :let={event}>
+            {render_slot(@operation_result, event)}
+          </:operation_result>
+        </.inspector_panel>
       </div>
-
-      <pre class="code-block"><code><%= raw(highlight_elixir(@selected.source)) %></code></pre>
     </section>
     """
   end
 
-  attr :events, :list, required: true
+  attr :error_text, :string, default: nil
+
+  def agent_error(%{error_text: nil} = assigns), do: ~H""
+
+  def agent_error(assigns) do
+    ~H"""
+    <div class="empty agent-error">{@error_text}</div>
+    """
+  end
+
+  attr :form, :any, required: true
+  attr :field_label, :string, required: true
+  attr :field_placeholder, :string, required: true
+  attr :button_label, :string, required: true
+  attr :running?, :boolean, default: false
+
+  def composer(assigns) do
+    ~H"""
+    <.form for={@form} class="composer" phx-submit="send_message">
+      <div class="form-row">
+        <label for="prompt_question">{@field_label}</label>
+        <textarea
+          id="prompt_question"
+          name="prompt[question]"
+          placeholder={@field_placeholder}
+        ><%= @form[:question].value %></textarea>
+      </div>
+
+      <details class="settings">
+        <summary>
+          <span>Model</span>
+          <strong>{@form[:model].value}</strong>
+        </summary>
+
+        <div class="form-row compact">
+          <label for="prompt_model">Model id</label>
+          <input id="prompt_model" name="prompt[model]" type="text" value={@form[:model].value} />
+        </div>
+      </details>
+
+      <div class="button-row">
+        <button class="button" type="submit" disabled={@running?}>
+          {@button_label}
+        </button>
+      </div>
+    </.form>
+    """
+  end
+
+  attr :active_tab, :string, required: true
+  attr :active_source, :string, required: true
+  attr :agent_view, :any, required: true
+  attr :source_examples, :list, required: true
   slot :operation_result
 
-  def activity(assigns) do
-    assigns = assign(assigns, activity_groups: activity_groups(assigns.events))
-
+  def inspector_panel(assigns) do
     ~H"""
-    <%= if @activity_groups == [] do %>
-      <div class="empty">No activity yet.</div>
-    <% else %>
-      <div class="event-groups">
-        <%= for group <- @activity_groups do %>
-          <details class="event-group">
-            <summary class="event-group-summary">
-              <span class="event-group-chevron" aria-hidden="true"></span>
+    <aside class="panel inspector-panel">
+      <div class="panel-header">
+        <div>
+          <h2>Run internals</h2>
+          <div class="tabs">
+            <.tab_button active_tab={@active_tab} tab="activity">
+              Activity
+            </.tab_button>
+            <.tab_button active_tab={@active_tab} tab="source">
+              Source
+            </.tab_button>
+          </div>
+        </div>
 
-              <span class="event-group-copy">
-                <strong>{group.title}</strong>
-                <span>{group.subtitle}</span>
-              </span>
+        <span class="subtle">{inspector_count(@active_tab, @agent_view, @source_examples)}</span>
+      </div>
 
-              <span class="event-group-meta">
-                <%= if group.operation do %>
-                  <span class="pill">{group.operation}</span>
-                <% end %>
-
-                <span>{group.count_label}</span>
-              </span>
-            </summary>
-
-            <div class="event-group-body">
-              <div class="event-list">
-                <%= for event <- group.events do %>
-                  <article class={["event", detailed_event?(event) && "detailed"]}>
-                    <div class="event-topline">
-                      <div>
-                        <h3>{event.label}</h3>
-                        <p class="subtle">{event.kind}</p>
-                      </div>
-
-                      <%= if is_nil(group.operation) do %>
-                        <%= if operation = event_operation(event) do %>
-                          <span class="pill">{operation}</span>
-                        <% end %>
-                      <% end %>
-                    </div>
-
-                    <%= if detailed_event?(event) do %>
-                      {render_slot(@operation_result, event)}
-                    <% end %>
-                  </article>
-                <% end %>
-              </div>
-            </div>
-          </details>
+      <div class="panel-body">
+        <%= if @active_tab == "activity" do %>
+          <AgentActivityComponents.activity events={@agent_view.events}>
+            <:operation_result :let={event}>
+              {render_slot(@operation_result, event)}
+            </:operation_result>
+          </AgentActivityComponents.activity>
+        <% else %>
+          <AgentSourceComponents.source_examples
+            examples={@source_examples}
+            active_source={@active_source}
+          />
         <% end %>
       </div>
-    <% end %>
+    </aside>
     """
   end
 
@@ -182,190 +265,6 @@ defmodule JidokaExampleWeb.AgentComponents do
     |> Enum.map(&String.trim/1)
   end
 
-  defp selected_source(examples, active_source) do
-    Enum.find(examples, &(&1.id == active_source)) || hd(examples)
-  end
-
-  defp source_tab_class(active_source, source),
-    do: ["source-nav-link", active_source == source && "active"]
-
-  defp highlight_elixir(source) do
-    source
-    |> Phoenix.HTML.html_escape()
-    |> Phoenix.HTML.safe_to_string()
-    |> String.replace(~r/(&quot;.*?&quot;)/, ~s(<span class="code-string">\\1</span>))
-    |> String.replace(~r/(#.*)$/m, ~s(<span class="code-comment">\\1</span>))
-    |> String.replace(
-      ~r/\b(defmodule|defp?|use|alias|do|end|agent|tools|controls|action|browser|ash_resource|catalog|instructions|model|generation|max_turns|timeout)\b/,
-      ~s(<span class="code-keyword">\\1</span>)
-    )
-    |> String.replace(~r/(:[a-zA-Z_][a-zA-Z0-9_?!]*)/, ~s(<span class="code-atom">\\1</span>))
-  end
-
-  defp activity_groups(events) do
-    events
-    |> Enum.reduce([], fn event, groups ->
-      key = activity_group_key(event)
-
-      case Enum.find_index(groups, &(&1.key == key)) do
-        nil -> groups ++ [new_activity_group(key, event)]
-        index -> List.update_at(groups, index, &append_activity_event(&1, event))
-      end
-    end)
-    |> Enum.map(&finalize_activity_group/1)
-  end
-
-  defp new_activity_group(key, event) do
-    %{
-      key: key,
-      title: activity_group_title(key),
-      subtitle: activity_group_subtitle(key),
-      operation: activity_group_operation(key),
-      events: [event]
-    }
-  end
-
-  defp append_activity_event(group, event), do: %{group | events: group.events ++ [event]}
-
-  defp finalize_activity_group(group) do
-    count = length(group.events)
-    status = group.events |> List.last() |> event_status()
-
-    count_label =
-      [pluralize(count, "event"), status]
-      |> Enum.reject(&is_nil/1)
-      |> Enum.join(" / ")
-
-    Map.put(group, :count_label, count_label)
-  end
-
-  defp activity_group_key(event) do
-    request_id = event_request_id(event)
-
-    cond do
-      turn_event?(event.kind) ->
-        {:turn, request_id}
-
-      operation = event_operation(event) ->
-        {:operation, request_id, operation}
-
-      model_event?(event) ->
-        {:model, request_id, event_loop_index(event)}
-
-      true ->
-        {:category, request_id, event_category(event)}
-    end
-  end
-
-  defp activity_group_title({:turn, _request_id}), do: "Turn lifecycle"
-
-  defp activity_group_title({:model, _request_id, loop_index}),
-    do: "Model call #{loop_number(loop_index)}"
-
-  defp activity_group_title({:operation, _request_id, operation}), do: "Tool: #{operation}"
-  defp activity_group_title({:category, _request_id, category}), do: category |> humanize_event()
-
-  defp activity_group_subtitle({:turn, _request_id}), do: "Start, finish, and runtime status"
-
-  defp activity_group_subtitle({:model, _request_id, _loop_index}),
-    do: "Prompt and LLM capability"
-
-  defp activity_group_subtitle({:operation, _request_id, _operation}),
-    do: "Tool lifecycle and result"
-
-  defp activity_group_subtitle({:category, _request_id, category}),
-    do: "#{humanize_event(category)} events"
-
-  defp activity_group_operation({:operation, _request_id, operation}), do: operation
-  defp activity_group_operation(_key), do: nil
-
-  defp detailed_event?(%{kind: :operation_result}), do: true
-  defp detailed_event?(_event), do: false
-
-  defp event_operation(%{refs: %{operation: operation}}) when is_binary(operation), do: operation
-  defp event_operation(%{payload: payload}), do: payload_value(payload, :operation)
-  defp event_operation(_event), do: nil
-
-  defp event_request_id(%{refs: %{request_id: request_id}}) when is_binary(request_id),
-    do: request_id
-
-  defp event_request_id(%{payload: payload}), do: payload_value(payload, :request_id) || "turn"
-  defp event_request_id(_event), do: "turn"
-
-  defp event_loop_index(%{payload: payload}), do: payload_value(payload, :loop_index) || 0
-  defp event_loop_index(_event), do: 0
-
-  defp event_category(%{payload: payload}), do: payload_value(payload, :category) || :runtime
-  defp event_category(_event), do: :runtime
-
-  defp event_status(%{kind: :operation_result}), do: "result"
-
-  defp event_status(%{payload: payload}) do
-    payload
-    |> payload_value(:status)
-    |> case do
-      nil -> nil
-      status -> humanize_event(status)
-    end
-  end
-
-  defp event_status(_event), do: nil
-
-  defp turn_event?(event)
-       when event in [:turn_started, :turn_finished, :turn_failed, :turn_hibernated],
-       do: true
-
-  defp turn_event?(_event), do: false
-
-  defp model_event?(%{kind: :prompt_assembled}), do: true
-
-  defp model_event?(%{payload: payload}),
-    do: payload_value(payload, :effect_kind) in [:llm, "llm"]
-
-  defp model_event?(_event), do: false
-
-  defp loop_number(index) when is_integer(index), do: index + 1
-
-  defp loop_number(index) when is_binary(index) do
-    case Integer.parse(index) do
-      {parsed, ""} -> parsed + 1
-      _other -> index
-    end
-  end
-
-  defp loop_number(_index), do: 1
-
-  defp pluralize(1, word), do: "1 #{word}"
-  defp pluralize(count, word), do: "#{count} #{word}s"
-
-  defp humanize_event(event) do
-    event
-    |> to_string()
-    |> String.replace("_", " ")
-    |> String.capitalize()
-  end
-
-  defp payload_value(payload, path) when is_list(path) do
-    Enum.reduce_while(path, payload, fn key, acc ->
-      case payload_value(acc, key) do
-        nil -> {:halt, nil}
-        value -> {:cont, value}
-      end
-    end)
-  end
-
-  defp payload_value(%{} = payload, key) when is_atom(key) do
-    case Map.fetch(payload, key) do
-      {:ok, value} -> value
-      :error -> Map.get(payload, Atom.to_string(key))
-    end
-  end
-
-  defp payload_value(%{} = payload, key) when is_binary(key) do
-    Map.get(payload, key) || Map.get(payload, String.to_existing_atom(key))
-  rescue
-    ArgumentError -> nil
-  end
-
-  defp payload_value(_payload, _key), do: nil
+  defp inspector_count("source", _agent_view, examples), do: "#{length(examples)} files"
+  defp inspector_count(_tab, agent_view, _examples), do: "#{length(agent_view.events)} events"
 end

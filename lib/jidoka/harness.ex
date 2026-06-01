@@ -40,7 +40,9 @@ defmodule Jidoka.Harness do
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
          {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts),
          {:ok, capabilities} <- normalize_capabilities(opts) do
-      TurnRunner.run(plan, request, capabilities, Keyword.put(opts, :memory, memory))
+      plan
+      |> TurnRunner.run(request, capabilities, Keyword.put(opts, :memory, memory))
+      |> maybe_capture_memory(plan.spec, request, opts)
     end
   end
 
@@ -75,6 +77,7 @@ defmodule Jidoka.Harness do
   @spec run_session(session_input(), request_input(), runtime_opts()) :: session_run_result()
   def run_session(session_input, request_input, opts \\ []) do
     with {:ok, session} <- resolve_session(session_input, opts),
+         :ok <- ensure_runnable_session(session),
          {:ok, plan} <- plan(session.spec),
          {:ok, request} <- Turn.Request.from_input(request_input, request_opts(opts)),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
@@ -84,10 +87,17 @@ defmodule Jidoka.Harness do
              request,
              Keyword.put(opts, :session_id, session.session_id)
            ),
-         {:ok, capabilities} <- normalize_capabilities(opts) do
+         {:ok, capabilities} <- normalize_capabilities(opts),
+         {:ok, session} <- session |> Session.put_request(request) |> persist_session(opts) do
       session
-      |> Session.put_request(request)
-      |> run_session_turn(plan, request, capabilities, Keyword.put(opts, :memory, memory))
+      |> run_session_turn(
+        plan,
+        request,
+        capabilities,
+        opts
+        |> Keyword.put(:memory, memory)
+        |> Keyword.put(:session_id, session.session_id)
+      )
     end
   end
 
@@ -161,6 +171,8 @@ defmodule Jidoka.Harness do
        ) do
     case TurnRunner.run(plan, request, capabilities, opts) do
       {:ok, %Turn.Result{} = result} ->
+        _capture = Memory.Runtime.capture_turn(plan.spec, request, result, opts)
+
         session
         |> Session.put_result(result)
         |> persist_session_result(opts, fn session -> {:ok, session, result} end)
@@ -176,6 +188,13 @@ defmodule Jidoka.Harness do
         |> persist_session_result(opts, fn _session -> {:error, reason} end)
     end
   end
+
+  defp maybe_capture_memory({:ok, %Turn.Result{} = result} = ok, spec, request, opts) do
+    _capture = Memory.Runtime.capture_turn(spec, request, result, opts)
+    ok
+  end
+
+  defp maybe_capture_memory(result, _spec, _request, _opts), do: result
 
   defp resume_session_snapshot(
          %Session{} = session,
@@ -228,6 +247,12 @@ defmodule Jidoka.Harness do
       nil -> {:error, {:missing_session_snapshot, session.session_id}}
     end
   end
+
+  defp ensure_runnable_session(%Session{status: :running, session_id: session_id}) do
+    {:error, {:session_already_running, session_id}}
+  end
+
+  defp ensure_runnable_session(%Session{}), do: :ok
 
   defp fetch_store(opts) do
     case Keyword.fetch(opts, :store) do

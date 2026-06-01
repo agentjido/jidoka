@@ -1,13 +1,14 @@
 defmodule JidokaExample.SupportAgent.Agent do
   @guide """
-  The Support Agent is the first rung in the example ladder: one supervised
-  Jidoka agent, one deterministic action, one visible tool call.
+  Start here to see the smallest useful Jidoka agent running under Jido
+  supervision: one agent module, one deterministic action, one visible tool
+  call.
 
-  Try asking about order A1001. The agent should call lookup_order, answer from
-  the returned order status, and show the tool projection in the Activity tab.
+  Ask about order A1001. Watch the agent call lookup_order, answer from the
+  returned order status, and publish the tool projection into the Activity tab.
 
-  This example also keeps basic operational controls close to the agent
-  definition so new developers can see where turn limits and timeouts live.
+  Notice that turn limits and timeouts live beside the agent definition in
+  `controls`, so the runtime bounds are part of the agent spec.
   """
   @moduledoc @guide
 

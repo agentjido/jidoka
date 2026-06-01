@@ -37,7 +37,8 @@ This is the V2 kernel. It currently supports:
 - operation controls that match by operation kind, name, source, idempotency,
   and metadata;
 - human-in-the-loop operation interrupts through durable approval snapshots;
-- harness sessions with a swappable store behaviour and in-memory store;
+- ergonomic `Jidoka.Session` facade over harness sessions with a swappable store
+  behaviour and in-memory store;
 - session replay projections over snapshots, journals, and trace events;
 - visible memory recall/write through `Agent.Spec.memory` and memory stores;
 - structured result schemas with validated `Turn.Result.value`;
@@ -132,6 +133,14 @@ mix phx.server
 
 The example app loads live LLM keys from `.env` files in the package root,
 `example/`, or the process environment.
+
+## Livebooks
+
+Advanced deterministic Livebooks live in [`livebook/`](livebook):
+
+- `01_v2_contracts_and_runic_spine.livemd`
+- `02_controls_sessions_and_human_review.livemd`
+- `03_import_eval_and_trace.livemd`
 
 ```elixir
 yaml = """
@@ -268,7 +277,8 @@ This is the `1.0.0-beta.1` V2 baseline. Stable application-facing concepts are:
 
 - `Jidoka.Agent.Spec` as immutable agent definition data;
 - `Jidoka.Turn.Plan`, `Jidoka.Turn.Request`, and `Jidoka.Turn.Result`;
-- `Jidoka.Harness` for execution, resume, sessions, stores, replay, and memory;
+- `Jidoka.Session` for app-facing session workflows;
+- `Jidoka.Harness` for execution, resume, stores, replay, and memory internals;
 - `Jidoka.Effect.Intent` / `Jidoka.Effect.Result` for external work;
 - `controls`, `operations`, `result`, `memory`, `trace`, and `eval` vocabulary.
 

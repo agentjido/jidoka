@@ -116,7 +116,19 @@ defmodule Jidoka.EvalTest do
              )
 
     assert {:error, :missing_eval_agent} = Eval.Case.new(id: "missing", input: "Hello")
+    assert {:error, {:invalid_eval_case_id, ""}} = Eval.Case.new(id: "", agent: spec)
+
+    assert {:error, {:invalid_generated_id, "eval", ""}} =
+             Eval.Case.new([agent: spec, input: "Hello"], id_generator: fn "eval" -> "" end)
+
+    assert_raise ArgumentError, ~r/invalid eval case/, fn ->
+      Eval.Case.new!(id: "", agent: spec)
+    end
+
     assert Eval.Run.statuses() == [:passed, :failed, :error]
+
+    assert {:error, _reason} = Eval.Run.new(case_id: "bad", status: :unknown)
+    assert_raise ArgumentError, ~r/invalid eval run/, fn -> Eval.Run.new!(case_id: "bad") end
   end
 
   test "run_case records hibernation as an eval error run" do

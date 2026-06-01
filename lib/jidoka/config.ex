@@ -59,13 +59,35 @@ defmodule Jidoka.Config do
   @spec normalize_model_spec(term(), atom()) :: {:ok, model()} | {:error, term()}
   def normalize_model_spec(value, field \\ :model)
 
+  def normalize_model_spec(value, field) when is_binary(value) do
+    value
+    |> normalize_model_string()
+    |> normalize_model_with_req_llm(field)
+  end
+
   def normalize_model_spec(value, field) do
+    normalize_model_with_req_llm(value, field)
+  end
+
+  defp normalize_model_with_req_llm(value, field) do
     case ReqLLM.model(value) do
       {:ok, %LLMDB.Model{} = model} -> {:ok, model}
       {:error, reason} -> {:error, {field, value, reason}}
     end
   rescue
     exception -> {:error, {field, value, Exception.message(exception)}}
+  end
+
+  defp normalize_model_string(value) do
+    value = String.trim(value)
+
+    case String.split(value, ":", parts: 2) do
+      [provider, id] when provider != "" and id != "" ->
+        %{provider: provider, id: id}
+
+      _other ->
+        value
+    end
   end
 
   @doc """

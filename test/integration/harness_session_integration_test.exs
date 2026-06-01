@@ -51,6 +51,47 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
              Harness.store_get_session(store, "sess_chat")
   end
 
+  test "sessions are marked running before effect interpretation to guard duplicate turns" do
+    parent = self()
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    spec = chat_spec()
+
+    assert {:ok, %Session{session_id: "sess_race"}} =
+             Harness.start_session(spec, session_id: "sess_race", store: store)
+
+    llm = fn _intent, _journal ->
+      send(parent, {:llm_started, self()})
+
+      receive do
+        :finish_llm -> {:ok, %{type: :final, content: "first turn complete"}}
+      after
+        2_000 -> {:ok, %{type: :final, content: "first turn timed out"}}
+      end
+    end
+
+    task =
+      Task.async(fn ->
+        Harness.run_session("sess_race", "First turn", store: store, llm: llm)
+      end)
+
+    assert_receive {:llm_started, llm_pid}, 1_000
+
+    assert {:ok, %Session{status: :running, requests: [%Turn.Request{input: "First turn"}]}} =
+             Harness.store_get_session(store, "sess_race")
+
+    assert {:error, {:session_already_running, "sess_race"}} =
+             Harness.run_session("sess_race", "Second turn", store: store, llm: llm)
+
+    send(llm_pid, :finish_llm)
+
+    assert {:ok, %Session{status: :finished}, %Turn.Result{content: "first turn complete"}} =
+             Task.await(task)
+
+    assert {:ok, %Session{status: :finished, requests: [%Turn.Request{input: "First turn"}]}} =
+             Harness.store_get_session(store, "sess_race")
+  end
+
   test "sessions list pending approvals and resume approved operation reviews" do
     test_pid = self()
     {:ok, pid} = InMemory.start_link()

@@ -41,6 +41,10 @@ module.
 
 ## Sessions And Stores
 
+`Jidoka.Session` is the ergonomic API for durable sessions. It delegates to
+`Jidoka.Harness`, and the underlying data struct is still
+`Jidoka.Harness.Session`.
+
 `Jidoka.Harness.Session` is the durable harness envelope for work that spans
 requests or process restarts. It contains:
 
@@ -58,20 +62,17 @@ Sessions are still data. They do not contain runtime clients or processes.
 store = {Jidoka.Harness.Store.InMemory, pid: pid}
 
 {:ok, session} =
-  Jidoka.Harness.start_session(spec,
-    session_id: "support-session-1",
-    store: store
-  )
+  Jidoka.session(spec, "support-session-1", store: store)
 
 {:hibernate, session, snapshot} =
-  Jidoka.Harness.run_session(session.session_id, "Hello",
+  Jidoka.Session.run(session.session_id, "Hello",
     store: store,
     llm: llm,
     checkpoint: :after_prompt
   )
 
 {:ok, session, result} =
-  Jidoka.Harness.resume_session(session.session_id,
+  Jidoka.Session.resume(session.session_id,
     store: store,
     llm: llm
   )
@@ -81,13 +82,13 @@ The store behaviour is intentionally small: put/get/list sessions. Pending
 review listing is derived from stored session data:
 
 ```elixir
-{:ok, reviews} = Jidoka.Harness.pending_reviews(store)
+{:ok, reviews} = Jidoka.Session.pending_reviews(store)
 ```
 
 Replay is a projection over stored data, not a runtime call:
 
 ```elixir
-{:ok, replay} = Jidoka.Harness.replay(session)
+{:ok, replay} = Jidoka.Session.replay(session)
 replay.timeline
 ```
 

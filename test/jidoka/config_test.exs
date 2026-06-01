@@ -12,6 +12,15 @@ defmodule Jidoka.ConfigTest do
     assert Jidoka.Config.model_ref(model) == "test:unit-model"
   end
 
+  test "normalizes compact provider model refs" do
+    assert {:ok, %LLMDB.Model{} = model} =
+             Jidoka.Config.normalize_model_spec("openai:gpt-4o-mini")
+
+    assert model.provider == :openai
+    assert model.provider_model_id == "gpt-4o-mini"
+    assert Jidoka.Config.model_ref(model) == "openai:gpt-4o-mini"
+  end
+
   test "returns structured errors for invalid model input" do
     assert {:error, {:model, :fast, _reason}} = Jidoka.Config.normalize_model_spec(:fast)
   end

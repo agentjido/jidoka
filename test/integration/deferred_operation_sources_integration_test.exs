@@ -253,7 +253,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
              result.agent_state.operation_results
   end
 
-  test "skills workflows and handoffs are not current tools DSL entities" do
+  test "deferred source families are exposed as tools DSL entities" do
     entity_names =
       Jidoka.Agent.Dsl.Sections.Tools.section().entities
       |> Enum.map(& &1.name)
@@ -262,10 +262,9 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
     assert :ash_resource in entity_names
     assert :browser in entity_names
     assert :catalog in entity_names
-
-    refute :skill in entity_names
-    refute :workflow in entity_names
-    refute :handoff in entity_names
+    assert :skill in entity_names
+    assert :workflow in entity_names
+    assert :handoff in entity_names
   end
 
   defp llm(operation, arguments, final_content) do

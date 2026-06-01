@@ -64,6 +64,78 @@ defmodule Jidoka.Agent.Dsl.Catalog do
   ]
 end
 
+defmodule Jidoka.Agent.Dsl.MCPTools do
+  @moduledoc false
+
+  defstruct [
+    :endpoint,
+    :prefix,
+    :tools,
+    :required,
+    :timeout,
+    :description,
+    :idempotency,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
+defmodule Jidoka.Agent.Dsl.SkillRef do
+  @moduledoc false
+
+  defstruct [:skill, :__spark_metadata__]
+end
+
+defmodule Jidoka.Agent.Dsl.SkillPath do
+  @moduledoc false
+
+  defstruct [:path, :__spark_metadata__]
+end
+
+defmodule Jidoka.Agent.Dsl.Subagent do
+  @moduledoc false
+
+  defstruct [
+    :agent,
+    :as,
+    :description,
+    :timeout,
+    :forward_context,
+    :result,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
+defmodule Jidoka.Agent.Dsl.Handoff do
+  @moduledoc false
+
+  defstruct [
+    :agent,
+    :as,
+    :description,
+    :target,
+    :forward_context,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
+defmodule Jidoka.Agent.Dsl.Workflow do
+  @moduledoc false
+
+  defstruct [
+    :workflow,
+    :as,
+    :description,
+    :timeout,
+    :forward_context,
+    :result,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
 defmodule Jidoka.Agent.Dsl.OperationControl do
   @moduledoc false
 

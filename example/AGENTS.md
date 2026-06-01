@@ -14,6 +14,22 @@ uses Jidoka agents in a normal Phoenix/Jido process tree.
 Use `AGENT_LADDER.md` as the product map for which capability each example
 introduces.
 
+The runnable V2 baseline currently includes:
+
+- Support Agent
+- Research Agent
+- Approval Flow Agent
+- Ash Agent
+- Lead Quality Agent
+- Memory Agent
+- Knowledge Agent
+- Debug Agent
+- Kitchen Sink Agent
+
+Other V1 examples are tracked in `AGENT_LADDER.md` as parity gaps. Do not add
+new runnable routes for them until the underlying Jidoka feature is stable
+enough to teach without caveats.
+
 ## Example Layout
 
 Keep one Phoenix project in `example/`:
@@ -47,6 +63,13 @@ children = [
   JidokaExample.Jido,
   {JidokaExample.SupportAgent.Agent, jido: JidokaExample.Jido},
   {JidokaExample.ResearchAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.ApprovalAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.AshAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.LeadQualityAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.MemoryAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.KnowledgeAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.DebugAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.KitchenSinkAgent.Agent, jido: JidokaExample.Jido},
   {Phoenix.PubSub, name: JidokaExample.PubSub},
   JidokaExampleWeb.Endpoint
 ]
@@ -156,10 +179,15 @@ The example app should support:
 
 ```bash
 mix deps.get
+mix jido_browser.install agent_browser --if-missing
 mix phx.server
 ```
 
 Optional CLI scripts are fine, but the web route should be the primary path.
+
+The research agent depends on the local `agent_browser` binary installed by
+`jido_browser`. The example runtime prefers that local binary so a different
+global `agent-browser` install does not break the browser tools.
 
 Example-specific tests are optional. For this showcase app, a clean format pass,
 compile pass, and manual route check are enough unless an example adds behavior
@@ -205,11 +233,25 @@ about harness internals.
 Prefer simple DSL examples:
 
 - `agent :id do ... end`
+- `context Zoi.object(...)` when the example needs typed runtime context
 - `instructions "..."`
 - `generation %{params: %{...}}` only when the example needs it
 - `controls do max_turns ... timeout ... end` for operational bounds
+- `controls do output MyControl end` for final-result policy checks
+- `controls do operation MyControl, when: [...] end` for review before side effects
 - `tools do action MyAction end`
+- `tools do skill MySkill end` for Jido.AI skill prompt/action bundles
+- `tools do mcp_tools ... end` for MCP-backed operation sources
 - `tools do browser :public_web, mode: :read_only end` for search plus page reads
+- `tools do ash_resource MyResource end` for AshJido generated Jido actions
+- `memory %{scope: :session, max_entries: 5}` for examples that demonstrate Jidoka memory
+
+Debugging examples should use the public `Jidoka.inspect/1` and
+`Jidoka.preflight/3` APIs rather than reaching into turn internals directly.
+
+Do not add a plugin DSL or hook DSL to examples. V2 examples should model V1
+hook use cases through explicit controls, operation review, trace/events, or
+ordinary actions.
 
 Do not add abstractions ahead of need. The value of this app is that a new
 developer can see the minimal shape and copy it.

@@ -20,6 +20,16 @@ config :req_llm,
 config :jido_browser,
   brave_api_key: env["BRAVE_SEARCH_API_KEY"]
 
+agent_browser_path =
+  env["JIDO_BROWSER_AGENT_BROWSER_BINARY_PATH"] ||
+    if Code.ensure_loaded?(Jido.Browser.Installer) do
+      Jido.Browser.Installer.bin_path(:agent_browser)
+    end
+
+if is_binary(agent_browser_path) and File.exists?(agent_browser_path) do
+  config :jido_browser, :agent_browser, binary_path: agent_browser_path
+end
+
 present? = fn value -> is_binary(value) and String.trim(value) != "" end
 
 default_model =

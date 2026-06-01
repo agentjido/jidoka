@@ -6,6 +6,15 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
   alias Jidoka.Effect.LLMDecision
   alias Jidoka.Schema
 
+  @operation_decision_types [
+    "operation",
+    "tool",
+    "tool_call",
+    "function",
+    "function_call",
+    "action"
+  ]
+
   @type t ::
           LLMDecision.t()
 
@@ -25,8 +34,22 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
       "final" ->
         parse_final(object)
 
-      "operation" ->
+      nil ->
+        if untyped_operation_shorthand?(object) do
+          parse_operation(object)
+        else
+          parse_untyped_final(object)
+        end
+
+      type when type in @operation_decision_types ->
         parse_operation(object)
+
+      type when is_binary(type) ->
+        if operation_shorthand?(object) do
+          parse_operation(object, type)
+        else
+          {:error, {:invalid_llm_decision_type, type}}
+        end
 
       type ->
         {:error, {:invalid_llm_decision_type, type}}
@@ -43,9 +66,43 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
     end
   end
 
-  defp parse_operation(object) do
-    name = Schema.get_key(object, :name)
-    arguments = Schema.get_key(object, :arguments) || %{}
+  defp parse_untyped_final(object) when is_map(object) do
+    content =
+      cond do
+        is_binary(Schema.get_key(object, :content)) ->
+          Schema.get_key(object, :content)
+
+        is_binary(Schema.get_key(object, :summary)) ->
+          Schema.get_key(object, :summary)
+
+        true ->
+          Jason.encode!(object)
+      end
+
+    {:ok, LLMDecision.final(content, result: Schema.get_key(object, :result) || object)}
+  end
+
+  defp parse_operation(object, fallback_name \\ nil) do
+    nested = nested_operation_object(object)
+
+    name =
+      Schema.get_key(object, :name) ||
+        Schema.get_key(object, :operation) ||
+        Schema.get_key(object, :tool) ||
+        Schema.get_key(object, :tool_name) ||
+        Schema.get_key(object, :function) ||
+        Schema.get_key(object, :function_name) ||
+        nested_name(nested) ||
+        fallback_name
+
+    arguments =
+      Schema.get_key(object, :arguments) ||
+        Schema.get_key(object, :params) ||
+        Schema.get_key(object, :parameters) ||
+        Schema.get_key(object, :args) ||
+        nested_arguments(nested) ||
+        shorthand_arguments(object, fallback_name) ||
+        %{}
 
     cond do
       not is_binary(name) ->
@@ -57,6 +114,90 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
       true ->
         {:ok, LLMDecision.operation(name, arguments)}
     end
+  end
+
+  defp operation_shorthand?(object) when is_map(object) do
+    match?(%{}, Schema.get_key(object, :arguments)) or
+      match?(%{}, Schema.get_key(object, :params)) or
+      match?(%{}, Schema.get_key(object, :parameters)) or
+      match?(%{}, nested_operation_object(object)) or
+      map_size(shorthand_arguments(object, :operation) || %{}) > 0
+  end
+
+  defp untyped_operation_shorthand?(object) when is_map(object) do
+    is_binary(Schema.get_key(object, :name)) or
+      is_binary(Schema.get_key(object, :operation)) or
+      is_binary(Schema.get_key(object, :tool)) or
+      is_binary(Schema.get_key(object, :tool_name)) or
+      is_binary(Schema.get_key(object, :function)) or
+      is_binary(Schema.get_key(object, :function_name)) or
+      match?(%{}, nested_operation_object(object))
+  end
+
+  defp nested_operation_object(object) when is_map(object) do
+    cond do
+      is_map(Schema.get_key(object, :tool_call)) ->
+        Schema.get_key(object, :tool_call)
+
+      is_map(Schema.get_key(object, :tool)) ->
+        Schema.get_key(object, :tool)
+
+      is_map(Schema.get_key(object, :function_call)) ->
+        Schema.get_key(object, :function_call)
+
+      is_map(Schema.get_key(object, :function)) ->
+        Schema.get_key(object, :function)
+
+      is_list(Schema.get_key(object, :tool_calls)) ->
+        object
+        |> Schema.get_key(:tool_calls)
+        |> List.first()
+
+      true ->
+        nil
+    end
+  end
+
+  defp nested_name(%{} = nested) do
+    Schema.get_key(nested, :name) ||
+      Schema.get_key(nested, :operation) ||
+      Schema.get_key(nested, :tool) ||
+      Schema.get_key(nested, :tool_name) ||
+      Schema.get_key(nested, :function) ||
+      Schema.get_key(nested, :function_name)
+  end
+
+  defp nested_name(_nested), do: nil
+
+  defp nested_arguments(%{} = nested) do
+    Schema.get_key(nested, :arguments) ||
+      Schema.get_key(nested, :params) ||
+      Schema.get_key(nested, :parameters) ||
+      Schema.get_key(nested, :args)
+  end
+
+  defp nested_arguments(_nested), do: nil
+
+  defp shorthand_arguments(_object, nil), do: nil
+
+  defp shorthand_arguments(object, _fallback_name) when is_map(object) do
+    arguments =
+      Map.reject(object, fn {key, _value} ->
+        key in [
+          :type,
+          "type",
+          :name,
+          "name",
+          :operation,
+          "operation",
+          :content,
+          "content",
+          :result,
+          "result"
+        ]
+      end)
+
+    if map_size(arguments) > 0, do: arguments, else: nil
   end
 
   defp decode_json_object(text) do

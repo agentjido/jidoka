@@ -68,9 +68,19 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
     params
     |> get(:runtime_opts, [])
     |> normalize_runtime_opts()
-    |> Keyword.update(:operation_context, operation_context(context), fn existing ->
-      Map.merge(operation_context(context), normalize_context(existing))
+    |> maybe_put_session_id(params)
+    |> Keyword.update(:operation_context, operation_context(params, context), fn existing ->
+      Map.merge(operation_context(params, context), normalize_context(existing))
     end)
+  end
+
+  defp maybe_put_session_id(opts, params) do
+    context = params |> get(:context, %{}) |> normalize_context()
+
+    case Map.get(context, :session_id, Map.get(context, "session_id")) do
+      session_id when is_binary(session_id) -> Keyword.put_new(opts, :session_id, session_id)
+      _other -> opts
+    end
   end
 
   defp normalize_runtime_opts(opts) when is_list(opts), do: opts
@@ -89,10 +99,11 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
     kind, reason -> {:error, {kind, reason}}
   end
 
-  defp operation_context(context) do
+  defp operation_context(params, context) do
     %{}
     |> maybe_put(:jido_agent, Map.get(context, :agent))
     |> maybe_put(:jido_agent_server_pid, Map.get(context, :agent_server_pid))
+    |> Map.merge(normalize_context(get(params, :context, %{})))
   end
 
   defp state_from_run_result({:ok, %Turn.Result{} = result}, %Turn.Request{} = request) do

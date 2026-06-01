@@ -13,10 +13,62 @@ defmodule Jidoka.Runtime.ReqLLM.DecisionTest do
              Decision.parse_text(~s({"type":"final","content":"hello","result":{"answer":"Ada"}}))
   end
 
+  test "parses untyped structured result objects as final decisions" do
+    assert {:ok,
+            %{
+              type: :final,
+              content: "Brief summary",
+              result: %{
+                "summary" => "Brief summary",
+                "sources" => [%{"url" => "https://example.com"}]
+              }
+            }} =
+             Decision.parse_text(
+               ~s({"summary":"Brief summary","sources":[{"url":"https://example.com"}]})
+             )
+  end
+
   test "parses operation decisions from JSON text" do
     assert {:ok, %{type: :operation, name: "weather", arguments: %{"city" => "Paris"}}} =
              Decision.parse_text(
                ~s({"type":"operation","name":"weather","arguments":{"city":"Paris"}})
+             )
+  end
+
+  test "normalizes common tool call aliases to operation decisions" do
+    assert {:ok, %{type: :operation, name: "weather", arguments: %{"city" => "Paris"}}} =
+             Decision.parse_text(
+               ~s({"type":"tool","name":"weather","arguments":{"city":"Paris"}})
+             )
+
+    assert {:ok, %{type: :operation, name: "weather", arguments: %{}}} =
+             Decision.parse_text(~s({"type":"function_call","name":"weather"}))
+
+    assert {:ok, %{type: :operation, name: "weather", arguments: %{}}} =
+             Decision.parse_text(~s({"type":"tool_call","name":"weather"}))
+
+    assert {:ok, %{type: :operation, name: "weather", arguments: %{}}} =
+             Decision.parse_text(~s({"type":"action","name":"weather"}))
+  end
+
+  test "normalizes operation-name shorthand when arguments are present" do
+    assert {:ok,
+            %{type: :operation, name: "read_page", arguments: %{"url" => "https://example.com"}}} =
+             Decision.parse_text(~s({"type":"read_page","url":"https://example.com"}))
+
+    assert {:ok, %{type: :operation, name: "search_web", arguments: %{"query" => "runic"}}} =
+             Decision.parse_text(~s({"type":"search_web","params":{"query":"runic"}}))
+
+    assert {:ok,
+            %{type: :operation, name: "read_page", arguments: %{"url" => "https://example.com"}}} =
+             Decision.parse_text(
+               ~s({"name":"read_page","arguments":{"url":"https://example.com"}})
+             )
+
+    assert {:ok,
+            %{type: :operation, name: "read_page", arguments: %{"url" => "https://example.com"}}} =
+             Decision.parse_text(
+               ~s({"tool_call":{"name":"read_page","arguments":{"url":"https://example.com"}}})
              )
   end
 
@@ -40,7 +92,7 @@ defmodule Jidoka.Runtime.ReqLLM.DecisionTest do
   test "rejects empty and malformed decision objects" do
     assert {:error, :empty_llm_response} = Decision.parse_text(nil)
 
-    assert {:error, {:invalid_llm_decision_type, nil}} =
+    assert {:ok, %{type: :final, content: "missing type"}} =
              Decision.parse_text(~s({"content":"missing type"}))
 
     assert {:error, {:invalid_llm_decision_type, "bad"}} =

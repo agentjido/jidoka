@@ -15,6 +15,8 @@ defmodule Jidoka.Agent.Spec.Operation do
     :ash_resource,
     :browser,
     :catalog,
+    :skill,
+    :mcp,
     :workflow,
     :subagent,
     :handoff

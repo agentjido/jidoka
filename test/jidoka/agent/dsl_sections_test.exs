@@ -39,6 +39,28 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert entities.catalog.target == Jidoka.Agent.Dsl.Catalog
     assert entities.catalog.args == [:name]
     assert get_in(entities.catalog.schema, [:via, :required])
+
+    assert entities.mcp_tools.target == Jidoka.Agent.Dsl.MCPTools
+    assert entities.mcp_tools.args == []
+    assert get_in(entities.mcp_tools.schema, [:endpoint, :required])
+
+    assert entities.skill.target == Jidoka.Agent.Dsl.SkillRef
+    assert entities.skill.args == [:skill]
+
+    assert entities.load_path.target == Jidoka.Agent.Dsl.SkillPath
+    assert entities.load_path.args == [:path]
+
+    assert entities.subagent.target == Jidoka.Agent.Dsl.Subagent
+    assert entities.subagent.args == [:agent]
+    assert get_in(entities.subagent.schema, [:timeout, :default]) == 30_000
+
+    assert entities.handoff.target == Jidoka.Agent.Dsl.Handoff
+    assert entities.handoff.args == [:agent]
+    assert get_in(entities.handoff.schema, [:target, :default]) == :auto
+
+    assert entities.workflow.target == Jidoka.Agent.Dsl.Workflow
+    assert entities.workflow.args == [:workflow]
+    assert get_in(entities.workflow.schema, [:result, :default]) == :output
   end
 
   test "controls section declares runtime and operation control entities" do

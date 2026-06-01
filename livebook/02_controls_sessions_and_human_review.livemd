@@ -1,0 +1,119 @@
+# Controls, Sessions, And Human Review
+
+This notebook demonstrates operation controls, durable session snapshots, pending
+review requests, and approval-based resume.
+
+```elixir
+Mix.install(
+  [
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  ],
+  consolidate_protocols: false
+)
+```
+
+## Define A Reviewed Operation
+
+```elixir
+defmodule IssueRefund do
+  use Jidoka.Action,
+    name: "issue_refund",
+    description: "Queues a deterministic refund.",
+    schema:
+      Zoi.object(%{
+        order_id: Zoi.string()
+      })
+
+  @impl true
+  def run(params, _context) do
+    order_id = Map.get(params, :order_id) || Map.get(params, "order_id")
+    {:ok, %{refund_id: "refund-#{order_id}", status: "queued"}}
+  end
+end
+
+defmodule RequireRefundApproval do
+  use Jidoka.Control, name: "require_refund_approval"
+
+  @impl true
+  def call(_operation), do: {:interrupt, :approval_required}
+end
+
+defmodule RefundAgent do
+  use Jidoka.Agent
+
+  agent :refund_agent do
+    model %{provider: :test, id: "notebook-model"}
+    instructions "Use issue_refund for refund requests, then summarize the result."
+  end
+
+  tools do
+    action IssueRefund, idempotency: :unsafe_once
+  end
+
+  controls do
+    max_turns 4
+    operation RequireRefundApproval, when: [kind: :action, name: :issue_refund]
+  end
+end
+```
+
+## Start A Durable Session
+
+```elixir
+{:ok, store_pid} = Jidoka.Harness.Store.InMemory.start_link()
+store = {Jidoka.Harness.Store.InMemory, pid: store_pid}
+
+{:ok, session} = Jidoka.Harness.start_session(RefundAgent.spec(), session_id: "refund-demo", store: store)
+session.status
+```
+
+## Run Until Review Is Required
+
+```elixir
+fake_llm = fn _intent, journal ->
+  llm_calls =
+    journal.results
+    |> Map.values()
+    |> Enum.count(&(&1.kind == :llm))
+
+  case llm_calls do
+    0 ->
+      {:ok, %{type: :operation, name: "issue_refund", arguments: %{"order_id" => "A1001"}}}
+
+    1 ->
+      {:ok, %{type: :final, content: "Refund refund-A1001 is queued."}}
+  end
+end
+
+{:hibernate, waiting, snapshot} =
+  Jidoka.Harness.run_session("refund-demo", "Refund order A1001.",
+    store: store,
+    llm: fake_llm
+  )
+
+%{
+  status: waiting.status,
+  cursor: snapshot.cursor.phase,
+  reviews: Jidoka.Harness.pending_reviews(waiting)
+}
+```
+
+## Approve And Resume
+
+```elixir
+{:ok, [review]} = Jidoka.Harness.pending_reviews(store)
+approval = Jidoka.Review.Response.approve(review.interrupt_id)
+
+{:ok, finished, result} =
+  Jidoka.Harness.resume_session("refund-demo",
+    store: store,
+    approval: approval,
+    llm: fake_llm
+  )
+
+%{
+  status: finished.status,
+  content: result.content,
+  replay: Jidoka.inspect(finished).replay
+}
+```

@@ -17,6 +17,27 @@ defmodule Jidoka.AgentViewTest do
     use Jidoka.AgentView, agent: DemoAgent
   end
 
+  defmodule RuntimeAgent do
+    def id, do: "runtime_agent"
+  end
+
+  defmodule RuntimeView do
+    use Jidoka.AgentView, agent: RuntimeAgent
+
+    @impl true
+    def prepare(%{reject?: true}), do: {:error, :rejected}
+    def prepare(_input), do: :ok
+
+    @impl true
+    def runtime_context(input) do
+      %{tenant: Map.get(input, :tenant, "default")}
+    end
+  end
+
+  defmodule MissingAgentView do
+    use Jidoka.AgentView
+  end
+
   test "initial view projects identity without owning runtime state" do
     assert {:ok, %AgentView{} = view} = DemoView.initial(%{conversation_id: "VIP Case!"})
 
@@ -110,5 +131,83 @@ defmodule Jidoka.AgentViewTest do
     updated = DemoView.apply_event(updated, event)
 
     assert [%{kind: :effect_started, refs: %{request_id: "req_agent_view"}}] = updated.events
+  end
+
+  test "view error, hibernate, empty input, duplicate events, and thinking deltas stay stable" do
+    {:ok, view} = RuntimeView.initial(%{conversation_id: "case_456", tenant: "acme"})
+
+    assert view.agent_id == "runtime_agent-case_456"
+    assert view.runtime_context == %{tenant: "acme"}
+
+    idle = RuntimeView.before_turn(view, "   ")
+    assert idle.status == :idle
+    assert idle.visible_messages == []
+
+    errored = RuntimeView.after_turn(view, {:error, :failed})
+    assert errored.status == :error
+    assert errored.error == :failed
+    assert is_binary(errored.error_text)
+
+    snapshot = snapshot()
+    interrupted = RuntimeView.after_turn(view, {:hibernate, snapshot})
+    assert interrupted.status == :interrupted
+    assert interrupted.metadata.last_snapshot.snapshot_id == snapshot.snapshot_id
+
+    thinking =
+      Event.new!(
+        event: :llm_delta,
+        request_id: "req_thinking",
+        data: %{chunk_type: :thinking, delta: "Analyzing"}
+      )
+
+    updated = RuntimeView.apply_event(view, thinking)
+
+    assert [%{role: :assistant, content: "Thinking...", thinking: "Analyzing"}] =
+             RuntimeView.visible_messages(updated)
+
+    event =
+      Event.new!(
+        event: :effect_started,
+        seq: 0,
+        request_id: "req_duplicate",
+        effect_id: "effect_1",
+        effect_kind: :llm
+      )
+
+    updated =
+      updated
+      |> RuntimeView.apply_event(event)
+      |> RuntimeView.apply_event(event)
+      |> RuntimeView.apply_event(%{ignored: true})
+
+    assert Enum.count(updated.events, &(&1.id == "event-req_duplicate-0-effect_started-effect_1")) ==
+             1
+
+    assert {:error, :rejected} = RuntimeView.initial(%{reject?: true})
+
+    assert_raise ArgumentError, ~r/must pass `agent:`/, fn ->
+      MissingAgentView.agent_module(%{})
+    end
+  end
+
+  defp snapshot do
+    spec =
+      Agent.Spec.new!(
+        id: "agent_view_snapshot_agent",
+        instructions: "Snapshot for AgentView.",
+        model: %{provider: :test, id: "model"}
+      )
+
+    request = Turn.Request.new!(input: "Hello")
+
+    state =
+      Turn.State.new!(
+        spec: spec,
+        plan: Turn.Plan.new!(spec),
+        request: request,
+        agent_state: request.agent_state
+      )
+
+    Jidoka.Runtime.AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
   end
 end

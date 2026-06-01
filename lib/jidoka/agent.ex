@@ -153,7 +153,8 @@ defmodule Jidoka.Agent do
       id: normalize_id!(agent.id),
       model: normalize_model!(agent_module, agent.model),
       generation: normalize_generation!(agent_module, agent.generation),
-      instructions: normalize_instructions!(agent.instructions),
+      instructions:
+        normalize_instructions!(agent.instructions, ToolSources.skill_prompt!(agent_module)),
       description: agent.description,
       context_schema: agent.context,
       result: normalize_result!(agent_module, agent.result),
@@ -450,17 +451,27 @@ defmodule Jidoka.Agent do
 
   defp normalize_dsl_error_message(_path, exception), do: Exception.message(exception)
 
-  defp normalize_instructions!(nil), do: @default_instructions
+  defp normalize_instructions!(instructions, skill_prompt \\ nil)
 
-  defp normalize_instructions!(instructions) when is_binary(instructions) do
+  defp normalize_instructions!(nil, skill_prompt),
+    do: append_skill_prompt(@default_instructions, skill_prompt)
+
+  defp normalize_instructions!(instructions, skill_prompt) when is_binary(instructions) do
     case String.trim(instructions) do
       "" -> raise ArgumentError, "agent instructions must be a non-empty string"
-      instructions -> instructions
+      instructions -> append_skill_prompt(instructions, skill_prompt)
     end
   end
 
-  defp normalize_instructions!(instructions),
+  defp normalize_instructions!(instructions, _skill_prompt),
     do: raise(ArgumentError, "agent instructions must be a string, got: #{inspect(instructions)}")
+
+  defp append_skill_prompt(instructions, nil), do: instructions
+  defp append_skill_prompt(instructions, ""), do: instructions
+
+  defp append_skill_prompt(instructions, skill_prompt) when is_binary(skill_prompt) do
+    instructions <> "\n\n" <> skill_prompt
+  end
 
   defp maybe_put_tool_sources(metadata, []), do: metadata
 

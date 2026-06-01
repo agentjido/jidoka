@@ -14,7 +14,7 @@ defmodule Jidoka.Workflow.Steps do
     messages =
       [
         Agent.Message.system(state.spec.instructions),
-        memory_message(state.memory)
+        memory_message(state.spec.memory, state.memory)
       ]
       |> Enum.reject(&is_nil/1)
       |> Kernel.++(state.request.agent_state.messages)
@@ -111,10 +111,37 @@ defmodule Jidoka.Workflow.Steps do
   defp result_contract(%Agent.Spec.Result{} = result) do
     %{
       schema?: true,
+      schema: result_schema_contract(result.schema),
       max_repairs: result.max_repairs,
       metadata: result.metadata
     }
   end
+
+  defp result_schema_contract(%Zoi.Types.Map{fields: fields}) when is_list(fields) do
+    fields =
+      Map.new(fields, fn {field, schema} ->
+        {to_string(field), result_schema_contract(schema)}
+      end)
+
+    %{
+      type: "object",
+      required: Map.keys(fields),
+      fields: fields
+    }
+  end
+
+  defp result_schema_contract(%Zoi.Types.Array{inner: inner}) do
+    %{type: "array", items: result_schema_contract(inner)}
+  end
+
+  defp result_schema_contract(%Zoi.Types.String{}), do: %{type: "string"}
+  defp result_schema_contract(%Zoi.Types.Number{}), do: %{type: "number"}
+  defp result_schema_contract(%Zoi.Types.Integer{}), do: %{type: "integer"}
+  defp result_schema_contract(%Zoi.Types.Float{}), do: %{type: "float"}
+  defp result_schema_contract(%Zoi.Types.Boolean{}), do: %{type: "boolean"}
+  defp result_schema_contract(%Zoi.Types.Atom{}), do: %{type: "atom"}
+  defp result_schema_contract(%Zoi.Types.Any{}), do: %{type: "any"}
+  defp result_schema_contract(%_{}), do: %{schema?: true}
 
   defp append_memory_recalled(%Turn.State{memory: nil} = state), do: state
   defp append_memory_recalled(%Turn.State{memory: %{entries: []}} = state), do: state
@@ -131,10 +158,11 @@ defmodule Jidoka.Workflow.Steps do
     |> Turn.Transition.commit()
   end
 
-  defp memory_message(nil), do: nil
-  defp memory_message(%{entries: []}), do: nil
+  defp memory_message(_policy, nil), do: nil
+  defp memory_message(_policy, %{entries: []}), do: nil
+  defp memory_message(%Agent.Spec.Memory{inject: :context}, _memory), do: nil
 
-  defp memory_message(memory) do
+  defp memory_message(_policy, memory) do
     content =
       memory.entries
       |> Enum.map_join("\n", fn entry -> "- #{entry.content}" end)

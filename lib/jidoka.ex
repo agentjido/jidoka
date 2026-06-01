@@ -16,6 +16,7 @@ defmodule Jidoka do
   alias Jidoka.Agent
   alias Jidoka.Error
   alias Jidoka.Harness
+  alias Jidoka.Harness.Session
   alias Jidoka.Inspection
   alias Jidoka.Runtime.AgentServerState
   alias Jidoka.Runtime.AgentSnapshot
@@ -28,6 +29,7 @@ defmodule Jidoka do
   @type runtime_opts :: keyword()
   @type server_ref :: Jido.AgentServer.server()
   @type runnable_input :: plan_input() | server_ref()
+  @type chat_input :: runnable_input() | Session.t()
 
   @type run_result ::
           {:ok, Turn.Result.t()}
@@ -88,6 +90,34 @@ defmodule Jidoka do
   def whereis(id, opts \\ []), do: Jidoka.Jido.whereis(id, opts)
 
   @doc """
+  Starts a durable Jidoka session for an agent, spec, or plan.
+
+  This is the root-level convenience wrapper around `Jidoka.Session.start/2`.
+  The returned value is a `Jidoka.Harness.Session` data struct.
+  """
+  @spec session(Jidoka.Session.agent_input()) :: {:ok, Jidoka.Session.t()} | {:error, term()}
+  @spec session(Jidoka.Session.agent_input(), keyword() | String.t()) ::
+          {:ok, Jidoka.Session.t()} | {:error, term()}
+  def session(agent_or_plan, opts \\ []), do: Jidoka.Session.start(agent_or_plan, opts)
+
+  @doc """
+  Starts a durable Jidoka session with an explicit session id.
+  """
+  @spec session(Jidoka.Session.agent_input(), String.t(), keyword()) ::
+          {:ok, Jidoka.Session.t()} | {:error, term()}
+  def session(agent_or_plan, session_id, opts) when is_binary(session_id) and is_list(opts) do
+    Jidoka.Session.start(agent_or_plan, session_id, opts)
+  end
+
+  @doc "Returns the current handoff owner for a conversation, if one has been recorded."
+  @spec handoff_owner(String.t()) :: Jidoka.Handoff.OwnerStore.owner() | nil
+  def handoff_owner(conversation_id), do: Jidoka.Handoff.OwnerStore.owner(conversation_id)
+
+  @doc "Clears the current handoff owner for a conversation."
+  @spec reset_handoff(String.t()) :: :ok
+  def reset_handoff(conversation_id), do: Jidoka.Handoff.OwnerStore.reset(conversation_id)
+
+  @doc """
   Compiles an agent definition into executable turn data.
 
   `Turn.Plan` remains data. It contains no live capabilities, processes, provider
@@ -118,14 +148,29 @@ defmodule Jidoka do
   def compile_turn_plan!(%Agent.Spec{} = spec), do: plan!(spec)
 
   @doc """
-  Runs one turn and returns only the final assistant text.
+  Runs one turn and returns final assistant text.
+
+  For caller-managed sessions, the updated session is returned alongside the
+  text so durable state is not lost.
 
   Use `run_turn/3` when callers need the full `Turn.Result`, journal, state, or
   checkpoint response.
   """
-  @spec chat(runnable_input(), String.t(), runtime_opts()) ::
-          {:ok, String.t()} | {:hibernate, AgentSnapshot.t()} | {:error, term()}
+  @spec chat(chat_input(), String.t(), runtime_opts()) ::
+          {:ok, String.t()}
+          | {:ok, Jidoka.Session.t(), String.t()}
+          | {:hibernate, AgentSnapshot.t()}
+          | {:hibernate, Jidoka.Session.t(), AgentSnapshot.t()}
+          | {:error, term()}
   def chat(spec_or_server, input, opts \\ [])
+
+  def chat(%Session{} = session, input, opts) when is_binary(input) and is_list(opts) do
+    case Jidoka.Session.chat(session, input, opts) do
+      {:ok, session, content} -> {:ok, session, content}
+      {:hibernate, session, snapshot} -> {:hibernate, session, snapshot}
+      {:error, reason} -> {:error, Error.normalize(reason, operation: :chat, phase: :session)}
+    end
+  end
 
   def chat(server, input, opts)
       when is_binary(input) and is_server_ref(server) and is_list(opts) do

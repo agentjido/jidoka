@@ -16,5 +16,12 @@ defmodule JidokaExampleWeb.Router do
     live "/", HomeLive, :index
     live "/agents/support", SupportAgentLive.Index, :index
     live "/agents/research", ResearchAgentLive.Index, :index
+    live "/agents/approval", ApprovalAgentLive.Index, :index
+    live "/agents/ash", AshAgentLive.Index, :index
+    live "/agents/lead-quality", LeadQualityAgentLive.Index, :index
+    live "/agents/memory", MemoryAgentLive.Index, :index
+    live "/agents/knowledge", KnowledgeAgentLive.Index, :index
+    live "/agents/debug", DebugAgentLive.Index, :index
+    live "/agents/kitchen-sink", KitchenSinkAgentLive.Index, :index
   end
 end

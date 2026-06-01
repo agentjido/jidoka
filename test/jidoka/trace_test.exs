@@ -79,4 +79,45 @@ defmodule Jidoka.TraceTest do
     assert {:error, {:invalid_trace_sink, :not_a_sink}} =
              Jidoka.Trace.Sink.record(:not_a_sink, [], Policy.new!())
   end
+
+  test "trace projection handles map events, fallback values, map policies, and disabled input" do
+    map_event = %{
+      event: :custom_trace,
+      request_id: "turn_map",
+      data: %{token: "secret", prompt: "omit", visible: [%{password: "hide", value: "ok"}]}
+    }
+
+    assert [
+             %{
+               seq: 0,
+               extension: :trace,
+               event: :custom_trace,
+               data: %{token: "[REDACTED]", visible: [%{password: "[REDACTED]", value: "ok"}]}
+             },
+             %{
+               seq: 1,
+               extension: :trace,
+               event: :unknown_event,
+               data: %{value: :loose_event}
+             }
+           ] =
+             Trace.timeline([map_event, :loose_event], %{
+               "trace_policy" => %{
+                 "redact_keys" => ["token", "password"],
+                 "omit_keys" => ["prompt"]
+               }
+             })
+
+    assert [] = Trace.timeline([map_event], %{policy: %{enabled: false}})
+    assert [] = Trace.timeline(:not_events, %{})
+
+    assert %{secret: "[REDACTED]", nested: %{token: "[REDACTED]"}, keep: "ok"} =
+             Trace.redact(
+               %{secret: "hide", nested: %{token: "hide"}, keep: "ok"},
+               redact_keys: [:secret, :token],
+               omit_keys: []
+             )
+
+    assert %{secret: "hide"} = Trace.redact(%{secret: "hide"}, sample_rate: 2.0)
+  end
 end

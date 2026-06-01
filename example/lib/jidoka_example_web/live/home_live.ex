@@ -15,8 +15,64 @@ defmodule JidokaExampleWeb.HomeLive do
     %{
       id: :research,
       title: "Research Agent",
-      description: "Browser search and page reads",
+      description: "Browser research and sourced briefs",
       path: "/agents/research",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
+      id: :approval,
+      title: "Approval Flow Agent",
+      description: "Human review before side effects",
+      path: "/agents/approval",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
+      id: :ash,
+      title: "Ash Agent",
+      description: "Ash resources exposed as tools",
+      path: "/agents/ash",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
+      id: :lead_quality,
+      title: "Lead Quality Agent",
+      description: "Multi-tool scoring with structured output",
+      path: "/agents/lead-quality",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
+      id: :memory,
+      title: "Memory Agent",
+      description: "Session memory backed by jido_memory",
+      path: "/agents/memory",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
+      id: :knowledge,
+      title: "Knowledge Agent",
+      description: "Skills, MCP, and optional web evidence",
+      path: "/agents/knowledge",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
+      id: :debug,
+      title: "Debug Agent",
+      description: "Inspect and preflight agent definitions",
+      path: "/agents/debug",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
+      id: :kitchen_sink,
+      title: "Kitchen Sink Agent",
+      description: "Every stable V2 feature in one route",
+      path: "/agents/kitchen-sink",
       status: "Ready",
       status_class: "idle"
     }

@@ -12,6 +12,7 @@ defmodule Jidoka.Projection do
   alias Jidoka.Effect
   alias Jidoka.Event
   alias Jidoka.Error
+  alias Jidoka.Handoff
   alias Jidoka.Harness
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
@@ -55,6 +56,9 @@ defmodule Jidoka.Projection do
     %{
       enabled: memory.enabled,
       scope: memory.scope,
+      namespace: project_value(memory.namespace),
+      capture: memory.capture,
+      inject: memory.inject,
       max_entries: memory.max_entries,
       metadata: project_value(memory.metadata)
     }
@@ -66,6 +70,23 @@ defmodule Jidoka.Projection do
       description: operation.description,
       idempotency: operation.idempotency,
       metadata: project_operation_metadata(operation.metadata)
+    }
+  end
+
+  def project(%Handoff{} = handoff) do
+    %{
+      id: handoff.id,
+      conversation_id: handoff.conversation_id,
+      from_agent: project_value(handoff.from_agent),
+      to_agent: inspect(handoff.to_agent),
+      to_agent_id: handoff.to_agent_id,
+      name: handoff.name,
+      message: handoff.message,
+      summary: handoff.summary,
+      reason: handoff.reason,
+      context: project_value(handoff.context),
+      request_id: handoff.request_id,
+      metadata: project_value(handoff.metadata)
     }
   end
 

@@ -5,10 +5,19 @@ defmodule JidokaExample.Application do
 
   @impl true
   def start(_type, _args) do
+    JidokaExample.MemoryAgent.Memory.ensure_ready!()
+
     children = [
       JidokaExample.Jido,
       {JidokaExample.SupportAgent.Agent, jido: JidokaExample.Jido},
       {JidokaExample.ResearchAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.ApprovalAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.AshAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.LeadQualityAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.MemoryAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.KnowledgeAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.DebugAgent.Agent, jido: JidokaExample.Jido},
+      {JidokaExample.KitchenSinkAgent.Agent, jido: JidokaExample.Jido},
       {Phoenix.PubSub, name: JidokaExample.PubSub},
       JidokaExampleWeb.Endpoint
     ]

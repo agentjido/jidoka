@@ -1,7 +1,18 @@
 defmodule Jidoka.Agent.Dsl.Sections.Tools do
   @moduledoc false
 
-  alias Jidoka.Agent.Dsl.{AshResource, Browser, Catalog, Tool}
+  alias Jidoka.Agent.Dsl.{
+    AshResource,
+    Browser,
+    Catalog,
+    Handoff,
+    MCPTools,
+    SkillPath,
+    SkillRef,
+    Subagent,
+    Tool,
+    Workflow
+  }
 
   @spec action_entity() :: Spark.Dsl.Entity.t()
   def action_entity do
@@ -176,6 +187,256 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
     }
   end
 
+  @spec mcp_tools_entity() :: Spark.Dsl.Entity.t()
+  def mcp_tools_entity do
+    %Spark.Dsl.Entity{
+      name: :mcp_tools,
+      target: MCPTools,
+      args: [],
+      describe: """
+      Register tools exposed by a configured MCP endpoint.
+      """,
+      schema: [
+        endpoint: [
+          type: :any,
+          required: true,
+          doc: "Configured MCP endpoint id."
+        ],
+        prefix: [
+          type: :string,
+          required: false,
+          doc: "Optional operation-name prefix for discovered MCP tools."
+        ],
+        tools: [
+          type: :any,
+          required: false,
+          default: [],
+          doc:
+            "Optional static MCP tool metadata when discovery is not available at compile time."
+        ],
+        required: [
+          type: :boolean,
+          required: false,
+          default: false,
+          doc: "Whether discovery failure should fail spec compilation."
+        ],
+        timeout: [
+          type: :pos_integer,
+          required: false,
+          doc: "Optional MCP request timeout in milliseconds."
+        ],
+        description: [
+          type: :string,
+          required: false,
+          doc: "Optional description override applied to generated operations."
+        ],
+        idempotency: [
+          type: :any,
+          required: false,
+          default: :idempotent,
+          doc: "Operation idempotency for generated MCP operations."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional metadata merged into generated operation specs."
+        ]
+      ]
+    }
+  end
+
+  @spec skill_ref_entity() :: Spark.Dsl.Entity.t()
+  def skill_ref_entity do
+    %Spark.Dsl.Entity{
+      name: :skill,
+      target: SkillRef,
+      args: [:skill],
+      describe: """
+      Register a Jido.AI skill module or runtime-loaded skill name.
+      """,
+      schema: [
+        skill: [
+          type: :any,
+          required: true,
+          doc: "A module defined with `use Jido.AI.Skill` or a runtime skill name."
+        ]
+      ]
+    }
+  end
+
+  @spec skill_path_entity() :: Spark.Dsl.Entity.t()
+  def skill_path_entity do
+    %Spark.Dsl.Entity{
+      name: :load_path,
+      target: SkillPath,
+      args: [:path],
+      describe: """
+      Load `SKILL.md` files for runtime skill references.
+      """,
+      schema: [
+        path: [
+          type: :string,
+          required: true,
+          doc: "A directory containing SKILL.md files or a specific SKILL.md path."
+        ]
+      ]
+    }
+  end
+
+  @spec subagent_entity() :: Spark.Dsl.Entity.t()
+  def subagent_entity do
+    %Spark.Dsl.Entity{
+      name: :subagent,
+      target: Subagent,
+      args: [:agent],
+      describe: """
+      Register a bounded delegation specialist as a model-callable operation.
+      """,
+      schema: [
+        agent: [
+          type: :atom,
+          required: true,
+          doc: "A module using `Jidoka.Agent`."
+        ],
+        as: [
+          type: :any,
+          required: false,
+          doc: "Optional published operation name."
+        ],
+        description: [
+          type: :string,
+          required: false,
+          doc: "Optional operation description override."
+        ],
+        timeout: [
+          type: :pos_integer,
+          required: false,
+          default: 30_000,
+          doc: "Bounded child-agent timeout in milliseconds."
+        ],
+        forward_context: [
+          type: :any,
+          required: false,
+          default: :public,
+          doc: "Context forwarding policy: :public, :none, {:only, keys}, or {:except, keys}."
+        ],
+        result: [
+          type: :any,
+          required: false,
+          default: :structured,
+          doc: "Parent-visible result shape: :text or :structured."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional metadata merged into the operation spec."
+        ]
+      ]
+    }
+  end
+
+  @spec handoff_entity() :: Spark.Dsl.Entity.t()
+  def handoff_entity do
+    %Spark.Dsl.Entity{
+      name: :handoff,
+      target: Handoff,
+      args: [:agent],
+      describe: """
+      Register a conversation ownership transfer as a model-callable operation.
+      """,
+      schema: [
+        agent: [
+          type: :atom,
+          required: true,
+          doc: "A module using `Jidoka.Agent` that should own future turns."
+        ],
+        as: [
+          type: :any,
+          required: false,
+          doc: "Optional published operation name."
+        ],
+        description: [
+          type: :string,
+          required: false,
+          doc: "Optional operation description override."
+        ],
+        target: [
+          type: :any,
+          required: false,
+          default: :auto,
+          doc: "Target process id policy: :auto, {:peer, id}, or {:peer, {:context, key}}."
+        ],
+        forward_context: [
+          type: :any,
+          required: false,
+          default: :public,
+          doc: "Context forwarding policy: :public, :none, {:only, keys}, or {:except, keys}."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional metadata merged into the operation spec."
+        ]
+      ]
+    }
+  end
+
+  @spec workflow_entity() :: Spark.Dsl.Entity.t()
+  def workflow_entity do
+    %Spark.Dsl.Entity{
+      name: :workflow,
+      target: Workflow,
+      args: [:workflow],
+      describe: """
+      Register a deterministic workflow as a model-callable operation.
+      """,
+      schema: [
+        workflow: [
+          type: :atom,
+          required: true,
+          doc: "A module using `Jidoka.Workflow`."
+        ],
+        as: [
+          type: :any,
+          required: false,
+          doc: "Optional published operation name."
+        ],
+        description: [
+          type: :string,
+          required: false,
+          doc: "Optional operation description override."
+        ],
+        timeout: [
+          type: :pos_integer,
+          required: false,
+          default: 30_000,
+          doc: "Workflow timeout in milliseconds."
+        ],
+        forward_context: [
+          type: :any,
+          required: false,
+          default: :public,
+          doc: "Context forwarding policy: :public, :none, {:only, keys}, or {:except, keys}."
+        ],
+        result: [
+          type: :any,
+          required: false,
+          default: :output,
+          doc: "Parent-visible result shape: :output or :structured."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional metadata merged into the operation spec."
+        ]
+      ]
+    }
+  end
+
   @spec section() :: Spark.Dsl.Section.t()
   def section do
     %Spark.Dsl.Section{
@@ -187,7 +448,13 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
         action_entity(),
         ash_resource_entity(),
         browser_entity(),
-        catalog_entity()
+        catalog_entity(),
+        mcp_tools_entity(),
+        skill_ref_entity(),
+        skill_path_entity(),
+        subagent_entity(),
+        handoff_entity(),
+        workflow_entity()
       ]
     }
   end

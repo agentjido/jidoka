@@ -29,6 +29,24 @@ defmodule Jidoka.Agent.Verifiers.VerifyTools do
             {:halt, {:error, dsl_error(message, module, [:tools, :action], tool_ref)}}
         end
 
+      %Jidoka.Agent.Dsl.SkillRef{} = skill_ref, {:ok, seen_names} ->
+        case Jidoka.Skill.validate_ref(skill_ref.skill) do
+          :ok ->
+            {:cont, {:ok, seen_names}}
+
+          {:error, message} ->
+            {:halt, {:error, dsl_error(message, module, [:tools, :skill], skill_ref)}}
+        end
+
+      %Jidoka.Agent.Dsl.SkillPath{} = skill_path, {:ok, seen_names} ->
+        case Jidoka.Skill.validate_load_path(skill_path.path) do
+          :ok ->
+            {:cont, {:ok, seen_names}}
+
+          {:error, message} ->
+            {:halt, {:error, dsl_error(message, module, [:tools, :load_path], skill_path)}}
+        end
+
       _tool_source, {:ok, seen_names} ->
         {:cont, {:ok, seen_names}}
     end)

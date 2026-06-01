@@ -1,0 +1,113 @@
+# Import, Eval, And Trace
+
+This notebook shows a data-authored agent imported from YAML, explicit registries
+for executable references, deterministic evals, and trace recording.
+
+```elixir
+Mix.install(
+  [
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  ],
+  consolidate_protocols: false
+)
+```
+
+## Register Executable References
+
+```elixir
+defmodule NotebookEcho do
+  use Jidoka.Action,
+    name: "echo_value",
+    description: "Echoes a deterministic value.",
+    schema:
+      Zoi.object(%{
+        value: Zoi.string()
+      })
+
+  @impl true
+  def run(params, _context) do
+    value = Map.get(params, :value) || Map.get(params, "value")
+    {:ok, %{value: value, source: "notebook"}}
+  end
+end
+```
+
+## Import A YAML Agent
+
+```elixir
+yaml = """
+agent:
+  id: imported_eval_agent
+  model:
+    provider: test
+    id: notebook-model
+  instructions: Use echo_value before answering.
+  runtime_defaults:
+    max_model_turns: 4
+tools:
+  actions:
+    - echo
+controls:
+  max_turns: 4
+"""
+
+{:ok, spec} =
+  Jidoka.import(yaml,
+    actions: %{"echo" => NotebookEcho}
+  )
+
+Jidoka.inspect(spec)
+```
+
+## Run And Trace The Turn
+
+```elixir
+fake_llm = fn _intent, journal ->
+  llm_calls =
+    journal.results
+    |> Map.values()
+    |> Enum.count(&(&1.kind == :llm))
+
+  case llm_calls do
+    0 -> {:ok, %{type: :operation, name: "echo_value", arguments: %{"value" => "Ada"}}}
+    1 -> {:ok, %{type: :final, content: "Echo returned Ada from the notebook."}}
+  end
+end
+
+{:ok, result} =
+  Jidoka.run_turn(spec, "Echo Ada.",
+    llm: fake_llm,
+    operations: Jidoka.Runtime.JidoActions.operations([NotebookEcho])
+  )
+
+{:ok, trace_pid} = Jidoka.Trace.Sink.InMemory.start_link()
+
+:ok =
+  Jidoka.Trace.record(result.events, {Jidoka.Trace.Sink.InMemory, pid: trace_pid},
+    policy: [redact_keys: [], omit_keys: []]
+  )
+
+Jidoka.Trace.Sink.InMemory.list(trace_pid)
+|> Enum.map(& &1.event)
+```
+
+## Turn The Flow Into An Eval
+
+```elixir
+{:ok, eval_run} =
+  Jidoka.Eval.run_case(
+    [
+      id: "imported_echo_eval",
+      agent: spec,
+      input: "Echo Ada.",
+      assertions: %{
+        contains: "Ada",
+        operation_called: "echo_value"
+      }
+    ],
+    llm: fake_llm,
+    operations: Jidoka.Runtime.JidoActions.operations([NotebookEcho])
+  )
+
+Jidoka.inspect(eval_run)
+```

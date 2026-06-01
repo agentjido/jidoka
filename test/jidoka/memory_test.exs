@@ -4,6 +4,7 @@ defmodule Jidoka.MemoryTest do
   alias Jidoka.Agent
   alias Jidoka.Memory
   alias Jidoka.Memory.Store.InMemory
+  alias Jidoka.Memory.Store.JidoMemory
 
   test "memory policy normalizes boolean and string values" do
     assert {:ok, %Agent.Spec.Memory{scope: :agent, max_entries: 5}} =
@@ -13,6 +14,22 @@ defmodule Jidoka.MemoryTest do
 
     assert {:ok, %Agent.Spec.Memory{scope: :session, max_entries: 2}} =
              Agent.Spec.Memory.from_input(%{"scope" => "session", "max_entries" => "2"})
+
+    assert {:ok,
+            %Agent.Spec.Memory{
+              scope: :agent,
+              namespace: "shared:team",
+              capture: :conversation,
+              inject: :context,
+              max_entries: 9
+            }} =
+             Agent.Spec.Memory.from_input(%{
+               "namespace" => "shared",
+               "shared_namespace" => "team",
+               "capture" => "conversation",
+               "inject" => "context",
+               "retrieve" => %{"limit" => 9}
+             })
   end
 
   test "memory entries, write results, and compactions are serializable data" do
@@ -39,6 +56,28 @@ defmodule Jidoka.MemoryTest do
                ],
                id_generator: fn "cmp" -> "cmp_test" end
              )
+
+    assert {:ok, ^entry} = Memory.Entry.from_input(entry)
+
+    assert {:error, {:invalid_generated_id, "mem", ""}} =
+             Memory.Entry.new([agent_id: "memory_agent", content: "bad"],
+               id_generator: fn "mem" -> "" end
+             )
+
+    assert {:error, _reason} = Memory.RecallRequest.new(agent_id: "memory_agent", query: "")
+    assert {:error, _reason} = Memory.WriteRequest.new(entry: %{content: "missing agent"})
+
+    assert_raise ArgumentError, ~r/invalid memory entry/, fn ->
+      Memory.Entry.new!(agent_id: "memory_agent", content: "")
+    end
+
+    assert_raise ArgumentError, ~r/invalid memory recall request/, fn ->
+      Memory.RecallRequest.new!(agent_id: "memory_agent")
+    end
+
+    assert_raise ArgumentError, ~r/invalid memory write result/, fn ->
+      Memory.WriteResult.new!(request: request, entry: %{content: "missing agent"})
+    end
   end
 
   test "in-memory store writes and recalls matching entries" do
@@ -85,5 +124,54 @@ defmodule Jidoka.MemoryTest do
 
     assert {:ok, all_entries} = Memory.Store.list_entries(store)
     assert Enum.map(all_entries, & &1.id) == ["mem_agent", "mem_session", "mem_other"]
+  end
+
+  test "jido_memory store writes and recalls entries through the Jido memory runtime" do
+    table = :"jidoka_memory_test_#{System.unique_integer([:positive])}"
+    :ok = Jido.Memory.Store.ETS.ensure_ready(table: table)
+
+    store =
+      {JidoMemory,
+       namespace: "jidoka:test", provider_opts: [store: {Jido.Memory.Store.ETS, [table: table]}]}
+
+    entry =
+      Memory.Entry.new!(
+        id: "mem_jido",
+        agent_id: "memory_agent",
+        session_id: "sess_1",
+        content: "Ada prefers short answers.",
+        metadata: %{"tags" => ["preference"]}
+      )
+
+    request = Memory.WriteRequest.new!(entry: entry)
+    assert {:ok, %Memory.WriteResult{entry: written}} = Memory.Store.write(store, request)
+    assert written.id == "mem_jido"
+
+    recall =
+      Memory.RecallRequest.new!(
+        agent_id: "memory_agent",
+        session_id: "sess_1",
+        scope: :session,
+        query: "How should I answer?",
+        limit: 5
+      )
+
+    assert {:ok, %Memory.RecallResult{entries: [recalled], metadata: metadata}} =
+             Memory.Store.recall(store, recall)
+
+    assert recalled.id == "mem_jido"
+    assert recalled.content == "Ada prefers short answers."
+    assert metadata["namespace"] == "jidoka:test:session:sess_1"
+
+    assert {:ok, [listed]} =
+             Memory.Store.list_entries(
+               {JidoMemory,
+                namespace: "jidoka:test",
+                scope: :session,
+                session_id: "sess_1",
+                provider_opts: [store: {Jido.Memory.Store.ETS, [table: table]}]}
+             )
+
+    assert listed.id == "mem_jido"
   end
 end

@@ -60,6 +60,11 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest do
     params = %{
       input: "hello",
       request_id: "request-1",
+      context: %{
+        domain: Jidoka.Runtime.Actions.RunTurnTest,
+        session_id: "session-1",
+        user_id: "user-1"
+      },
       runtime_opts: [operation_context: [test_pid: self()]]
     }
 
@@ -74,6 +79,9 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest do
     assert opts[:operation_context].jido_agent == context.agent
     assert opts[:operation_context].jido_agent_server_pid == self()
     assert opts[:operation_context].test_pid == self()
+    assert opts[:operation_context].domain == Jidoka.Runtime.Actions.RunTurnTest
+    assert opts[:session_id] == "session-1"
+    assert opts[:operation_context].user_id == "user-1"
   end
 
   test "writes hibernation snapshots into Jido agent state" do

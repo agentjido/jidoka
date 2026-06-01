@@ -92,7 +92,7 @@ defmodule Jidoka.Runtime.ReqLLM do
   defp build_prompt_messages(prompt) do
     {:ok,
      [
-       %{role: :system, content: runtime_system_prompt()},
+       %{role: :system, content: runtime_system_prompt(prompt)},
        %{role: :user, content: Jason.encode!(prompt)}
      ]}
   rescue
@@ -295,7 +295,27 @@ defmodule Jidoka.Runtime.ReqLLM do
 
   defp hex?(hex), do: String.match?(hex, ~r/\A[0-9a-fA-F]{4}\z/)
 
-  defp runtime_system_prompt do
+  defp runtime_system_prompt(prompt) do
+    operation_instructions =
+      if operations_available?(prompt) do
+        """
+
+        To call an available operation:
+        {"type":"operation","name":"operation_name","arguments":{}}
+
+        Use only operations listed in the prompt payload. Never invent operation
+        names. If a tool observation is present in the message history, use it
+        to produce the final answer.
+        """
+      else
+        """
+
+        This prompt payload has no available operations. Never return an
+        operation decision. Continue the conversation by returning a final
+        answer, including clarifying questions when the task requires them.
+        """
+      end
+
     """
     You are the model side of a Jidoka agent turn.
 
@@ -305,14 +325,17 @@ defmodule Jidoka.Runtime.ReqLLM do
     {"type":"final","content":"your answer"}
 
     If the prompt payload includes a non-null "result" contract, include a
-    "result" field with the structured application value:
+    "result" field with the structured application value. Follow the result
+    schema fields exactly:
     {"type":"final","content":"short user-facing answer","result":{}}
-
-    To call an available operation:
-    {"type":"operation","name":"operation_name","arguments":{}}
-
-    Use only operations listed in the prompt payload. If a tool observation is
-    present in the message history, use it to produce the final answer.
+    #{operation_instructions}
     """
+  end
+
+  defp operations_available?(prompt) when is_map(prompt) do
+    case Schema.get_key(prompt, :operations) do
+      operations when is_list(operations) -> operations != []
+      _other -> false
+    end
   end
 end

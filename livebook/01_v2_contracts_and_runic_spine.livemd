@@ -1,0 +1,104 @@
+# Jidoka V2 Contracts And Runic Spine
+
+This notebook shows the V2 center of gravity: agent definition data, a compiled
+turn plan, preflight inspection, a deterministic tool loop, and hibernate/resume.
+
+```elixir
+Mix.install(
+  [
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  ],
+  consolidate_protocols: false
+)
+```
+
+## Define A Small Agent
+
+```elixir
+defmodule ContractLookup do
+  use Jidoka.Action,
+    name: "lookup_contract",
+    description: "Returns deterministic contract data.",
+    schema:
+      Zoi.object(%{
+        id: Zoi.string()
+      })
+
+  @impl true
+  def run(params, _context) do
+    id = Map.get(params, :id) || Map.get(params, "id")
+    {:ok, %{id: id, status: "active", owner: "Ada"}}
+  end
+end
+
+defmodule ContractAgent do
+  use Jidoka.Agent
+
+  agent :contract_agent do
+    model %{provider: :test, id: "notebook-model"}
+    instructions "Use lookup_contract before answering contract questions."
+  end
+
+  tools do
+    action ContractLookup
+  end
+end
+```
+
+## Inspect The Data Contracts
+
+```elixir
+spec = ContractAgent.spec()
+{:ok, plan} = Jidoka.plan(spec)
+{:ok, preflight} = Jidoka.preflight(plan, "Check contract C-100.")
+
+%{
+  spec: Jidoka.projection(spec),
+  plan: Jidoka.projection(plan),
+  prompt_messages: preflight.prompt.messages
+}
+```
+
+## Run A Deterministic Tool Loop
+
+```elixir
+fake_llm = fn _intent, journal ->
+  llm_calls =
+    journal.results
+    |> Map.values()
+    |> Enum.count(&(&1.kind == :llm))
+
+  case llm_calls do
+    0 ->
+      {:ok, %{type: :operation, name: "lookup_contract", arguments: %{"id" => "C-100"}}}
+
+    1 ->
+      {:ok, %{type: :final, content: "Contract C-100 is active and owned by Ada."}}
+  end
+end
+
+{:ok, result} = ContractAgent.run_turn("Check contract C-100.", llm: fake_llm)
+
+%{
+  content: result.content,
+  operations: Enum.map(result.agent_state.operation_results, &Jidoka.projection/1),
+  journal: Jidoka.inspect(result.journal)
+}
+```
+
+## Hibernate And Resume
+
+```elixir
+{:hibernate, snapshot} =
+  ContractAgent.run_turn("Check contract C-100.",
+    llm: fake_llm,
+    checkpoint: :after_prompt
+  )
+
+{snapshot.cursor.phase, snapshot.agent_id}
+```
+
+```elixir
+{:ok, resumed} = Jidoka.resume(snapshot, llm: fake_llm)
+resumed.content
+```
