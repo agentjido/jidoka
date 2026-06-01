@@ -124,7 +124,7 @@ defmodule Jidoka.MixProject do
     ]
   end
 
-  # Explicit guide list. New guides should follow the docs voice in VOICE.md.
+  # Explicit guide list.
   defp guide_extras do
     [
       # ── Introduction ─────────────────────────────────────────────────────
