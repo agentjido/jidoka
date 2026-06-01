@@ -9,6 +9,11 @@ defmodule Jidoka.MixProject do
       elixirc_paths: elixirc_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       dialyzer: dialyzer(),
+      description: description(),
+      package: package(),
+      source_url: source_url(),
+      homepage_url: source_url(),
+      docs: docs(),
       test_coverage: [
         ignore_modules: [
           ~r/^Jidoka\.Agent\.Dsl(\.|$)/,
@@ -35,7 +40,7 @@ defmodule Jidoka.MixProject do
       {:dotenvy, "~> 1.1"},
       {:ash_jido, "~> 1.0"},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:idna, "~> 6.1", override: true},
+      {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:jason, "~> 1.4"},
       {:jido, "~> 2.3"},
       {:jido_ai, "~> 2.2"},
@@ -58,6 +63,45 @@ defmodule Jidoka.MixProject do
   defp dialyzer do
     [
       plt_add_apps: [:llm_db, :mix]
+    ]
+  end
+
+  defp description do
+    "A thin, data-driven agent harness for the Jido ecosystem with a Spark DSL and Runic turn spine."
+  end
+
+  defp source_url, do: "https://github.com/mikehostetler/jidoka-v2"
+
+  defp package do
+    [
+      files: [
+        "lib",
+        "guides",
+        "livebook",
+        ".formatter.exs",
+        "mix.exs",
+        "README.md",
+        "CHANGELOG.md",
+        "LICENSE"
+      ],
+      licenses: ["Apache-2.0"],
+      links: %{
+        "GitHub" => source_url()
+      }
+    ]
+  end
+
+  defp docs do
+    [
+      main: "readme",
+      source_ref: "v1.0.0-beta.1",
+      source_url: source_url(),
+      extras:
+        [
+          "README.md",
+          "CHANGELOG.md",
+          "LICENSE"
+        ] ++ Path.wildcard("guides/*.{md,livemd}") ++ Path.wildcard("livebook/*.livemd")
     ]
   end
 end

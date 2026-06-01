@@ -380,8 +380,8 @@ Jidoka uses Jido as the foundation:
 - DSL agent modules are also `Jido.Agent` modules;
 - tools are Jido actions;
 - action schemas and execution stay on the Jido side.
-- `Jidoka.Jido` is the default Jido runtime instance started by
-  `Jidoka.Application`.
+- `Jidoka.Jido` is the default Jido runtime instance started by the Jidoka
+  application module.
 - `MyAgent.start/1` and `Jidoka.start_agent/2` start DSL agents under
   `Jido.AgentServer`.
 - AgentServer routes `"jidoka.turn.run"` to `Jidoka.Runtime.Actions.RunTurn`,

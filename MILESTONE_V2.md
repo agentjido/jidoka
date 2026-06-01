@@ -587,15 +587,21 @@ Status:
   API shape, and versioned contracts.
 - README now documents API stability boundaries and versioned data contracts.
 - Runtime guide documents snapshot, session, and import version boundaries.
+- Added Hex release metadata, ExDoc configuration, and Apache-2.0 licensing for
+  the beta package.
+- Added the app-facing `Jidoka.Session` facade over durable harness sessions.
 
 Final verification:
 
 - `mix format --check-formatted` passes.
-- `mix test` passes with 200 tests.
-- `mix test --cover` passes at 80.27% coverage.
+- `mix test` passes with 274 tests.
+- `mix test --cover` passes at 80.11% coverage.
 - `mix compile --warnings-as-errors --force` passes.
-- `mix xref graph --format cycles --label compile` reports no cycles.
+- `mix xref graph --format cycles --label compile-connected` reports no
+  cycles.
 - `mix dialyzer` passes with no errors.
+- `mix docs` generates without warnings.
+- `mix hex.build --unpack` succeeds.
 - `mix test --include live test/jidoka/live_req_llm_test.exs` passes.
 
 ## Recommended Next Slice

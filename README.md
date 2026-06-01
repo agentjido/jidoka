@@ -122,8 +122,10 @@ agent:
 
 ## Example App
 
-The Phoenix showcase app lives in [`example/`](example). It depends on this
-package by path and exposes one LiveView route per agent example.
+The Phoenix showcase app lives in the
+[`example/`](https://github.com/mikehostetler/jidoka-v2/tree/main/example)
+directory. It depends on this package by path and exposes one LiveView route
+per agent example.
 
 ```bash
 cd example
@@ -136,7 +138,9 @@ The example app loads live LLM keys from `.env` files in the package root,
 
 ## Livebooks
 
-Advanced deterministic Livebooks live in [`livebook/`](livebook):
+Advanced deterministic Livebooks live in the
+[`livebook/`](https://github.com/mikehostetler/jidoka-v2/tree/main/livebook)
+directory:
 
 - `01_v2_contracts_and_runic_spine.livemd`
 - `02_controls_sessions_and_human_review.livemd`
@@ -322,5 +326,10 @@ the full LLMDB or Spark internals.
   operation control and incomplete unsafe intents are not retried automatically.
 - ReqLLM and Jido.Action are first-class runtime dependencies.
 
-Long-form architecture notes live in [JIDOKA_V2.md](JIDOKA_V2.md).
+Long-form architecture notes live in
+[JIDOKA_V2.md](https://github.com/mikehostetler/jidoka-v2/blob/main/JIDOKA_V2.md).
 Milestone release notes live in [CHANGELOG.md](CHANGELOG.md).
+
+## License
+
+Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).

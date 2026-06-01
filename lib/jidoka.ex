@@ -1,9 +1,9 @@
 defmodule Jidoka do
   @moduledoc """
-  Minimal V2 spike.
+  Public facade for Jidoka V2.
 
-  This module intentionally exposes a tiny public surface that proves the new
-  architecture can work:
+  This module exposes the stable application-facing surface for the V2 agent
+  harness:
 
   * an immutable `Jidoka.Agent.Spec`;
   * a compiled `Jidoka.Turn.Plan`;
@@ -59,7 +59,7 @@ defmodule Jidoka do
   @doc """
   Alias for `agent/1`.
 
-  Kept while the V2 spike is settling. Prefer `agent/1` in new examples.
+  Kept as a convenience alias. Prefer `agent/1` in new code.
   """
   @spec new_agent(keyword() | map()) :: {:ok, Agent.Spec.t()} | {:error, term()}
   def new_agent(attrs), do: agent(attrs)
@@ -142,7 +142,7 @@ defmodule Jidoka do
   @doc """
   Alias for `plan!/1`.
 
-  Kept while the V2 spike is settling. Prefer `plan!/1` in new examples.
+  Kept as a convenience alias. Prefer `plan!/1` in new code.
   """
   @spec compile_turn_plan!(Agent.Spec.t()) :: Turn.Plan.t()
   def compile_turn_plan!(%Agent.Spec{} = spec), do: plan!(spec)

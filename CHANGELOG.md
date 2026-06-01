@@ -41,6 +41,7 @@ Quality gate for this milestone:
 - `mix test`
 - `mix test --cover`
 - `mix compile --warnings-as-errors --force`
-- `mix xref graph --format cycles --label compile`
+- `mix xref graph --format cycles --label compile-connected`
 - `mix dialyzer`
+- `mix hex.build`
 - `mix test --include live test/jidoka/live_req_llm_test.exs`
