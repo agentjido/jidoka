@@ -12,7 +12,6 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
     :tool,
     :ash_resource,
     :browser,
-    :catalog,
     :skill,
     :mcp,
     :workflow,

@@ -13,6 +13,20 @@ defmodule Jidoka.Operation.Source.MCP do
   alias Jidoka.Effect
   alias Jidoka.Schema
 
+  @transport_layers [:stdio, :shell, :sse, :streamable_http]
+  @transport_option_keys [
+    :command,
+    :args,
+    :env,
+    :cwd,
+    :base_url,
+    :base_path,
+    :sse_path,
+    :headers,
+    :method,
+    :url
+  ]
+
   @type tool_spec :: %{
           required(:name) => String.t(),
           optional(:description) => String.t(),
@@ -24,6 +38,11 @@ defmodule Jidoka.Operation.Source.MCP do
           prefix: String.t() | nil,
           tools: [tool_spec()],
           required: boolean(),
+          transport: term(),
+          client_info: map(),
+          protocol_version: String.t() | nil,
+          capabilities: map(),
+          timeouts: map(),
           timeout: pos_integer() | nil,
           description: String.t() | nil,
           idempotency: Operation.idempotency(),
@@ -36,6 +55,11 @@ defmodule Jidoka.Operation.Source.MCP do
     :prefix,
     tools: [],
     required: false,
+    transport: nil,
+    client_info: %{"name" => "jidoka"},
+    protocol_version: nil,
+    capabilities: %{},
+    timeouts: %{},
     timeout: nil,
     description: nil,
     idempotency: :idempotent,
@@ -51,6 +75,14 @@ defmodule Jidoka.Operation.Source.MCP do
          {:ok, prefix} <- normalize_prefix(Schema.get_key(attrs, :prefix)),
          {:ok, tools} <- normalize_static_tools(Schema.get_key(attrs, :tools, [])),
          {:ok, required} <- normalize_required(Schema.get_key(attrs, :required, false)),
+         {:ok, transport} <- normalize_transport(Schema.get_key(attrs, :transport)),
+         {:ok, client_info} <-
+           normalize_client_info(Schema.get_key(attrs, :client_info, %{"name" => "jidoka"})),
+         {:ok, protocol_version} <-
+           normalize_protocol_version(Schema.get_key(attrs, :protocol_version)),
+         {:ok, capabilities} <-
+           normalize_named_map(Schema.get_key(attrs, :capabilities, %{}), :capabilities),
+         {:ok, timeouts} <- normalize_named_map(Schema.get_key(attrs, :timeouts, %{}), :timeouts),
          {:ok, timeout} <- normalize_timeout(Schema.get_key(attrs, :timeout)),
          {:ok, idempotency} <-
            normalize_idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
@@ -62,6 +94,11 @@ defmodule Jidoka.Operation.Source.MCP do
          prefix: prefix,
          tools: tools,
          required: required,
+         transport: transport,
+         client_info: client_info,
+         protocol_version: protocol_version,
+         capabilities: capabilities,
+         timeouts: timeouts,
          timeout: timeout,
          description: Schema.get_key(attrs, :description),
          idempotency: idempotency,
@@ -117,6 +154,11 @@ defmodule Jidoka.Operation.Source.MCP do
           "source" => "mcp",
           "kind" => "mcp",
           "endpoint" => metadata_value(source.endpoint),
+          "transport" => metadata_value(source.transport),
+          "client_info" => source.client_info,
+          "protocol_version" => source.protocol_version,
+          "capabilities" => source.capabilities,
+          "timeouts" => source.timeouts,
           "remote_tool" => remote_name,
           "prefix" => source.prefix,
           "parameters_schema" => tool.input_schema
@@ -128,7 +170,14 @@ defmodule Jidoka.Operation.Source.MCP do
   defp tools(%__MODULE__{tools: [_ | _] = tools}, _opts), do: {:ok, tools}
 
   defp tools(%__MODULE__{} = source, opts) do
-    case list_tools(client(source, opts), source, call_opts(source)) do
+    client = client(source, opts)
+
+    result =
+      with :ok <- prepare_endpoint(client, source) do
+        list_tools(client, source, call_opts(source))
+      end
+
+    case result do
       {:ok, tools} ->
         {:ok, tools}
 
@@ -154,15 +203,52 @@ defmodule Jidoka.Operation.Source.MCP do
   end
 
   defp call_tool(client, %__MODULE__{} = source, remote_name, arguments, opts) do
-    if ensure_client_function?(client, :call_tool, 4) do
-      client
-      |> apply(:call_tool, [source.endpoint, remote_name, arguments, opts])
-      |> normalize_call_tool_response(source, remote_name)
-    else
-      {:error, {:invalid_mcp_client, client}}
+    with :ok <- prepare_endpoint(client, source) do
+      if ensure_client_function?(client, :call_tool, 4) do
+        client
+        |> apply(:call_tool, [source.endpoint, remote_name, arguments, opts])
+        |> normalize_call_tool_response(source, remote_name)
+      else
+        {:error, {:invalid_mcp_client, client}}
+      end
     end
   rescue
     exception -> {:error, exception}
+  end
+
+  defp prepare_endpoint(_client, %__MODULE__{transport: nil}), do: :ok
+
+  defp prepare_endpoint(client, %__MODULE__{} = source) do
+    with :ok <- ensure_runtime_endpoint(source.endpoint),
+         true <- ensure_client_function?(client, :register_endpoint, 1),
+         {:ok, endpoint} <- endpoint(source) do
+      case apply(client, :register_endpoint, [endpoint]) do
+        {:ok, _endpoint} -> :ok
+        {:error, {:endpoint_already_registered, _endpoint_id}} -> :ok
+        {:error, reason} -> {:error, {:mcp_endpoint_registration_failed, source.endpoint, reason}}
+        other -> {:error, {:invalid_mcp_endpoint_registration_response, other}}
+      end
+    else
+      false -> {:error, {:invalid_mcp_client, client}}
+      {:error, reason} -> {:error, reason}
+    end
+  rescue
+    exception -> {:error, exception}
+  end
+
+  defp ensure_runtime_endpoint(endpoint) when is_atom(endpoint) and not is_nil(endpoint), do: :ok
+
+  defp ensure_runtime_endpoint(endpoint),
+    do: {:error, {:invalid_mcp_runtime_endpoint, endpoint}}
+
+  defp endpoint(%__MODULE__{} = source) do
+    Jido.MCP.Endpoint.new(source.endpoint, %{
+      transport: source.transport,
+      client_info: source.client_info,
+      protocol_version: source.protocol_version,
+      capabilities: source.capabilities,
+      timeouts: source.timeouts
+    })
   end
 
   defp ensure_client_function?(client, function, arity) when is_atom(client) do
@@ -279,6 +365,93 @@ defmodule Jidoka.Operation.Source.MCP do
   defp normalize_required(required) when is_boolean(required), do: {:ok, required}
   defp normalize_required(required), do: {:error, {:invalid_mcp_required, required}}
 
+  defp normalize_transport(nil), do: {:ok, nil}
+
+  defp normalize_transport({layer, opts} = transport)
+       when layer in @transport_layers and is_list(opts),
+       do: {:ok, transport}
+
+  defp normalize_transport(%{} = transport) do
+    with {:ok, layer} <-
+           normalize_transport_layer(
+             Schema.get_key(transport, :type) ||
+               Schema.get_key(transport, :layer) ||
+               Schema.get_key(transport, :transport)
+           ),
+         {:ok, opts} <-
+           normalize_transport_opts(Map.drop(transport, [:type, "type", :layer, "layer", :transport, "transport"])) do
+      {:ok, {layer, opts}}
+    end
+  end
+
+  defp normalize_transport(transport), do: {:error, {:invalid_mcp_transport, transport}}
+
+  defp normalize_transport_layer(layer) when layer in @transport_layers, do: {:ok, layer}
+
+  defp normalize_transport_layer(layer) when is_binary(layer) do
+    layer = layer |> String.trim() |> String.downcase()
+
+    @transport_layers
+    |> Enum.find(&(Atom.to_string(&1) == layer))
+    |> case do
+      nil -> {:error, {:invalid_mcp_transport_layer, layer}}
+      layer -> {:ok, layer}
+    end
+  end
+
+  defp normalize_transport_layer(layer), do: {:error, {:invalid_mcp_transport_layer, layer}}
+
+  defp normalize_transport_opts(opts) when is_map(opts) do
+    opts
+    |> Enum.reduce_while({:ok, []}, fn {key, value}, {:ok, acc} ->
+      case normalize_transport_option_key(key) do
+        {:ok, key} -> {:cont, {:ok, [{key, value} | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, opts} -> {:ok, Enum.reverse(opts)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp normalize_transport_option_key(key) when key in @transport_option_keys, do: {:ok, key}
+
+  defp normalize_transport_option_key(key) when is_binary(key) do
+    @transport_option_keys
+    |> Enum.find(&(Atom.to_string(&1) == key))
+    |> case do
+      nil -> {:error, {:invalid_mcp_transport_option, key}}
+      key -> {:ok, key}
+    end
+  end
+
+  defp normalize_transport_option_key(key), do: {:error, {:invalid_mcp_transport_option, key}}
+
+  defp normalize_client_info(nil), do: {:ok, %{"name" => "jidoka"}}
+
+  defp normalize_client_info(%{} = client_info) do
+    case Map.get(client_info, :name, Map.get(client_info, "name")) do
+      name when is_binary(name) and name != "" -> {:ok, stringify_keys(client_info)}
+      _other -> {:error, {:invalid_mcp_client_info, client_info}}
+    end
+  end
+
+  defp normalize_client_info(client_info), do: {:error, {:invalid_mcp_client_info, client_info}}
+
+  defp normalize_protocol_version(nil), do: {:ok, nil}
+
+  defp normalize_protocol_version(protocol_version)
+       when is_binary(protocol_version) and protocol_version != "",
+       do: {:ok, protocol_version}
+
+  defp normalize_protocol_version(protocol_version),
+    do: {:error, {:invalid_mcp_protocol_version, protocol_version}}
+
+  defp normalize_named_map(nil, _field), do: {:ok, %{}}
+  defp normalize_named_map(%{} = map, _field), do: {:ok, stringify_keys(map)}
+  defp normalize_named_map(value, field), do: {:error, {:invalid_mcp_map, field, value}}
+
   defp normalize_timeout(nil), do: {:ok, nil}
   defp normalize_timeout(timeout) when is_integer(timeout) and timeout > 0, do: {:ok, timeout}
   defp normalize_timeout(timeout), do: {:error, {:invalid_mcp_timeout, timeout}}
@@ -360,11 +533,29 @@ defmodule Jidoka.Operation.Source.MCP do
     end
   end
 
-  defp call_opts(%__MODULE__{timeout: nil}), do: []
-  defp call_opts(%__MODULE__{timeout: timeout}), do: [timeout: timeout]
+  defp call_opts(%__MODULE__{} = source) do
+    []
+    |> maybe_put_timeout(source.timeout)
+    |> maybe_put_timeouts(source.timeouts)
+  end
 
+  defp maybe_put_timeout(opts, nil), do: opts
+  defp maybe_put_timeout(opts, timeout), do: Keyword.put(opts, :timeout, timeout)
+
+  defp maybe_put_timeouts(opts, timeouts) when timeouts in [nil, %{}], do: opts
+  defp maybe_put_timeouts(opts, timeouts), do: Keyword.put(opts, :timeouts, timeouts)
+
+  defp metadata_value(nil), do: nil
   defp metadata_value(value) when is_atom(value), do: Atom.to_string(value)
+  defp metadata_value(value) when is_tuple(value), do: inspect(value)
   defp metadata_value(value), do: to_string(value)
+
+  defp stringify_keys(map) when is_map(map) do
+    Map.new(map, fn
+      {key, value} when is_atom(key) -> {Atom.to_string(key), value}
+      {key, value} -> {to_string(key), value}
+    end)
+  end
 
   defp reject_nil_values(map) do
     map

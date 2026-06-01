@@ -18,7 +18,7 @@ defmodule JidokaExample.DebugAgentTest do
     assert Operation.kind(operations["preflight_agent"]) == :action
   end
 
-  test "target catalog uses fixed ids without dynamic atom conversion" do
+  test "target registry uses fixed ids without dynamic atom conversion" do
     assert "support" in Targets.ids()
     assert "knowledge" in Targets.ids()
     assert "kitchen_sink" in Targets.ids()

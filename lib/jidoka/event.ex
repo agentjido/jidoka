@@ -2,8 +2,9 @@ defmodule Jidoka.Event do
   @moduledoc """
   Core event emitted by Jidoka turn transitions.
 
-  Events are neutral harness data. Extensions may project or consume them, but
-  core workflow/state modules should not depend on concrete extension modules.
+  Events are neutral harness data. Runtime, trace, streaming, and UI modules
+  may project or consume them, but workflow/state modules should only emit the
+  event data itself.
   """
 
   alias Jidoka.Schema
@@ -34,7 +35,6 @@ defmodule Jidoka.Event do
     result_repair_requested: %{category: :result, phase: :validate_result, status: :planned},
     memory_recalled: %{category: :memory, phase: :memory, status: :completed},
     memory_written: %{category: :memory, phase: :memory, status: :completed},
-    compaction_applied: %{category: :compaction, phase: :compaction, status: :completed},
     operation_observed: %{
       category: :operation,
       phase: :apply_operation_results,
@@ -53,15 +53,13 @@ defmodule Jidoka.Event do
     :control,
     :approval,
     :result,
-    :memory,
-    :compaction
+    :memory
   ]
   @phases [
     :start,
     :control,
     :review,
     :memory,
-    :compaction,
     :assemble_prompt,
     :plan_model_effect,
     :interpret_effect,

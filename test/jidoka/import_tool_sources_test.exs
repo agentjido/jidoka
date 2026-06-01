@@ -57,7 +57,7 @@ defmodule Jidoka.ImportToolSourcesTest do
     end)
   end
 
-  test "YAML imports support ash_resource, browser, and catalog tool sources" do
+  test "YAML imports support ash_resource, browser, and MCP tool sources" do
     yaml = """
     agent:
       id: import_sources_agent
@@ -77,13 +77,24 @@ defmodule Jidoka.ImportToolSourcesTest do
           mode: search
           allow:
             - docs.example.com
-      catalogs:
-        - name: support
-          providers:
-            - support
-          max_results: 2
-          metadata:
-            owner: ops
+      mcp_tools:
+        - endpoint: demo_mcp
+          prefix: mcp_
+          transport:
+            type: stdio
+            command: echo
+          client_info:
+            name: jidoka-import-test
+          protocol_version: "2025-06-18"
+          capabilities:
+            tools: {}
+          timeouts:
+            request_ms: 777
+          tools:
+            - name: lookup_policy
+              description: Looks up a policy.
+              input_schema:
+                type: object
     """
 
     assert {:ok, spec} =
@@ -97,7 +108,7 @@ defmodule Jidoka.ImportToolSourcesTest do
     assert %{
              "read_account" => %{metadata: %{"source" => "ash_resource", "risk" => "low"}},
              "search_web" => %{metadata: %{"source" => "browser", "browser" => "docs"}},
-             "catalog_support" => %{metadata: %{"source" => "catalog", "owner" => "ops"}}
+             "mcp_lookup_policy" => %{metadata: %{"source" => "mcp", "endpoint" => "demo_mcp"}}
            } = operations
 
     refute Map.has_key?(operations, "update_account")
@@ -105,7 +116,13 @@ defmodule Jidoka.ImportToolSourcesTest do
     assert [
              %{"source" => "ash_resource", "resource" => resource, "actions" => ["read_account"]},
              %{"source" => "browser", "name" => "docs", "mode" => "search"},
-             %{"source" => "catalog", "name" => "support", "providers" => ["support"]}
+             %{
+               "source" => "mcp",
+               "endpoint" => "demo_mcp",
+               "protocol_version" => "2025-06-18",
+               "client_info" => %{"name" => "jidoka-import-test"},
+               "timeouts" => %{"request_ms" => 777}
+             }
            ] = spec.metadata["tool_sources"]
 
     assert resource == inspect(AccountResource)
@@ -119,6 +136,17 @@ defmodule Jidoka.ImportToolSourcesTest do
              Jidoka.Import.load(%{
                agent: %{id: "safe_ash_import", model: %{provider: :test, id: "model"}},
                tools: %{ash_resources: [%{ref: "Missing.Resource"}]}
+             })
+  end
+
+  test "imports reject removed catalog tool sources" do
+    assert {:error,
+            %Jidoka.Error.ValidationError{
+              details: %{reason: {:unsupported_tool_source, :catalogs}}
+            }} =
+             Jidoka.Import.load(%{
+               agent: %{id: "removed_catalog_import", model: %{provider: :test, id: "model"}},
+               tools: %{"catalogs" => [%{"name" => "legacy"}]}
              })
   end
 end

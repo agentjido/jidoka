@@ -41,7 +41,6 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
              "score_lead",
              "create_customer",
              "list_customers",
-             "catalog_jido_actions",
              "search_web",
              "read_page"
            ]
@@ -67,7 +66,6 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
            |> get(:result, [])
            |> Enum.any?(&(get(&1, :name) == "Grace Hopper"))
 
-    assert get(operations["catalog_jido_actions"], :catalog) == "jido_actions"
     assert get(operations["search_web"], :count) == 2
     assert get(operations["read_page"], :content) =~ "Runic workflows"
 
@@ -451,22 +449,19 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
           operation("list_customers", %{})
 
         {"kitchen_sink_agent", 12} ->
-          operation("catalog_jido_actions", %{"query" => "browser", "limit" => 3})
-
-        {"kitchen_sink_agent", 13} ->
           operation("search_web", %{
             "query" => "Runic workflows in Elixir",
             "max_results" => 2
           })
 
-        {"kitchen_sink_agent", 14} ->
+        {"kitchen_sink_agent", 13} ->
           operation("read_page", %{
             "url" => "https://example.com/runic-workflows",
             "format" => "markdown",
             "max_chars" => 500
           })
 
-        {"kitchen_sink_agent", 15} ->
+        {"kitchen_sink_agent", 14} ->
           {:ok,
            %{
              type: :final,
@@ -485,7 +480,6 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
                    "action",
                    "lead_quality",
                    "ash_resource",
-                   "catalog",
                    "browser"
                  ]
                )

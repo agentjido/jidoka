@@ -3,7 +3,7 @@ defmodule Jidoka.Control do
   Minimal reusable policy control contract for Jidoka agents.
 
   Controls are declared by agents as data first. Runtime execution will attach
-  them at explicit control points, but the first V2 slice only needs a stable
+  them at explicit control points, but the current implementation only needs a stable
   module contract and published name.
   """
 

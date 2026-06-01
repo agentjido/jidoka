@@ -13,7 +13,7 @@ defmodule JidokaExampleWeb.KitchenSinkAgentLive.Index do
 
   @stream_message_tag Jidoka.Stream.message_tag()
   @default_question """
-  Run the kitchen sink demo: look up the showcase policy, call the MCP showcase notes tool, ask the evidence specialist what to cite for the feature summary, record the refund specialist as owner for future refund follow-up, run the deterministic feature summary workflow, remember that I prefer concise answers, show the runtime context, look up order A1001, enrich and score Ada from Northwind, list the CRM customers, search the Jido action catalog for browser tools, search the web for Runic workflows in Elixir, and return the structured feature summary.
+  Run the kitchen sink demo: look up the showcase policy, call the MCP showcase notes tool, ask the evidence specialist what to cite for the feature summary, record the refund specialist as owner for future refund follow-up, run the deterministic feature summary workflow, remember that I prefer concise answers, show the runtime context, look up order A1001, enrich and score Ada from Northwind, list the CRM customers, search the web for Runic workflows in Elixir, and return the structured feature summary.
   """
   @example_root Path.expand("../../../..", __DIR__)
   @package_root Path.expand("..", @example_root)
@@ -98,12 +98,6 @@ defmodule JidokaExampleWeb.KitchenSinkAgentLive.Index do
       path: "lib/jidoka_example/ash_agent/resources/customer.ex"
     },
     %{id: "browser", label: "Browser Tools", path: "lib/jidoka/browser.ex", root: :package},
-    %{
-      id: "catalog",
-      label: "Catalog Source",
-      path: "lib/jidoka/operation/source/catalog.ex",
-      root: :package
-    },
     %{
       id: "memory_store",
       label: "Memory Store",
@@ -600,19 +594,6 @@ defmodule JidokaExampleWeb.KitchenSinkAgentLive.Index do
     ["#{value(result, :name)} at #{value(result, :company)} was returned from Ash."]
   end
 
-  defp summary_items("catalog_jido_actions", result) do
-    actions = value(result, :actions) || []
-
-    ([
-       compact_line("Query", value(result, :query)),
-       compact_line("Actions", value(result, :count))
-     ] ++
-       Enum.map(Enum.take(actions, 4), fn action ->
-         "#{value(action, :name)}: #{value(action, :description)}"
-       end))
-    |> compact()
-  end
-
   defp summary_items("search_web", result) do
     results = value(result, :results) || []
 
@@ -650,8 +631,6 @@ defmodule JidokaExampleWeb.KitchenSinkAgentLive.Index do
 
   defp operation_source(operation) when operation in ["search_web", "read_page", "snapshot_url"],
     do: "browser"
-
-  defp operation_source("catalog_jido_actions"), do: "catalog"
 
   defp operation_source("showcase_policy_lookup"), do: "skill"
 

@@ -65,11 +65,11 @@ defmodule Jidoka.Kino.TraceView do
 
   defp resolve_timeline({:error, reason}), do: {:error, Jidoka.Error.format(reason)}
 
-  defp resolve_timeline(%Turn.Result{events: events}), do: {:ok, Jidoka.Extensions.Trace.timeline(events)}
-  defp resolve_timeline(%Turn.State{events: events}), do: {:ok, Jidoka.Extensions.Trace.timeline(events)}
+  defp resolve_timeline(%Turn.Result{events: events}), do: {:ok, Jidoka.Trace.timeline(events)}
+  defp resolve_timeline(%Turn.State{events: events}), do: {:ok, Jidoka.Trace.timeline(events)}
 
   defp resolve_timeline(%AgentSnapshot{turn_state: %Turn.State{events: events}}),
-    do: {:ok, Jidoka.Extensions.Trace.timeline(events)}
+    do: {:ok, Jidoka.Trace.timeline(events)}
 
   defp resolve_timeline(%Preflight{timeline: timeline}), do: {:ok, timeline}
   defp resolve_timeline(%Harness.Replay{timeline: timeline}), do: {:ok, timeline}
@@ -81,7 +81,7 @@ defmodule Jidoka.Kino.TraceView do
     end
   end
 
-  defp resolve_timeline([%Jidoka.Event{} | _rest] = events), do: {:ok, Jidoka.Extensions.Trace.timeline(events)}
+  defp resolve_timeline([%Jidoka.Event{} | _rest] = events), do: {:ok, Jidoka.Trace.timeline(events)}
   defp resolve_timeline([%{} | _rest] = timeline), do: {:ok, timeline}
 
   defp resolve_timeline(list) when is_list(list) do

@@ -4,7 +4,7 @@ defmodule Jidoka.Kino do
 
   Kino is not a runtime dependency of Jidoka. These helpers compile and run
   without Kino installed; rendering becomes a no-op outside Livebook. The
-  helpers are intentionally thin wrappers around V2 data contracts such as
+  helpers are intentionally thin wrappers around Jidoka data contracts such as
   `Jidoka.inspect/1`, `Jidoka.preflight/3`, `Jidoka.Harness.Replay`, and trace
   timelines.
   """
@@ -43,7 +43,7 @@ defmodule Jidoka.Kino do
   def load_provider_env(names \\ RuntimeSetup.provider_env_names()), do: RuntimeSetup.load_provider_env(names)
 
   @doc """
-  Runs `fun`, renders a V2 timeline when the result contains one, and returns the original result.
+  Runs `fun`, renders a Jidoka timeline when the result contains one, and returns the original result.
   """
   @spec trace(String.t(), (-> result), keyword()) :: result when result: term()
   def trace(label, fun, opts \\ []), do: TraceView.trace(label, fun, opts)
@@ -90,13 +90,13 @@ defmodule Jidoka.Kino do
   def agent_diagram(target, opts \\ []), do: AgentView.agent_diagram(target, opts)
 
   @doc """
-  Renders a compact V2 event timeline from a result, snapshot, session, replay, or raw events.
+  Renders a compact Jidoka event timeline from a result, snapshot, session, replay, or raw events.
   """
   @spec timeline(term(), keyword()) :: {:ok, [map()]} | {:error, String.t()}
   def timeline(target, opts \\ []), do: TraceView.timeline(target, opts)
 
   @doc """
-  Renders a Mermaid call graph from a V2 timeline.
+  Renders a Mermaid call graph from a Jidoka timeline.
   """
   @spec call_graph(term(), keyword()) :: {:ok, String.t()} | {:error, String.t()}
   def call_graph(target, opts \\ []), do: TraceView.call_graph(target, opts)

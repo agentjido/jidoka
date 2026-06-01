@@ -8,9 +8,9 @@ current package surface.
 Highlights:
 
 - The public DSL remains limited to `agent`, `tools`, and `controls`.
-- `instructions` stays string-only; extensions are runtime/package code, not DSL.
+- `instructions` stays string-only; runtime additions stay explicit Elixir code, not DSL.
 - JSON/YAML imports now support `action`, `ash_resource`, `browser`, and
-  `catalog` tool sources through data-safe registries.
+  `mcp_tools` tool sources through data-safe registries.
 - Operation controls can match by kind, name, source, idempotency, and metadata.
 - Hard Hex dependencies are used for the Jido ecosystem packages.
 

@@ -164,7 +164,6 @@ defmodule Jidoka.Projection do
       request: project(state.request),
       agent_state: project(state.agent_state),
       memory: project(state.memory),
-      compactions: Enum.map(state.compactions, &project/1),
       prompt: project_value(state.prompt),
       llm_result: project_value(state.llm_result),
       operation_plan: project_value(state.operation_plan),
@@ -197,6 +196,7 @@ defmodule Jidoka.Projection do
       agent_state: project(result.agent_state),
       journal: project(result.journal),
       events: project_value(result.events),
+      usage: project_value(result.usage),
       metadata: project_value(result.metadata)
     }
   end
@@ -310,16 +310,6 @@ defmodule Jidoka.Projection do
       entry: project(result.entry),
       status: result.status,
       metadata: project_value(result.metadata)
-    }
-  end
-
-  def project(%Jidoka.Memory.Compaction{} = compaction) do
-    %{
-      id: compaction.id,
-      agent_id: compaction.agent_id,
-      summary: compaction.summary,
-      source_message_ids: compaction.source_message_ids,
-      metadata: project_value(compaction.metadata)
     }
   end
 

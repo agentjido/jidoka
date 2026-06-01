@@ -32,7 +32,7 @@ defmodule Jidoka.MemoryTest do
              })
   end
 
-  test "memory entries, write results, and compactions are serializable data" do
+  test "memory entries and write results are serializable data" do
     entry =
       Memory.Entry.new!(
         [agent_id: "memory_agent", content: "Ada prefers concise answers."],
@@ -43,19 +43,6 @@ defmodule Jidoka.MemoryTest do
 
     assert %Memory.WriteResult{entry: ^entry, status: :ok} =
              Memory.WriteResult.new!(request: request, entry: entry)
-
-    assert %Memory.Compaction{
-             id: "cmp_test",
-             source_message_ids: ["msg_1", "msg_2"]
-           } =
-             Memory.Compaction.new!(
-               [
-                 agent_id: "memory_agent",
-                 summary: "The user prefers concise answers.",
-                 source_message_ids: ["msg_1", "msg_2"]
-               ],
-               id_generator: fn "cmp" -> "cmp_test" end
-             )
 
     assert {:ok, ^entry} = Memory.Entry.from_input(entry)
 

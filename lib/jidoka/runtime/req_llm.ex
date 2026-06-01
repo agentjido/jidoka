@@ -23,6 +23,7 @@ defmodule Jidoka.Runtime.ReqLLM do
           | {:receive_timeout, timeout()}
           | {:provider_options, map()}
           | {:cache, term()}
+          | {:api_key, String.t()}
           | {:stream, boolean()}
           | {:stream_to, pid() | {:pid, pid()}}
           | {:on_event, (Event.t() -> term())}
@@ -107,9 +108,12 @@ defmodule Jidoka.Runtime.ReqLLM do
       generate_streaming_response(model, messages, llm_opts, intent, opts)
     else
       with {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts) do
-        response
-        |> ReqLLM.Response.text()
-        |> Decision.parse_text()
+        with {:ok, decision} <-
+               response
+               |> ReqLLM.Response.text()
+               |> Decision.parse_text() do
+          {:ok, attach_response_metadata(decision, model, response)}
+        end
       end
     end
   end
@@ -128,6 +132,7 @@ defmodule Jidoka.Runtime.ReqLLM do
              ),
            text <- response_text(stream_state_key, response),
            {:ok, decision} <- Decision.parse_text(text) do
+        decision = attach_response_metadata(decision, model, response)
         emit_remaining_final_delta(stream_state_key, intent, decision, opts)
         {:ok, decision}
       end
@@ -146,6 +151,32 @@ defmodule Jidoka.Runtime.ReqLLM do
       true -> text
     end
   end
+
+  defp attach_response_metadata(%Effect.LLMDecision{} = decision, model, response) do
+    metadata =
+      %{}
+      |> maybe_put(:usage, response_usage(response))
+      |> maybe_put(:model, model_ref(model))
+      |> maybe_put(:finish_reason, ReqLLM.Response.finish_reason(response))
+
+    %Effect.LLMDecision{decision | metadata: Map.merge(decision.metadata || %{}, metadata)}
+  end
+
+  defp response_usage(response) do
+    response
+    |> ReqLLM.Response.usage()
+    |> Jidoka.Usage.normalize()
+    |> empty_to_nil()
+  end
+
+  defp model_ref(%LLMDB.Model{} = model), do: LLMDB.Model.spec(model)
+  defp model_ref(model), do: inspect(model)
+
+  defp empty_to_nil(%{} = map) when map_size(map) == 0, do: nil
+  defp empty_to_nil(value), do: value
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp stream_enabled?(opts) do
     Keyword.get(opts, :stream) == true or Keyword.has_key?(opts, :stream_to) or

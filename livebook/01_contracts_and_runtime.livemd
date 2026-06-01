@@ -1,8 +1,8 @@
-# Jidoka V2 Contracts And Runic Spine
+# Jidoka Contracts And Runtime
 
 ## Section
 
-This notebook shows the V2 center of gravity: agent definition data, a compiled
+This notebook shows the Jidoka center of gravity: agent definition data, a compiled
 turn plan, preflight inspection, a deterministic tool loop, and hibernate/resume.
 
 ```elixir

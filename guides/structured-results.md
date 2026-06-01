@@ -48,7 +48,7 @@ with a structured `result` value:
 At runtime:
 
 ```elixir
-{:ok, result} = MyApp.ProfileAgent.run_turn("Summarize Ada.", llm: llm)
+{:ok, result} = Jidoka.turn(MyApp.ProfileAgent, "Summarize Ada.")
 
 result.content
 #=> "Ada is ready."
@@ -126,8 +126,8 @@ agent:
 
 ## Testing
 
-Use fake LLM decisions to make structured-output tests deterministic. The
-canonical integration coverage is in:
+Use fake LLM decisions to make structured-output tests deterministic. Existing
+coverage lives in:
 
 - `test/integration/structured_result_integration_test.exs`
 - `test/jidoka/runtime/req_llm/decision_test.exs`

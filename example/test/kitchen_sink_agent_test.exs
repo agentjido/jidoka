@@ -25,7 +25,6 @@ defmodule JidokaExample.KitchenSinkAgentTest do
     assert %Operation{} = operations["list_customers"]
     assert %Operation{} = operations["search_web"]
     assert %Operation{} = operations["read_page"]
-    assert %Operation{} = operations["catalog_jido_actions"]
 
     assert Operation.kind(operations["show_context"]) == :action
     assert Operation.kind(operations["showcase_policy_lookup"]) == :skill
@@ -35,7 +34,6 @@ defmodule JidokaExample.KitchenSinkAgentTest do
     assert Operation.kind(operations["build_feature_summary"]) == :workflow
     assert Operation.kind(operations["create_customer"]) == :ash_resource
     assert Operation.kind(operations["search_web"]) == :browser
-    assert Operation.kind(operations["catalog_jido_actions"]) == :catalog
   end
 
   test "agent spec includes skill instructions and metadata" do

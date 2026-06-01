@@ -39,7 +39,7 @@ defmodule Jidoka.TraceTest do
 
     assert :ok = Trace.record([event], {InMemory, pid: pid}, policy: policy)
 
-    assert [%{event: :turn_finished, request_id: "turn_sink", extension: :trace}] =
+    assert [%{event: :turn_finished, request_id: "turn_sink", projection: :trace}] =
              InMemory.list(pid)
 
     assert :ok = InMemory.clear(pid)
@@ -90,13 +90,13 @@ defmodule Jidoka.TraceTest do
     assert [
              %{
                seq: 0,
-               extension: :trace,
+               projection: :trace,
                event: :custom_trace,
                data: %{token: "[REDACTED]", visible: [%{password: "[REDACTED]", value: "ok"}]}
              },
              %{
                seq: 1,
-               extension: :trace,
+               projection: :trace,
                event: :unknown_event,
                data: %{value: :loose_event}
              }

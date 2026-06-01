@@ -1,11 +1,11 @@
 # Controls
 
-Controls are Jidoka's policy surface. They are declared on `Agent.Spec` and run
-at explicit runtime boundaries without changing the pure Runic workflow steps.
+Controls are Jidoka's policy layer. They are declared on `Agent.Spec` and run
+while a turn is executing.
 
 ## Boundaries
 
-Jidoka currently supports these control surfaces:
+Jidoka currently supports these control points:
 
 - `input` runs before prompt assembly and the first model call.
 - `operation` runs before a model-requested operation capability executes.
@@ -107,20 +107,13 @@ If an operation control interrupts, the turn hibernates:
 
 ```elixir
 {:hibernate, snapshot} =
-  Jidoka.turn(spec, "Refund order_123",
-    llm: llm,
-    operations: operations
-  )
+  Jidoka.turn(MyApp.RefundAgent, "Refund order_123")
 
 review = snapshot.metadata["pending_review"]
 approval = Jidoka.Review.Response.approve(review.interrupt_id)
 
 {:ok, result} =
-  Jidoka.resume(snapshot,
-    approval: approval,
-    llm: llm,
-    operations: operations
-  )
+  Jidoka.resume(snapshot, approval: approval)
 ```
 
 Operations marked `:unsafe_once` must have a matching operation control before

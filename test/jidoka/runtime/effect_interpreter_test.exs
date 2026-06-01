@@ -26,7 +26,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     assert result.status == :ok
     assert next_state.journal.results[intent.id] == result
 
-    assert Enum.map(Jidoka.Extensions.Trace.timeline(next_state.events), & &1.event) == [
+    assert Enum.map(Jidoka.Trace.timeline(next_state.events), & &1.event) == [
              :effect_started,
              :capability_call_started,
              :capability_call_completed,
@@ -50,7 +50,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
     assert %Effect.Result{status: :error} = next_state.journal.results[intent.id]
 
-    timeline = Jidoka.Extensions.Trace.timeline(next_state.events)
+    timeline = Jidoka.Trace.timeline(next_state.events)
 
     assert Enum.map(timeline, & &1.event) == [
              :effect_started,
@@ -83,7 +83,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     assert next_state.journal == state.journal
 
     assert [%{event: :effect_replayed, effect_id: effect_id, effect_kind: :llm}] =
-             Jidoka.Extensions.Trace.timeline(next_state.events)
+             Jidoka.Trace.timeline(next_state.events)
 
     assert effect_id == intent.id
   end
@@ -109,7 +109,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     assert next_state.journal == state.journal
 
     assert [%{event: :effect_replayed, effect_id: effect_id, effect_kind: :operation}] =
-             Jidoka.Extensions.Trace.timeline(next_state.events)
+             Jidoka.Trace.timeline(next_state.events)
 
     assert effect_id == intent.id
   end

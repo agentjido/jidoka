@@ -41,7 +41,6 @@ defmodule Jidoka.Workflow.Steps do
       operations: operations,
       result: result_contract(state.spec.result),
       memory: memory_contract(state.memory),
-      compactions: Enum.map(state.compactions, &Jidoka.project/1),
       context: state.request.context,
       generation: state.spec.generation.params,
       loop_index: state.loop_index

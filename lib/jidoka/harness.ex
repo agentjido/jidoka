@@ -289,9 +289,8 @@ defmodule Jidoka.Harness do
   end
 
   defp request_opts(opts) do
-    case Keyword.fetch(opts, :id_generator) do
-      {:ok, generator} -> [id_generator: generator]
-      :error -> []
-    end
+    opts
+    |> Keyword.take([:id_generator, :request_id, :context, :metadata])
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 end

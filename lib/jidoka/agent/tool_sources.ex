@@ -4,7 +4,6 @@ defmodule Jidoka.Agent.ToolSources do
   alias Jidoka.Agent.Dsl.{
     AshResource,
     Browser,
-    Catalog,
     Handoff,
     MCPTools,
     SkillPath,
@@ -16,7 +15,6 @@ defmodule Jidoka.Agent.ToolSources do
 
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Operation.Source
-  alias Jidoka.Operation.Source.Catalog, as: CatalogSource
   alias Jidoka.Operation.Source.Handoff, as: HandoffSource
   alias Jidoka.Operation.Source.MCP, as: MCPSource
   alias Jidoka.Operation.Source.Subagent, as: SubagentSource
@@ -129,16 +127,6 @@ defmodule Jidoka.Agent.ToolSources do
     end)
   end
 
-  defp operations_from_entity!(agent_module, %Catalog{} = catalog) do
-    catalog
-    |> catalog_source!(agent_module)
-    |> Source.operations()
-    |> case do
-      {:ok, operations} -> operations
-      {:error, reason} -> raise ArgumentError, "invalid catalog source: #{inspect(reason)}"
-    end
-  end
-
   defp operations_from_entity!(agent_module, %MCPTools{} = mcp_tools) do
     mcp_tools
     |> mcp_source!(agent_module)
@@ -219,25 +207,6 @@ defmodule Jidoka.Agent.ToolSources do
     ]
   end
 
-  defp source_metadata_from_entity!(agent_module, %Catalog{} = catalog) do
-    [
-      operation_from_dsl!(agent_module, [:tools, :catalog], fn ->
-        source = catalog_source!(catalog, agent_module)
-
-        %{
-          "source" => "catalog",
-          "name" => source.name,
-          "via" => metadata_value(source.via),
-          "providers" => source.providers,
-          "only" => source.only,
-          "except" => source.except,
-          "max_results" => source.max_results
-        }
-        |> reject_nil_values()
-      end)
-    ]
-  end
-
   defp source_metadata_from_entity!(agent_module, %MCPTools{} = mcp_tools) do
     [
       operation_from_dsl!(agent_module, [:tools, :mcp_tools], fn ->
@@ -248,6 +217,11 @@ defmodule Jidoka.Agent.ToolSources do
           "endpoint" => metadata_value(source.endpoint),
           "prefix" => source.prefix,
           "required" => source.required,
+          "transport" => metadata_value(source.transport),
+          "client_info" => source.client_info,
+          "protocol_version" => source.protocol_version,
+          "capabilities" => source.capabilities,
+          "timeouts" => source.timeouts,
           "tools" => Enum.map(source.tools, & &1.name)
         }
         |> reject_nil_values()
@@ -419,28 +393,11 @@ defmodule Jidoka.Agent.ToolSources do
     agent_module
     |> entities()
     |> Enum.flat_map(fn
-      %Catalog{} = catalog -> [catalog_source!(catalog, agent_module)]
       %MCPTools{} = mcp_tools -> [mcp_source!(mcp_tools, agent_module)]
       %Subagent{} = subagent -> [subagent_source!(subagent, agent_module)]
       %Handoff{} = handoff -> [handoff_source!(handoff, agent_module)]
       %Workflow{} = workflow -> [workflow_source!(workflow, agent_module)]
       _entity -> []
-    end)
-  end
-
-  defp catalog_source!(%Catalog{} = catalog, agent_module) do
-    operation_from_dsl!(agent_module, [:tools, :catalog], fn ->
-      CatalogSource.new!(
-        name: catalog.name,
-        via: catalog.via || :jido_discovery,
-        providers: catalog.providers || [],
-        only: catalog.only || [],
-        except: catalog.except || [],
-        max_results: catalog.max_results,
-        description: catalog.description,
-        idempotency: catalog.idempotency || :idempotent,
-        metadata: catalog.metadata || %{}
-      )
     end)
   end
 
@@ -451,6 +408,11 @@ defmodule Jidoka.Agent.ToolSources do
         prefix: mcp_tools.prefix,
         tools: mcp_tools.tools || [],
         required: mcp_tools.required || false,
+        transport: mcp_tools.transport,
+        client_info: mcp_tools.client_info,
+        protocol_version: mcp_tools.protocol_version,
+        capabilities: mcp_tools.capabilities || %{},
+        timeouts: mcp_tools.timeouts || %{},
         timeout: mcp_tools.timeout,
         description: mcp_tools.description,
         idempotency: mcp_tools.idempotency || :idempotent,

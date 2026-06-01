@@ -1,20 +1,30 @@
 # Getting Started
 
-This guide shows the smallest useful Jidoka flow: define an agent, attach one
-Jido action, run one ReAct-style turn, and inspect the compiled spec.
+Build one agent, call a real model, then add one tool.
+
+Jidoka agents are Elixir modules. The DSL compiles to `Jidoka.Agent.Spec`
+data, and the runtime handles model calls, tool calls, sessions, and resume.
 
 ## Install
 
-From the package root:
+Add Jidoka to your application:
+
+```elixir
+def deps do
+  [
+    {:jidoka, "~> 1.0.0-beta.1"}
+  ]
+end
+```
+
+Fetch and compile:
 
 ```bash
 mix deps.get
-mix test
+mix compile
 ```
 
-For live LLM calls, provide one provider key in the process environment or in
-your host application's ReqLLM config. The Jidoka package does not load `.env`
-files itself.
+Export a provider key before running live examples:
 
 ```bash
 export OPENAI_API_KEY=...
@@ -22,9 +32,121 @@ export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 ```
 
-## Define A Tool
+Jidoka does not load `.env` files for applications. Put that policy in your
+app or release config.
 
-Jidoka tools are Jido actions.
+## Define An Agent
+
+Start with the shortest useful agent:
+
+```elixir
+defmodule MyApp.Assistant do
+  use Jidoka.Agent
+
+  agent :assistant do
+    model "openai:gpt-4o-mini"
+    instructions "Answer clearly and briefly."
+  end
+end
+```
+
+Generation settings are optional. Jidoka uses
+`Jidoka.Config.default_generation/0` unless the agent overrides them.
+
+## Run A Chat
+
+Use `chat/3` when you only need the assistant's final text:
+
+```elixir
+{:ok, text} = MyApp.Assistant.chat("What can you help me with?")
+```
+
+The same call can go through the facade:
+
+```elixir
+{:ok, text} = Jidoka.chat(MyApp.Assistant, "What can you help me with?")
+```
+
+## Inspect The Prompt
+
+Use `preflight/3` before spending tokens on a confusing agent:
+
+```elixir
+{:ok, preflight} =
+  Jidoka.preflight(MyApp.Assistant, "What can you help me with?")
+
+preflight.prompt
+#=> %{
+#=>   model: "openai:gpt-4o-mini",
+#=>   messages: [
+#=>     %{role: :system, content: "Answer clearly and briefly."},
+#=>     %{role: :user, content: "What can you help me with?"}
+#=>   ],
+#=>   operations: [],
+#=>   result: nil,
+#=>   memory: nil,
+#=>   context: %{},
+#=>   generation: %{temperature: 0.0, max_tokens: 500},
+#=>   loop_index: 0
+#=> }
+
+preflight.timeline
+#=> [
+#=>   %{
+#=>     event: :prompt_assembled,
+#=>     phase: :assemble_prompt,
+#=>     category: :workflow,
+#=>     status: :completed,
+#=>     agent_id: "assistant",
+#=>     loop_index: 0,
+#=>     ...
+#=>   }
+#=> ]
+```
+
+Use `inspect/2` when you want the compiled agent shape:
+
+```elixir
+Jidoka.inspect(MyApp.Assistant)
+#=> %{
+#=>   kind: :agent,
+#=>   module: "MyApp.Assistant",
+#=>   spec: %{
+#=>     id: "assistant",
+#=>     model: "openai:gpt-4o-mini",
+#=>     instructions: "Answer clearly and briefly.",
+#=>     operations: [],
+#=>     controls: %{
+#=>       max_turns: nil,
+#=>       timeout_ms: nil,
+#=>       inputs: [],
+#=>       operations: [],
+#=>       outputs: []
+#=>     }
+#=>   },
+#=>   plan: %{
+#=>     spec_id: "assistant",
+#=>     workflow_profile: :tool_loop,
+#=>     max_model_turns: 8,
+#=>     timeout_ms: 30000,
+#=>     phases: [
+#=>       :assemble_prompt,
+#=>       :plan_model_effect,
+#=>       :apply_model_result,
+#=>       :plan_operation_effects,
+#=>       :apply_operation_results
+#=>     ]
+#=>   }
+#=> }
+```
+
+That is the useful part: `preflight/3` shows the exact messages and tools the
+model would receive, while `inspect/2` shows the compiled spec and turn plan.
+Neither call contacts a provider.
+
+## Add A Tool
+
+Tools are Jido actions exposed to the model as operations.
 
 ```elixir
 defmodule MyApp.LocalTime do
@@ -39,18 +161,13 @@ defmodule MyApp.LocalTime do
     {:ok, %{city: city, time: "09:30"}}
   end
 end
-```
 
-## Define An Agent
-
-```elixir
 defmodule MyApp.TimeAgent do
   use Jidoka.Agent
 
   agent :time_agent do
     model "openai:gpt-4o-mini"
-    generation %{temperature: 0.0, max_tokens: 500}
-    instructions "Call local_time when asked for the time."
+    instructions "Use local_time when the user asks for the time."
   end
 
   tools do
@@ -59,92 +176,72 @@ defmodule MyApp.TimeAgent do
 end
 ```
 
-## Inspect The Spec
-
-The DSL compiles to `Jidoka.Agent.Spec`:
-
-```elixir
-spec = MyApp.TimeAgent.spec()
-spec.id
-#=> "time_agent"
-
-Jidoka.Config.model_ref(spec.model)
-#=> "openai:gpt-4o-mini"
-```
-
-The spec is definition data. It contains no live clients, processes, or API
-keys.
-
-## Import An Agent
-
-The same Phase 1 agent shape can be imported from JSON or YAML:
-
-```yaml
-agent:
-  id: time_agent
-  model: openai:gpt-4o-mini
-  generation:
-    temperature: 0.0
-    max_tokens: 500
-  instructions: Call local_time when asked for the time.
-tools:
-  actions:
-    - local_time
-```
-
-Runtime-only values are resolved through explicit registries:
-
-```elixir
-yaml = """
-agent:
-  id: time_agent
-  model: openai:gpt-4o-mini
-  generation:
-    temperature: 0.0
-    max_tokens: 500
-  instructions: Call local_time when asked for the time.
-tools:
-  actions:
-    - local_time
-"""
-
-{:ok, spec} =
-  Jidoka.import(yaml,
-    actions: %{"local_time" => MyApp.LocalTime}
-  )
-```
-
-## Run A Turn
-
-For live execution:
+Run it with the same `chat/3` call:
 
 ```elixir
 {:ok, text} = MyApp.TimeAgent.chat("What time is it in Chicago?")
 ```
 
-For deterministic tests, pass a fake LLM:
+The model decides whether to call `local_time`. Jidoka runs the action, feeds
+the result back to the model, and returns the final answer.
+
+## Get The Full Turn
+
+Use `turn/3` when you need events, the turn journal, structured output, or a
+hibernation snapshot:
 
 ```elixir
-llm = fn _intent, journal ->
-  llm_calls =
-    Enum.count(journal.results, fn {_id, result} ->
-      result.kind == :llm
-    end)
+{:ok, result} =
+  Jidoka.turn(MyApp.TimeAgent, "What time is it in Chicago?")
 
-  case llm_calls do
-    0 -> {:ok, %{type: :operation, name: "local_time", arguments: %{"city" => "Chicago"}}}
-    1 -> {:ok, %{type: :final, content: "Chicago time is 09:30."}}
-  end
-end
-
-{:ok, result} = MyApp.TimeAgent.run_turn("What time is it in Chicago?", llm: llm)
 result.content
-#=> "Chicago time is 09:30."
+result.usage
+result.events
+result.journal.results
 ```
 
-## Next Steps
+Product code usually starts with `chat/3`. Tests, traces, and UIs often need
+`turn/3`.
 
-- Add policy with [Controls](controls.md).
-- Return typed application data with [Structured Results](structured-results.md).
-- Persist hibernated work with [Runtime And Harness](runtime-and-harness.md).
-- Try a live provider with [Live LLM Tool Loop](live-llm-tool-loop.md).
+## Keep A Conversation
+
+Use `Jidoka.Session` for multi-turn state:
+
+```elixir
+{:ok, session} = Jidoka.session(MyApp.Assistant, "demo-conversation")
+
+{:ok, session, text} =
+  Jidoka.chat(session, "Remember that my team is called Platform.")
+
+{:ok, session, text} =
+  Jidoka.chat(session, "What is my team called?")
+```
+
+Sessions can use in-memory stores for development and custom stores for
+production.
+
+## Test Without A Provider
+
+User-facing docs use real models. Tests should not.
+
+For deterministic tests, inject fake `llm:` and `operations:` capabilities.
+See [Testing And Evals](testing-and-evals.md) for the full pattern.
+
+## Common Mistakes
+
+| Symptom | Fix |
+| --- | --- |
+| `{:error, :missing_provider_credentials}` | Export `OPENAI_API_KEY` or another provider key supported by ReqLLM. |
+| The model does not call your tool | Check `Jidoka.preflight/3` and make sure the tool description tells the model when to use it. |
+| `chat/3` returns `{:hibernate, snapshot}` | A control paused the turn. Use `Jidoka.resume/2` with an approval response. |
+| You need the operation result | Use `turn/3` and inspect `result.journal.results`. |
+| You need repeatable tests | Use fake capabilities from [Testing And Evals](testing-and-evals.md). |
+
+## Next
+
+- [Agent DSL](agent-dsl.md) - the full agent DSL.
+- [Tools And Operations](tools-and-operations.md) - actions, browsers, MCP,
+  workflows, and subagents.
+- [Sessions And Stores](sessions-and-stores.md) - durable conversations.
+- [Controls](controls.md) - input, operation, output, and human review.
+- [Core Concepts](core-concepts.md) - the data model behind Jidoka.

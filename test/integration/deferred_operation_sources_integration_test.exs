@@ -263,7 +263,6 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
     assert :action in entity_names
     assert :ash_resource in entity_names
     assert :browser in entity_names
-    assert :catalog in entity_names
     assert :skill in entity_names
     assert :workflow in entity_names
     assert :handoff in entity_names

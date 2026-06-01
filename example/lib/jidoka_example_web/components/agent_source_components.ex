@@ -51,7 +51,7 @@ defmodule JidokaExampleWeb.AgentSourceComponents do
     |> String.replace(~r/(&quot;.*?&quot;)/, ~s(<span class="code-string">\\1</span>))
     |> String.replace(~r/(#.*)$/m, ~s(<span class="code-comment">\\1</span>))
     |> String.replace(
-      ~r/\b(defmodule|defp?|use|alias|do|end|agent|tools|controls|action|browser|ash_resource|catalog|instructions|model|generation|max_turns|timeout)\b/,
+      ~r/\b(defmodule|defp?|use|alias|do|end|agent|tools|controls|action|browser|ash_resource|instructions|model|generation|max_turns|timeout)\b/,
       ~s(<span class="code-keyword">\\1</span>)
     )
     |> String.replace(~r/(:[a-zA-Z_][a-zA-Z0-9_?!]*)/, ~s(<span class="code-atom">\\1</span>))

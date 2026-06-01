@@ -4,7 +4,6 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
   alias Jidoka.Agent.Dsl.{
     AshResource,
     Browser,
-    Catalog,
     Handoff,
     MCPTools,
     SkillPath,
@@ -123,70 +122,6 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
     }
   end
 
-  @spec catalog_entity() :: Spark.Dsl.Entity.t()
-  def catalog_entity do
-    %Spark.Dsl.Entity{
-      name: :catalog,
-      target: Catalog,
-      args: [:name],
-      describe: """
-      Register a constrained operation catalog lookup source.
-      """,
-      schema: [
-        name: [
-          type: :any,
-          required: true,
-          doc: "Lower-snake catalog id."
-        ],
-        via: [
-          type: :any,
-          required: true,
-          doc: "Runtime catalog route or module owned by the host application."
-        ],
-        providers: [
-          type: :any,
-          required: false,
-          default: [],
-          doc: "Optional provider/category filters for the catalog route."
-        ],
-        only: [
-          type: :any,
-          required: false,
-          default: [],
-          doc: "Optional operation names allowed from this catalog."
-        ],
-        except: [
-          type: :any,
-          required: false,
-          default: [],
-          doc: "Optional operation names excluded from this catalog."
-        ],
-        max_results: [
-          type: :pos_integer,
-          required: false,
-          doc: "Optional maximum number of catalog results."
-        ],
-        description: [
-          type: :string,
-          required: false,
-          doc: "Optional operation description override."
-        ],
-        idempotency: [
-          type: :any,
-          required: false,
-          default: :idempotent,
-          doc: "Operation idempotency for the catalog lookup operation."
-        ],
-        metadata: [
-          type: :map,
-          required: false,
-          default: %{},
-          doc: "Optional metadata merged into the operation spec."
-        ]
-      ]
-    }
-  end
-
   @spec mcp_tools_entity() :: Spark.Dsl.Entity.t()
   def mcp_tools_entity do
     %Spark.Dsl.Entity{
@@ -218,6 +153,33 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
           required: false,
           default: false,
           doc: "Whether discovery failure should fail spec compilation."
+        ],
+        transport: [
+          type: :any,
+          required: false,
+          doc: "Optional inline MCP transport definition for runtime endpoint registration."
+        ],
+        client_info: [
+          type: :map,
+          required: false,
+          doc: "Optional MCP client info for inline endpoint registration."
+        ],
+        protocol_version: [
+          type: :string,
+          required: false,
+          doc: "Optional MCP protocol version for inline endpoint registration."
+        ],
+        capabilities: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional MCP client capability metadata for inline endpoint registration."
+        ],
+        timeouts: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional MCP timeout metadata for inline endpoint registration."
         ],
         timeout: [
           type: :pos_integer,
@@ -447,7 +409,6 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
         action_entity(),
         ash_resource_entity(),
         browser_entity(),
-        catalog_entity(),
         mcp_tools_entity(),
         skill_ref_entity(),
         skill_path_entity(),

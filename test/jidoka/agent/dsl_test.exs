@@ -195,7 +195,7 @@ defmodule Jidoka.Agent.DslTest do
     assert {:ok, "hello"} = agent_module.chat("Say hello", llm: llm)
   end
 
-  test "compiles ash_resource, browser, and catalog tool sources into operation data" do
+  test "compiles ash_resource and browser tool sources into operation data" do
     suffix = System.unique_integer([:positive])
     agent_module = Module.concat(JidokaTest, "SourceDslAgent#{suffix}")
 
@@ -251,16 +251,10 @@ defmodule Jidoka.Agent.DslTest do
         browser :docs,
           allow: ["https://docs.example.com"],
           mode: :read_only
-
-        catalog :support_ops,
-          via: :connect,
-          providers: [:github],
-          max_results: 8
       end
 
       controls do
         operation JidokaTest.SourceDslControl#{suffix}, when: [kind: :browser]
-        operation JidokaTest.SourceDslControl#{suffix}, when: [kind: :catalog]
         operation JidokaTest.SourceDslControl#{suffix}, when: [kind: :ash_resource]
       end
     end
@@ -304,17 +298,6 @@ defmodule Jidoka.Agent.DslTest do
     assert %Jidoka.Agent.Spec.Operation{metadata: %{"kind" => "browser"}} =
              operations["snapshot_url"]
 
-    assert %Jidoka.Agent.Spec.Operation{
-             metadata: %{
-               "kind" => "catalog",
-               "source" => "catalog",
-               "catalog" => "support_ops",
-               "via" => "connect",
-               "providers" => ["github"],
-               "max_results" => 8
-             }
-           } = operations["catalog_support_ops"]
-
     assert Jidoka.Browser.Tools.ReadPage in agent_module.__jidoka_agent__().actions
 
     assert [
@@ -322,8 +305,7 @@ defmodule Jidoka.Agent.DslTest do
                "source" => "ash_resource",
                "actions" => ["read", "create"]
              },
-             %{"source" => "browser", "name" => "docs"},
-             %{"source" => "catalog", "name" => "support_ops"}
+             %{"source" => "browser", "name" => "docs"}
            ] = agent_module.spec().metadata["tool_sources"]
   end
 
@@ -380,9 +362,6 @@ defmodule Jidoka.Agent.DslTest do
       def __jidoka_ash_jido_actions__, do: [JidokaTest.ToolSourceDefaultsReadAction#{suffix}]
     end
 
-    defmodule JidokaTest.ToolSourceDefaultsCatalog#{suffix} do
-    end
-
     defmodule JidokaTest.ToolSourceDefaultsAgent#{suffix} do
       use Jidoka.Agent
 
@@ -393,12 +372,6 @@ defmodule Jidoka.Agent.DslTest do
       tools do
         ash_resource JidokaTest.ToolSourceDefaultsResource#{suffix}, actions: :read
         browser :web
-
-        catalog :ops,
-          via: {:module, JidokaTest.ToolSourceDefaultsCatalog#{suffix}},
-          only: [:lookup],
-          except: :delete,
-          metadata: %{risk: "low"}
       end
     end
     """)
@@ -413,14 +386,6 @@ defmodule Jidoka.Agent.DslTest do
     assert %Jidoka.Agent.Spec.Operation{
              metadata: %{"mode" => "read_only", "allow" => []}
            } = operations["read_page"]
-
-    assert %Jidoka.Agent.Spec.Operation{metadata: metadata} = operations["catalog_ops"]
-
-    assert %{"kind" => "catalog", "only" => ["lookup"], "except" => ["delete"], "via" => via} =
-             metadata
-
-    assert metadata[:risk] == "low"
-    assert via == "{:module, JidokaTest.ToolSourceDefaultsCatalog#{suffix}}"
   end
 
   test "default runtime routes browser tool sources through the Jido action path" do

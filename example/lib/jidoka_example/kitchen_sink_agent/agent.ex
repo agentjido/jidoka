@@ -4,8 +4,8 @@ defmodule JidokaExample.KitchenSinkAgent.Agent do
 
   Run the default prompt to exercise typed agent context, memory, local
   actions, skills, subagents, handoffs, Ash resource tools, browser search,
-  catalog lookup, structured output, input controls, output controls,
-  streaming, and the activity projection in one place.
+  MCP tools, structured output, input controls, output controls, streaming, and
+  the activity projection in one place.
 
   For the human-review path, ask it to refund order B2002 for $25. The same
   agent will hibernate before the refund operation, then resume after you
@@ -76,8 +76,7 @@ defmodule JidokaExample.KitchenSinkAgent.Agent do
     showcase_policy_lookup, mcp_showcase_notes, evidence_specialist,
     refund_specialist, build_feature_summary, remember preferences,
     show_context, lookup_order, enrich_lead, score_lead, list_customers,
-    catalog_jido_actions, search_web, and read_page when an accessible
-    non-GitHub source is useful.
+    search_web, and read_page when an accessible non-GitHub source is useful.
 
     Use create_customer once per distinct customer name. Customer names must be
     unique. If create_customer reports a duplicate, say the record already
@@ -143,7 +142,6 @@ defmodule JidokaExample.KitchenSinkAgent.Agent do
       actions: [:create_customer, :list_customers]
 
     browser :public_web, mode: :read_only
-    catalog :jido_actions, via: :jido_discovery, max_results: 8
 
     mcp_tools endpoint: :kitchen_sink_mcp,
               prefix: "mcp_",

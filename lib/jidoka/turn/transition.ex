@@ -2,9 +2,8 @@ defmodule Jidoka.Turn.Transition do
   @moduledoc """
   Pure transition result for turn state changes.
 
-  Domain functions can produce state plus neutral events/diagnostics without
-  depending on any concrete extension. `commit/1` appends those events to the
-  state in sequence order.
+  Domain functions can produce state plus neutral events/diagnostics.
+  `commit/1` appends those events to the state in sequence order.
   """
 
   alias Jidoka.Event

@@ -50,8 +50,26 @@ defmodule Jidoka.Turn.Request do
     attrs = Schema.normalize_attrs(attrs)
     generator = Keyword.get(opts, :id_generator)
 
+    attrs =
+      attrs
+      |> put_opt_default(:request_id, Keyword.get(opts, :request_id))
+      |> put_opt_default(:context, Keyword.get(opts, :context))
+      |> put_opt_default(:metadata, Keyword.get(opts, :metadata))
+
     with {:ok, attrs} <- put_generated_id(attrs, :request_id, "turn", generator) do
       {:ok, Schema.put_default(attrs, :agent_state, Agent.State.new!())}
+    end
+  end
+
+  defp put_opt_default(attrs, _key, nil), do: attrs
+
+  defp put_opt_default(attrs, key, value) do
+    string_key = Atom.to_string(key)
+
+    if Map.has_key?(attrs, key) or Map.has_key?(attrs, string_key) do
+      attrs
+    else
+      Map.put(attrs, key, value)
     end
   end
 

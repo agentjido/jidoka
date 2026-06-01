@@ -1,5 +1,5 @@
 defmodule Jidoka.Turn.State do
-  @moduledoc "Ephemeral data value passed through the V2 turn workflow."
+  @moduledoc "Ephemeral data value passed through the Jidoka turn workflow."
 
   alias Jidoka.Schema
   alias Jidoka.Agent
@@ -14,7 +14,6 @@ defmodule Jidoka.Turn.State do
               request: Zoi.lazy({Turn.Request, :schema, []}),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
               memory: Zoi.lazy({Jidoka.Memory.RecallResult, :schema, []}) |> Zoi.nullish(),
-              compactions: Zoi.array(Zoi.lazy({Jidoka.Memory.Compaction, :schema, []})) |> Zoi.default([]),
               prompt: Zoi.any() |> Zoi.nullish(),
               llm_result: Zoi.lazy({Effect.LLMDecision, :schema, []}) |> Zoi.nullish(),
               operation_plan: Zoi.lazy({Effect.OperationRequest, :schema, []}) |> Zoi.nullish(),

@@ -42,7 +42,6 @@ defmodule Jidoka.Runtime.TurnRunner do
                request: request,
                agent_state: request.agent_state,
                memory: Keyword.get(opts, :memory),
-               compactions: Keyword.get(opts, :compactions, []),
                started_at_ms: clock_ms(opts)
              ),
            :ok <- emit_turn_started(state, opts),

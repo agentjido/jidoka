@@ -43,13 +43,32 @@ defmodule Jidoka.MCPTest do
 
     def list_tools(:bad_list_response, _opts), do: :bad_response
 
+    def list_tools(:inline_mcp, opts) do
+      send(self(), {:inline_list_tools_opts, opts})
+
+      {:ok,
+       [
+         %{
+           name: "inline_lookup",
+           description: "Uses an inline MCP endpoint.",
+           input_schema: %{"type" => "object"}
+         }
+       ]}
+    end
+
     def call_tool(:demo_mcp, "lookup_policy", args, _opts) do
       {:ok, %{data: %{"topic" => args["topic"], "policy" => "Use MCP through Jidoka."}}}
     end
 
     def call_tool(:list_response, "Remote Tool", _args, _opts), do: {:ok, %{ok: true}}
 
+    def call_tool(:inline_mcp, "inline_lookup", args, opts) do
+      {:ok, %{endpoint_opts: opts, args: args}}
+    end
+
     def call_tool(:bad_call_response, "broken", _args, _opts), do: :bad_response
+
+    def register_endpoint(%Jido.MCP.Endpoint{} = endpoint), do: {:ok, endpoint}
   end
 
   defmodule StaticMCPAgent do
@@ -160,6 +179,48 @@ defmodule Jidoka.MCPTest do
              bad_call_capability.(bad_intent, Effect.Journal.new!())
   end
 
+  test "MCP sources support inline endpoint depth and pass timeout configuration" do
+    source =
+      MCP.new!(
+        endpoint: :inline_mcp,
+        client: FakeMCPClient,
+        transport: {:stdio, command: "echo"},
+        client_info: %{name: "jidoka-test", version: "1.0"},
+        protocol_version: "2025-06-18",
+        capabilities: %{tools: %{}},
+        timeouts: %{request_ms: 777},
+        timeout: 123,
+        prefix: "inline_"
+      )
+
+    assert {:ok, [%Operation{name: "inline_inline_lookup"} = operation]} =
+             Source.operations(source)
+
+    assert operation.metadata["transport"] == ~s({:stdio, [command: "echo"]})
+    assert operation.metadata["client_info"] == %{"name" => "jidoka-test", "version" => "1.0"}
+    assert operation.metadata["protocol_version"] == "2025-06-18"
+    assert operation.metadata["capabilities"] == %{"tools" => %{}}
+    assert operation.metadata["timeouts"] == %{"request_ms" => 777}
+
+    assert_receive {:inline_list_tools_opts, opts}
+    assert opts[:timeout] == 123
+    assert opts[:timeouts] == %{"request_ms" => 777}
+
+    assert {:ok, %{capability: capability}} = Source.compile(source)
+
+    intent =
+      Effect.Intent.new(:operation, %{
+        name: "inline_inline_lookup",
+        arguments: %{"topic" => "depth"}
+      })
+
+    assert {:ok, %{result: %{args: %{"topic" => "depth"}, endpoint_opts: call_opts}}} =
+             capability.(intent, Effect.Journal.new!())
+
+    assert call_opts[:timeout] == 123
+    assert call_opts[:timeouts] == %{"request_ms" => 777}
+  end
+
   test "MCP tools declared in the DSL execute through the normal operation loop" do
     llm = fn _intent, %Effect.Journal{} = journal ->
       case count_results(journal, :llm) do
@@ -215,6 +276,16 @@ defmodule Jidoka.MCPTest do
              MCP.new(endpoint: :demo, tools: [%{name: "lookup", input_schema: :bad}])
 
     assert {:error, {:invalid_mcp_required, :yes}} = MCP.new(endpoint: :demo, required: :yes)
+
+    assert {:error, {:invalid_mcp_client_info, %{version: "1.0"}}} =
+             MCP.new(endpoint: :demo, client_info: %{version: "1.0"})
+
+    assert {:error, {:invalid_mcp_protocol_version, ""}} =
+             MCP.new(endpoint: :demo, protocol_version: "")
+
+    assert {:error, {:invalid_mcp_map, :capabilities, []}} =
+             MCP.new(endpoint: :demo, capabilities: [])
+
     assert {:error, {:invalid_mcp_timeout, 0}} = MCP.new(endpoint: :demo, timeout: 0)
 
     assert {:error, {:invalid_mcp_idempotency, "eventual"}} =

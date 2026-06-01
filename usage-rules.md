@@ -21,8 +21,8 @@ Use these rules when generating code that depends on Jidoka.
 ## Tools And Operations
 
 - Use Jido actions for local tools.
-- Use `ash_resource`, `browser`, `catalog`, `mcp_tools`, `subagent`, `handoff`,
-  and `workflow` only when those operation sources are needed.
+- Use `ash_resource`, `browser`, `mcp_tools`, `subagent`, `handoff`, and
+  `workflow` only when those operation sources are needed.
 - Mark unsafe, non-idempotent operations with `idempotency: :unsafe_once`.
 - Attach operation controls to unsafe operations before release code reaches
   production.

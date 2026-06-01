@@ -126,4 +126,31 @@ defmodule Jidoka.StreamTest do
              :turn_finished
            ]
   end
+
+  test "chat_async returns a request handle that can be streamed and awaited" do
+    spec =
+      Agent.Spec.new!(
+        id: "async_stream_agent",
+        instructions: "Answer tersely.",
+        model: %{provider: :test, id: "model"}
+      )
+
+    llm = fn _intent, _journal ->
+      {:ok, %{type: :final, content: "async stream ok"}}
+    end
+
+    assert {:ok, request} =
+             Jidoka.chat_async(spec, "Hello", llm: llm, stream: true, request_id: "req_async_stream")
+
+    assert request.request_id == "req_async_stream"
+
+    stream = Jidoka.stream(request, stream_event_timeout_ms: 100)
+
+    assert {:ok, "async stream ok"} = Jidoka.await(request, timeout: 1_000)
+
+    assert [
+             %Event{event: :turn_started},
+             %Event{event: :prompt_assembled} | _
+           ] = Enum.to_list(stream)
+  end
 end

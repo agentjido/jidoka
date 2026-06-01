@@ -14,6 +14,7 @@ defmodule Jidoka.Turn.Result do
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
               events: Zoi.array(Zoi.lazy({Jidoka.Event, :schema, []})) |> Zoi.default([]),
+              usage: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -39,7 +40,8 @@ defmodule Jidoka.Turn.Result do
       value: state.result_value,
       agent_state: state.agent_state,
       journal: state.journal,
-      events: state.events
+      events: state.events,
+      usage: Jidoka.Usage.from_journal(state.journal)
     )
   end
 end

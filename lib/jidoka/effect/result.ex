@@ -29,11 +29,25 @@ defmodule Jidoka.Effect.Result do
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "effect result")
 
-  @spec ok(Effect.Intent.t(), term()) :: t()
-  def ok(intent, output),
-    do: new!(intent_id: intent.id, kind: intent.kind, status: :ok, output: output)
+  @spec ok(Effect.Intent.t(), term(), keyword()) :: t()
+  def ok(intent, output, opts \\ []),
+    do:
+      new!(
+        intent_id: intent.id,
+        kind: intent.kind,
+        status: :ok,
+        output: output,
+        metadata: Keyword.get(opts, :metadata, %{})
+      )
 
-  @spec error(Effect.Intent.t(), term()) :: t()
-  def error(intent, output),
-    do: new!(intent_id: intent.id, kind: intent.kind, status: :error, output: output)
+  @spec error(Effect.Intent.t(), term(), keyword()) :: t()
+  def error(intent, output, opts \\ []),
+    do:
+      new!(
+        intent_id: intent.id,
+        kind: intent.kind,
+        status: :error,
+        output: output,
+        metadata: Keyword.get(opts, :metadata, %{})
+      )
 end

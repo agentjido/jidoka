@@ -25,6 +25,7 @@ defmodule Jidoka.ImportTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
+  alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Import.AgentDocument
   alias Jidoka.ImportTest.Support.{EchoAction, EchoControl}
 
@@ -283,5 +284,84 @@ defmodule Jidoka.ImportTest do
              Jidoka.import(json, format: :json)
 
     assert Jidoka.Config.model_ref(spec.model) == "test:root-model"
+  end
+
+  test "exports portable JSON that imports back into an equivalent spec" do
+    spec =
+      Jidoka.agent!(
+        id: "export_round_trip_agent",
+        model: %{provider: :test, id: "export-model"},
+        instructions: "Export this agent.",
+        generation: %{params: %{temperature: 0.2, max_tokens: 64}},
+        memory: %{scope: :session, max_entries: 4},
+        operations: [
+          %{
+            name: "lookup",
+            description: "Looks up a value.",
+            idempotency: :pure,
+            metadata: %{kind: :tool, owner: "tests"}
+          }
+        ],
+        controls: %{
+          max_turns: 3,
+          timeout_ms: 1_000,
+          operation: %{
+            control: EchoControl,
+            match: %{kind: :tool, name: "lookup"}
+          }
+        }
+      )
+
+    assert {:ok, json} = Jidoka.export(spec, format: :json)
+
+    assert {:ok, %Agent.Spec{} = imported} =
+             Jidoka.import(json, format: :json, controls: %{"echo_control" => EchoControl})
+
+    assert imported.id == spec.id
+    assert imported.instructions == spec.instructions
+    assert Jidoka.Config.model_ref(imported.model) == "test:export-model"
+    assert imported.memory.scope == :session
+    assert [%{name: "lookup", idempotency: :pure}] = imported.operations
+    assert imported.operations |> hd() |> Operation.kind() == :tool
+    assert imported.controls.max_turns == 3
+    assert [%{control: EchoControl}] = imported.controls.operations
+  end
+
+  test "exports portable YAML and requires refs for runtime-only schemas" do
+    assert {:ok, yaml} =
+             Jidoka.export(
+               [
+                 id: "export_yaml_agent",
+                 model: %{provider: :test, id: "yaml-model"},
+                 instructions: "Export me."
+               ],
+               format: :yaml
+             )
+
+    assert yaml =~ "export_yaml_agent"
+    assert {:ok, %Agent.Spec{id: "export_yaml_agent"}} = Jidoka.import(yaml, format: :yaml)
+
+    schema = Zoi.object(%{answer: Zoi.string()})
+
+    spec =
+      Jidoka.agent!(
+        id: "export_schema_agent",
+        model: %{provider: :test, id: "schema-model"},
+        instructions: "Needs refs.",
+        result: schema
+      )
+
+    assert {:error, {:unexportable_result_schema, :missing_result_schema_ref}} =
+             Jidoka.export(spec)
+
+    assert {:ok, json} = Jidoka.export(spec, result_schema_ref: "answer_result")
+
+    assert {:ok, %Agent.Spec{result: result}} =
+             Jidoka.import(json,
+               format: :json,
+               result_schemas: %{"answer_result" => schema}
+             )
+
+    assert %Agent.Spec.Result{metadata: %{"schema_ref" => "answer_result"}} = result
   end
 end

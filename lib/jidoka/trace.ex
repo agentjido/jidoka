@@ -1,12 +1,12 @@
 defmodule Jidoka.Trace do
   @moduledoc """
-  Trace projection helpers used by the built-in trace extension.
+  Trace projection helpers for Jidoka runtime events.
   """
 
   alias Jidoka.Event
   alias Jidoka.Trace.{Policy, Sink}
 
-  @doc "Returns the core event names projected by the built-in trace extension."
+  @doc "Returns the core event names projected by trace timelines."
   @spec events() :: [atom()]
   def events, do: Event.events()
 
@@ -56,17 +56,17 @@ defmodule Jidoka.Trace do
   defp timeline_event(%Event{} = event, _index) do
     event
     |> Event.to_map()
-    |> Map.put(:extension, :trace)
+    |> Map.put(:projection, :trace)
   end
 
   defp timeline_event(%{} = event, index) do
     event
     |> Map.put_new(:seq, index)
-    |> Map.put_new(:extension, :trace)
+    |> Map.put_new(:projection, :trace)
   end
 
   defp timeline_event(other, index) do
-    %{seq: index, extension: :trace, event: :unknown_event, data: %{value: other}}
+    %{seq: index, projection: :trace, event: :unknown_event, data: %{value: other}}
   end
 
   defp policy(%Policy{} = policy), do: Policy.from_input(policy)

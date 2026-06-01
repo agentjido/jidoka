@@ -244,7 +244,7 @@ defmodule Jidoka.Inspection do
     }
   end
 
-  defp timeline(events), do: Jidoka.Extensions.Trace.timeline(events)
+  defp timeline(events), do: Jidoka.Trace.timeline(events)
 
   defp latest_cursor(%Harness.Session{} = session) do
     case Harness.Session.latest_snapshot(session) do

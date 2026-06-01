@@ -57,7 +57,6 @@ defmodule Jidoka.StabilizationContractTest do
 
   alias Jidoka.Agent
   alias Jidoka.Effect
-  alias Jidoka.Extension
   alias Jidoka.Handoff
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
@@ -72,7 +71,7 @@ defmodule Jidoka.StabilizationContractTest do
   alias Jidoka.Turn
   alias Jidoka.StabilizationContractTest.Support
 
-  test "root facade exposes the locked V2 API and omits V1 orchestration helpers" do
+  test "root facade exposes the locked API and omits legacy orchestration helpers" do
     Code.ensure_loaded!(Jidoka)
 
     expected_exports = [
@@ -80,6 +79,8 @@ defmodule Jidoka.StabilizationContractTest do
       agent!: 1,
       import: 1,
       import: 2,
+      export: 1,
+      export: 2,
       start_agent: 1,
       start_agent: 2,
       stop_agent: 1,
@@ -95,6 +96,12 @@ defmodule Jidoka.StabilizationContractTest do
       plan!: 1,
       chat: 2,
       chat: 3,
+      chat_async: 2,
+      chat_async: 3,
+      stream: 1,
+      stream: 2,
+      await: 1,
+      await: 2,
       turn: 2,
       turn: 3,
       await_agent: 1,
@@ -139,7 +146,7 @@ defmodule Jidoka.StabilizationContractTest do
 
     for {function, arity} <- removed_v1_exports do
       refute function_exported?(Jidoka, function, arity),
-             "V1 helper Jidoka.#{function}/#{arity} should not be part of V2"
+             "Legacy helper Jidoka.#{function}/#{arity} should not be part of the locked API"
     end
   end
 
@@ -169,25 +176,6 @@ defmodule Jidoka.StabilizationContractTest do
     assert_raise ArgumentError, ~r/invalid generated id/, fn ->
       Id.generate!("turn", fn _prefix -> "" end)
     end
-  end
-
-  test "extension patches normalize operation data and reject invalid defaults" do
-    assert {:ok,
-            %Extension.Patch{
-              operations: [%Agent.Spec.Operation{name: "lookup"}],
-              runtime_defaults: %{"max_model_turns" => 4},
-              diagnostics: ["ok"]
-            }} =
-             Extension.Patch.new(
-               operations: [%{"name" => "lookup"}],
-               runtime_defaults: %{"max_model_turns" => 4},
-               diagnostics: ["ok"]
-             )
-
-    assert %Extension.Patch{operations: [], runtime_defaults: %{}, metadata: %{}} =
-             Extension.Patch.new!()
-
-    assert {:error, _reason} = Extension.Patch.new(operations: [%{"idempotency" => "bad"}])
   end
 
   test "preflight and operation control context are explicit data contracts" do

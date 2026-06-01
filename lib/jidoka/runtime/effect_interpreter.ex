@@ -146,7 +146,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   defp call_capability(%Effect.Intent{kind: :llm} = intent, %Capabilities{llm: llm}, journal) do
     case invoke_capability(llm, intent, journal) do
       {:ok, output} ->
-        {:ok, Effect.Result.ok(intent, output)}
+        {:ok, Effect.Result.ok(intent, output, metadata: output_metadata(output))}
 
       {:error, reason} ->
         {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
@@ -197,6 +197,11 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       effect_kind: intent.kind
     )
   end
+
+  defp output_metadata(%Effect.LLMDecision{metadata: metadata}) when is_map(metadata), do: metadata
+  defp output_metadata(%{metadata: metadata}) when is_map(metadata), do: metadata
+  defp output_metadata(%{"metadata" => metadata}) when is_map(metadata), do: metadata
+  defp output_metadata(_output), do: %{}
 
   defp append_capability_result_trace(
          %Turn.State{} = state,

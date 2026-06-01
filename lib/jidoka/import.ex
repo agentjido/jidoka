@@ -14,7 +14,7 @@ defmodule Jidoka.Import do
   alias Jidoka.Import.AgentDocument
   alias Jidoka.Import.Registry
   alias Jidoka.Operation.Source
-  alias Jidoka.Operation.Source.Catalog, as: CatalogSource
+  alias Jidoka.Operation.Source.MCP, as: MCPSource
   alias Jidoka.Runtime.JidoActions
   alias Jidoka.Schema
 
@@ -36,6 +36,7 @@ defmodule Jidoka.Import do
 
   @agent_keys ~w(id model generation instructions context context_schema result result_schema memory runtime_defaults metadata)
   @document_keys ~w(version agent tools controls operations runtime_defaults metadata)
+  @unsupported_tool_sources [:catalog, :catalogs]
 
   @doc """
   Imports a JSON or YAML agent document string.
@@ -205,16 +206,26 @@ defmodule Jidoka.Import do
   end
 
   defp tool_source_data(tools, opts) when is_map(tools) do
-    with {:ok, actions} <- action_operations(tools, opts),
+    with :ok <- reject_unsupported_tool_sources(tools),
+         {:ok, actions} <- action_operations(tools, opts),
          {:ok, ash_resources, ash_sources} <- ash_resource_operations(tools, opts),
          {:ok, browsers, browser_sources} <- browser_operations(tools),
-         {:ok, catalogs, catalog_sources} <- catalog_operations(tools) do
+         {:ok, mcps, mcp_sources} <- mcp_operations(tools) do
       {:ok,
        %{
-         operations: actions ++ ash_resources ++ browsers ++ catalogs,
-         sources: ash_sources ++ browser_sources ++ catalog_sources
+         operations: actions ++ ash_resources ++ browsers ++ mcps,
+         sources: ash_sources ++ browser_sources ++ mcp_sources
        }}
     end
+  end
+
+  defp reject_unsupported_tool_sources(tools) when is_map(tools) do
+    Enum.find_value(@unsupported_tool_sources, :ok, fn key ->
+      case Schema.fetch_key(tools, key) do
+        {:ok, _value} -> {:error, {:unsupported_tool_source, key}}
+        :error -> false
+      end
+    end)
   end
 
   defp action_operations(tools, opts) when is_map(tools) do
@@ -265,23 +276,26 @@ defmodule Jidoka.Import do
     end)
   end
 
-  defp catalog_operations(tools) when is_map(tools) do
+  defp mcp_operations(tools) when is_map(tools) do
     tools
-    |> tool_entries(:catalogs, :catalog)
-    |> Enum.reduce_while({:ok, [], []}, fn catalog_ref, {:ok, acc_operations, sources} ->
-      with {:ok, catalog} <- normalize_catalog_ref(catalog_ref),
-           {:ok, catalog_operations} <- Source.operations(catalog) do
-        source = %{
-          "source" => "catalog",
-          "name" => catalog.name,
-          "via" => metadata_value(catalog.via),
-          "providers" => catalog.providers,
-          "only" => catalog.only,
-          "except" => catalog.except,
-          "max_results" => catalog.max_results
+    |> tool_entries(:mcp_tools, :mcp_tool)
+    |> Enum.reduce_while({:ok, [], []}, fn mcp_ref, {:ok, acc_operations, sources} ->
+      with {:ok, source} <- normalize_mcp_ref(mcp_ref),
+           {:ok, source_operations} <- Source.operations(source) do
+        source_metadata = %{
+          "source" => "mcp",
+          "endpoint" => metadata_value(source.endpoint),
+          "prefix" => source.prefix,
+          "required" => source.required,
+          "transport" => metadata_value(source.transport),
+          "client_info" => source.client_info,
+          "protocol_version" => source.protocol_version,
+          "capabilities" => source.capabilities,
+          "timeouts" => source.timeouts,
+          "tools" => Enum.map(source.tools, & &1.name)
         }
 
-        {:cont, {:ok, acc_operations ++ catalog_operations, sources ++ [reject_nil_values(source)]}}
+        {:cont, {:ok, acc_operations ++ source_operations, sources ++ [reject_nil_values(source_metadata)]}}
       else
         {:error, reason} -> {:halt, {:error, reason}}
       end
@@ -495,23 +509,27 @@ defmodule Jidoka.Import do
 
   defp normalize_browser_ref(name), do: normalize_browser_ref(%{"name" => name})
 
-  defp normalize_catalog_ref(%{} = attrs) do
+  defp normalize_mcp_ref(%{} = attrs) do
     attrs = stringify_keys(attrs)
 
-    CatalogSource.new(
-      name: Schema.get_key(attrs, :name) || Schema.get_key(attrs, :ref),
-      via: Schema.get_key(attrs, :via, :jido_discovery),
-      providers: Schema.get_key(attrs, :providers, []),
-      only: Schema.get_key(attrs, :only, []),
-      except: Schema.get_key(attrs, :except, []),
-      max_results: Schema.get_key(attrs, :max_results),
+    MCPSource.new(
+      endpoint: Schema.get_key(attrs, :endpoint) || Schema.get_key(attrs, :ref),
+      prefix: Schema.get_key(attrs, :prefix),
+      tools: Schema.get_key(attrs, :tools, []),
+      required: Schema.get_key(attrs, :required, false),
+      transport: Schema.get_key(attrs, :transport),
+      client_info: Schema.get_key(attrs, :client_info, %{"name" => "jidoka"}),
+      protocol_version: Schema.get_key(attrs, :protocol_version),
+      capabilities: Schema.get_key(attrs, :capabilities, %{}),
+      timeouts: Schema.get_key(attrs, :timeouts, %{}),
+      timeout: Schema.get_key(attrs, :timeout),
       description: Schema.get_key(attrs, :description),
       idempotency: Schema.get_key(attrs, :idempotency, :idempotent),
       metadata: Schema.get_key(attrs, :metadata, %{})
     )
   end
 
-  defp normalize_catalog_ref(name), do: normalize_catalog_ref(%{"name" => name})
+  defp normalize_mcp_ref(endpoint), do: normalize_mcp_ref(%{"endpoint" => endpoint})
 
   defp tool_entries(tools, plural_key, singular_key) do
     tools

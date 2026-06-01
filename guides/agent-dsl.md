@@ -1,7 +1,6 @@
 # Agent DSL
 
-The V2 DSL is intentionally small. It is an authoring layer that compiles to
-`Jidoka.Agent.Spec`.
+The Jidoka DSL is small. It compiles agent modules to `Jidoka.Agent.Spec`.
 
 ## Minimal Agent
 
@@ -20,7 +19,6 @@ This uses default instructions and the configured default model.
 ```elixir
 agent :support_agent do
   model "openai:gpt-4o-mini"
-  generation %{temperature: 0.0, max_tokens: 500}
   instructions "Answer support questions tersely."
   context Zoi.object(%{tenant_id: Zoi.string()})
   result schema: Zoi.object(%{answer: Zoi.string()}), max_repairs: 1
@@ -32,7 +30,8 @@ Supported fields:
 
 - `model` - any ReqLLM/LLMDB model input, such as `"openai:gpt-4o-mini"` or
   `%{provider: :openai, id: "gpt-4o-mini"}`;
-- `generation` - permissive provider-facing generation defaults;
+- `generation` - optional provider-facing generation overrides; omitted agents
+  use `Jidoka.Config.default_generation/0`;
 - `instructions` - system-level behavior instructions;
 - `context` - optional Zoi schema for runtime context validation;
 - `result` - optional Zoi schema or `Jidoka.Agent.Spec.Result` data for
@@ -50,35 +49,123 @@ error.
 ```elixir
 tools do
   action MyApp.LocalTime
+  ash_resource MyApp.Accounts.Customer, actions: [:read, :create]
   browser :docs, allow: ["https://docs.example.com"]
-  catalog :support_ops, via: :connect, providers: [:github], max_results: 8
+  mcp_tools endpoint: :support_mcp, prefix: "support_"
+  skill MyApp.Skills.RefundPolicy
+  load_path "priv/skills"
+  workflow MyApp.Workflows.RefundQuote, as: :quote_refund
+  subagent MyApp.EvidenceAgent, as: :collect_evidence
+  handoff MyApp.BillingAgent, as: :billing_specialist
 end
 ```
 
-Each action must be a Jido action or compatible module exposing `to_tool/0`.
-Jidoka converts actions into `Agent.Spec.Operation` entries.
+The `tools` block is authoring vocabulary for anything the model can ask
+Jidoka to do. Every entry compiles to one or more `Agent.Spec.Operation`
+records. The runtime still sees a small operation boundary; the DSL gives you
+clear source-specific syntax.
 
-The `tools` block is authoring vocabulary. Internally these entries normalize
-to model-callable operations:
+Supported entries:
 
-- `action MyApp.Action` uses the built-in Jido action runtime.
-- `ash_resource MyApp.Resource` records an Ash resource source. AshJido
-  generated actions are imported as `:ash_resource` operations.
-  `actions:` filters the generated AshJido actions exposed to the model:
+| DSL entry | Use it for | Runtime shape |
+| --- | --- | --- |
+| `action MyApp.Action` | One deterministic Jido/Jidoka action. | One `:action` operation. |
+| `ash_resource MyApp.Resource` | AshJido-generated actions from an Ash resource. | One operation per exposed Ash action. |
+| `browser :docs` | Search/read/snapshot browser capabilities backed by `jido_browser`. | `:browser` operations. |
+| `mcp_tools endpoint: :id` | Tools exposed by a configured MCP endpoint. | One `:mcp` operation per discovered/static tool. |
+| `skill MyApp.Skill` | Jido.AI skill instructions and any declared operations. | Skill prompt plus `:skill` operations when present. |
+| `load_path "priv/skills"` | Runtime-loaded `SKILL.md` files. | Adds skill instructions from the path. |
+| `workflow MyApp.Workflow` | Deterministic application workflow as one callable operation. | One `:workflow` operation. |
+| `subagent MyApp.Agent` | Bounded delegation to another Jidoka agent for one task. | One `:subagent` operation. |
+| `handoff MyApp.Agent` | Transfer future conversation ownership to another agent. | One `:handoff` operation. |
 
-  ```elixir
-  tools do
-    ash_resource MyApp.Accounts.User, actions: [:read, :create]
-  end
-  ```
+`action` is the smallest tool source. The module must be a Jido action or a
+compatible module exposing `to_tool/0`.
 
-- `browser :docs` expands to constrained `:browser` operations backed by
-  Jido action wrappers for the `jido_browser` read-only tools: `search_web`,
-  `read_page`, and `snapshot_url` in `:read_only` mode.
-- `catalog :support_ops` publishes a constrained `:catalog` lookup operation
-  such as `catalog_support_ops`. By default it searches the Jido Discovery
-  action catalog and returns matching action metadata; it does not execute
-  discovered actions.
+```elixir
+tools do
+  action MyApp.LocalTime
+end
+```
+
+`ash_resource` records an Ash resource source. AshJido-generated actions are
+imported as `:ash_resource` operations. Use `actions:` to filter the generated
+operations exposed to the model:
+
+```elixir
+tools do
+  ash_resource MyApp.Accounts.User, actions: [:read, :create]
+end
+```
+
+`browser` expands to constrained browser operations backed by Jido action
+wrappers for the `jido_browser` read-only tools: `search_web`, `read_page`, and
+`snapshot_url` in `:read_only` mode.
+
+```elixir
+tools do
+  browser :docs, mode: :read_only, allow: ["https://hexdocs.pm"]
+end
+```
+
+`mcp_tools` imports tools from a configured MCP endpoint. Use `prefix:` to keep
+remote tool names distinct from local operation names.
+
+```elixir
+tools do
+  mcp_tools endpoint: :support_mcp,
+            prefix: "support_",
+            tools: [%{name: "lookup_policy", description: "Look up support policy."}]
+end
+```
+
+`skill` and `load_path` add Jido.AI skill context. A skill can add prompt
+instructions, operation metadata, or both depending on the skill definition.
+
+```elixir
+tools do
+  skill MyApp.Skills.RefundPolicy
+  load_path "priv/skills"
+end
+```
+
+`workflow` exposes deterministic application code as one operation. Use it when
+the model should choose a business workflow, but your application owns the
+workflow steps.
+
+```elixir
+tools do
+  workflow MyApp.Workflows.RefundQuote,
+    as: :quote_refund,
+    timeout: 10_000,
+    result: :structured
+end
+```
+
+`subagent` delegates one bounded task to another Jidoka agent and returns the
+child result to the parent. It does not change who owns the next user turn.
+
+```elixir
+tools do
+  subagent MyApp.EvidenceAgent,
+    as: :collect_evidence,
+    timeout: 30_000,
+    result: :structured
+end
+```
+
+`handoff` records that another agent should own future turns for a conversation.
+The current turn still completes normally; your application reads
+`Jidoka.handoff/1` to route the next message.
+
+```elixir
+tools do
+  handoff MyApp.BillingAgent,
+    as: :billing_specialist,
+    target: :auto,
+    forward_context: :public
+end
+```
 
 ## Controls Block
 
@@ -132,8 +219,7 @@ controls do
 end
 ```
 
-Input, operation, and output controls run in declaration order at their
-respective runtime boundaries. Operation controls receive
+Input, operation, and output controls run in declaration order. Operation controls receive
 `Jidoka.Runtime.Controls.OperationContext` data and may return `:cont`,
 `{:block, reason}`, `{:interrupt, reason}`, or `{:error, reason}`.
 
@@ -158,15 +244,16 @@ The important boundary is the compiled spec:
 }
 ```
 
-Golden tests in `test/jidoka/golden/dsl_to_spec_test.exs` lock the stable
-projection of this shape.
+Golden tests in `test/jidoka/golden/dsl_to_spec_test.exs` lock the projected
+shape.
 
 ## Import Parity
 
 JSON/YAML imports compile into the same `Jidoka.Agent.Spec` shape. Portable
 documents stay data-only, so action modules and Zoi context schemas are named in
-the document and resolved with registries. The import surface mirrors the
-current minimal DSL: `agent`, `tools`, and `controls`.
+the document and resolved with registries. Import currently covers the data-safe
+agent fields, controls, and the portable tool sources: `action`,
+`ash_resource`, `browser`, and `mcp_tools`.
 
 ```yaml
 agent:
@@ -190,10 +277,12 @@ tools:
       mode: search
       allow:
         - docs.example.com
-  catalogs:
-    - name: support_ops
-      providers:
-        - support
+  mcp_tools:
+    - endpoint: support_mcp
+      prefix: support_
+      tools:
+        - name: lookup_policy
+          description: Look up support policy.
 controls:
   max_turns: 8
   timeout: 30000
@@ -258,9 +347,8 @@ controls:
 String refs are resolved only through explicit registries; imports do not create
 atoms or modules from untrusted input.
 
-## Intentionally Absent
+## Not In The DSL Yet
 
-The current DSL does not expose handoffs, workflows, session queues, approval
-queues, extensions, or native provider tool-calling. Runtime extensions remain
-plain Elixir modules registered by package/application code, not author-facing
-DSL.
+The current DSL does not expose session queues, approval queues, or native
+provider tool-calling. Runtime additions remain explicit Elixir code, not
+agent DSL.

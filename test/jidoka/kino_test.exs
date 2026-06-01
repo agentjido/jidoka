@@ -66,7 +66,7 @@ defmodule JidokaTest.KinoTest do
     assert System.get_env("OPENAI_API_KEY") == "test-openai-key"
   end
 
-  test "debug_agent and agent_diagram render V2 inspection data without Kino" do
+  test "debug_agent and agent_diagram render Jidoka inspection data without Kino" do
     assert {:ok, %{kind: :agent, spec: %{id: "kino_test_agent"}}} = Jidoka.Kino.debug_agent(Agent)
 
     assert {:ok, markdown} = Jidoka.Kino.agent_diagram(Agent)

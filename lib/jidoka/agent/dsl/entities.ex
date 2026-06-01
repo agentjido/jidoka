@@ -47,23 +47,6 @@ defmodule Jidoka.Agent.Dsl.Browser do
   ]
 end
 
-defmodule Jidoka.Agent.Dsl.Catalog do
-  @moduledoc false
-
-  defstruct [
-    :name,
-    :via,
-    :providers,
-    :only,
-    :except,
-    :max_results,
-    :description,
-    :idempotency,
-    :metadata,
-    :__spark_metadata__
-  ]
-end
-
 defmodule Jidoka.Agent.Dsl.MCPTools do
   @moduledoc false
 
@@ -72,6 +55,11 @@ defmodule Jidoka.Agent.Dsl.MCPTools do
     :prefix,
     :tools,
     :required,
+    :transport,
+    :client_info,
+    :protocol_version,
+    :capabilities,
+    :timeouts,
     :timeout,
     :description,
     :idempotency,

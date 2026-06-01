@@ -1,6 +1,6 @@
 defmodule Jidoka.Workflow do
   @moduledoc """
-  Minimal deterministic workflow contract for V2.
+  Minimal deterministic workflow contract for Jidoka.
 
   A workflow is application-owned deterministic code exposed to an agent as one
   model-callable operation. It is separate from the Runic agent turn spine: the

@@ -8,6 +8,7 @@ defmodule Jidoka.Session do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Chat
   alias Jidoka.Harness
   alias Jidoka.Harness.Session, as: HarnessSession
   alias Jidoka.Harness.Store
@@ -24,6 +25,7 @@ defmodule Jidoka.Session do
           {:ok, t(), String.t()}
           | {:hibernate, t(), AgentSnapshot.t()}
           | {:error, term()}
+  @type async_result :: {:ok, Chat.Request.t()} | {:error, term()}
 
   @doc """
   Starts a new session for an agent, spec, or plan.
@@ -84,6 +86,25 @@ defmodule Jidoka.Session do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  @doc """
+  Starts one session chat turn asynchronously.
+
+  Pass `stream: true` to stream request-scoped `Jidoka.Event` values to the
+  caller mailbox while the request is running.
+  """
+  @spec chat_async(session_input(), String.t(), opts()) :: async_result()
+  def chat_async(session_or_id, input, opts \\ []) when is_binary(input) and is_list(opts) do
+    Chat.Request.start_fun(session_or_id, input, opts, fn prepared_opts ->
+      chat(session_or_id, input, prepared_opts)
+    end)
+  end
+
+  @doc "Waits for a request handle returned by `chat_async/3`."
+  @spec await(Chat.Request.t(), opts()) :: chat_result()
+  def await(%Chat.Request{} = request, opts \\ []) when is_list(opts) do
+    Chat.Request.await(request, opts)
   end
 
   @doc """

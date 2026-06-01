@@ -13,6 +13,25 @@ defmodule Jidoka.Stream do
   @message_tag :jidoka_turn_event
   @terminal_events [:turn_finished, :turn_failed, :turn_hibernated]
 
+  @type t :: %__MODULE__{
+          request: Jidoka.Chat.Request.t(),
+          events: Enumerable.t()
+        }
+
+  defstruct [:request, :events]
+
+  @doc "Builds a stream wrapper for an async chat request."
+  @spec new(Jidoka.Chat.Request.t(), keyword()) :: t()
+  def new(%Jidoka.Chat.Request{} = request, opts \\ []) when is_list(opts) do
+    %__MODULE__{request: request, events: events(request.request_id, opts)}
+  end
+
+  @doc "Waits for the final normalized result for a stream wrapper."
+  @spec await(t(), keyword()) :: term()
+  def await(%__MODULE__{request: %Jidoka.Chat.Request{} = request}, opts \\ []) do
+    Jidoka.Chat.Request.await(request, opts)
+  end
+
   @doc "Returns the mailbox tag used for streamed turn events."
   @spec message_tag() :: atom()
   def message_tag, do: @message_tag
@@ -38,7 +57,12 @@ defmodule Jidoka.Stream do
 
   def thinking_delta(_event), do: nil
 
-  @doc false
+  @doc """
+  Emits one event to the stream sinks configured for a running turn.
+
+  Custom capabilities can call this when they want to surface incremental
+  provider output, for example `:llm_delta` events from a streaming model.
+  """
   @spec emit(Event.t(), keyword()) :: :ok
   def emit(%Event{} = event, opts) when is_list(opts) do
     emit_to_mailbox(event, Keyword.get(opts, :stream_to))
@@ -111,4 +135,11 @@ defmodule Jidoka.Stream do
       _other -> nil
     end
   end
+end
+
+defimpl Enumerable, for: Jidoka.Stream do
+  def reduce(%Jidoka.Stream{events: events}, acc, fun), do: Enumerable.reduce(events, acc, fun)
+  def count(_stream), do: {:error, __MODULE__}
+  def member?(_stream, _event), do: {:error, __MODULE__}
+  def slice(_stream), do: {:error, __MODULE__}
 end

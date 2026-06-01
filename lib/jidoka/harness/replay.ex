@@ -86,14 +86,14 @@ defmodule Jidoka.Harness.Replay do
     |> Enum.flat_map(& &1.events)
     |> Kernel.++(result.events)
     |> unique_events()
-    |> Jidoka.Extensions.Trace.timeline()
+    |> Jidoka.Trace.timeline()
   end
 
   defp timeline(states, nil) when is_list(states) do
     states
     |> Enum.flat_map(& &1.events)
     |> unique_events()
-    |> Jidoka.Extensions.Trace.timeline()
+    |> Jidoka.Trace.timeline()
   end
 
   defp unique_events(events) do

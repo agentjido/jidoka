@@ -52,6 +52,45 @@ defmodule Jidoka.SessionTest do
     assert root_updated.status == :finished
   end
 
+  test "session chat can run asynchronously for UI callers" do
+    {:ok, session} = Session.start(spec(), "async-chat-123")
+
+    llm = fn _intent, _journal ->
+      {:ok, %{type: :final, content: "async session ok"}}
+    end
+
+    assert {:ok, request} = Session.chat_async(session, "Hello", llm: llm, stream: true)
+    assert request.request_id =~ "chat_"
+    assert request.session_id == "async-chat-123"
+
+    stream = Jidoka.stream(request, stream_event_timeout_ms: 100)
+
+    assert {:ok, %HarnessSession{status: :finished} = updated, "async session ok"} =
+             Jidoka.await(stream, timeout: 1_000)
+
+    assert updated.session_id == "async-chat-123"
+
+    assert [:turn_started | _] = stream |> Enum.map(& &1.event)
+  end
+
+  test "persisted session ids can run asynchronously through the session facade" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+
+    assert {:ok, %HarnessSession{session_id: "async-stored-123"}} =
+             Session.start(spec(), "async-stored-123", store: store)
+
+    llm = fn _intent, _journal ->
+      {:ok, %{type: :final, content: "async stored ok"}}
+    end
+
+    assert {:ok, request} =
+             Session.chat_async("async-stored-123", "Hello", store: store, llm: llm)
+
+    assert {:ok, %HarnessSession{session_id: "async-stored-123"}, "async stored ok"} =
+             Session.await(request, timeout: 1_000)
+  end
+
   test "session run can resolve persisted sessions by id" do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}

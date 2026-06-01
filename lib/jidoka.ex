@@ -1,8 +1,8 @@
 defmodule Jidoka do
   @moduledoc """
-  Public facade for Jidoka V2.
+  Public facade for Jidoka.
 
-  This module exposes the stable application-facing surface for the V2 agent
+  This module exposes the stable application-facing surface for the Jidoka agent
   harness:
 
   * an immutable `Jidoka.Agent.Spec`;
@@ -18,12 +18,15 @@ defmodule Jidoka do
   * `plan/1` compiles definition data into executable turn data;
   * `turn/3` runs one full model/tool turn;
   * `chat/3` runs a turn and returns only final assistant text;
+  * `chat_async/3`, `stream/2`, and `await/2` support UI-friendly async flows;
   * `session/2` starts durable multi-turn state;
   * `resume/2` continues from a hibernated snapshot;
+  * `export/2` writes portable JSON/YAML agent data;
   * `inspect/2`, `preflight/3`, and `project/1` expose debugging views.
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Chat
   alias Jidoka.Error
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
@@ -80,6 +83,18 @@ defmodule Jidoka do
   """
   @spec import(String.t(), keyword()) :: {:ok, Agent.Spec.t()} | {:error, term()}
   def import(contents, opts \\ []), do: Jidoka.Import.import(contents, opts)
+
+  @doc """
+  Exports an agent definition to a portable JSON or YAML document string.
+
+  Export writes data that can be passed back into `import/2`. Runtime-only
+  values are not serialized. If a context or result schema is present, provide
+  a registry ref with `context_schema_ref:` or `result_schema_ref:` so the
+  exported document can be resolved by the importing application.
+  """
+  @spec export(module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map(), keyword()) ::
+          {:ok, String.t()} | {:error, term()}
+  def export(agent_or_spec, opts \\ []), do: Jidoka.Export.export(agent_or_spec, opts)
 
   @doc """
   Starts a Jidoka DSL agent under the default `Jidoka.Jido` process tree.
@@ -215,7 +230,41 @@ defmodule Jidoka do
   end
 
   @doc """
-  Runs one agent turn through the V2 Runic spine.
+  Starts one chat request asynchronously and returns a request handle.
+
+  This is the UI-friendly companion to `chat/3`. Pass `stream: true` to stream
+  request-scoped `Jidoka.Event` values to the caller mailbox while the task is
+  running. Use `stream/2` to enumerate those events and `await/2` to collect the
+  final normalized chat result.
+  """
+  @spec chat_async(chat_input(), String.t(), runtime_opts()) ::
+          {:ok, Chat.Request.t()} | {:error, term()}
+  def chat_async(target, input, opts \\ []) when is_binary(input) and is_list(opts) do
+    Chat.Request.start(target, input, opts)
+  end
+
+  @doc """
+  Builds a request-scoped event stream for an async chat request.
+
+  The stream consumes events already emitted to the caller mailbox and stops at
+  `:turn_finished`, `:turn_failed`, or `:turn_hibernated`.
+  """
+  @spec stream(Chat.Request.t(), keyword()) :: Jidoka.Stream.t()
+  def stream(%Chat.Request{} = request, opts \\ []), do: Jidoka.Stream.new(request, opts)
+
+  @doc """
+  Waits for a chat request or stream to finish.
+
+  This returns the same normalized result shape as `chat/3`, including session
+  results when the request target is a `Jidoka.Session`.
+  """
+  @spec await(Chat.Request.t() | Jidoka.Stream.t(), keyword()) :: term()
+  def await(request_or_stream, opts \\ [])
+  def await(%Chat.Request{} = request, opts), do: Chat.Request.await(request, opts)
+  def await(%Jidoka.Stream{} = stream, opts), do: Jidoka.Stream.await(stream, opts)
+
+  @doc """
+  Runs one agent turn through the Jidoka Runic spine.
 
   This is the stable core runtime entrypoint. It accepts an `Agent.Spec` or
   `Turn.Plan`, normalizes the request, runs pure workflow planning, interprets

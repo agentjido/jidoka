@@ -2,7 +2,7 @@ defmodule Jidoka.Skill do
   @moduledoc """
   Jido.AI skill helpers used by the Jidoka DSL.
 
-  Skills are definition-time data in Jidoka V2. A skill contributes prompt
+  Skills are definition-time data in Jidoka. A skill contributes prompt
   instructions and any action modules published by the skill manifest. Those
   actions are still executed through the normal Jido action operation path.
   """

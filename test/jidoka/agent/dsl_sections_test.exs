@@ -36,10 +36,6 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert entities.browser.args == [:name]
     assert get_in(entities.browser.schema, [:mode, :default]) == :read_only
 
-    assert entities.catalog.target == Jidoka.Agent.Dsl.Catalog
-    assert entities.catalog.args == [:name]
-    assert get_in(entities.catalog.schema, [:via, :required])
-
     assert entities.mcp_tools.target == Jidoka.Agent.Dsl.MCPTools
     assert entities.mcp_tools.args == []
     assert get_in(entities.mcp_tools.schema, [:endpoint, :required])

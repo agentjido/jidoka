@@ -29,7 +29,7 @@ defmodule JidokaExample.KnowledgeAgent.MCP.LocalClient do
          "note" =>
            "This note came from the Knowledge Agent MCP client and was executed through the same Jidoka operation effect path as local tools.",
          "recommended_use" =>
-           "Use MCP for tool catalogs or external servers that should remain outside the application codebase."
+           "Use MCP for tool registries or external servers that should remain outside the application codebase."
        }
      }}
   end

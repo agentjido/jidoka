@@ -148,7 +148,7 @@ Primary features:
 
 - `Jidoka.inspect/1` for compiled agent structure
 - `Jidoka.preflight/3` for prompt and operation preview without effects
-- local debug actions over a fixed target catalog
+- local debug actions over a fixed target registry
 - source inspection for the package inspection modules
 - developer-oriented route that does not require external tools to be useful
 
@@ -167,7 +167,6 @@ Primary features:
 - multiple `tools do action ... end` entries
 - `tools do ash_resource ... end`
 - `tools do browser ... end`
-- `tools do catalog ... end`
 - `tools do skill ... end`
 - `tools do mcp_tools ... end`
 - `tools do subagent ... end`

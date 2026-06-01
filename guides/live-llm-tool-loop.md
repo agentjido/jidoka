@@ -42,6 +42,5 @@ or:
 {"type":"operation","name":"local_time","arguments":{"city":"Chicago"}}
 ```
 
-This keeps the Runic/effect spine provider-neutral while the V2 runtime
-settles. Native provider tool-calling can replace this protocol later without
-changing `Agent.Spec` or the harness boundary.
+This keeps the current runtime provider-neutral. Native provider tool-calling
+can replace this protocol later without changing `Agent.Spec`.

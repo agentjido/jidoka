@@ -1,6 +1,6 @@
 # Runtime And Harness
 
-Jidoka V2 separates authoring, executable data, and effect execution.
+Jidoka separates authoring, executable data, and effect execution.
 
 ```text
 Jidoka.Agent DSL
@@ -94,9 +94,9 @@ replay.timeline
 
 ## Observability And Evals
 
-Core runtime events are neutral `Jidoka.Event` data. The trace extension
-projects them into a compact timeline, and callers decide whether to persist
-that timeline:
+Core runtime events are neutral `Jidoka.Event` data. `Jidoka.Trace` projects
+them into a compact timeline, and callers decide whether to persist that
+timeline:
 
 ```elixir
 {:ok, sink} = Jidoka.Trace.Sink.InMemory.start_link()

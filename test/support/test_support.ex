@@ -40,7 +40,7 @@ defmodule Jidoka.TestSupport do
 
   @spec timeline([Event.t()] | [map()]) :: [map()]
   def timeline([]), do: []
-  def timeline([%Event{} | _rest] = events), do: Jidoka.Extensions.Trace.timeline(events)
+  def timeline([%Event{} | _rest] = events), do: Jidoka.Trace.timeline(events)
   def timeline([%{} | _rest] = timeline), do: timeline
 
   @spec event_index([Event.t()] | [map()], atom()) :: non_neg_integer() | nil

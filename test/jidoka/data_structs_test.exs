@@ -83,9 +83,6 @@ defmodule Jidoka.DataStructsTest do
     assert Operation.kind(Operation.new!(name: "lookup", metadata: %{kind: "browser"})) ==
              :browser
 
-    assert Operation.kind(Operation.new!(name: "lookup", metadata: %{"kind" => "catalog"})) ==
-             :catalog
-
     assert Operation.kind(Operation.new!(name: "lookup", metadata: %{"kind" => "ash_resource"})) ==
              :ash_resource
 
