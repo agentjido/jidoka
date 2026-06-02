@@ -186,10 +186,23 @@ Jidoka.inspect(MyApp.TimeAgent)
   Jidoka.preflight(MyApp.TimeAgent, "What time is it in Chicago?")
 
 preflight.prompt.messages
-preflight.prompt.tools
+preflight.prompt.tool_definitions
 ```
 
 `preflight/3` validates the prompt and tool metadata without calling a model.
+
+After a turn, use `Jidoka.Debug.request/2` when you need the full request view
+for a user report, notebook, or test:
+
+```elixir
+{:ok, result} = Jidoka.turn(MyApp.TimeAgent, "What time is it in Chicago?")
+{:ok, summary} = Jidoka.Debug.request(result)
+
+summary.prompt.messages
+summary.operation_results
+summary.usage
+summary.replay_diagnostics.status
+```
 
 ## Author With Data
 
@@ -251,6 +264,7 @@ Start here:
 - [Workflows](guides/workflows.md)
 - [Controls](guides/controls.md)
 - [Sessions And Stores](guides/sessions-and-stores.md)
+- [Inspection And Preflight](guides/inspection-and-preflight.md)
 - [Testing And Evals](guides/testing-and-evals.md)
 
 Useful next topics:

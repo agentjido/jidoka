@@ -92,6 +92,50 @@ Replay is a projection over stored data, not a runtime call:
 replay.timeline
 ```
 
+Replay diagnostics explain whether recorded effects are complete and safe to
+reason about without calling providers or tools:
+
+```elixir
+{:ok, diagnostics} = Jidoka.Harness.Replay.diagnose(replay)
+
+diagnostics.status
+#=> :complete | :waiting | :failed | :incomplete
+
+diagnostics.missing_effect_results
+diagnostics.unsafe_effects
+diagnostics.pending_reviews
+```
+
+Diagnostic statuses are intentionally small:
+
+| Status | Meaning |
+| --- | --- |
+| `:complete` | The replay has complete effect result data. |
+| `:waiting` | Human review is pending, usually from an interrupted operation control. |
+| `:failed` | At least one effect result or timeline event failed. |
+| `:incomplete` | An effect intent exists without a recorded result. |
+
+Use `Jidoka.Debug.request/2` when you want a request-level view that combines
+prompt metadata, operation results, usage, timeline, journal, and replay
+diagnostics:
+
+```elixir
+{:ok, summary} = Jidoka.Debug.request(result)
+summary.prompt.messages
+summary.replay_diagnostics.status
+```
+
+For hibernated work, pass the snapshot directly. Add `session:` when you want
+the session id attached to the summary:
+
+```elixir
+{:hibernate, session, snapshot} = Jidoka.Session.run(session, "Refund A1001")
+
+{:ok, summary} = Jidoka.Debug.request(snapshot, session: session)
+summary.pending_reviews
+summary.replay_diagnostics.status
+```
+
 ## Observability And Evals
 
 Core runtime events are neutral `Jidoka.Event` data. `Jidoka.Trace` projects

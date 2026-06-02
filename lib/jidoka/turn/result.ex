@@ -3,6 +3,7 @@ defmodule Jidoka.Turn.Result do
 
   alias Jidoka.Schema
   alias Jidoka.Agent
+  alias Jidoka.Config
   alias Jidoka.Effect
   alias Jidoka.Turn
 
@@ -41,7 +42,52 @@ defmodule Jidoka.Turn.Result do
       agent_state: state.agent_state,
       journal: state.journal,
       events: state.events,
-      usage: Jidoka.Usage.from_journal(state.journal)
+      usage: Jidoka.Usage.from_journal(state.journal),
+      metadata: %{debug: debug_metadata(state)}
     )
   end
+
+  defp debug_metadata(%Turn.State{} = state) do
+    %{
+      request_id: state.request.request_id,
+      agent_id: state.spec.id,
+      model: Config.model_ref(state.spec.model),
+      input: state.request.input,
+      context_keys: context_keys(state.request.context),
+      prompt: prompt_debug(state.prompt),
+      diagnostics: state.diagnostics,
+      started_at_ms: state.started_at_ms
+    }
+  end
+
+  defp prompt_debug(nil), do: nil
+
+  defp prompt_debug(%{} = prompt) do
+    operations = Map.get(prompt, :operations, Map.get(prompt, "operations", []))
+
+    %{
+      model: Map.get(prompt, :model, Map.get(prompt, "model")),
+      loop_index: Map.get(prompt, :loop_index, Map.get(prompt, "loop_index")),
+      messages: Map.get(prompt, :messages, Map.get(prompt, "messages", [])),
+      message_count: length(Map.get(prompt, :messages, Map.get(prompt, "messages", []))),
+      operations: operations,
+      operation_names: Enum.map(operations, &operation_name/1),
+      operation_count: length(operations),
+      result: Map.get(prompt, :result, Map.get(prompt, "result")),
+      memory: Map.get(prompt, :memory, Map.get(prompt, "memory")),
+      generation: Map.get(prompt, :generation, Map.get(prompt, "generation"))
+    }
+  end
+
+  defp operation_name(%{} = operation), do: Map.get(operation, :name, Map.get(operation, "name"))
+  defp operation_name(_operation), do: nil
+
+  defp context_keys(%{} = context) do
+    context
+    |> Map.keys()
+    |> Enum.map(&to_string/1)
+    |> Enum.sort()
+  end
+
+  defp context_keys(_context), do: []
 end

@@ -104,6 +104,7 @@ The three functions cover three layers of the data-first runtime.
 | "How does this turn input shape the prompt?" | `Jidoka.preflight(agent, input)` | yes |
 | "What is the deterministic projection of this value?" | `Jidoka.project(value)` | yes |
 | "What happened during the turn that just ran?" | `Jidoka.inspect(turn_result)` | yes |
+| "Debug the exact request that just ran." | `Jidoka.Debug.request(turn_result)` | yes |
 | "Replay this snapshot." | `Jidoka.resume(snapshot, opts)` | no, runs effects |
 
 ## How To
@@ -232,7 +233,68 @@ projected.journal.intent_count
 `Jidoka.inspect(result)` returns a richer map with a `:timeline` and
 `:status` already filled in - useful for log output during development.
 
-### Step 6: Inspect A Snapshot Or Session
+### Step 6: Debug A Completed Request
+
+`Jidoka.Debug.request/2` assembles one request-level view from a result,
+session, snapshot, or replay. Use it when you want the prompt, operation
+calls, usage, timeline, journal, and replay diagnostics in one place.
+
+```elixir
+{:ok, result} = Jidoka.turn(MyApp.TimeAgent, "What time is it?", llm: llm)
+
+{:ok, summary} = Jidoka.Debug.request(result)
+
+summary.request_id
+summary.prompt.messages
+summary.operation_names
+summary.operation_results
+summary.usage
+summary.replay_diagnostics.status
+#=> :complete
+```
+
+The summary is a typed `Jidoka.Debug.RequestSummary`:
+
+```elixir
+%Jidoka.Debug.RequestSummary{
+  request_id: "turn_...",
+  agent_id: "time_agent",
+  status: :finished,
+  model: "openai:gpt-4o-mini",
+  input: "What time is it?",
+  content: "It is 09:30 in Chicago.",
+  context_keys: [],
+  operation_names: ["local_time"],
+  usage: %{llm_calls: 2, total_tokens: 184},
+  replay_diagnostics: %Jidoka.Debug.ReplayDiagnostics{status: :complete}
+}
+```
+
+The summary is data-only. It does not call an LLM, tool, memory store, or
+runtime capability. For sessions, use `Jidoka.Debug.latest(session)` or pass
+`request_id:` when you need a specific hibernated request. Unknown request ids
+return `{:error, {:request_debug_not_found, session_id, request_id}}` instead
+of falling back to the latest request.
+
+For hibernated snapshots and sessions, the same call exposes pending review
+data and incomplete effects:
+
+```elixir
+{:hibernate, session, snapshot} = Jidoka.Session.run(session, "Refund A1001")
+
+{:ok, summary} = Jidoka.Debug.request(snapshot, session: session)
+
+summary.status
+#=> :waiting
+
+summary.pending_reviews
+#=> [%{operation: "refund_order", ...}]
+
+summary.replay_diagnostics.status
+#=> :waiting
+```
+
+### Step 7: Inspect A Snapshot Or Session
 
 When a turn hibernates (typically because an operation control
 returned `{:interrupt, _}`), `inspect/2` produces a snapshot view that
@@ -258,7 +320,26 @@ count, pending reviews, and the latest cursor. Sessions are documented in
 [Runtime And Harness](runtime-and-harness.md); the inspection view is the
 debugging entry point for them.
 
-### Step 7: Use Inspect For Logging
+Replay diagnostics explain whether recorded effect data is complete:
+
+```elixir
+{:ok, replay} = Jidoka.Session.replay(session)
+{:ok, diagnostics} = Jidoka.Harness.Replay.diagnose(replay)
+
+diagnostics.status
+#=> :complete | :waiting | :failed | :incomplete
+```
+
+Status meanings:
+
+| Status | Meaning |
+| --- | --- |
+| `:complete` | Every recorded effect intent has a result. |
+| `:waiting` | A human review request is still pending. |
+| `:failed` | An effect result or timeline event failed. |
+| `:incomplete` | At least one effect intent has no recorded result. |
+
+### Step 8: Use Inspect For Logging
 
 Because every view is a plain map, it serializes cleanly:
 
@@ -281,6 +362,9 @@ production traces; `inspect/2` is the developer view.
 - **Snapshot views in failure logs.** When a session hibernates, log the
   result of `Jidoka.inspect(snapshot)`; the timeline plus pending review
   data is usually enough to diagnose stuck approvals.
+- **Request summaries for user reports.** When a user says "that answer was
+  wrong", capture `Jidoka.Debug.request(result)` so you have the prompt,
+  operation results, usage, and replay diagnostics together.
 - **Compare DSL and imported specs.** `Jidoka.inspect(dsl_module).spec ==
   Jidoka.inspect(imported_spec).spec` is the simplest parity assertion.
 - **Inspect workflow modules before agent prompts.** If the workflow graph or
@@ -344,6 +428,8 @@ less between releases.
   `prompt`, `events`, `timeline`, `diagnostics`.
 - [`Jidoka.Projection`](`Jidoka.Projection`) - the data-facing companion
   used by `Jidoka.project/1`.
+- [`Jidoka.Debug`](`Jidoka.Debug`) - request-level summaries and replay
+  diagnostics.
 - [`Jidoka.Agent.Spec`](`Jidoka.Agent.Spec`) - the spec inspect views
   path.
 

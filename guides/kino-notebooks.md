@@ -7,8 +7,9 @@ no-op rendering boundary outside Livebook. The helpers are thin wrappers
 around stable Jidoka contracts (`Jidoka.inspect/1`, `Jidoka.preflight/3`,
 `Jidoka.Harness`, `Jidoka.Turn.Result`). By the end you will be able to set up
 a notebook, mirror Livebook provider secrets, debug an agent definition,
-render a preflight, run a chat cell deterministically, and start an agent
-process that survives notebook re-evaluation.
+debug a completed request, render a preflight, run a chat cell
+deterministically, and start an agent process that survives notebook
+re-evaluation.
 
 ## When To Use This
 
@@ -229,7 +230,31 @@ The wrapped result is returned unchanged. Pair with
 `Jidoka.Kino.timeline/2` or `Jidoka.Kino.call_graph/2` when you want a
 separate cell to inspect the same data later.
 
-### Step 7: Start An Agent Once Per Notebook Session
+### Step 7: Debug A Completed Request
+
+`debug_request/2` renders the exact request-level summary for a result,
+session, snapshot, or replay.
+
+```elixir
+{:ok, result} =
+  Jidoka.turn(MyApp.TimeAgent, "What time is it in Chicago?", llm: deterministic_llm())
+
+{:ok, summary} = Jidoka.Kino.debug_request(result)
+
+summary.prompt.messages
+summary.operation_results
+summary.replay_diagnostics.status
+```
+
+Use this after a live call when you need to see the assembled prompt,
+operation results, usage, timeline, and replay diagnostics in one place.
+For a session, pass `request_id:` when you need a specific stored request:
+
+```elixir
+{:ok, summary} = Jidoka.Kino.debug_request(session, request_id: "turn_...")
+```
+
+### Step 8: Start An Agent Once Per Notebook Session
 
 Plain `MyApp.TimeAgent.start(id: "demo")` raises on the second cell
 evaluation because the id is already registered. `start_or_reuse/3` returns
@@ -245,7 +270,7 @@ the existing pid instead.
 The second cell evaluation returns the same pid without restarting the
 process, which keeps any in-memory session state intact.
 
-### Step 8: Render Context Maps Without Leaking Internals
+### Step 9: Render Context Maps Without Leaking Internals
 
 `context/3` separates the public and internal halves of a runtime context
 map and renders them as two tables.

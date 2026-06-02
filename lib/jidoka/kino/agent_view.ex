@@ -19,6 +19,21 @@ defmodule Jidoka.Kino.AgentView do
   end
 
   @doc false
+  @spec debug_request(term(), keyword()) :: {:ok, Jidoka.Debug.RequestSummary.t()} | {:error, String.t()}
+  def debug_request(target, opts \\ []) do
+    case Jidoka.Debug.request(target, opts) do
+      {:ok, summary} ->
+        render_request_summary(summary)
+        {:ok, summary}
+
+      {:error, reason} ->
+        message = Jidoka.Error.format(reason)
+        Render.markdown("### Request Debug\n\n#{Render.escape_markdown(message)}")
+        {:error, message}
+    end
+  end
+
+  @doc false
   @spec preflight(Jidoka.plan_input() | module(), Jidoka.request_input(), keyword()) ::
           {:ok, Preflight.t()} | {:error, String.t()}
   def preflight(agent_or_plan, request_input, opts \\ []) do
@@ -101,6 +116,81 @@ defmodule Jidoka.Kino.AgentView do
     Render.table("Preflight summary", preflight_rows(preflight), keys: [:property, :value])
     render_optional_table("Prompt messages", prompt_message_rows(preflight.prompt.messages), [:role, :content])
     render_optional_table("Preflight timeline", preflight.timeline, timeline_keys(preflight.timeline))
+  end
+
+  defp render_request_summary(summary) do
+    projected = Jidoka.project(summary)
+
+    Render.table("Request summary", request_summary_rows(projected), keys: [:property, :value])
+
+    prompt_messages =
+      projected
+      |> get_in([:prompt, :messages])
+      |> List.wrap()
+
+    render_optional_table("Prompt messages", prompt_messages, [:role, :content])
+
+    operation_rows =
+      projected
+      |> Map.get(:operation_results, [])
+      |> operation_result_rows()
+
+    render_optional_table("Operation results", operation_rows, [:operation, :preview])
+
+    diagnostic_rows =
+      projected
+      |> Map.get(:replay_diagnostics)
+      |> replay_diagnostic_rows()
+
+    render_optional_table("Replay diagnostics", diagnostic_rows, [:property, :value])
+
+    render_optional_table(
+      "Request timeline",
+      Map.get(projected, :timeline, []),
+      timeline_keys(Map.get(projected, :timeline, []))
+    )
+  end
+
+  defp request_summary_rows(summary) do
+    [
+      %{property: "request id", value: Map.get(summary, :request_id)},
+      %{property: "session id", value: Map.get(summary, :session_id)},
+      %{property: "agent id", value: Map.get(summary, :agent_id)},
+      %{property: "status", value: Map.get(summary, :status)},
+      %{property: "model", value: Map.get(summary, :model)},
+      %{property: "input", value: summary |> Map.get(:input) |> Render.preview(200)},
+      %{property: "content", value: summary |> Map.get(:content) |> Render.preview(220)},
+      %{property: "operations", value: summary |> Map.get(:operation_names, []) |> Render.format_list()},
+      %{property: "usage", value: summary |> Map.get(:usage, %{}) |> Render.inspect_value(12)},
+      %{property: "diagnostics", value: summary |> Map.get(:diagnostics, []) |> Render.inspect_value(8)}
+    ]
+    |> Render.reject_blank_rows()
+  end
+
+  defp operation_result_rows(results) when is_list(results) do
+    Enum.map(results, fn result ->
+      %{
+        operation: Map.get(result, :operation),
+        preview: result |> Map.get(:output) |> Render.preview(220)
+      }
+    end)
+  end
+
+  defp replay_diagnostic_rows(nil), do: []
+
+  defp replay_diagnostic_rows(diagnostics) do
+    [
+      %{property: "status", value: Map.get(diagnostics, :status)},
+      %{property: "intents", value: Map.get(diagnostics, :intent_count)},
+      %{property: "results", value: Map.get(diagnostics, :result_count)},
+      %{property: "events", value: Map.get(diagnostics, :event_count)},
+      %{property: "missing effect results", value: length(Map.get(diagnostics, :missing_effect_results, []))},
+      %{property: "failed effect results", value: length(Map.get(diagnostics, :failed_effect_results, []))},
+      %{property: "unsafe effects", value: length(Map.get(diagnostics, :unsafe_effects, []))},
+      %{property: "pending reviews", value: length(Map.get(diagnostics, :pending_reviews, []))},
+      %{property: "warnings", value: diagnostics |> Map.get(:warnings, []) |> Render.format_list()}
+    ]
+    |> Render.reject_blank_rows()
   end
 
   defp agent_summary_rows(inspection, spec, plan) do

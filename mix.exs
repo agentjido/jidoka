@@ -243,6 +243,8 @@ defmodule Jidoka.MixProject do
         Jidoka.Import,
         Jidoka.Import.AgentDocument,
         Jidoka.Export,
+        Jidoka.Debug,
+        ~r/^Jidoka\.Debug\./,
         Jidoka.Inspection,
         Jidoka.Inspection.Preflight,
         Jidoka.Projection
@@ -285,6 +287,7 @@ defmodule Jidoka.MixProject do
       Jidoka.Handoff,
       Jidoka.Harness,
       Jidoka.Import,
+      Jidoka.Debug,
       Jidoka.Inspection,
       Jidoka.Kino,
       Jidoka.Memory,

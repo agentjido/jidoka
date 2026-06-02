@@ -7,6 +7,7 @@ defmodule Jidoka.Inspection do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Debug
   alias Jidoka.Effect
   alias Jidoka.Error
   alias Jidoka.Inspection.Preflight
@@ -30,6 +31,8 @@ defmodule Jidoka.Inspection do
           | AgentSnapshot.t()
           | Harness.Session.t()
           | Harness.Replay.t()
+          | Debug.RequestSummary.t()
+          | Debug.ReplayDiagnostics.t()
           | Effect.Journal.t()
           | Effect.Intent.t()
           | Effect.Result.t()
@@ -70,6 +73,8 @@ defmodule Jidoka.Inspection do
   def inspect(%AgentSnapshot{} = snapshot, _opts), do: snapshot_view(snapshot)
   def inspect(%Harness.Session{} = session, _opts), do: session_view(session)
   def inspect(%Harness.Replay{} = replay, _opts), do: replay_view(replay)
+  def inspect(%Debug.RequestSummary{} = summary, _opts), do: request_summary_view(summary)
+  def inspect(%Debug.ReplayDiagnostics{} = diagnostics, _opts), do: replay_diagnostics_view(diagnostics)
   def inspect(%Effect.Journal{} = journal, _opts), do: journal_view(journal)
   def inspect(%Effect.Intent{} = intent, _opts), do: intent_view(intent)
   def inspect(%Effect.Result{} = result, _opts), do: effect_result_view(result)
@@ -189,6 +194,12 @@ defmodule Jidoka.Inspection do
   end
 
   defp replay_view(%Harness.Replay{} = replay) do
+    diagnostics =
+      case Harness.Replay.diagnose(replay) do
+        {:ok, diagnostics} -> Jidoka.project(diagnostics)
+        {:error, reason} -> %{error: Jidoka.error_to_map(reason)}
+      end
+
     %{
       kind: :replay,
       session_id: replay.session_id,
@@ -198,9 +209,22 @@ defmodule Jidoka.Inspection do
       timeline: replay.timeline,
       journal: replay.journal,
       pending_reviews: replay.pending_reviews,
+      diagnostics: diagnostics,
       result: replay.result,
       metadata: replay.metadata
     }
+  end
+
+  defp request_summary_view(%Debug.RequestSummary{} = summary) do
+    summary
+    |> Jidoka.project()
+    |> Map.put(:kind, :request_debug)
+  end
+
+  defp replay_diagnostics_view(%Debug.ReplayDiagnostics{} = diagnostics) do
+    diagnostics
+    |> Jidoka.project()
+    |> Map.put(:kind, :replay_diagnostics)
   end
 
   defp journal_view(%Effect.Journal{} = journal) do
