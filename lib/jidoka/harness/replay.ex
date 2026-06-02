@@ -68,6 +68,10 @@ defmodule Jidoka.Harness.Replay do
     )
   end
 
+  @doc "Returns data-only diagnostics for a replay, session, snapshot, result, or journal."
+  @spec diagnose(term()) :: {:ok, Jidoka.Debug.ReplayDiagnostics.t()} | {:error, term()}
+  def diagnose(target), do: Jidoka.Debug.diagnose(target)
+
   defp snapshot_summary(%AgentSnapshot{} = snapshot) do
     %{
       snapshot_id: snapshot.snapshot_id,

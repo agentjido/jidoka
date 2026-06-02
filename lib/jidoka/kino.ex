@@ -77,6 +77,12 @@ defmodule Jidoka.Kino do
   def debug_agent(target, opts \\ []), do: AgentView.debug_agent(target, opts)
 
   @doc """
+  Renders a request-level debug summary from a turn result, session, snapshot, or replay.
+  """
+  @spec debug_request(term(), keyword()) :: {:ok, Jidoka.Debug.RequestSummary.t()} | {:error, String.t()}
+  def debug_request(target, opts \\ []), do: AgentView.debug_request(target, opts)
+
+  @doc """
   Runs `Jidoka.preflight/3` and renders prompt/timeline tables.
   """
   @spec preflight(Jidoka.plan_input() | module(), Jidoka.request_input(), keyword()) ::

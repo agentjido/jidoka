@@ -92,6 +92,30 @@ Replay is a projection over stored data, not a runtime call:
 replay.timeline
 ```
 
+Replay diagnostics explain whether recorded effects are complete and safe to
+reason about without calling providers or tools:
+
+```elixir
+{:ok, diagnostics} = Jidoka.Harness.Replay.diagnose(replay)
+
+diagnostics.status
+#=> :complete | :waiting | :failed | :incomplete
+
+diagnostics.missing_effect_results
+diagnostics.unsafe_effects
+diagnostics.pending_reviews
+```
+
+Use `Jidoka.Debug.request/2` when you want a request-level view that combines
+prompt metadata, operation results, usage, timeline, journal, and replay
+diagnostics:
+
+```elixir
+{:ok, summary} = Jidoka.Debug.request(result)
+summary.prompt.messages
+summary.replay_diagnostics.status
+```
+
 ## Observability And Evals
 
 Core runtime events are neutral `Jidoka.Event` data. `Jidoka.Trace` projects

@@ -375,6 +375,18 @@ defmodule Jidoka.Projection do
     |> project_value()
   end
 
+  def project(%Jidoka.Debug.RequestSummary{} = summary) do
+    summary
+    |> Map.from_struct()
+    |> project_value()
+  end
+
+  def project(%Jidoka.Debug.ReplayDiagnostics{} = diagnostics) do
+    diagnostics
+    |> Map.from_struct()
+    |> project_value()
+  end
+
   def project(%Jidoka.Trace.Policy{} = policy) do
     %{
       enabled: policy.enabled,
