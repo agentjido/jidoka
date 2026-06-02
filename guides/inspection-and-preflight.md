@@ -255,7 +255,9 @@ summary.replay_diagnostics.status
 
 The summary is data-only. It does not call an LLM, tool, memory store, or
 runtime capability. For sessions, use `Jidoka.Debug.latest(session)` or pass
-`request_id:` when you need a specific hibernated request.
+`request_id:` when you need a specific hibernated request. Unknown request ids
+return `{:error, {:request_debug_not_found, session_id, request_id}}` instead
+of falling back to the latest request.
 
 ### Step 7: Inspect A Snapshot Or Session
 

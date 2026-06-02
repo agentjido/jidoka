@@ -135,7 +135,7 @@ defmodule Jidoka.Kino.AgentView do
       |> Map.get(:operation_results, [])
       |> operation_result_rows()
 
-    render_optional_table("Operation results", operation_rows, [:operation, :status, :preview])
+    render_optional_table("Operation results", operation_rows, [:operation, :preview])
 
     diagnostic_rows =
       projected
@@ -171,7 +171,6 @@ defmodule Jidoka.Kino.AgentView do
     Enum.map(results, fn result ->
       %{
         operation: Map.get(result, :operation),
-        status: Map.get(result, :status),
         preview: result |> Map.get(:output) |> Render.preview(220)
       }
     end)

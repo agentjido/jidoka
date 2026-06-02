@@ -111,7 +111,7 @@ defmodule Jidoka.Debug do
       usage: %{},
       timeline: timeline,
       journal: Jidoka.project(state.journal),
-      pending_reviews: pending_reviews(snapshot),
+      pending_reviews: Enum.map(pending_reviews(snapshot), &Jidoka.project/1),
       diagnostics: state.diagnostics,
       replay_diagnostics: diagnose!(snapshot),
       metadata: snapshot.metadata
@@ -260,7 +260,7 @@ defmodule Jidoka.Debug do
   defp request_from_snapshot(%Session{} = session, nil, opts) do
     case Session.latest_snapshot(session) do
       %AgentSnapshot{} = snapshot -> request(snapshot, Keyword.put(opts, :session, session))
-      nil -> request_from_session_data(session, opts)
+      nil -> request_from_session_data(session, nil, opts)
     end
   end
 
@@ -272,21 +272,39 @@ defmodule Jidoka.Debug do
 
     case snapshot do
       %AgentSnapshot{} = snapshot -> request(snapshot, Keyword.put(opts, :session, session))
-      nil -> request_from_session_data(session, opts)
+      nil -> request_from_session_data(session, request_id, opts)
     end
   end
 
-  defp request_from_session_data(%Session{} = session, _opts) do
+  defp request_from_session_data(%Session{} = session, request_id, _opts) do
+    request = session_request(session, request_id)
+
+    if is_nil(request) and is_binary(request_id) do
+      {:error, {:request_debug_not_found, session.session_id, request_id}}
+    else
+      request_summary_from_session_data(session, request)
+    end
+  end
+
+  defp request_summary_from_session_data(%Session{} = session, request) do
     RequestSummary.new(
-      request_id: session.requests |> List.last() |> then(&request_id/1),
+      request_id: request_id(request),
       agent_id: session.agent_id,
       session_id: session.session_id,
       status: session.status,
+      input: request_input(request),
+      context_keys: request_context_keys(request),
       pending_reviews: Enum.map(session.pending_reviews, &Jidoka.project/1),
       error: session.error,
       replay_diagnostics: diagnose!(session),
       metadata: session.metadata
     )
+  end
+
+  defp session_request(%Session{requests: requests}, nil), do: List.last(requests)
+
+  defp session_request(%Session{requests: requests}, request_id) when is_binary(request_id) do
+    Enum.find(requests, &(request_id(&1) == request_id))
   end
 
   defp debug_metadata(%Turn.Result{metadata: metadata}) do
@@ -364,6 +382,12 @@ defmodule Jidoka.Debug do
 
   defp request_id(%Turn.Request{request_id: request_id}), do: request_id
   defp request_id(_request), do: nil
+
+  defp request_input(%Turn.Request{input: input}), do: input
+  defp request_input(_request), do: nil
+
+  defp request_context_keys(%Turn.Request{context: context}), do: context_keys(context)
+  defp request_context_keys(_request), do: []
 
   defp request_id_from_timeline(timeline), do: Enum.find_value(timeline, &map_get(&1, :request_id))
   defp agent_id_from_timeline(timeline), do: Enum.find_value(timeline, &map_get(&1, :agent_id))
