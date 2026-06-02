@@ -18,11 +18,9 @@ permissions:
 jobs:
   ci:
     name: CI
-    uses: agentjido/github-actions/.github/workflows/jido-ci.yml@v4
+    uses: agentjido/github-actions/.github/workflows/jido-ci.yml@v5
     secrets: inherit
     with:
-      otp_versions: '["27", "28"]'
-      elixir_versions: '["1.18", "1.19"]'
       docs_command: mix docs -f html && mix doctor --raise
       test_command: mix test --cover && mix test.coverage
       credo_command: mix credo --min-priority higher
