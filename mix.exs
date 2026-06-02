@@ -136,6 +136,7 @@ defmodule Jidoka.MixProject do
       # ── Building Agents ──────────────────────────────────────────────────
       "guides/agent-dsl.md",
       "guides/tools-and-operations.md",
+      "guides/workflows.md",
       "guides/structured-results.md",
       "guides/controls.md",
       "guides/memory.md",
@@ -188,7 +189,7 @@ defmodule Jidoka.MixProject do
     [
       Introduction: ~r{guides/(getting-started|core-concepts|public-facade|configuration)\.md},
       "Building Agents":
-        ~r{guides/(agent-dsl|tools-and-operations|structured-results|controls|memory|handoffs|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
+        ~r{guides/(agent-dsl|tools-and-operations|workflows|structured-results|controls|memory|handoffs|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
       "Operating Agents":
         ~r{guides/(runtime-and-harness|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety)\.md},
       Integrations:
@@ -236,7 +237,7 @@ defmodule Jidoka.MixProject do
         ~r/^Jidoka\.Browser\.Tools\./,
         ~r/^Jidoka\.Operation\.Source(\.|$)/,
         Jidoka.Skill,
-        Jidoka.Workflow
+        ~r/^Jidoka\.Workflow(\.|$)/
       ],
       "Import, Export, And Inspection": [
         Jidoka.Import,
@@ -263,8 +264,7 @@ defmodule Jidoka.MixProject do
       "Runtime Internals": [
         Jidoka.Harness,
         Jidoka.Harness.Replay,
-        ~r/^Jidoka\.Runtime\./,
-        ~r/^Jidoka\.Workflow\./
+        ~r/^Jidoka\.Runtime\./
       ],
       "Configuration And Errors": [
         Jidoka.Config,

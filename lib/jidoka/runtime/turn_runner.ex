@@ -18,7 +18,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   alias Jidoka.Effect
   alias Jidoka.Review.Interrupt
   alias Jidoka.Turn
-  alias Jidoka.Workflow.Compiler
+  alias Jidoka.Runtime.Spine.Compiler
   alias Runic.Workflow
 
   @type run_result ::

@@ -388,6 +388,12 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
           default: :output,
           doc: "Parent-visible result shape: :output or :structured."
         ],
+        idempotency: [
+          type: :any,
+          required: false,
+          default: :idempotent,
+          doc: "Operation idempotency policy for the workflow operation."
+        ],
         metadata: [
           type: :map,
           required: false,

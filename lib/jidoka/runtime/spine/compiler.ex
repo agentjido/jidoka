@@ -1,10 +1,10 @@
-defmodule Jidoka.Workflow.Compiler do
+defmodule Jidoka.Runtime.Spine.Compiler do
   @moduledoc "Compiles `Jidoka.Turn.Plan` data into small Runic workflows."
 
   require Runic
 
   alias Jidoka.Turn
-  alias Jidoka.Workflow.Steps
+  alias Jidoka.Runtime.Spine.Steps
   alias Runic.Workflow
 
   @spec model_turn_workflow(Turn.Plan.t()) :: Workflow.t()
@@ -19,7 +19,7 @@ defmodule Jidoka.Workflow.Compiler do
         name: :plan_model_effect
       )
 
-    Workflow.new(name: :jidoka_v2_model_turn)
+    Workflow.new(name: :jidoka_model_turn)
     |> Workflow.add(assemble_prompt)
     |> Workflow.add(plan_model_effect, to: :assemble_prompt)
   end

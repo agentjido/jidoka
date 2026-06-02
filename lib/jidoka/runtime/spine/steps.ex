@@ -1,4 +1,4 @@
-defmodule Jidoka.Workflow.Steps do
+defmodule Jidoka.Runtime.Spine.Steps do
   @moduledoc "Pure phase functions used by the Runic turn workflow."
 
   alias Jidoka.Agent

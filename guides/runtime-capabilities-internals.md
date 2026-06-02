@@ -415,7 +415,7 @@ Adding a new signal type (for example, `"jidoka.session.resume"`) requires:
   the Zoi schema, adding a default for tests, and adding a
   `call_capability/3` clause in `Jidoka.Runtime.EffectInterpreter`. Steps that
   produce the new effect kind belong in
-  [`Jidoka.Workflow.Steps`](`Jidoka.Workflow.Steps`).
+  [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`).
 - **New LLM adapters.** Implement the
   `(Effect.Intent.t(), Effect.Journal.t() -> {:ok, %Effect.LLMDecision{}} | {:error, term})`
   contract. Return `Effect.LLMDecision.final/2` or

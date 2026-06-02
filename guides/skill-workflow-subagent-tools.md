@@ -16,7 +16,8 @@ for in each situation and how to test all three deterministically.
   capability ships to many agents and you want the prompt and tools to travel
   together.
 - Use **workflow** when application-owned deterministic code should appear as
-  one tool. Workflows hide multi-step deterministic logic from the model.
+  one tool. Workflows hide multi-step deterministic logic from the model. See
+  [Workflows](workflows.md) for the full workflow DSL.
 - Use **subagent** when a bounded specialist should answer one nested
   question inside the current turn, with its own model, instructions, and
   tools, and return a structured result to the parent.
@@ -31,6 +32,7 @@ for in each situation and how to test all three deterministically.
 - For skills: `Jido.AI.Skill` (vendored under `jido_ai`) and any skill
   modules or `SKILL.md` files you want to load.
 - No extra dependencies for workflows or subagents.
+- The full workflow authoring reference lives in [Workflows](workflows.md).
 
 ## Quick Example
 
@@ -38,20 +40,22 @@ One DSL block can register all three sources for one agent:
 
 ```elixir
 defmodule MyApp.MathWorkflow do
-  use Jidoka.Workflow,
-    id: :math_workflow,
-    description: "Adds one and doubles the value.",
-    parameters_schema: %{
-      "type" => "object",
-      "properties" => %{"value" => %{"type" => "integer"}},
-      "required" => ["value"]
-    }
+  use Jidoka.Workflow
 
-  @impl true
-  def run(input, _context) do
-    value = Map.get(input, :value) || Map.get(input, "value")
-    {:ok, %{value: (value + 1) * 2}}
+  workflow do
+    id :math_workflow
+    description "Adds one and doubles the value."
+    input Zoi.object(%{value: Zoi.integer()})
   end
+
+  steps do
+    function :calculate, {__MODULE__, :calculate, 2},
+      input: %{value: input(:value)}
+  end
+
+  output from(:calculate)
+
+  def calculate(%{value: value}, _context), do: {:ok, %{value: (value + 1) * 2}}
 end
 
 defmodule MyApp.EvidenceAgent do
@@ -195,24 +199,29 @@ The compiled spec carries the skill body inside `spec.instructions` and one
 
 ### Step 2: Define A Deterministic Workflow
 
-A workflow is one operation backed by code you fully own.
+A workflow is one operation backed by deterministic steps you fully own. This
+guide only shows how workflow modules compose with skills and subagents; the
+full workflow DSL is covered in [Workflows](workflows.md).
 
 ```elixir
 defmodule MyApp.RefundWorkflow do
-  use Jidoka.Workflow,
-    id: :process_refund,
-    description: "Validates and queues a refund."
+  use Jidoka.Workflow
 
-  @impl true
-  def run(input, _context) do
-    case input do
-      %{"order_id" => order_id} when is_binary(order_id) ->
-        {:ok, %{refund_id: "refund-#{order_id}", status: "queued"}}
-
-      _ ->
-        {:error, :missing_order_id}
-    end
+  workflow do
+    id :process_refund
+    description "Validates and queues a refund."
+    input Zoi.object(%{order_id: Zoi.string()})
   end
+
+  steps do
+    function :queue_refund, {__MODULE__, :queue_refund, 2},
+      input: %{order_id: input(:order_id)}
+  end
+
+  output from(:queue_refund)
+
+  def queue_refund(%{order_id: order_id}, _context),
+    do: {:ok, %{refund_id: "refund-#{order_id}", status: "queued"}}
 end
 
 tools do
@@ -223,9 +232,9 @@ tools do
 end
 ```
 
-`result: :structured` returns the workflow's `{:ok, value}` as the operation
-result. `result: :output` (the default) wraps the value with a basic envelope
-that the parent prompt can show verbatim.
+`result: :output` returns the workflow output directly. `result: :structured`
+wraps it with workflow and operation metadata so the parent turn can inspect
+where the value came from.
 
 ### Step 3: Delegate To A Subagent For One Task
 
@@ -348,7 +357,7 @@ example. Skill tests live in
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
 | `{:error, {:invalid_skill, ref, reason}}` at compile time | The skill module or name failed validation. | Confirm the module exports `manifest/0`, `body/0`, and `actions/0`, or use a hyphenated string name registered through `Jido.AI.Skill.Registry`. |
-| `{:error, {:invalid_workflow_module, module, reason}}` | The workflow module is missing `run/2` or has a non-string id. | `use Jidoka.Workflow, id: :snake_case_id` and implement `run/2`. |
+| `{:error, {:invalid_workflow_module, module, reason}}` | The workflow module is missing a valid callback or DSL definition. | Use `workflow do id :snake_case_id ... end`, add `steps do ... end`, and declare `output from(:step)`. |
 | `{:error, {:duplicate_operation_source_name, name}}` | Two sources produced the same operation name. | Use `as:` overrides on workflow or subagent, or split the agent. |
 | Subagent times out | `timeout:` is too small for the child's tool loop. | Raise `timeout:` or simplify the child. The default is `30_000` ms. |
 | Skill prompt does not appear in `spec.instructions` | The skill module failed to resolve; check `Jidoka.Skill.prompt/2` for the same refs. | Add a `load_path` entry or register the skill at the application layer. |
@@ -373,6 +382,8 @@ Key modules touched in this guide:
 ## Related Guides
 
 - [Getting Started](getting-started.md) - the smallest DSL agent end to end.
+- [Workflows](workflows.md) - full workflow DSL, refs, runtime behavior, and
+  testing.
 - [Handoffs](handoffs.md) - conversation ownership transfer; the partner
   pattern to subagents.
 - [AshJido Resources](ash-jido.md) - a sibling source for Ash-backed tools.

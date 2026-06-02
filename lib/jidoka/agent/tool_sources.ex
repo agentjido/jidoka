@@ -457,6 +457,7 @@ defmodule Jidoka.Agent.ToolSources do
         timeout: workflow.timeout || 30_000,
         forward_context: workflow.forward_context || :public,
         result: workflow.result || :output,
+        idempotency: workflow.idempotency || :idempotent,
         metadata: workflow.metadata || %{}
       )
     end)

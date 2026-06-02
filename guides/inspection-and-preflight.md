@@ -100,6 +100,7 @@ The three functions cover three layers of the data-first runtime.
 | Question | Tool | Effect-free? |
 | --- | --- | --- |
 | "What did the DSL/import compile to?" | `Jidoka.inspect(agent_or_spec)` | yes |
+| "What workflow graph did this module compile to?" | `Jidoka.inspect(workflow_module)` | yes |
 | "How does this turn input shape the prompt?" | `Jidoka.preflight(agent, input)` | yes |
 | "What is the deterministic projection of this value?" | `Jidoka.project(value)` | yes |
 | "What happened during the turn that just ran?" | `Jidoka.inspect(turn_result)` | yes |
@@ -134,7 +135,38 @@ view.plan.prompt_strategy
 For raw structs (Effect intents, results, sessions, eval runs) inspect
 dispatches on the struct and returns the matching tagged view.
 
-### Step 2: Preflight A Turn
+### Step 2: Inspect A Workflow Module
+
+`Jidoka.inspect/1` also accepts `Jidoka.Workflow` modules. Use this before
+exposing a workflow as an agent tool.
+
+```elixir
+view = Jidoka.inspect(MyApp.Workflows.RefundReview)
+
+view.kind
+#=> :workflow
+
+view.workflow.id
+#=> "refund_review"
+
+Enum.map(view.workflow.steps, &{&1.name, &1.kind})
+#=> [check_policy: :function, queue_refund: :action]
+
+view.workflow.parameters_schema?
+#=> true
+```
+
+When the same workflow is registered in an agent, inspect the agent operation
+metadata to confirm the model-visible name, result mode, timeout, and
+parameters schema:
+
+```elixir
+Jidoka.inspect(MyApp.SupportAgent).spec.operations
+|> Enum.find(&(&1.metadata.source == "workflow"))
+|> Map.take([:name, :idempotency, :metadata])
+```
+
+### Step 3: Preflight A Turn
 
 `Jidoka.preflight/3` mirrors `Jidoka.turn/3`'s arguments minus the
 capabilities. It validates the context, calls `Memory.Runtime.recall/3`
@@ -165,7 +197,7 @@ preflight.diagnostics
 A non-empty `diagnostics` list flags issues the prompt assembler noticed
 (missing memory entries, oversized tool descriptions, etc.).
 
-### Step 3: Inspect Operation Metadata
+### Step 4: Inspect Operation Metadata
 
 When you need to confirm `controls do operation ... when: [...] end` will
 match, project the operations:
@@ -182,7 +214,7 @@ The `metadata` map is the exact shape control `when:` clauses match
 against (`:kind`, `:name`, `:source`, `:idempotency`, and any free-form
 keys).
 
-### Step 4: Project Turn Results And Journals
+### Step 5: Project Turn Results And Journals
 
 After a turn, project the result for assertions and external rendering.
 
@@ -200,7 +232,7 @@ projected.journal.intent_count
 `Jidoka.inspect(result)` returns a richer map with a `:timeline` and
 `:status` already filled in - useful for log output during development.
 
-### Step 5: Inspect A Snapshot Or Session
+### Step 6: Inspect A Snapshot Or Session
 
 When a turn hibernates (typically because an operation control
 returned `{:interrupt, _}`), `inspect/2` produces a snapshot view that
@@ -226,7 +258,7 @@ count, pending reviews, and the latest cursor. Sessions are documented in
 [Runtime And Harness](runtime-and-harness.md); the inspection view is the
 debugging entry point for them.
 
-### Step 6: Use Inspect For Logging
+### Step 7: Use Inspect For Logging
 
 Because every view is a plain map, it serializes cleanly:
 
@@ -251,6 +283,8 @@ production traces; `inspect/2` is the developer view.
   data is usually enough to diagnose stuck approvals.
 - **Compare DSL and imported specs.** `Jidoka.inspect(dsl_module).spec ==
   Jidoka.inspect(imported_spec).spec` is the simplest parity assertion.
+- **Inspect workflow modules before agent prompts.** If the workflow graph or
+  parameters schema is wrong, fix it before debugging a model decision.
 - **Strip identifiers in golden tests.** Use `Jidoka.project/1` and then
   drop generated id fields before snapshotting.
 - **Never `IO.inspect/1` raw structs in production.** They print

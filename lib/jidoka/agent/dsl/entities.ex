@@ -119,6 +119,7 @@ defmodule Jidoka.Agent.Dsl.Workflow do
     :timeout,
     :forward_context,
     :result,
+    :idempotency,
     :metadata,
     :__spark_metadata__
   ]

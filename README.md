@@ -248,6 +248,7 @@ Start here:
 - [Getting Started](guides/getting-started.md)
 - [Agent DSL](guides/agent-dsl.md)
 - [Tools And Operations](guides/tools-and-operations.md)
+- [Workflows](guides/workflows.md)
 - [Controls](guides/controls.md)
 - [Sessions And Stores](guides/sessions-and-stores.md)
 - [Testing And Evals](guides/testing-and-evals.md)
@@ -270,7 +271,7 @@ This is the `1.0.0-beta.1` baseline. The public vocabulary is centered on:
 - `Jidoka.import/2`, `Jidoka.chat/3`, `Jidoka.turn/3`, `Jidoka.resume/2`
 - `tools`, `controls`, `memory`, `result`, `trace`, and `eval`
 
-Native provider tool calling, richer workflow authoring, and production
+Native provider tool calling, inline workflow sugar, and production
 store/runtime adapters are still active design areas.
 
 ## License

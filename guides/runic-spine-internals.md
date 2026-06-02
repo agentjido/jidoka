@@ -2,7 +2,7 @@
 
 Jidoka owns the ReAct-style agent loop in its own Runic workflow rather than
 delegating it to `Jido.AI.ReAct`. This guide explains why the spine lives in
-Jidoka, how `Jidoka.Workflow.Compiler` and `Jidoka.Workflow.Steps` carve the
+Jidoka, how `Jidoka.Runtime.Spine.Compiler` and `Jidoka.Runtime.Spine.Steps` carve the
 turn into pure phases, and what contributors must preserve when adding new
 steps. It is written for people maintaining the Jidoka runtime, not for agent
 authors.
@@ -10,8 +10,8 @@ authors.
 ## When To Use This
 
 - Use this guide when you are about to add, reorder, or rewrite a workflow
-  step in [`Jidoka.Workflow.Steps`](`Jidoka.Workflow.Steps`) or change how
-  [`Jidoka.Workflow.Compiler`](`Jidoka.Workflow.Compiler`) wires steps together.
+  step in [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) or change how
+  [`Jidoka.Runtime.Spine.Compiler`](`Jidoka.Runtime.Spine.Compiler`) wires steps together.
 - Use this guide before introducing any new "framework" that wraps the turn
   loop; the answer is usually to add a narrowly scoped workflow step, not to
   replace the spine.
@@ -38,7 +38,7 @@ purpose:
 
 ```elixir
 alias Jidoka.Turn
-alias Jidoka.Workflow.Compiler
+alias Jidoka.Runtime.Spine.Compiler
 alias Runic.Workflow
 
 spec = Jidoka.agent!(id: "spine_demo", model: %{provider: :test, id: "m"})
@@ -76,7 +76,7 @@ Three ideas explain why the spine looks the way it does.
    `Turn.Plan` contract and runs it with Runic so the loop is deterministic,
    inspectable, and free of provider-specific control flow.
 2. **Functional core, effect shell.**
-   [`Jidoka.Workflow.Steps`](`Jidoka.Workflow.Steps`) is pure. It returns the
+   [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) is pure. It returns the
    next `Turn.State` plus declared `Effect.Intent` values. The runtime shell
    ([`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) and
    [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`))
@@ -121,14 +121,14 @@ def model_turn_workflow(%Turn.Plan{} = _plan) do
   assemble_prompt = Runic.step(&Steps.assemble_prompt/1, name: :assemble_prompt)
   plan_model_effect = Runic.step(&Steps.plan_model_effect/1, name: :plan_model_effect)
 
-  Workflow.new(name: :jidoka_v2_model_turn)
+  Workflow.new(name: :jidoka_model_turn)
   |> Workflow.add(assemble_prompt)
   |> Workflow.add(plan_model_effect, to: :assemble_prompt)
 end
 ```
 
 Read both step functions in
-[`Jidoka.Workflow.Steps`](`Jidoka.Workflow.Steps`) before you change anything.
+[`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) before you change anything.
 The combination of `Turn.Transition.new!/1 -> event/3 -> commit/1` is the only
 way new events should enter `Turn.State.events`.
 
@@ -168,7 +168,7 @@ Wire the step downstream of an existing named step so the data flow is
 explicit:
 
 ```elixir
-Workflow.new(name: :jidoka_v2_model_turn)
+Workflow.new(name: :jidoka_model_turn)
 |> Workflow.add(assemble_prompt)
 |> Workflow.add(MyExt.Steps.annotate_prompt(), to: :assemble_prompt)
 |> Workflow.add(plan_model_effect, to: :annotate_prompt)
@@ -233,7 +233,7 @@ phase list on `Turn.Plan` (see `plan.phases` in
 ## Change Points
 
 - **Workflow steps.** New runtime phases belong in
-  `Jidoka.Workflow.Steps` and must keep the same single-argument
+  `Jidoka.Runtime.Spine.Steps` and must keep the same single-argument
   `Turn.State -> Turn.State` shape used by built-in steps.
 - **Event vocabulary.** New event names belong in `Jidoka.Event` so trace and
   replay consumers remain stable.
@@ -273,7 +273,7 @@ directly and running the harness with injected capabilities.
 ```elixir
 test "spine produces an llm intent after one pass" do
   alias Jidoka.Turn
-  alias Jidoka.Workflow.Compiler
+  alias Jidoka.Runtime.Spine.Compiler
   alias Runic.Workflow
 
   spec = Jidoka.agent!(id: "spine_test", model: %{provider: :test, id: "m"})
@@ -307,15 +307,15 @@ stable across event metadata churn.
 | --- | --- | --- |
 | Step output is dropped between iterations | Step returned something other than `%Turn.State{}` | Always return `Turn.Transition.commit/1` or the original state. |
 | Snapshot serialization fails with `:non_serializable_snapshot_value` | A step stuffed a function, pid, or socket into state | Move the value into a runtime capability and reference it by id. |
-| New step never runs | Not wired through `Workflow.add(step, to: :predecessor)` | Add the step in `Jidoka.Workflow.Compiler.model_turn_workflow/1`. |
+| New step never runs | Not wired through `Workflow.add(step, to: :predecessor)` | Add the step in `Jidoka.Runtime.Spine.Compiler.model_turn_workflow/1`. |
 | Events appear out of order in traces | Direct `state.events` mutation | Use `Turn.Transition.event/3 -> commit/1`. |
 | Tests pass locally but live LLM fails | A pure step assumed provider behavior | Move the assumption into the capability or the ReqLLM adapter. |
 
 ## Reference
 
-- [`Jidoka.Workflow.Compiler`](`Jidoka.Workflow.Compiler`) - builds the Runic
+- [`Jidoka.Runtime.Spine.Compiler`](`Jidoka.Runtime.Spine.Compiler`) - builds the Runic
   workflow used by the runner.
-- [`Jidoka.Workflow.Steps`](`Jidoka.Workflow.Steps`) - pure phase functions
+- [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) - pure phase functions
   (`assemble_prompt/1`, `plan_model_effect/1`).
 - [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) - effect shell
   that runs the workflow and interprets intents.

@@ -131,7 +131,7 @@ with `Spec` listed as an alias.
 | Turn.Result | The final app-facing result of one turn: content, optional structured `value`, agent state, journal, and events. | [`Jidoka.Turn.Result`](`Jidoka.Turn.Result`) | [Structured Results](structured-results.md) |
 | Turn.State | The ephemeral, in-flight data value the workflow threads through each phase. Hibernation snapshots the state at a checkpoint; resume rebuilds the runner from that snapshot. | [`Jidoka.Turn.State`](`Jidoka.Turn.State`) | [Runtime And Harness](runtime-and-harness.md) |
 | Unsafe Once | Idempotency level for operations whose effects must not be replayed. Spec validation requires a matching operation control before such an operation can ship in a plan. | [`Jidoka.Agent.Spec.Operation`](`Jidoka.Agent.Spec.Operation`) | [Controls](controls.md) |
-| Workflow | An application-owned deterministic process exposed to an agent as a single model-callable operation. Different from the Runic turn spine: the agent chooses when to call it, the workflow module owns the ordered process inside `run/2`. | [`Jidoka.Workflow`](`Jidoka.Workflow`) | [Agent DSL](agent-dsl.md) |
+| Workflow | An application-owned deterministic process exposed to an agent as a single model-callable operation. Callback workflows implement `run/2`; DSL workflows declare `workflow do`, `steps do`, and `output` and compile to `Jidoka.Workflow.Spec`. | [`Jidoka.Workflow`](`Jidoka.Workflow`) | [Workflows](workflows.md) |
 
 ## Common Patterns
 
@@ -166,6 +166,7 @@ Top-level modules referenced throughout this glossary:
 
 - [Getting Started](getting-started.md) - the smallest end-to-end Jidoka flow.
 - [Agent DSL](agent-dsl.md) - full DSL surface, imports, and operation sources.
+- [Workflows](workflows.md) - deterministic workflow modules exposed as tools.
 - [Controls](controls.md) - input/operation/output policy and approvals.
 - [Structured Results](structured-results.md) - typed `Turn.Result.value`.
 - [Runtime And Harness](runtime-and-harness.md) - sessions, snapshots, effects, memory.

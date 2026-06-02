@@ -264,7 +264,7 @@ struct so that preflight output is also data:
 
 Preflight is produced by `Jidoka.Inspection.preflight/3`, which resolves a
 plan, normalizes a request, runs the pure
-`Jidoka.Workflow.Steps.assemble_prompt/1`, and projects the resulting state.
+`Jidoka.Runtime.Spine.Steps.assemble_prompt/1`, and projects the resulting state.
 No capability is called. The struct is the contract for "what would a turn
 see?" debugging without spending a token.
 
