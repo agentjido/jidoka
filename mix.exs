@@ -136,6 +136,7 @@ defmodule Jidoka.MixProject do
       # ── Building Agents ──────────────────────────────────────────────────
       "guides/agent-dsl.md",
       "guides/tools-and-operations.md",
+      "guides/agent-orchestration.md",
       "guides/workflows.md",
       "guides/structured-results.md",
       "guides/controls.md",
@@ -189,7 +190,7 @@ defmodule Jidoka.MixProject do
     [
       Introduction: ~r{guides/(getting-started|core-concepts|public-facade|configuration)\.md},
       "Building Agents":
-        ~r{guides/(agent-dsl|tools-and-operations|workflows|structured-results|controls|memory|handoffs|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
+        ~r{guides/(agent-dsl|tools-and-operations|agent-orchestration|workflows|structured-results|controls|memory|handoffs|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
       "Operating Agents":
         ~r{guides/(runtime-and-harness|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety)\.md},
       Integrations:

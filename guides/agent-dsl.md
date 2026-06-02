@@ -178,6 +178,8 @@ see [Workflows](workflows.md).
 
 `subagent` delegates one bounded task to another Jidoka agent and returns the
 child result to the parent. It does not change who owns the next user turn.
+Use it when the parent should synthesize the child result and keep owning the
+conversation.
 
 ```elixir
 tools do
@@ -191,6 +193,7 @@ end
 `handoff` records that another agent should own future turns for a conversation.
 The current turn still completes normally; your application reads
 `Jidoka.handoff/1` to route the next message.
+Use it when the next user message should be handled by a different agent.
 
 ```elixir
 tools do
@@ -200,6 +203,9 @@ tools do
     forward_context: :public
 end
 ```
+
+For the decision model, context rules, and testing shape for both primitives,
+see [Agent Orchestration](agent-orchestration.md).
 
 ## Controls Block
 

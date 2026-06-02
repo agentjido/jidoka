@@ -23,6 +23,8 @@ for in each situation and how to test all three deterministically.
   tools, and return a structured result to the parent.
 - Do **not** use **subagent** to transfer conversation ownership. That is a
   **handoff** and lives in [Handoffs](handoffs.md).
+- If you are choosing between subagent and handoff, start with
+  [Agent Orchestration](agent-orchestration.md).
 - Do **not** use **workflow** for one-off code. A plain `Jidoka.Action`
   is simpler.
 
@@ -303,7 +305,8 @@ Subagents and handoffs look similar but solve different problems:
 
 When in doubt, ask whether the parent should still own the conversation
 after the call returns. If yes, use a subagent. See [Handoffs](handoffs.md)
-for the handoff path.
+for the handoff path, or [Agent Orchestration](agent-orchestration.md) for the
+full comparison and dispatcher pattern.
 
 ## Common Patterns
 

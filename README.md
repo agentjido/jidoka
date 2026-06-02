@@ -261,6 +261,7 @@ Start here:
 - [Getting Started](guides/getting-started.md)
 - [Agent DSL](guides/agent-dsl.md)
 - [Tools And Operations](guides/tools-and-operations.md)
+- [Agent Orchestration](guides/agent-orchestration.md)
 - [Workflows](guides/workflows.md)
 - [Controls](guides/controls.md)
 - [Sessions And Stores](guides/sessions-and-stores.md)

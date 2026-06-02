@@ -6,6 +6,10 @@ data to route the next turn. A handoff is different from a subagent call:
 handoffs change who owns the next turn, while subagents handle one bounded task
 inside the current turn and return a result.
 
+For a side-by-side choice between subagents and handoffs, start with
+[Agent Orchestration](agent-orchestration.md). This guide focuses on the
+handoff storage and routing contract.
+
 ## When To Use This
 
 - Use this guide when one agent should permanently (until reset) take over
@@ -212,6 +216,23 @@ end
 result inside `result.agent_state.operation_results` carries the handoff
 payload.
 
+If the handoff should forward values from the turn request context, pass the
+request context into the source boundary:
+
+```elixir
+request =
+  Jidoka.Turn.Request.new!(
+    input: "Why is my bill higher?",
+    context: %{session_id: "conv-1", tenant: "acme"}
+  )
+
+{:ok, result} =
+  MyApp.TriageAgent.run_turn(request,
+    llm: llm,
+    operation_context: %{parent_context: request.context}
+  )
+```
+
 ### Step 3: Read Ownership From The Store
 
 After the turn, the owner store has the new owner recorded under the
@@ -239,10 +260,15 @@ Routing belongs to the application. A typical dispatcher checks the store
 first, then falls back to the original agent.
 
 ```elixir
-def dispatch(conversation_id, input) do
+def dispatch(conversation_id, input, opts \\ []) do
   case Jidoka.handoff(conversation_id) do
-    %{agent: agent_module} -> agent_module.chat(input)
-    nil -> MyApp.TriageAgent.chat(input)
+    %{agent: agent_module, handoff: handoff} ->
+      agent_module.chat(input,
+        context: Map.merge(handoff.context, %{handoff_summary: handoff.summary})
+      )
+
+    nil ->
+      MyApp.TriageAgent.chat(input, opts)
   end
 end
 ```
@@ -322,6 +348,12 @@ defmodule MyApp.TriageHandoffTest do
   end
 
   test "records the specialist as the new owner" do
+    request =
+      Jidoka.Turn.Request.new!(
+        input: "Why is my bill higher?",
+        context: %{session_id: "conv-1", tenant: "acme"}
+      )
+
     llm = fn _intent, journal ->
       case map_size(journal.results) do
         0 ->
@@ -340,7 +372,11 @@ defmodule MyApp.TriageHandoffTest do
       end
     end
 
-    assert {:ok, _result} = MyApp.TriageAgent.run_turn("Why is my bill higher?", llm: llm)
+    assert {:ok, _result} =
+             MyApp.TriageAgent.run_turn(request,
+               llm: llm,
+               operation_context: %{parent_context: request.context}
+             )
 
     assert %{
              agent: MyApp.SpecialistAgent,
