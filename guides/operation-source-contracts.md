@@ -147,6 +147,44 @@ All adopt the same `Source` behaviour:
 External integrations such as Ash/Jido and the browser source ship in their
 own packages but compile to the same `%{operations, capability}` output.
 
+### `Source.Workflow`
+
+Workflow sources expose a `Jidoka.Workflow` module as one operation.
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `:workflow` | module | Workflow module. Supports callback and DSL workflows. |
+| `:name` / `:as` | string or atom | Operation name the model sees. Defaults to workflow id. |
+| `:description` | string | Optional operation description override. |
+| `:timeout` | positive integer | Total wall-clock timeout in milliseconds. Defaults to `30_000`. |
+| `:forward_context` | policy | `:public`, `:none`, `{:only, keys}`, or `{:except, keys}`. |
+| `:result` | `:output` or `:structured` | Raw workflow output or wrapped workflow metadata. |
+| `:idempotency` | operation idempotency | Defaults to `:idempotent`; `:unsafe_once` requires controls. |
+| `:metadata` | map | Extra operation metadata merged into the operation. |
+
+Published workflow operation metadata includes:
+
+```elixir
+%{
+  "source" => "workflow",
+  "kind" => "workflow",
+  "workflow" => "refund_review",
+  "module" => "MyApp.Workflows.RefundReview",
+  "timeout" => 30_000,
+  "forward_context" => "{:only, [:tenant]}",
+  "result" => "structured",
+  "idempotency" => "idempotent",
+  "parameters_schema" => %{"type" => "object", ...}
+}
+```
+
+The capability validates the incoming `Effect.OperationRequest`, checks the
+operation name, builds workflow context from `forward_context` and optional
+`arguments["context"]`, then calls `Jidoka.Workflow.run/3`. If the workflow
+fails, the capability returns `{:error, {:workflow_failed, operation_name,
+reason}}`. If the operation source timeout expires, it returns
+`{:error, {:workflow_timeout, operation_name, timeout}}`.
+
 ## Common Patterns
 
 - **Compile once, reuse everywhere.** Build the source struct at boot or in a
@@ -194,6 +232,8 @@ end
 | `{:error, {:missing_operation_handler, name}}` | The compiled capability cannot route the operation. | Ensure the operation is published by a source compiled into the same plan. |
 | `{:error, {:unsupported_effect_kind, kind}}` | Capability was called with an `:llm` intent. | Operation capabilities only handle `:operation` intents; route LLM intents through `Runtime.Capabilities.llm`. |
 | Local source raises `invalid_operation_handler` | Handler is not 1- or 2-arity. | Use `fn args -> ... end` or `fn args, context -> ... end`. |
+| `{:error, {:workflow_failed, name, reason}}` | Workflow source ran but the workflow returned an error. | Inspect `reason`; DSL workflows include workflow id, step, kind, target, and cause on step failures. |
+| `{:error, {:workflow_timeout, name, timeout}}` | Workflow source exceeded its operation timeout. | Raise `timeout:` or move long work out of the synchronous workflow. |
 
 ## Reference
 
@@ -213,6 +253,7 @@ end
 
 - [Agent Spec Contract](agent-spec-contract.md) - where compiled operations
   live.
+- [Workflows](workflows.md) - workflow DSL and workflow source options.
 - [Turn And Effect Contracts](turn-and-effect-contracts.md) - the
   `Effect.Intent` shape capabilities consume.
 - [Runtime And Harness](runtime-and-harness.md) - how the routed capability

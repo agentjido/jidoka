@@ -1,0 +1,152 @@
+# Workflows
+
+## Section
+
+This notebook defines a deterministic workflow, inspects the compiled graph,
+runs the workflow directly, then exposes it as one model-callable agent tool.
+
+```elixir
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  ],
+  consolidate_protocols: false
+)
+```
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:notebook-model", check_provider?: false)
+```
+
+## Define A Workflow
+
+```elixir
+defmodule NotebookRefundWorkflow do
+  use Jidoka.Workflow
+
+  workflow do
+    id :notebook_refund_review
+    description "Reviews a refund request with tenant context."
+
+    input Zoi.object(%{
+            order_id: Zoi.string(),
+            amount: Zoi.float()
+          })
+  end
+
+  steps do
+    function :check_policy, {__MODULE__, :check_policy, 2},
+      input: %{
+        order_id: input(:order_id),
+        amount: input(:amount),
+        tenant: context(:tenant)
+      }
+  end
+
+  output %{
+    order_id: from(:check_policy, :order_id),
+    approved: from(:check_policy, :approved),
+    summary: from(:check_policy, :summary)
+  }
+
+  def check_policy(%{order_id: order_id, amount: amount, tenant: tenant}, _context) do
+    approved = amount <= 100.0
+
+    {:ok,
+     %{
+       order_id: order_id,
+       approved: approved,
+       summary: "Refund #{order_id} for #{tenant}: #{if(approved, do: "approved", else: "review")}"
+     }}
+  end
+end
+```
+
+## Inspect And Run It Directly
+
+```elixir
+Jidoka.inspect(NotebookRefundWorkflow)
+```
+
+```elixir
+{:ok, workflow_output} =
+  Jidoka.Workflow.run(
+    NotebookRefundWorkflow,
+    %{"order_id" => "A1001", "amount" => 42.50},
+    context: %{tenant: "acme"}
+  )
+
+workflow_output
+```
+
+## Expose It As An Agent Tool
+
+```elixir
+defmodule NotebookRefundAgent do
+  use Jidoka.Agent
+
+  agent :notebook_refund_agent do
+    model %{provider: :test, id: "notebook-model"}
+    instructions "Use review_refund before answering refund questions."
+  end
+
+  tools do
+    workflow NotebookRefundWorkflow,
+      as: :review_refund,
+      forward_context: {:only, [:tenant]},
+      result: :structured
+  end
+end
+```
+
+```elixir
+{:ok, _inspection} = Jidoka.Kino.debug_agent(NotebookRefundAgent)
+{:ok, _diagram} = Jidoka.Kino.agent_diagram(NotebookRefundAgent)
+```
+
+## Run A Deterministic Tool Loop
+
+```elixir
+fake_llm = fn _intent, journal ->
+  llm_calls =
+    journal.results
+    |> Map.values()
+    |> Enum.count(&(&1.kind == :llm))
+
+  case llm_calls do
+    0 ->
+      {:ok,
+       %{
+         type: :operation,
+         name: "review_refund",
+         arguments: %{"order_id" => "A1001", "amount" => 42.50}
+       }}
+
+    1 ->
+      {:ok, %{type: :final, content: "Refund A1001 is approved."}}
+  end
+end
+
+request =
+  Jidoka.Turn.Request.new!(
+    input: "Can we refund A1001 for 42.50?",
+    context: %{tenant: "acme"}
+  )
+
+{:ok, result} =
+  NotebookRefundAgent.run_turn(request,
+    llm: fake_llm,
+    operation_context: %{parent_context: request.context}
+  )
+
+%{
+  content: result.content,
+  operations: Enum.map(result.agent_state.operation_results, &Jidoka.project/1)
+}
+```
+
+```elixir
+{:ok, _timeline} = Jidoka.Kino.timeline(result)
+{:ok, _graph} = Jidoka.Kino.call_graph(result)
+```

@@ -16,7 +16,8 @@ for in each situation and how to test all three deterministically.
   capability ships to many agents and you want the prompt and tools to travel
   together.
 - Use **workflow** when application-owned deterministic code should appear as
-  one tool. Workflows hide multi-step deterministic logic from the model.
+  one tool. Workflows hide multi-step deterministic logic from the model. See
+  [Workflows](workflows.md) for the full workflow DSL.
 - Use **subagent** when a bounded specialist should answer one nested
   question inside the current turn, with its own model, instructions, and
   tools, and return a structured result to the parent.
@@ -31,6 +32,7 @@ for in each situation and how to test all three deterministically.
 - For skills: `Jido.AI.Skill` (vendored under `jido_ai`) and any skill
   modules or `SKILL.md` files you want to load.
 - No extra dependencies for workflows or subagents.
+- The full workflow authoring reference lives in [Workflows](workflows.md).
 
 ## Quick Example
 
@@ -197,7 +199,9 @@ The compiled spec carries the skill body inside `spec.instructions` and one
 
 ### Step 2: Define A Deterministic Workflow
 
-A workflow is one operation backed by deterministic steps you fully own.
+A workflow is one operation backed by deterministic steps you fully own. This
+guide only shows how workflow modules compose with skills and subagents; the
+full workflow DSL is covered in [Workflows](workflows.md).
 
 ```elixir
 defmodule MyApp.RefundWorkflow do
@@ -378,6 +382,8 @@ Key modules touched in this guide:
 ## Related Guides
 
 - [Getting Started](getting-started.md) - the smallest DSL agent end to end.
+- [Workflows](workflows.md) - full workflow DSL, refs, runtime behavior, and
+  testing.
 - [Handoffs](handoffs.md) - conversation ownership transfer; the partner
   pattern to subagents.
 - [AshJido Resources](ash-jido.md) - a sibling source for Ash-backed tools.

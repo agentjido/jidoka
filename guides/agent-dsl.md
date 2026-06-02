@@ -131,7 +131,8 @@ end
 
 `workflow` exposes deterministic application code as one operation. Use it when
 the model should choose a business workflow, but your application owns the
-workflow steps.
+workflow steps. Define the workflow in a module, then register it in
+`tools do`.
 
 ```elixir
 defmodule MyApp.Workflows.RefundQuote do
@@ -154,9 +155,26 @@ tools do
   workflow MyApp.Workflows.RefundQuote,
     as: :quote_refund,
     timeout: 10_000,
+    forward_context: {:only, [:tenant]},
+    idempotency: :idempotent,
     result: :structured
 end
 ```
+
+Workflow tool options:
+
+| Option | Default | Purpose |
+| --- | --- | --- |
+| `as:` | workflow id | Operation name the model sees. |
+| `description:` | workflow description | Tool description. |
+| `timeout:` | `30_000` | Total workflow wall-clock timeout in milliseconds. |
+| `forward_context:` | `:public` | Runtime context forwarded into workflow execution. |
+| `result:` | `:output` | `:output` returns raw workflow output; `:structured` wraps workflow metadata. |
+| `idempotency:` | `:idempotent` | Operation safety level. Use `:unsafe_once` with an operation control. |
+| `metadata:` | `%{}` | Extra operation metadata. |
+
+For workflow module authoring, refs, step kinds, direct execution, and testing,
+see [Workflows](workflows.md).
 
 `subagent` delegates one bounded task to another Jidoka agent and returns the
 child result to the parent. It does not change who owns the next user turn.

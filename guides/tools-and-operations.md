@@ -355,6 +355,8 @@ backs `Jidoka.Operation.Source.Local`.
 
 - [Agent DSL](agent-dsl.md) - the DSL that owns the `tools`
   block.
+- [Workflows](workflows.md) - deterministic multi-step work exposed as one
+  operation.
 - [Controls](controls.md) - input/operation/output policy and approvals.
 - [Handoffs](handoffs.md) - the handoff source and conversation ownership.
 - [Testing And Evals](testing-and-evals.md) - golden DSL-to-spec tests and

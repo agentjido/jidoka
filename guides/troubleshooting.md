@@ -111,6 +111,26 @@ trace.
 | Compile warning about `unused alias` in the agent module | DSL macro generated the alias automatically | Either remove the explicit alias or suppress with `_ = MyAction`. |
 | Memory section accepted but never used | Memory adapter not passed at runtime | Pass `memory_store:` to `Jidoka.turn/3` or configure a default. |
 
+## Workflow Errors
+
+| Symptom | Likely Cause | Fix |
+| --- | --- | --- |
+| Spark error: `` `workflow.id` is required `` | `workflow do` block omitted `id`. | Add `id :lower_snake_case`. |
+| Spark error: `workflow.id` must be lower snake case | Id contains uppercase, hyphen, space, or invalid prefix. | Use lowercase letters, numbers, and underscores. |
+| Spark error: `workflow.input` must be a Zoi map/object schema | `input` was omitted or a raw map was passed. | Use `input Zoi.object(%{field: Zoi.string()})`. |
+| Spark error: workflow step names must be lower snake case | Step name is invalid. | Use atoms like `:lookup_order` and `:draft_reply`. |
+| Spark error: references missing step | `from(:step)` or `after: [:step]` targets a step that does not exist. | Rename the ref or add the missing step. |
+| Spark error: dependencies contain a cycle | Steps depend on each other through `from` or `after`. | Break the cycle; first-pass workflows do not support loops or branches. |
+| Spark error: input reference is not declared | `input(:key)` does not exist in the Zoi input schema. | Add the field to `workflow.input` or remove the ref. |
+| Spark error: output must reference at least one step | `output` is static or only references input/context. | Use `output from(:step)` or a map containing `from(:step)`. |
+| `Missing workflow context key` | A `context(:key)` ref was declared but not passed/forwarded. | Pass `context:` to `Jidoka.Workflow.run/3` or configure `forward_context:` on the workflow tool. |
+| Workflow step failed with `missing_field` | `from(:step, path)` selected a missing nested field. | Inspect the prior step output and fix the path. |
+| Workflow step failed with `expected_map` | Step `input:` or agent `context:` resolved to a non-map. | Wrap refs in a map or have the prior step return a map. |
+| Workflow timed out | A function/action/agent step exceeded total timeout. | Raise `timeout:` or move long work to an async application process. |
+| Agent step returns `{:hibernate, snapshot}` | A nested agent hit human-in-the-loop review inside workflow execution. | Move HITL to an operation control around the workflow tool. |
+| `{:error, {:workflow_failed, name, reason}}` | Workflow source ran, but workflow execution failed. | Inspect `reason.details`; DSL step errors include workflow id, step, kind, target, and cause. |
+| `{:error, {:workflow_timeout, name, timeout}}` | Workflow operation source exceeded its timeout. | Raise the tool `timeout:` or shorten the workflow. |
+
 ## Import Errors
 
 | Symptom | Likely Cause | Fix |
@@ -251,6 +271,8 @@ needed once you have the categories above as a reference.
 
 - [Errors And Config Reference](errors-and-config-reference.md) - the
   authoritative reference for error structs and config keys.
+- [Workflows](workflows.md) - workflow DSL, refs, runtime behavior, and
+  testing.
 - [Turn Runner And Effect Interpreter](turn-runner-and-effect-interpreter.md) -
   where the runtime errors originate.
 - [Runtime Capabilities Internals](runtime-capabilities-internals.md) -
