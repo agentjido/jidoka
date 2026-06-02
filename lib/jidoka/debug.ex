@@ -222,6 +222,7 @@ defmodule Jidoka.Debug do
     diagnostics_from_parts(
       journal: replay.journal,
       events: replay.timeline,
+      pending_effects: replay_pending_effects(replay),
       pending_reviews: replay.pending_reviews,
       metadata: %{source: :replay, session_id: replay.session_id}
     )
@@ -445,6 +446,15 @@ defmodule Jidoka.Debug do
     |> map_get(:pending_review)
     |> List.wrap()
     |> Enum.reject(&is_nil/1)
+  end
+
+  defp replay_pending_effects(%Replay{snapshots: snapshots}) do
+    Enum.flat_map(snapshots, fn snapshot ->
+      snapshot
+      |> map_get(:pending_effects, [])
+      |> List.wrap()
+      |> Enum.reject(&is_nil/1)
+    end)
   end
 
   defp session_id(%Session{session_id: session_id}), do: session_id
