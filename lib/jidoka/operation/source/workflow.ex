@@ -11,6 +11,7 @@ defmodule Jidoka.Operation.Source.Workflow do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Schema
+  alias Jidoka.Workflow.Spec
 
   @result_modes [:output, :structured]
 
@@ -25,8 +26,9 @@ defmodule Jidoka.Operation.Source.Workflow do
           timeout: pos_integer(),
           forward_context: forward_context(),
           result: result_mode(),
+          idempotency: Operation.idempotency(),
           metadata: map(),
-          definition: map()
+          definition: Spec.t()
         }
 
   defstruct [
@@ -37,6 +39,7 @@ defmodule Jidoka.Operation.Source.Workflow do
     timeout: 30_000,
     forward_context: :public,
     result: :output,
+    idempotency: :idempotent,
     metadata: %{}
   ]
 
@@ -54,6 +57,7 @@ defmodule Jidoka.Operation.Source.Workflow do
          {:ok, forward_context} <-
            normalize_forward_context(Schema.get_key(attrs, :forward_context, :public)),
          {:ok, result} <- normalize_result(Schema.get_key(attrs, :result, :output)),
+         {:ok, idempotency} <- normalize_idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
          {:ok, metadata} <- normalize_metadata(Schema.get_key(attrs, :metadata, %{})) do
       {:ok,
        %__MODULE__{
@@ -63,6 +67,7 @@ defmodule Jidoka.Operation.Source.Workflow do
          timeout: timeout,
          forward_context: forward_context,
          result: result,
+         idempotency: idempotency,
          metadata: metadata,
          definition: definition
        }}
@@ -84,7 +89,7 @@ defmodule Jidoka.Operation.Source.Workflow do
        Operation.new!(
          name: source.name,
          description: source.description || "Run #{source.definition.id} workflow.",
-         idempotency: :idempotent,
+         idempotency: source.idempotency,
          metadata:
            source.metadata
            |> Map.merge(%{
@@ -95,6 +100,7 @@ defmodule Jidoka.Operation.Source.Workflow do
              "timeout" => source.timeout,
              "forward_context" => inspect(source.forward_context),
              "result" => Atom.to_string(source.result),
+             "idempotency" => Atom.to_string(source.idempotency),
              "parameters_schema" => source.definition.parameters_schema
            })
            |> reject_nil_values()
@@ -125,7 +131,11 @@ defmodule Jidoka.Operation.Source.Workflow do
 
     task =
       Task.async(fn ->
-        Jidoka.Workflow.run(source.workflow, arguments, context: task_context)
+        Jidoka.Workflow.run(source.workflow, arguments,
+          context: task_context,
+          timeout: source.timeout,
+          agent_opts: agent_opts(context)
+        )
       end)
 
     case Task.yield(task, source.timeout) || Task.shutdown(task, :brutal_kill) do
@@ -240,6 +250,27 @@ defmodule Jidoka.Operation.Source.Workflow do
 
   defp normalize_result(result), do: {:error, {:invalid_workflow_result, result}}
 
+  defp normalize_idempotency(idempotency) when is_atom(idempotency) do
+    if idempotency in Operation.valid_idempotencies() do
+      {:ok, idempotency}
+    else
+      {:error, {:invalid_workflow_idempotency, idempotency}}
+    end
+  end
+
+  defp normalize_idempotency(idempotency) when is_binary(idempotency) do
+    idempotency = String.trim(idempotency)
+
+    Operation.valid_idempotencies()
+    |> Enum.find(&(Atom.to_string(&1) == idempotency))
+    |> case do
+      nil -> {:error, {:invalid_workflow_idempotency, idempotency}}
+      idempotency -> {:ok, idempotency}
+    end
+  end
+
+  defp normalize_idempotency(idempotency), do: {:error, {:invalid_workflow_idempotency, idempotency}}
+
   defp normalize_metadata(nil), do: {:ok, %{}}
   defp normalize_metadata(metadata) when is_map(metadata), do: {:ok, metadata}
   defp normalize_metadata(metadata), do: {:error, {:invalid_workflow_metadata, metadata}}
@@ -248,5 +279,12 @@ defmodule Jidoka.Operation.Source.Workflow do
     map
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
+  end
+
+  defp agent_opts(context) do
+    case Schema.get_key(context, :agent_opts, []) do
+      opts when is_list(opts) -> opts
+      _other -> []
+    end
   end
 end

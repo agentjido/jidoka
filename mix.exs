@@ -236,7 +236,7 @@ defmodule Jidoka.MixProject do
         ~r/^Jidoka\.Browser\.Tools\./,
         ~r/^Jidoka\.Operation\.Source(\.|$)/,
         Jidoka.Skill,
-        Jidoka.Workflow
+        ~r/^Jidoka\.Workflow(\.|$)/
       ],
       "Import, Export, And Inspection": [
         Jidoka.Import,
@@ -263,8 +263,7 @@ defmodule Jidoka.MixProject do
       "Runtime Internals": [
         Jidoka.Harness,
         Jidoka.Harness.Replay,
-        ~r/^Jidoka\.Runtime\./,
-        ~r/^Jidoka\.Workflow\./
+        ~r/^Jidoka\.Runtime\./
       ],
       "Configuration And Errors": [
         Jidoka.Config,

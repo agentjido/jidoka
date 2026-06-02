@@ -15,7 +15,8 @@ defmodule Jidoka.Inspection do
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
-  alias Jidoka.Workflow.Steps
+  alias Jidoka.Runtime.Spine.Steps
+  alias Jidoka.Workflow
 
   @type inspectable ::
           module()
@@ -42,9 +43,17 @@ defmodule Jidoka.Inspection do
   def inspect(value, opts \\ [])
 
   def inspect(agent_module, opts) when is_atom(agent_module) and is_list(opts) do
-    case agent_spec(agent_module) do
-      {:ok, spec} -> agent_view(spec, Keyword.put(opts, :module, agent_module))
-      :error -> Jidoka.project(agent_module)
+    cond do
+      match?({:ok, _spec}, agent_spec(agent_module)) ->
+        {:ok, spec} = agent_spec(agent_module)
+        agent_view(spec, Keyword.put(opts, :module, agent_module))
+
+      match?({:ok, _workflow}, Workflow.definition(agent_module)) ->
+        {:ok, workflow} = Workflow.definition(agent_module)
+        workflow_view(workflow)
+
+      true ->
+        Jidoka.project(agent_module)
     end
   end
 
@@ -73,6 +82,7 @@ defmodule Jidoka.Inspection do
   def inspect(%Memory.RecallResult{} = result, _opts), do: memory_view(:memory_recall, result)
   def inspect(%Memory.WriteResult{} = result, _opts), do: memory_view(:memory_write, result)
   def inspect(%Jidoka.Eval.Run{} = run, _opts), do: eval_run_view(run)
+  def inspect(%Workflow.Spec{} = workflow, _opts), do: workflow_view(workflow)
   def inspect(value, _opts), do: Jidoka.project(value)
 
   @doc "Assembles the prompt for a turn without interpreting any effects."
@@ -115,6 +125,13 @@ defmodule Jidoka.Inspection do
           error: Jidoka.error_to_map(reason)
         }
     end
+  end
+
+  defp workflow_view(%Workflow.Spec{} = workflow) do
+    %{
+      kind: :workflow,
+      workflow: Jidoka.project(workflow)
+    }
   end
 
   defp turn_result_view(%Turn.Result{} = result) do

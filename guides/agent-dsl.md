@@ -134,6 +134,22 @@ the model should choose a business workflow, but your application owns the
 workflow steps.
 
 ```elixir
+defmodule MyApp.Workflows.RefundQuote do
+  use Jidoka.Workflow
+
+  workflow do
+    id :refund_quote
+    input Zoi.object(%{order_id: Zoi.string()})
+  end
+
+  steps do
+    function :quote, {MyApp.Refunds, :quote, 2},
+      input: %{order_id: input(:order_id)}
+  end
+
+  output from(:quote)
+end
+
 tools do
   workflow MyApp.Workflows.RefundQuote,
     as: :quote_refund,

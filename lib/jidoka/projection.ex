@@ -17,6 +17,7 @@ defmodule Jidoka.Projection do
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
+  alias Jidoka.Workflow
 
   @doc "Projects a supported Jidoka data contract into a stable map."
   @spec project(term()) :: term()
@@ -70,6 +71,35 @@ defmodule Jidoka.Projection do
       description: operation.description,
       idempotency: operation.idempotency,
       metadata: project_operation_metadata(operation.metadata)
+    }
+  end
+
+  def project(%Workflow.Spec{} = workflow) do
+    %{
+      id: workflow.id,
+      module: inspect(workflow.module),
+      description: workflow.description,
+      mode: workflow.mode,
+      parameters_schema?: is_map(workflow.parameters_schema),
+      steps: Enum.map(workflow.steps, &project/1),
+      dependencies: project_value(workflow.dependencies),
+      output: project_workflow_ref(workflow.output),
+      input_refs: Enum.map(workflow.input_refs, &project_value/1),
+      context_refs: Enum.map(workflow.context_refs, &project_value/1),
+      metadata: project_value(workflow.metadata)
+    }
+  end
+
+  def project(%Workflow.Step{} = step) do
+    %{
+      name: step.name,
+      kind: step.kind,
+      target: project_workflow_target(step.target),
+      input: project_workflow_ref(step.input),
+      prompt: project_workflow_ref(step.prompt),
+      context: project_workflow_ref(step.context),
+      after: step.after,
+      metadata: project_value(step.metadata)
     }
   end
 
@@ -448,6 +478,28 @@ defmodule Jidoka.Projection do
   end
 
   defp project_operation_metadata(metadata), do: project_value(metadata)
+
+  defp project_workflow_target({module, function, arity})
+       when is_atom(module) and is_atom(function) and is_integer(arity) do
+    "#{inspect(module)}.#{function}/#{arity}"
+  end
+
+  defp project_workflow_target(target) when is_atom(target), do: inspect(target)
+  defp project_workflow_target(target), do: project_value(target)
+
+  defp project_workflow_ref({:jidoka_workflow_ref, :input, key}), do: %{ref: :input, key: key}
+  defp project_workflow_ref({:jidoka_workflow_ref, :context, key}), do: %{ref: :context, key: key}
+  defp project_workflow_ref({:jidoka_workflow_ref, :value, value}), do: %{ref: :value, value: project_value(value)}
+
+  defp project_workflow_ref({:jidoka_workflow_ref, :from, step, nil}), do: %{ref: :from, step: step}
+
+  defp project_workflow_ref({:jidoka_workflow_ref, :from, step, path}),
+    do: %{ref: :from, step: step, path: path}
+
+  defp project_workflow_ref(%{} = map), do: Map.new(map, fn {key, value} -> {key, project_workflow_ref(value)} end)
+  defp project_workflow_ref(list) when is_list(list), do: Enum.map(list, &project_workflow_ref/1)
+  defp project_workflow_ref(nil), do: nil
+  defp project_workflow_ref(value), do: project_value(value)
 
   defp control_name(module) when is_atom(module) do
     case Jidoka.Control.control_name(module) do

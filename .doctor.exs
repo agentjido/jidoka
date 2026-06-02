@@ -18,7 +18,7 @@
     ~r/^Jidoka\.Runtime(?:\.|$)/,
     ~r/^Jidoka\.Trace\.(Policy|Sink)(?:\.|$)/,
     ~r/^Jidoka\.Turn(?:\.|$)/,
-    ~r/^Jidoka\.Workflow\.(Compiler|Steps)$/
+    ~r/^Jidoka\.Workflow\.(Codegen|Definition|Dsl|ParametersSchema|Runtime|SparkDsl)(?:\.|$)/
   ],
   ignore_paths: [],
   min_module_doc_coverage: 40,

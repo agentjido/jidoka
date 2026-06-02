@@ -1,14 +1,15 @@
 defmodule Jidoka.Workflow do
   @moduledoc """
-  Minimal deterministic workflow contract for Jidoka.
+  Deterministic workflow contract and DSL for Jidoka.
 
-  A workflow is application-owned deterministic code exposed to an agent as one
-  model-callable operation. It is separate from the Runic agent turn spine: the
-  agent chooses when to call it, while the workflow module owns the ordered
-  process inside `run/2`.
+  Workflows are application-owned deterministic processes exposed to an agent
+  as one model-callable operation. Callback workflows implement `run/2`
+  directly. Declarative workflows use `workflow do`, `steps do`, and `output`
+  and execute through a Runic workflow.
   """
 
   alias Jidoka.Schema
+  alias Jidoka.Workflow.Spec
 
   @callback run(input :: map(), context :: map()) :: {:ok, term()} | {:error, term()} | term()
   @callback id() :: String.t()
@@ -17,71 +18,141 @@ defmodule Jidoka.Workflow do
 
   @optional_callbacks description: 0, parameters_schema: 0
 
-  @type definition :: %{
-          required(:id) => String.t(),
-          required(:module) => module(),
-          optional(:description) => String.t() | nil,
-          optional(:parameters_schema) => map() | nil
-        }
+  @type definition :: Spec.t()
 
-  @doc "Defines a deterministic workflow module for agent tool exposure."
+  @doc """
+  Defines a deterministic workflow.
+
+  Use callback form for a simple opaque operation:
+
+      use Jidoka.Workflow, id: :my_workflow
+
+      def run(input, context), do: {:ok, %{input: input, context: context}}
+
+  Use DSL form for a validated multi-step workflow:
+
+      use Jidoka.Workflow
+
+      workflow do
+        id :my_workflow
+        input Zoi.object(%{value: Zoi.integer()})
+      end
+
+      steps do
+        function :double, {MyApp.Fns, :double, 2}, input: %{value: input(:value)}
+      end
+
+      output from(:double)
+  """
   defmacro __using__(opts \\ []) do
-    quote location: :keep do
-      @behaviour Jidoka.Workflow
-      @jidoka_workflow_opts unquote(opts)
-      @before_compile Jidoka.Workflow
+    if opts == [] do
+      quote location: :keep do
+        @behaviour Jidoka.Workflow
+        @jidoka_workflow_opts []
+        @jidoka_workflow_mode :dsl
+        use Jidoka.Workflow.SparkDsl
+        @before_compile Jidoka.Workflow
+      end
+    else
+      quote location: :keep do
+        @behaviour Jidoka.Workflow
+        @jidoka_workflow_opts unquote(opts)
+        @jidoka_workflow_mode :callback
+        use Jidoka.Workflow.SparkDsl
+        @before_compile Jidoka.Workflow
+      end
     end
   end
 
   @doc false
-  defmacro __before_compile__(_env) do
+  defmacro __before_compile__(env) do
+    case Module.get_attribute(env.module, :jidoka_workflow_mode) do
+      :dsl ->
+        env
+        |> Jidoka.Workflow.Definition.build!(Module.get_attribute(env.module, :jidoka_workflow_opts) || [])
+        |> Jidoka.Workflow.Codegen.emit()
+
+      _mode ->
+        reject_mixed_callback_dsl!(env.module, Module.get_attribute(env.module, :jidoka_workflow_opts) || [])
+        callback_codegen(Module.get_attribute(env.module, :jidoka_workflow_opts) || [])
+    end
+  end
+
+  defp reject_mixed_callback_dsl!(module, opts) do
+    configured_id = Spark.Dsl.Extension.get_opt(module, [:workflow], :id)
+    steps = Spark.Dsl.Extension.get_entities(module, [:steps])
+    output = Spark.Dsl.Extension.get_opt(module, [:workflow_output], :output)
+
+    unless is_nil(configured_id) and steps == [] and is_nil(output) do
+      raise Jidoka.Workflow.Dsl.Error.exception(
+              message: "Jidoka.Workflow cannot mix callback options with the workflow DSL.",
+              path: [:workflow],
+              value: opts,
+              hint:
+                "Use either `use Jidoka.Workflow, id: ...` with `run/2`, or `use Jidoka.Workflow` with `workflow do ... end`.",
+              module: module
+            )
+    end
+  end
+
+  defp callback_codegen(opts) do
     quote location: :keep do
       @impl Jidoka.Workflow
       def id do
         Jidoka.Workflow.normalize_id!(
-          Keyword.get(@jidoka_workflow_opts, :id) || Keyword.get(@jidoka_workflow_opts, :name) ||
+          Keyword.get(unquote(Macro.escape(opts)), :id) ||
+            Keyword.get(unquote(Macro.escape(opts)), :name) ||
             __MODULE__
         )
       end
 
       @impl Jidoka.Workflow
       def description do
-        Keyword.get(@jidoka_workflow_opts, :description)
+        Keyword.get(unquote(Macro.escape(opts)), :description)
       end
 
       @impl Jidoka.Workflow
       def parameters_schema do
-        Keyword.get(@jidoka_workflow_opts, :parameters_schema) ||
-          Keyword.get(@jidoka_workflow_opts, :input_schema)
+        Keyword.get(unquote(Macro.escape(opts)), :parameters_schema) ||
+          Keyword.get(unquote(Macro.escape(opts)), :input_schema)
       end
 
+      @doc false
       def __jidoka_workflow__ do
-        Jidoka.Workflow.definition!(__MODULE__)
+        Jidoka.Workflow.callback_spec!(
+          __MODULE__,
+          id: id(),
+          description: description(),
+          parameters_schema: parameters_schema()
+        )
       end
 
       defoverridable id: 0, description: 0, parameters_schema: 0
     end
   end
 
-  @doc "Returns the normalized operation definition for a workflow module."
+  @doc false
+  @spec callback_spec!(module(), keyword()) :: Spec.t()
+  def callback_spec!(workflow_module, opts) when is_atom(workflow_module) and is_list(opts) do
+    Spec.new!(
+      id: Keyword.fetch!(opts, :id),
+      module: workflow_module,
+      description: Keyword.get(opts, :description),
+      mode: :callback,
+      parameters_schema: Keyword.get(opts, :parameters_schema),
+      metadata: %{}
+    )
+  end
+
+  @doc "Returns the normalized workflow definition for a workflow module."
   @spec definition(module()) :: {:ok, definition()} | {:error, term()}
   def definition(workflow_module) when is_atom(workflow_module) do
     with {:module, _module} <- Code.ensure_compiled(workflow_module),
-         true <- function_exported?(workflow_module, :run, 2),
-         {:ok, id} <- normalize_id(workflow_id(workflow_module)),
-         {:ok, description} <- normalize_description(workflow_description(workflow_module)),
-         {:ok, parameters_schema} <-
-           normalize_parameters_schema(parameters_schema(workflow_module)) do
-      {:ok,
-       %{
-         id: id,
-         module: workflow_module,
-         description: description,
-         parameters_schema: parameters_schema
-       }}
+         {:ok, spec} <- workflow_spec(workflow_module),
+         :ok <- validate_runnable(workflow_module, spec) do
+      {:ok, spec}
     else
       {:error, reason} -> {:error, {:invalid_workflow_module, workflow_module, reason}}
-      false -> {:error, {:invalid_workflow_module, workflow_module, :missing_run}}
     end
   end
 
@@ -99,10 +170,19 @@ defmodule Jidoka.Workflow do
   @doc "Runs a workflow with normalized map input and optional context."
   @spec run(module(), map() | keyword(), keyword()) :: {:ok, term()} | {:error, term()}
   def run(workflow_module, input, opts \\ []) when is_atom(workflow_module) and is_list(opts) do
-    with {:ok, definition} <- definition(workflow_module),
-         {:ok, input} <- normalize_input(input),
+    with {:ok, spec} <- definition(workflow_module) do
+      run_spec(spec, input, opts)
+    end
+  end
+
+  defp run_spec(%Spec{mode: :dsl} = spec, input, opts) do
+    Jidoka.Workflow.Runtime.run(spec, input, opts)
+  end
+
+  defp run_spec(%Spec{mode: :callback} = spec, input, opts) do
+    with {:ok, input} <- normalize_input(input),
          {:ok, context} <- normalize_context(Keyword.get(opts, :context, %{})) do
-      case apply(definition.module, :run, [input, context]) do
+      case apply(spec.module, :run, [input, context]) do
         {:ok, output} -> {:ok, output}
         {:error, reason} -> {:error, reason}
         output -> {:ok, output}
@@ -150,6 +230,43 @@ defmodule Jidoka.Workflow do
       {:error, reason} -> raise ArgumentError, "invalid workflow id: #{inspect(reason)}"
     end
   end
+
+  defp workflow_spec(workflow_module) do
+    cond do
+      function_exported?(workflow_module, :__jidoka_workflow__, 0) ->
+        case apply(workflow_module, :__jidoka_workflow__, []) do
+          %Spec{} = spec -> {:ok, spec}
+          other -> {:error, {:invalid_workflow_spec, other}}
+        end
+
+      function_exported?(workflow_module, :run, 2) ->
+        callback_spec_from_functions(workflow_module)
+
+      true ->
+        {:error, :missing_run}
+    end
+  end
+
+  defp callback_spec_from_functions(workflow_module) do
+    with {:ok, id} <- normalize_id(workflow_id(workflow_module)),
+         {:ok, description} <- normalize_description(workflow_description(workflow_module)),
+         {:ok, parameters_schema} <- normalize_parameters_schema(parameters_schema(workflow_module)) do
+      {:ok,
+       Spec.new!(
+         id: id,
+         module: workflow_module,
+         description: description,
+         mode: :callback,
+         parameters_schema: parameters_schema
+       )}
+    end
+  end
+
+  defp validate_runnable(workflow_module, %Spec{mode: :callback}) do
+    if function_exported?(workflow_module, :run, 2), do: :ok, else: {:error, :missing_run}
+  end
+
+  defp validate_runnable(_workflow_module, %Spec{mode: :dsl}), do: :ok
 
   defp workflow_id(module) do
     if function_exported?(module, :id, 0), do: apply(module, :id, []), else: module

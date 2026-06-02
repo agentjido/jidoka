@@ -1,30 +1,37 @@
 defmodule JidokaExample.KitchenSinkAgent.Workflows.FeatureSummaryWorkflow do
   @moduledoc """
-  Deterministic workflow used by the Kitchen Sink demo.
+  Declarative deterministic workflow used by the Kitchen Sink demo.
 
-  This demonstrates workflow-as-tool: the parent agent chooses when to call the
-  operation, while application code owns the deterministic process and output.
+  The parent agent chooses when to call the operation. The workflow owns the
+  ordered deterministic process and returns a structured result to the agent.
   """
 
-  use Jidoka.Workflow,
-    id: :feature_summary_workflow,
-    description: "Builds a deterministic feature summary from a list of feature names.",
-    parameters_schema: %{
-      "type" => "object",
-      "properties" => %{
-        "features" => %{
-          "type" => "array",
-          "items" => %{"type" => "string"}
-        }
-      },
-      "required" => ["features"]
-    }
+  use Jidoka.Workflow
 
-  @impl true
-  def run(input, context) do
+  workflow do
+    id(:feature_summary_workflow)
+    description "Builds a deterministic feature summary from a list of feature names."
+
+    input Zoi.object(%{
+            features: Zoi.array(Zoi.string())
+          })
+  end
+
+  steps do
+    function :build_summary, {__MODULE__, :build_summary, 2},
+      input: %{
+        features: input(:features),
+        tenant: context(:tenant)
+      }
+  end
+
+  output from(:build_summary)
+
+  @doc false
+  @spec build_summary(map(), map()) :: {:ok, map()}
+  def build_summary(%{features: features, tenant: tenant}, _context) do
     features =
-      input
-      |> get(:features, [])
+      features
       |> List.wrap()
       |> Enum.map(&to_string/1)
       |> Enum.reject(&(&1 == ""))
@@ -33,15 +40,8 @@ defmodule JidokaExample.KitchenSinkAgent.Workflows.FeatureSummaryWorkflow do
      %{
        feature_count: length(features),
        features: features,
-       tenant: get(context, :tenant),
+       tenant: tenant,
        summary: "Deterministic workflow summarized #{length(features)} showcased features."
      }}
   end
-
-  defp get(map, key, default \\ nil)
-
-  defp get(%{} = map, key, default),
-    do: Map.get(map, key, Map.get(map, Atom.to_string(key), default))
-
-  defp get(_map, _key, default), do: default
 end
