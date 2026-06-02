@@ -6,6 +6,38 @@ defmodule Jidoka.Debug do
   produces: turn results, sessions, snapshots, journals, events, and replay
   projections. It never calls LLMs, tools, memory stores, or runtime
   capabilities.
+
+  Use this module after a turn when you need one value that explains the
+  request: prompt messages, selected operations, operation results, usage,
+  timeline, journal, pending reviews, and replay diagnostics.
+
+      {:ok, result} = Jidoka.turn(MyApp.Agent, "Check order A1001")
+      {:ok, summary} = Jidoka.Debug.request(result)
+
+      summary.prompt.messages
+      summary.operation_results
+      summary.usage
+      summary.replay_diagnostics.status
+
+  Request summaries accept:
+
+  - `Jidoka.Turn.Result` for a completed turn;
+  - `Jidoka.Harness.Session` for the latest request, or a specific
+    `request_id:`;
+  - `Jidoka.Runtime.AgentSnapshot` for hibernated work;
+  - `Jidoka.Harness.Replay` for stored replay projections;
+  - common return tuples such as `{:ok, result}` and `{:hibernate, snapshot}`.
+
+  `Jidoka.Debug` intentionally stores context keys, not full context values.
+  Keep secrets and large application payloads in your application data, not in
+  debug summaries.
+
+  Replay diagnostics use four statuses:
+
+  - `:complete` - all recorded effect intents have results;
+  - `:waiting` - human review is pending;
+  - `:failed` - an effect result or timeline event failed;
+  - `:incomplete` - at least one effect intent has no recorded result.
   """
 
   alias Jidoka.Debug.{ReplayDiagnostics, RequestSummary}
@@ -21,6 +53,13 @@ defmodule Jidoka.Debug do
   The summary combines prompt debug metadata, operation results, usage,
   timeline, journal, pending reviews, and replay diagnostics. It is data-only
   and never calls runtime capabilities.
+
+  Options:
+
+  - `:session` - attach a session id when summarizing a snapshot or result;
+  - `:request_id` - when the target is a session, select a specific stored
+    request or snapshot. Unknown ids return
+    `{:error, {:request_debug_not_found, session_id, request_id}}`.
   """
   @spec request(term(), keyword()) :: {:ok, RequestSummary.t()} | {:error, term()}
   def request(target, opts \\ [])
@@ -136,7 +175,12 @@ defmodule Jidoka.Debug do
 
   def request(other, _opts), do: {:error, {:unsupported_debug_request_target, other}}
 
-  @doc "Returns the latest request summary for a session."
+  @doc """
+  Returns the latest request summary for a session.
+
+  This is a convenience wrapper around `request/2`. Pass `request_id:` to
+  select a specific request in the session history.
+  """
   @spec latest(Session.t(), keyword()) :: {:ok, RequestSummary.t()} | {:error, term()}
   def latest(%Session{} = session, opts \\ []), do: request(session, opts)
 
@@ -145,6 +189,10 @@ defmodule Jidoka.Debug do
 
   Diagnostics flag missing effect results, failed effect results, unsafe
   effects, pending reviews, and failed timeline events.
+
+  Use this when you have a session, snapshot, replay, result, or journal and
+  need to know whether the recorded data is complete enough to inspect or
+  replay safely.
   """
   @spec diagnose(term()) :: {:ok, ReplayDiagnostics.t()} | {:error, term()}
   def diagnose(%Turn.Result{} = result) do

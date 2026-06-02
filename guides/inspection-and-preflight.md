@@ -253,11 +253,46 @@ summary.replay_diagnostics.status
 #=> :complete
 ```
 
+The summary is a typed `Jidoka.Debug.RequestSummary`:
+
+```elixir
+%Jidoka.Debug.RequestSummary{
+  request_id: "turn_...",
+  agent_id: "time_agent",
+  status: :finished,
+  model: "openai:gpt-4o-mini",
+  input: "What time is it?",
+  content: "It is 09:30 in Chicago.",
+  context_keys: [],
+  operation_names: ["local_time"],
+  usage: %{llm_calls: 2, total_tokens: 184},
+  replay_diagnostics: %Jidoka.Debug.ReplayDiagnostics{status: :complete}
+}
+```
+
 The summary is data-only. It does not call an LLM, tool, memory store, or
 runtime capability. For sessions, use `Jidoka.Debug.latest(session)` or pass
 `request_id:` when you need a specific hibernated request. Unknown request ids
 return `{:error, {:request_debug_not_found, session_id, request_id}}` instead
 of falling back to the latest request.
+
+For hibernated snapshots and sessions, the same call exposes pending review
+data and incomplete effects:
+
+```elixir
+{:hibernate, session, snapshot} = Jidoka.Session.run(session, "Refund A1001")
+
+{:ok, summary} = Jidoka.Debug.request(snapshot, session: session)
+
+summary.status
+#=> :waiting
+
+summary.pending_reviews
+#=> [%{operation: "refund_order", ...}]
+
+summary.replay_diagnostics.status
+#=> :waiting
+```
 
 ### Step 7: Inspect A Snapshot Or Session
 
@@ -294,6 +329,15 @@ Replay diagnostics explain whether recorded effect data is complete:
 diagnostics.status
 #=> :complete | :waiting | :failed | :incomplete
 ```
+
+Status meanings:
+
+| Status | Meaning |
+| --- | --- |
+| `:complete` | Every recorded effect intent has a result. |
+| `:waiting` | A human review request is still pending. |
+| `:failed` | An effect result or timeline event failed. |
+| `:incomplete` | At least one effect intent has no recorded result. |
 
 ### Step 8: Use Inspect For Logging
 

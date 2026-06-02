@@ -106,6 +106,15 @@ diagnostics.unsafe_effects
 diagnostics.pending_reviews
 ```
 
+Diagnostic statuses are intentionally small:
+
+| Status | Meaning |
+| --- | --- |
+| `:complete` | The replay has complete effect result data. |
+| `:waiting` | Human review is pending, usually from an interrupted operation control. |
+| `:failed` | At least one effect result or timeline event failed. |
+| `:incomplete` | An effect intent exists without a recorded result. |
+
 Use `Jidoka.Debug.request/2` when you want a request-level view that combines
 prompt metadata, operation results, usage, timeline, journal, and replay
 diagnostics:
@@ -113,6 +122,17 @@ diagnostics:
 ```elixir
 {:ok, summary} = Jidoka.Debug.request(result)
 summary.prompt.messages
+summary.replay_diagnostics.status
+```
+
+For hibernated work, pass the snapshot directly. Add `session:` when you want
+the session id attached to the summary:
+
+```elixir
+{:hibernate, session, snapshot} = Jidoka.Session.run(session, "Refund A1001")
+
+{:ok, summary} = Jidoka.Debug.request(snapshot, session: session)
+summary.pending_reviews
 summary.replay_diagnostics.status
 ```
 

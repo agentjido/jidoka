@@ -248,6 +248,11 @@ summary.replay_diagnostics.status
 
 Use this after a live call when you need to see the assembled prompt,
 operation results, usage, timeline, and replay diagnostics in one place.
+For a session, pass `request_id:` when you need a specific stored request:
+
+```elixir
+{:ok, summary} = Jidoka.Kino.debug_request(session, request_id: "turn_...")
+```
 
 ### Step 8: Start An Agent Once Per Notebook Session
 
@@ -265,7 +270,7 @@ the existing pid instead.
 The second cell evaluation returns the same pid without restarting the
 process, which keeps any in-memory session state intact.
 
-### Step 8: Render Context Maps Without Leaking Internals
+### Step 9: Render Context Maps Without Leaking Internals
 
 `context/3` separates the public and internal halves of a runtime context
 map and renders them as two tables.
