@@ -49,6 +49,11 @@ defmodule Jidoka.WorkflowDslTest do
     def error(%{reason: reason}, _context), do: {:error, reason}
     def raises(_params, _context), do: raise("workflow function raised")
     def throws(_params, _context), do: throw(:workflow_function_threw)
+
+    def sleep(%{ms: ms}, _context) do
+      Process.sleep(ms)
+      {:ok, %{slept: ms}}
+    end
   end
 
   defmodule EchoAgent do
@@ -150,6 +155,23 @@ defmodule Jidoka.WorkflowDslTest do
     end
 
     output from(:double)
+  end
+
+  defmodule SlowWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:slow_workflow)
+      input Zoi.object(%{ms: Zoi.integer()})
+    end
+
+    steps do
+      function :sleep, {Fns, :sleep, 2}, input: %{ms: input(:ms)}
+    end
+
+    output from(:sleep)
   end
 
   defmodule AgentWorkflow do
@@ -396,10 +418,16 @@ defmodule Jidoka.WorkflowDslTest do
     assert {:error, error} = Workflow.run(ActionWorkflow, :bad_input)
     assert error.details.reason == :invalid_workflow_input
 
+    assert {:error, error} = Workflow.run(ActionWorkflow, [:bad_input])
+    assert error.details.reason == :invalid_workflow_input
+
     assert {:error, error} = Workflow.run(FunctionWorkflow, %{topic: 123}, context: %{suffix: "ok"})
     assert error.details.reason == :schema
 
     assert {:error, error} = Workflow.run(ActionWorkflow, %{value: 1}, context: :bad_context)
+    assert error.details.reason == :invalid_workflow_context
+
+    assert {:error, error} = Workflow.run(ActionWorkflow, %{value: 1}, context: [:bad_context])
     assert error.details.reason == :invalid_workflow_context
 
     assert {:error, error} = Workflow.run(ActionWorkflow, %{value: 1}, timeout: 0)
@@ -409,9 +437,26 @@ defmodule Jidoka.WorkflowDslTest do
     assert error.details.reason == :invalid_workflow_agent_opts
 
     assert {:error, {:invalid_workflow_input, :bad_input}} = Workflow.run(CallbackWorkflow, :bad_input)
+    assert {:error, {:invalid_workflow_input, [:bad_input]}} = Workflow.run(CallbackWorkflow, [:bad_input])
 
     assert {:error, {:invalid_workflow_context, :bad_context}} =
              Workflow.run(CallbackWorkflow, %{}, context: :bad_context)
+
+    assert {:error, {:invalid_workflow_context, [:bad_context]}} =
+             Workflow.run(CallbackWorkflow, %{}, context: [:bad_context])
+  end
+
+  test "workflow runtime enforces total wall-clock timeout" do
+    started_at = System.monotonic_time(:millisecond)
+
+    assert {:error, error} = Workflow.run(SlowWorkflow, %{ms: 100}, timeout: 10)
+
+    elapsed = System.monotonic_time(:millisecond) - started_at
+    assert elapsed < 500
+    assert Exception.message(error) =~ "timed out"
+    assert error.details.workflow_id == "slow_workflow"
+    assert error.details.reason == :timeout
+    assert error.details.timeout == 10
   end
 
   test "workflow step runner exposes clear failure modes" do
@@ -590,6 +635,47 @@ defmodule Jidoka.WorkflowDslTest do
     assert_raise ArgumentError, ~r/invalid workflow source/, fn ->
       WorkflowSource.new!(workflow: "bad")
     end
+  end
+
+  test "workflow operation source forwards and overrides context defensively" do
+    assert {:ok, source} =
+             WorkflowSource.new(
+               workflow: FunctionWorkflow,
+               as: :context_workflow,
+               forward_context: {:only, [:suffix]},
+               result: :output
+             )
+
+    assert {:ok, capability} =
+             WorkflowSource.capability(source,
+               context: [parent_context: [suffix: "parent", secret: "hidden"]]
+             )
+
+    journal = Effect.Journal.new!()
+
+    assert {:ok, "runic:parent"} =
+             capability.(
+               Effect.Intent.new(:operation, %{name: "context_workflow", arguments: %{"topic" => "runic"}}),
+               journal
+             )
+
+    assert {:ok, "runic:child"} =
+             capability.(
+               Effect.Intent.new(:operation, %{
+                 name: "context_workflow",
+                 arguments: %{"topic" => "runic", "context" => [suffix: "child"]}
+               }),
+               journal
+             )
+
+    assert {:ok, source} = WorkflowSource.new(workflow: ActionWorkflow, as: :math_workflow)
+    assert {:ok, capability} = WorkflowSource.capability(source, context: :bad_context)
+
+    assert {:ok, %{"value" => 4}} =
+             capability.(
+               Effect.Intent.new(:operation, %{name: "math_workflow", arguments: %{"value" => 1}}),
+               journal
+             )
   end
 
   test "workflow idempotency can opt into unsafe operation controls" do

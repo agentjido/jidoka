@@ -21,10 +21,7 @@ defmodule Jidoka.Workflow.Runtime do
         error: nil
       }
 
-      spec
-      |> build_workflow()
-      |> Workflow.react_until_satisfied(state, deadline_ms: runtime_opts.timeout)
-      |> final_output(spec)
+      execute_with_timeout(spec, state, runtime_opts.timeout)
     end
   rescue
     exception -> {:error, exception}
@@ -65,6 +62,36 @@ defmodule Jidoka.Workflow.Runtime do
     end
   end
 
+  defp execute_with_timeout(%Spec{} = spec, state, timeout) do
+    task =
+      Task.async(fn ->
+        safe_execute(spec, state, timeout)
+      end)
+
+    case Task.yield(task, timeout) || Task.shutdown(task, :brutal_kill) do
+      {:ok, result} ->
+        result
+
+      nil ->
+        {:error,
+         Jidoka.Error.execution_error("Workflow #{spec.id} timed out.",
+           phase: :workflow,
+           details: %{workflow_id: spec.id, reason: :timeout, timeout: timeout}
+         )}
+    end
+  end
+
+  defp safe_execute(%Spec{} = spec, state, timeout) do
+    spec
+    |> build_workflow()
+    |> Workflow.react_until_satisfied(state, deadline_ms: timeout)
+    |> final_output(spec)
+  rescue
+    exception -> {:error, exception}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
+
   defp normalize_opts(opts) do
     with {:ok, context} <- normalize_context(Keyword.get(opts, :context, %{})),
          {:ok, timeout} <- normalize_timeout(Keyword.get(opts, :timeout, 30_000)),
@@ -73,10 +100,19 @@ defmodule Jidoka.Workflow.Runtime do
     end
   end
 
-  defp normalize_context(context) when is_list(context), do: {:ok, Map.new(context)}
+  defp normalize_context(context) when is_list(context) do
+    if Keyword.keyword?(context) do
+      {:ok, Map.new(context)}
+    else
+      invalid_context(context)
+    end
+  end
+
   defp normalize_context(context) when is_map(context), do: {:ok, context}
 
-  defp normalize_context(context) do
+  defp normalize_context(context), do: invalid_context(context)
+
+  defp invalid_context(context) do
     {:error,
      Jidoka.Error.validation_error("Invalid workflow context: expected a map or keyword list.",
        field: :context,
@@ -132,10 +168,19 @@ defmodule Jidoka.Workflow.Runtime do
     end
   end
 
-  defp normalize_input(input) when is_list(input), do: {:ok, Map.new(input)}
+  defp normalize_input(input) when is_list(input) do
+    if Keyword.keyword?(input) do
+      {:ok, Map.new(input)}
+    else
+      invalid_input(input)
+    end
+  end
+
   defp normalize_input(input) when is_map(input), do: {:ok, input}
 
-  defp normalize_input(input) do
+  defp normalize_input(input), do: invalid_input(input)
+
+  defp invalid_input(input) do
     {:error,
      Jidoka.Error.validation_error("Invalid workflow input: expected a map or keyword list.",
        field: :input,

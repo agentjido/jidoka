@@ -466,7 +466,11 @@ defmodule Jidoka.Workflow.Definition do
     end
   end
 
-  defp collect_refs(term), do: collect_refs(term, %{input: [], from: [], context: []})
+  defp collect_refs(term) do
+    term
+    |> collect_refs(%{input: [], from: [], context: []})
+    |> normalize_refs()
+  end
 
   defp collect_refs({:jidoka_workflow_ref, :input, key}, acc),
     do: Map.update!(acc, :input, &[key | &1])
@@ -489,7 +493,9 @@ defmodule Jidoka.Workflow.Definition do
     |> Enum.reduce(acc, &collect_refs/2)
   end
 
-  defp collect_refs(_other, acc) do
+  defp collect_refs(_other, acc), do: acc
+
+  defp normalize_refs(acc) do
     %{
       input: Enum.uniq(acc.input),
       from: Enum.uniq(acc.from),

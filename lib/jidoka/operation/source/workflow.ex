@@ -110,7 +110,7 @@ defmodule Jidoka.Operation.Source.Workflow do
 
   @impl true
   def capability(%__MODULE__{} = source, opts) do
-    context = Keyword.get(opts, :context, %{})
+    context = opts |> Keyword.get(:context, %{}) |> normalize_context()
 
     {:ok,
      fn
@@ -157,14 +157,21 @@ defmodule Jidoka.Operation.Source.Workflow do
   end
 
   defp child_context(%__MODULE__{} = source, parent_context, arguments) do
+    parent_context = normalize_context(parent_context)
+    arguments = normalize_context(arguments)
+
     parent_context =
       parent_context
       |> Map.get(:parent_context, Map.get(parent_context, "parent_context", parent_context))
+      |> normalize_context()
       |> forward_context(source.forward_context)
 
     case Schema.get_key(arguments, :context, %{}) do
-      task_context when is_map(task_context) -> Map.merge(parent_context, task_context)
-      _other -> parent_context
+      task_context when is_map(task_context) or is_list(task_context) ->
+        Map.merge(parent_context, normalize_context(task_context))
+
+      _other ->
+        parent_context
     end
   end
 
@@ -282,9 +289,17 @@ defmodule Jidoka.Operation.Source.Workflow do
   end
 
   defp agent_opts(context) do
-    case Schema.get_key(context, :agent_opts, []) do
+    case context |> normalize_context() |> Schema.get_key(:agent_opts, []) do
       opts when is_list(opts) -> opts
       _other -> []
     end
   end
+
+  defp normalize_context(context) when is_map(context), do: context
+
+  defp normalize_context(context) when is_list(context) do
+    if Keyword.keyword?(context), do: Map.new(context), else: %{}
+  end
+
+  defp normalize_context(_context), do: %{}
 end

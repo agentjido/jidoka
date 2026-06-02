@@ -300,11 +300,25 @@ defmodule Jidoka.Workflow do
   defp normalize_parameters_schema(schema),
     do: {:error, {:invalid_workflow_parameters_schema, schema}}
 
-  defp normalize_input(input) when is_list(input), do: {:ok, Map.new(input)}
+  defp normalize_input(input) when is_list(input) do
+    if Keyword.keyword?(input) do
+      {:ok, Map.new(input)}
+    else
+      {:error, {:invalid_workflow_input, input}}
+    end
+  end
+
   defp normalize_input(input) when is_map(input), do: {:ok, Schema.normalize_attrs(input)}
   defp normalize_input(input), do: {:error, {:invalid_workflow_input, input}}
 
-  defp normalize_context(context) when is_list(context), do: {:ok, Map.new(context)}
+  defp normalize_context(context) when is_list(context) do
+    if Keyword.keyword?(context) do
+      {:ok, Map.new(context)}
+    else
+      {:error, {:invalid_workflow_context, context}}
+    end
+  end
+
   defp normalize_context(context) when is_map(context), do: {:ok, context}
   defp normalize_context(context), do: {:error, {:invalid_workflow_context, context}}
 end
