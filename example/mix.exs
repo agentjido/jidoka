@@ -25,8 +25,6 @@ defmodule JidokaExample.MixProject do
       {:bandit, "~> 1.6"},
       {:dotenvy, "~> 1.1"},
       {:jason, "~> 1.4"},
-      {:jido_action, github: "agentjido/jido_action", branch: "main", override: true},
-      {:lua, "~> 1.0.0-rc"},
       {:mdex, "~> 0.12.2"},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},

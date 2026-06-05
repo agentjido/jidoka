@@ -152,25 +152,7 @@ Primary features:
 - source inspection for the package inspection modules
 - developer-oriented route that does not require external tools to be useful
 
-### 9. Lua Tools Agent
-
-Status: implemented.
-
-Adds dynamic Lua scripting over a constrained hidden host tool surface. The
-model sees only query, describe, and execute operations. The execute operation
-runs a short sandboxed Lua script that can call several selected read-only
-host actions and returns a trace of every hidden call.
-
-Primary features:
-
-- `tools do action ... end` for a tiny model-visible Lua interface
-- hidden ordinary `Jidoka.Action` modules behind the Lua runtime
-- query/describe/execute flow without a public catalog API
-- sandboxed Lua execution with timeout, script-size, and call-count limits
-- operation result rendering for Lua script, hidden calls, and return value
-- source inspection across the Lua surface, runtime, visible actions, and hidden actions
-
-### 10. Kitchen Sink Agent
+### 9. Kitchen Sink Agent
 
 Status: implemented.
 
@@ -225,7 +207,6 @@ sources instead of a plugin DSL.
 | `delegation_agent` / `orchestrator` | Subagents, handoffs, imported agent specs | Partially covered by Kitchen Sink | Subagents and handoffs exist; defer a standalone route until ownership semantics and imported-spec parity are stronger. |
 | `pr_reviewer` | Load diff, detect findings, enforce review quality | Deferred | Needs repository/diff tools, structured finding output, and review-specific output controls. |
 | `debug_agent` / `trace` | Request inspection and trace inspection | Implemented as Debug Agent | Trace UX can still get richer, but inspect/preflight are now represented in the app. |
-| `dynamic_scripting` | Compose a selected hidden tool surface with Lua | Implemented as Lua Tools Agent | Keep this example app-first. Do not promote it to a core catalog DSL until the DX and safety model are proven. |
 | `chat` | General chat plus hooks/guardrails/plugins | Do not port directly | Hooks are now controls/events; plugins are not a V2 DSL goal. Split remaining surfaces into focused examples. |
 | `kitchen_sink` | Everything at once | Implemented against stable V2 features | Needs stricter evidence validation so it cannot claim a feature ran unless operation results prove it. |
 
@@ -241,11 +222,11 @@ sources instead of a plugin DSL.
 
 ## Current Focus
 
-The V2 example app now proves the current spine across ten use cases: DSL agent
+The V2 example app now proves the current spine across nine use cases: DSL agent
 definition, agent context, Jido supervision, local actions, browser tools, Ash
 resource tools, skills, MCP tools, structured results, controls,
 hibernate/resume review, session memory, inspect/preflight, streaming, activity
-projection, dynamic Lua scripting over hidden actions, and source inspection.
+projection, and source inspection.
 
 The next examples should be pulled from the parity order only after the
 underlying Jidoka feature is stable enough to teach without caveats. The next
