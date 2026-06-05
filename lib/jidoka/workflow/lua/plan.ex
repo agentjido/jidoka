@@ -1,12 +1,12 @@
-defmodule JidokaExample.LuaToolsAgent.LuaWorkflow do
+defmodule Jidoka.Workflow.Lua.Plan do
   @moduledoc false
 
   require Runic
   import Runic, only: [context: 1]
 
-  alias JidokaExample.LuaToolsAgent.CallTrace
-  alias JidokaExample.LuaToolsAgent.LuaWorkflow.{Ref, Spec}
-  alias JidokaExample.LuaToolsAgent.Policy
+  alias Jidoka.Workflow.Lua.CallTrace
+  alias Jidoka.Workflow.Lua.Plan.{Ref, Spec}
+  alias Jidoka.Workflow.Lua.Policy
   alias Runic.Workflow
 
   @type t :: Spec.t()

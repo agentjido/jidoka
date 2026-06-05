@@ -1,9 +1,9 @@
-defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
+defmodule Jidoka.Workflow.Lua.Plan.Spec do
   @moduledoc false
 
   alias Jido.Action.Catalog.Entry
-  alias JidokaExample.LuaToolsAgent.LuaWorkflow.Ref
-  alias JidokaExample.LuaToolsAgent.Policy
+  alias Jidoka.Workflow.Lua.Plan.Ref
+  alias Jidoka.Workflow.Lua.Policy
 
   @enforce_keys [:id, :steps, :output]
   defstruct [:id, :steps, :output]

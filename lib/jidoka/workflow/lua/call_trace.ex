@@ -1,4 +1,4 @@
-defmodule JidokaExample.LuaToolsAgent.CallTrace do
+defmodule Jidoka.Workflow.Lua.CallTrace do
   @moduledoc false
 
   @spec start_link() :: Agent.on_start()

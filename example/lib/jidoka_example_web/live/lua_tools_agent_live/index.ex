@@ -14,6 +14,7 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
   Find Northwind customers, list unpaid invoices for each customer, draft a follow-up note with the hidden support note tool, and summarize every hidden Lua tool call you made.
   """
   @example_root Path.expand("../../../..", __DIR__)
+  @package_root Path.expand("..", @example_root)
   @tabs ~w(activity source)
   @sources [
     %{id: "jido", label: "Jido", path: "lib/jidoka_example/jido.ex"},
@@ -21,24 +22,39 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     %{id: "agent", label: "Agent", path: "lib/jidoka_example/lua_tools_agent/agent.ex"},
     %{id: "catalog", label: "Lua Catalog", path: "lib/jidoka_example/lua_tools_agent/catalog.ex"},
     %{
-      id: "runtime",
-      label: "Lua Runtime",
+      id: "runtime_wrapper",
+      label: "Runtime Wrapper",
       path: "lib/jidoka_example/lua_tools_agent/lua_runtime.ex"
     },
     %{
-      id: "workflow",
-      label: "Lua Workflow",
-      path: "lib/jidoka_example/lua_tools_agent/lua_workflow.ex"
+      id: "workflow_lua",
+      label: "Jidoka.Workflow.Lua",
+      root: :package,
+      path: "lib/jidoka/workflow/lua.ex"
     },
     %{
-      id: "workflow_spec",
-      label: "Workflow Spec",
-      path: "lib/jidoka_example/lua_tools_agent/lua_workflow/spec.ex"
+      id: "workflow_plan",
+      label: "Lua Plan Runtime",
+      root: :package,
+      path: "lib/jidoka/workflow/lua/plan.ex"
     },
     %{
-      id: "workflow_ref",
-      label: "Workflow Refs",
-      path: "lib/jidoka_example/lua_tools_agent/lua_workflow/ref.ex"
+      id: "workflow_plan_spec",
+      label: "Lua Plan Spec",
+      root: :package,
+      path: "lib/jidoka/workflow/lua/plan/spec.ex"
+    },
+    %{
+      id: "workflow_plan_ref",
+      label: "Lua Plan Refs",
+      root: :package,
+      path: "lib/jidoka/workflow/lua/plan/ref.ex"
+    },
+    %{
+      id: "workflow_lua_policy",
+      label: "Lua Policy",
+      root: :package,
+      path: "lib/jidoka/workflow/lua/policy.ex"
     },
     %{
       id: "query",
@@ -89,6 +105,7 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
         default_question: @default_question,
         example_root: @example_root,
         guide: Agent.guide(),
+        package_root: @package_root,
         page_title: "Lua Tools Agent",
         sources: @sources,
         tabs: @tabs

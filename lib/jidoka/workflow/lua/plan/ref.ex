@@ -1,4 +1,4 @@
-defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Ref do
+defmodule Jidoka.Workflow.Lua.Plan.Ref do
   @moduledoc false
 
   @spec collect(term()) :: [String.t()]
@@ -68,27 +68,27 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Ref do
     end
   end
 
-  defp resolve_path(value, [], _step_id), do: {:ok, value}
+  defp resolve_path(value, [], _source), do: {:ok, value}
 
-  defp resolve_path(value, [key | path], step_id) when is_map(value) do
+  defp resolve_path(value, [key | path], source) when is_map(value) do
     case fetch_path_key(value, key) do
-      {:ok, nested} -> resolve_path(nested, path, step_id)
-      :error -> {:error, {:missing_lua_workflow_path, step_id, key}}
+      {:ok, nested} -> resolve_path(nested, path, source)
+      :error -> {:error, {:missing_lua_workflow_path, source, key}}
     end
   end
 
-  defp resolve_path(value, [key | path], step_id) when is_list(value) do
+  defp resolve_path(value, [key | path], source) when is_list(value) do
     with {:ok, index} <- path_index(key),
          {:ok, nested} <- fetch_list_index(value, index) do
-      resolve_path(nested, path, step_id)
+      resolve_path(nested, path, source)
     else
-      :error -> {:error, {:missing_lua_workflow_path, step_id, key}}
+      :error -> {:error, {:missing_lua_workflow_path, source, key}}
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp resolve_path(value, [key | _path], step_id),
-    do: {:error, {:invalid_lua_workflow_path_target, step_id, key, value}}
+  defp resolve_path(value, [key | _path], source),
+    do: {:error, {:invalid_lua_workflow_path_target, source, key, value}}
 
   defp fetch_path_key(map, key) do
     key = to_string(key)
