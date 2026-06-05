@@ -177,6 +177,9 @@ end
 - A JSON object with `"type": "final"` and `"content"`.
 - A JSON object with `"type": "operation"`, `"tool_call"`, `"function_call"`,
   or shorthand fields like `"name"` + `"arguments"`.
+- A JSON object with `"type": "operations"` or a `"tool_calls"` /
+  `"function_calls"` array. Jidoka preserves the returned order while the
+  runtime may execute independent operation intents concurrently.
 - Markdown-fenced JSON (`` ```json ... ``` ``).
 - Plain text, which is treated as `LLMDecision.final/1` content.
 
@@ -418,8 +421,9 @@ Adding a new signal type (for example, `"jidoka.session.resume"`) requires:
   [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`).
 - **New LLM adapters.** Implement the
   `(Effect.Intent.t(), Effect.Journal.t() -> {:ok, %Effect.LLMDecision{}} | {:error, term})`
-  contract. Return `Effect.LLMDecision.final/2` or
-  `Effect.LLMDecision.operation/2` directly when no JSON parsing is needed.
+  contract. Return `Effect.LLMDecision.final/2`,
+  `Effect.LLMDecision.operation/3`, or `Effect.LLMDecision.operations/2`
+  directly when no JSON parsing is needed.
 - **New operation sources.** Implement `Jidoka.Operation.Source` and reuse
   `Jidoka.Runtime.LocalOperations` for arity-1/arity-2 dispatch.
 - **Approval providers.** Wrap `Jidoka.Runtime.Review.approval_response/1` by

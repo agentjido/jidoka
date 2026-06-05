@@ -140,6 +140,9 @@ defmodule Jidoka.Turn.State do
       {:ok, %Effect.LLMDecision{type: :operation, name: name, arguments: arguments} = decision} ->
         plan_operation_turn(state, decision, name, arguments)
 
+      {:ok, %Effect.LLMDecision{type: :operations, operations: operations} = decision} ->
+        plan_operation_turns(state, decision, operations)
+
       {:error, reason} ->
         {:error, reason}
     end
@@ -341,6 +344,27 @@ defmodule Jidoka.Turn.State do
     end
   end
 
+  defp plan_operation_turns(%__MODULE__{} = state, %Effect.LLMDecision{} = decision, operations) do
+    batch_size = length(operations)
+
+    operations
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {operation_request, index}, {:ok, effects} ->
+      case plan_operation_effect(state, operation_request.name, operation_request.arguments, index, batch_size) do
+        {:ok, effect} -> {:cont, {:ok, [effect | effects]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, effects} ->
+        effects = Enum.reverse(effects)
+        {:ok, put_operation_effects(state, decision, operations, effects)}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp operation_for(%__MODULE__{spec: %{operations: operations}}, name) do
     Enum.find(operations, &(&1.name == name))
   end
@@ -354,39 +378,117 @@ defmodule Jidoka.Turn.State do
         loop_index: state.loop_index
       )
 
-    payload = Effect.OperationRequest.to_payload(operation_request)
+    effect = operation_effect(state, operation, operation_request, 0, 1)
 
-    effect =
-      Effect.Intent.new(:operation, payload,
-        idempotency: operation.idempotency,
-        idempotency_key:
-          stable_key([
-            state.spec.id,
-            state.request.request_id,
-            :operation,
-            state.loop_index,
-            name,
-            arguments
-          ])
-      )
+    put_operation_effects(state, decision, [operation_request], [effect])
+  end
 
-    %__MODULE__{
+  defp put_operation_effects(
+         %__MODULE__{} = state,
+         %Effect.LLMDecision{} = decision,
+         operation_requests,
+         effects
+       ) do
+    planned_state = %__MODULE__{
       state
       | llm_result: decision,
-        operation_plan: operation_request,
-        pending_effects: [effect]
+        operation_plan: List.first(operation_requests),
+        pending_effects: effects
     }
-    |> transition()
-    |> transition_event(:effect_planned,
-      agent_id: state.spec.id,
-      request_id: state.request.request_id,
-      loop_index: state.loop_index,
-      effect_id: effect.id,
-      effect_kind: :operation,
-      operation: name
-    )
+
+    effects
+    |> Enum.reduce(transition(planned_state), fn effect, transition ->
+      transition_event(transition, :effect_planned,
+        agent_id: state.spec.id,
+        request_id: state.request.request_id,
+        loop_index: state.loop_index,
+        effect_id: effect.id,
+        effect_kind: :operation,
+        operation: effect_operation_name(effect),
+        data: batch_metadata(effect)
+      )
+    end)
     |> Turn.Transition.commit()
   end
+
+  defp plan_operation_effect(%__MODULE__{} = state, name, arguments, index, batch_size) do
+    case operation_for(state, name) do
+      nil ->
+        {:error, {:unknown_operation, name}}
+
+      operation ->
+        with :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
+          operation_request =
+            Effect.OperationRequest.new!(
+              name: name,
+              arguments: arguments,
+              request_id: state.request.request_id,
+              loop_index: state.loop_index,
+              metadata: %{"batch_index" => index, "batch_size" => batch_size}
+            )
+
+          {:ok, operation_effect(state, operation, operation_request, index, batch_size)}
+        end
+    end
+  end
+
+  defp operation_effect(
+         %__MODULE__{} = state,
+         operation,
+         %Effect.OperationRequest{} = operation_request,
+         index,
+         batch_size
+       ) do
+    name = operation_request.name
+    arguments = operation_request.arguments
+    payload = Effect.OperationRequest.to_payload(operation_request)
+
+    {idempotency_key, metadata} =
+      operation_effect_identity(state, name, arguments, index, batch_size)
+
+    Effect.Intent.new(:operation, payload,
+      idempotency: operation.idempotency,
+      idempotency_key: idempotency_key,
+      metadata: metadata
+    )
+  end
+
+  defp operation_effect_identity(%__MODULE__{} = state, name, arguments, _index, 1) do
+    idempotency_key =
+      stable_key([
+        state.spec.id,
+        state.request.request_id,
+        :operation,
+        state.loop_index,
+        name,
+        arguments
+      ])
+
+    {idempotency_key, %{}}
+  end
+
+  defp operation_effect_identity(%__MODULE__{} = state, name, arguments, index, batch_size) do
+    idempotency_key =
+      stable_key([
+        state.spec.id,
+        state.request.request_id,
+        :operation,
+        state.loop_index,
+        index,
+        batch_size,
+        name,
+        arguments
+      ])
+
+    {idempotency_key, %{"batch_index" => index, "batch_size" => batch_size}}
+  end
+
+  defp effect_operation_name(%Effect.Intent{payload: payload}) do
+    Map.get(payload, :name) || Map.get(payload, "name")
+  end
+
+  defp batch_metadata(%Effect.Intent{metadata: metadata}) when map_size(metadata) == 0, do: %{}
+  defp batch_metadata(%Effect.Intent{metadata: metadata}), do: metadata
 
   defp transition(%__MODULE__{} = state), do: Turn.Transition.new!(state)
 

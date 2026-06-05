@@ -14,6 +14,13 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
     "function_call",
     "action"
   ]
+  @operations_decision_types [
+    "operations",
+    "tools",
+    "tool_calls",
+    "function_calls",
+    "actions"
+  ]
 
   @type t ::
           LLMDecision.t()
@@ -30,31 +37,39 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
 
   @spec parse_object(map()) :: {:ok, t()} | {:error, term()}
   def parse_object(object) when is_map(object) do
-    case Schema.get_key(object, :type) do
-      "final" ->
-        parse_final(object)
+    parse_object_by_type(object, Schema.get_key(object, :type))
+  end
 
-      nil ->
-        if untyped_operation_shorthand?(object) do
-          parse_operation(object)
-        else
-          parse_untyped_final(object)
-        end
+  defp parse_object_by_type(object, "final"), do: parse_final(object)
 
-      type when type in @operation_decision_types ->
-        parse_operation(object)
-
-      type when is_binary(type) ->
-        if operation_shorthand?(object) do
-          parse_operation(object, type)
-        else
-          {:error, {:invalid_llm_decision_type, type}}
-        end
-
-      type ->
-        {:error, {:invalid_llm_decision_type, type}}
+  defp parse_object_by_type(object, nil) do
+    cond do
+      untyped_operations_shorthand?(object) -> parse_operations(object)
+      untyped_operation_shorthand?(object) -> parse_operation(object)
+      true -> parse_untyped_final(object)
     end
   end
+
+  defp parse_object_by_type(object, type) when type in @operations_decision_types,
+    do: parse_operations(object)
+
+  defp parse_object_by_type(object, type) when type in @operation_decision_types do
+    if operations_shorthand?(object) do
+      parse_operations(object)
+    else
+      parse_operation(object)
+    end
+  end
+
+  defp parse_object_by_type(object, type) when is_binary(type) do
+    if operation_shorthand?(object) do
+      parse_operation(object, type)
+    else
+      {:error, {:invalid_llm_decision_type, type}}
+    end
+  end
+
+  defp parse_object_by_type(_object, type), do: {:error, {:invalid_llm_decision_type, type}}
 
   defp parse_final(object) do
     case Schema.get_key(object, :content) do
@@ -90,15 +105,74 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
     build_operation_decision(name, arguments)
   end
 
+  defp parse_operations(object) when is_map(object) do
+    object
+    |> operation_items()
+    |> case do
+      operations when is_list(operations) and operations != [] -> parse_operation_items(operations)
+      operations -> {:error, {:empty_operations, operations}}
+    end
+  end
+
+  defp parse_operation_items(operations) do
+    operations
+    |> Enum.reduce_while({:ok, []}, fn operation, {:ok, acc} ->
+      case operation_request(operation) do
+        {:ok, request} -> {:cont, {:ok, [request | acc]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, operations} -> {:ok, LLMDecision.operations(Enum.reverse(operations))}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp operation_items(object) when is_map(object) do
+    cond do
+      is_list(Schema.get_key(object, :operations)) ->
+        Schema.get_key(object, :operations)
+
+      is_list(Schema.get_key(object, :tool_calls)) ->
+        Schema.get_key(object, :tool_calls)
+
+      is_list(Schema.get_key(object, :tools)) ->
+        Schema.get_key(object, :tools)
+
+      is_list(Schema.get_key(object, :function_calls)) ->
+        Schema.get_key(object, :function_calls)
+
+      is_list(Schema.get_key(object, :actions)) ->
+        Schema.get_key(object, :actions)
+
+      true ->
+        nil
+    end
+  end
+
+  defp operation_request(%{} = object) do
+    nested = nested_operation_object(object)
+    name = operation_name(object, nested, nil)
+    arguments = operation_arguments(object, nested, nil)
+
+    build_operation_request(name, arguments)
+  end
+
+  defp operation_request(other), do: {:error, {:invalid_operation_request, other}}
+
   defp operation_name(object, nested, fallback_name) do
-    Schema.get_key(object, :name) ||
-      Schema.get_key(object, :operation) ||
-      Schema.get_key(object, :tool) ||
-      Schema.get_key(object, :tool_name) ||
-      Schema.get_key(object, :function) ||
-      Schema.get_key(object, :function_name) ||
-      nested_name(nested) ||
+    candidates = [
+      Schema.get_key(object, :name),
+      Schema.get_key(object, :operation),
+      Schema.get_key(object, :tool),
+      Schema.get_key(object, :tool_name),
+      Schema.get_key(object, :function),
+      Schema.get_key(object, :function_name),
+      nested_name(nested),
       fallback_name
+    ]
+
+    Enum.find(candidates, &is_binary/1) || Enum.find(candidates, &(not is_nil(&1)))
   end
 
   defp operation_arguments(object, nested, fallback_name) do
@@ -112,11 +186,40 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
   end
 
   defp build_operation_decision(name, arguments) do
+    arguments = normalize_arguments(arguments)
+
     cond do
       not is_binary(name) -> {:error, {:invalid_operation_name, name}}
       not is_map(arguments) -> {:error, {:invalid_operation_arguments, arguments}}
       true -> {:ok, LLMDecision.operation(name, arguments)}
     end
+  end
+
+  defp build_operation_request(name, arguments) do
+    arguments = normalize_arguments(arguments)
+
+    cond do
+      not is_binary(name) -> {:error, {:invalid_operation_name, name}}
+      not is_map(arguments) -> {:error, {:invalid_operation_arguments, arguments}}
+      true -> {:ok, %{name: name, arguments: arguments}}
+    end
+  end
+
+  defp normalize_arguments(arguments) when is_binary(arguments) do
+    case Jason.decode(arguments) do
+      {:ok, %{} = decoded} -> decoded
+      _other -> arguments
+    end
+  end
+
+  defp normalize_arguments(arguments), do: arguments
+
+  defp operations_shorthand?(object) when is_map(object) do
+    is_list(Schema.get_key(object, :operations)) or
+      is_list(Schema.get_key(object, :tool_calls)) or
+      is_list(Schema.get_key(object, :tools)) or
+      is_list(Schema.get_key(object, :function_calls)) or
+      is_list(Schema.get_key(object, :actions))
   end
 
   defp operation_shorthand?(object) when is_map(object) do
@@ -125,6 +228,10 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
       match?(%{}, Schema.get_key(object, :parameters)) or
       match?(%{}, nested_operation_object(object)) or
       map_size(shorthand_arguments(object, :operation) || %{}) > 0
+  end
+
+  defp untyped_operations_shorthand?(object) when is_map(object) do
+    operations_shorthand?(object)
   end
 
   defp untyped_operation_shorthand?(object) when is_map(object) do

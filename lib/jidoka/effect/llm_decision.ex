@@ -3,13 +3,15 @@ defmodule Jidoka.Effect.LLMDecision do
   Typed model-side decision returned by an LLM effect.
 
   The runtime uses a constrained decision protocol: a model either returns a
-  final response or asks Jidoka to run one operation. Keeping that decision as a
-  struct gives hibernate/resume a stable shape instead of relying on loose maps.
+  final response or asks Jidoka to run one or more operations. Keeping that
+  decision as a struct gives hibernate/resume a stable shape instead of relying
+  on loose maps.
   """
 
   alias Jidoka.Schema
+  alias Jidoka.Effect.OperationRequest
 
-  @types [:final, :operation]
+  @types [:final, :operation, :operations]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -19,12 +21,13 @@ defmodule Jidoka.Effect.LLMDecision do
               result: Zoi.any() |> Zoi.nullish(),
               name: Schema.non_empty_string() |> Zoi.nullish(),
               arguments: Zoi.map() |> Zoi.default(%{}),
+              operations: Zoi.array(Zoi.lazy({OperationRequest, :schema, []})) |> Zoi.default([]),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
           )
 
-  @type decision_type :: :final | :operation
+  @type decision_type :: :final | :operation | :operations
   @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
@@ -37,38 +40,10 @@ defmodule Jidoka.Effect.LLMDecision do
     attrs = Schema.normalize_attrs(attrs)
 
     case normalized_type(Schema.get_key(attrs, :type)) do
-      "final" ->
-        case Schema.get_key(attrs, :content) do
-          content when is_binary(content) ->
-            attrs
-            |> Map.delete("type")
-            |> Map.put(:type, :final)
-            |> then(&Schema.parse(@schema, &1))
-
-          other ->
-            {:error, {:invalid_final_content, other}}
-        end
-
-      "operation" ->
-        name = Schema.get_key(attrs, :name)
-        arguments = Schema.get_key(attrs, :arguments, %{})
-
-        cond do
-          not is_binary(name) ->
-            {:error, {:invalid_operation_name, name}}
-
-          not is_map(arguments) ->
-            {:error, {:invalid_operation_arguments, arguments}}
-
-          true ->
-            attrs
-            |> Map.delete("type")
-            |> Map.put(:type, :operation)
-            |> then(&Schema.parse(@schema, &1))
-        end
-
-      type ->
-        {:error, {:invalid_llm_decision_type, type}}
+      "final" -> new_final(attrs)
+      "operation" -> new_operation(attrs)
+      "operations" -> new_operations(attrs)
+      type -> {:error, {:invalid_llm_decision_type, type}}
     end
   end
 
@@ -104,6 +79,15 @@ defmodule Jidoka.Effect.LLMDecision do
     )
   end
 
+  @spec operations([OperationRequest.t() | keyword() | map()], keyword()) :: t()
+  def operations(operations, opts \\ []) when is_list(operations) do
+    new!(
+      type: :operations,
+      operations: operations,
+      metadata: Keyword.get(opts, :metadata, %{})
+    )
+  end
+
   @spec to_payload(t()) :: map()
   def to_payload(%__MODULE__{type: :final, content: content, result: result}) do
     %{type: :final, content: content, result: result}
@@ -115,6 +99,48 @@ defmodule Jidoka.Effect.LLMDecision do
     %{type: :operation, name: name, arguments: arguments}
   end
 
+  def to_payload(%__MODULE__{type: :operations, operations: operations}) do
+    %{type: :operations, operations: Enum.map(operations, &OperationRequest.to_payload/1)}
+  end
+
   defp normalized_type(type) when is_atom(type), do: Atom.to_string(type)
   defp normalized_type(type), do: type
+
+  defp new_final(attrs) do
+    case Schema.get_key(attrs, :content) do
+      content when is_binary(content) ->
+        parse_typed(attrs, :final)
+
+      other ->
+        {:error, {:invalid_final_content, other}}
+    end
+  end
+
+  defp new_operation(attrs) do
+    name = Schema.get_key(attrs, :name)
+    arguments = Schema.get_key(attrs, :arguments, %{})
+
+    cond do
+      not is_binary(name) -> {:error, {:invalid_operation_name, name}}
+      not is_map(arguments) -> {:error, {:invalid_operation_arguments, arguments}}
+      true -> parse_typed(attrs, :operation)
+    end
+  end
+
+  defp new_operations(attrs) do
+    operations = Schema.get_key(attrs, :operations, [])
+
+    cond do
+      not is_list(operations) -> {:error, {:invalid_operations, operations}}
+      operations == [] -> {:error, {:empty_operations, operations}}
+      true -> parse_typed(attrs, :operations)
+    end
+  end
+
+  defp parse_typed(attrs, type) do
+    attrs
+    |> Map.delete("type")
+    |> Map.put(:type, type)
+    |> then(&Schema.parse(@schema, &1))
+  end
 end

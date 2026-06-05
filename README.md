@@ -20,7 +20,7 @@ resume later.
 DSL / JSON / YAML
 -> Jidoka.Agent.Spec
 -> Jidoka.chat / Jidoka.turn / Jidoka.Session
--> model calls + tool calls
+-> model calls + bounded tool-call batches
 -> text, Turn.Result, or snapshot
 ```
 
@@ -81,7 +81,7 @@ end
 ```
 
 Use `chat/3` when you only need the final assistant text. Use `turn/3` when
-you need the full result:
+you need the full result, including journaled tool calls and events:
 
 ```elixir
 {:ok, result} = Jidoka.turn(MyApp.Assistant, "What can you help me with?")

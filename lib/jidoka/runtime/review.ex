@@ -127,28 +127,37 @@ defmodule Jidoka.Runtime.Review do
          %Review.Interrupt{} = interrupt,
          response
        ) do
-    case Turn.State.current_pending_effect(state) do
-      %Effect.Intent{id: effect_id} = effect when effect_id == interrupt.effect_id ->
+    case Enum.find(state.pending_effects, fn
+           %Effect.Intent{id: effect_id} -> effect_id == interrupt.effect_id
+           _other -> false
+         end) do
+      %Effect.Intent{} = effect ->
         metadata =
           effect.metadata
           |> Map.put("approved_interrupt_id", interrupt.id)
           |> Map.put("approval_decision", response.decision)
 
-        {:ok, replace_current_pending_effect(state, %Effect.Intent{effect | metadata: metadata})}
-
-      %Effect.Intent{} = effect ->
-        {:error, {:approval_effect_mismatch, interrupt.effect_id, effect.id}}
+        {:ok, replace_pending_effect(state, %Effect.Intent{effect | metadata: metadata})}
 
       nil ->
-        {:error, {:missing_pending_effect, state}}
+        case Turn.State.current_pending_effect(state) do
+          %Effect.Intent{} = effect ->
+            {:error, {:approval_effect_mismatch, interrupt.effect_id, effect.id}}
+
+          nil ->
+            {:error, {:missing_pending_effect, state}}
+        end
     end
   end
 
-  defp replace_current_pending_effect(
-         %Turn.State{pending_effects: [_effect | rest]} = state,
-         effect
-       ) do
-    %Turn.State{state | pending_effects: [effect | rest]}
+  defp replace_pending_effect(%Turn.State{} = state, %Effect.Intent{id: effect_id} = effect) do
+    pending_effects =
+      Enum.map(state.pending_effects, fn
+        %Effect.Intent{id: ^effect_id} -> effect
+        other -> other
+      end)
+
+    %Turn.State{state | pending_effects: pending_effects}
   end
 
   defp append_requested(%Turn.State{} = state, %Review.Interrupt{} = interrupt) do
