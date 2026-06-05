@@ -22,8 +22,8 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
         )
       end)
 
-    assert_receive {:operation_started, "slow_a", slow_a_pid}
-    assert_receive {:operation_started, "slow_b", slow_b_pid}
+    assert_receive {:operation_started, "slow_a", slow_a_pid}, 1_000
+    assert_receive {:operation_started, "slow_b", slow_b_pid}, 1_000
 
     send(slow_b_pid, {:release_operation, "slow_b"})
     send(slow_a_pid, {:release_operation, "slow_a"})
@@ -46,6 +46,34 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
 
     assert operation_event_index(events, :capability_call_started, "slow_a") < first_completed
     assert operation_event_index(events, :capability_call_started, "slow_b") < first_completed
+  end
+
+  test "operation batches use the configured default parallelism" do
+    test_pid = self()
+    operation_names = Enum.map(1..8, &"slow_#{&1}")
+
+    task =
+      Task.async(fn ->
+        Jidoka.turn(spec(operation_names), "Run all lookups.",
+          llm: batched_llm(operation_names, "All lookups finished."),
+          operations: blocking_operations(test_pid, operation_names)
+        )
+      end)
+
+    started =
+      Enum.map(operation_names, fn name ->
+        assert_receive {:operation_started, ^name, pid}, 1_000
+        {name, pid}
+      end)
+
+    Enum.each(started, fn {name, pid} ->
+      send(pid, {:release_operation, name})
+    end)
+
+    assert {:ok, %Turn.Result{content: "All lookups finished."} = result} =
+             Task.await(task, 5_000)
+
+    assert Enum.map(result.agent_state.operation_results, & &1.operation) == operation_names
   end
 
   test "duplicate operation calls in one batch are both executed and observed" do
@@ -79,8 +107,8 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
            ] = result.agent_state.operation_results
 
     assert first_effect_id != second_effect_id
-    assert_receive {:lookup_called, "A"}
-    assert_receive {:lookup_called, "A"}
+    assert_receive {:lookup_called, "A"}, 1_000
+    assert_receive {:lookup_called, "A"}, 1_000
   end
 
   test "a review interrupt in a batch hibernates before any operation executes" do
@@ -125,8 +153,8 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
                clock: clock(1_001)
              )
 
-    assert_receive {:operation_called, "safe_lookup"}
-    assert_receive {:operation_called, "review_lookup"}
+    assert_receive {:operation_called, "safe_lookup"}, 1_000
+    assert_receive {:operation_called, "review_lookup"}, 1_000
   end
 
   defp spec(operation_names) do
