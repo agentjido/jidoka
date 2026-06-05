@@ -3,6 +3,8 @@ defmodule JidokaExample.LuaToolsAgent.LuaRuntime do
 
   alias JidokaExample.LuaToolsAgent.CallTrace
   alias JidokaExample.LuaToolsAgent.Policy
+  alias JidokaExample.LuaToolsAgent.Surface
+  alias JidokaExample.LuaToolsAgent.ToolWorkflow
 
   @spec execute(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def execute(script, opts \\ [])
@@ -71,9 +73,12 @@ defmodule JidokaExample.LuaToolsAgent.LuaRuntime do
     lua =
       policy.entries
       |> Enum.reduce(new_lua(policy), fn entry, lua ->
-        Lua.set!(lua, entry.path, fn args, state ->
+        Lua.set!(lua, Surface.lua_path(entry), fn args, state ->
           call_entry(entry, args, state, trace, policy, context)
         end)
+      end)
+      |> Lua.set!(["jidoka", "parallel"], fn args, state ->
+        call_parallel(args, state, trace, policy, context)
       end)
 
     case Lua.eval!(lua, script) do
@@ -103,43 +108,96 @@ defmodule JidokaExample.LuaToolsAgent.LuaRuntime do
       end
       |> ensure_map()
 
-    case CallTrace.reserve(trace, entry.id, decoded_args, policy.max_calls) do
-      {:ok, call_id} ->
-        case run_action(entry.action, decoded_args, context) do
-          {:ok, output} ->
-            CallTrace.complete(trace, call_id, "ok", output)
-            {encoded, state} = Lua.encode!(state, output)
-            {[encoded], state}
-
-          {:error, reason} ->
-            output = %{"error" => format_reason(reason)}
-            CallTrace.complete(trace, call_id, "error", output)
-            {:error, output["error"], state}
-        end
+    case ToolWorkflow.run_call(entry.id, decoded_args, trace, policy, context) do
+      {:ok, output} ->
+        {encoded, state} = Lua.encode!(state, output)
+        {[encoded], state}
 
       {:error, reason} ->
         {:error, format_reason(reason), state}
     end
   end
 
-  defp run_action(action, arguments, context) do
-    tool = action.to_tool()
-
-    case tool.function.(arguments, context) do
-      {:ok, encoded} -> {:ok, decode_tool_payload(encoded)}
-      {:error, encoded} -> {:error, decode_tool_payload(encoded)}
-      other -> {:error, {:invalid_action_result, other}}
+  defp call_parallel(args, state, trace, policy, context) do
+    with {:ok, call_specs} <- normalize_parallel_args(args, state),
+         {:ok, outputs} <- ToolWorkflow.run_calls(call_specs, trace, policy, context) do
+      {encoded, state} = Lua.encode!(state, outputs)
+      {[encoded], state}
+    else
+      {:error, reason} -> {:error, format_reason(reason), state}
     end
   end
 
-  defp decode_tool_payload(encoded) when is_binary(encoded) do
-    case Jason.decode(encoded) do
-      {:ok, decoded} -> decoded
-      {:error, _reason} -> encoded
+  defp normalize_parallel_args(args, state) do
+    args =
+      args
+      |> decode_lua_args(state)
+      |> case do
+        [arg] -> normalize_lua_value(arg)
+        [] -> []
+        args -> Enum.map(args, &normalize_lua_value/1)
+      end
+
+    args
+    |> List.wrap()
+    |> Enum.reduce_while({:ok, []}, fn call, {:ok, calls} ->
+      case normalize_parallel_call(call) do
+        {:ok, call} -> {:cont, {:ok, calls ++ [call]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp normalize_parallel_call(%{} = call) do
+    with {:ok, tool_id} <- parallel_tool_id(call),
+         {:ok, arguments} <- parallel_arguments(call) do
+      {:ok, %{tool_id: tool_id, arguments: arguments}}
     end
   end
 
-  defp decode_tool_payload(value), do: value
+  defp normalize_parallel_call(call), do: {:error, {:invalid_lua_parallel_call, call}}
+
+  defp parallel_tool_id(call) do
+    call
+    |> first_present(["tool_id", "tool", "id", "name", "path"])
+    |> case do
+      nil -> {:error, {:missing_lua_parallel_tool, call}}
+      path when is_list(path) -> {:ok, path |> Enum.map(&to_string/1) |> Enum.join(".")}
+      tool_id -> {:ok, to_string(tool_id)}
+    end
+  end
+
+  defp parallel_arguments(call) do
+    arguments = first_present(call, ["arguments", "args", "input"]) || %{}
+    {:ok, ensure_map(arguments)}
+  end
+
+  defp first_present(map, keys) do
+    Enum.find_value(keys, fn key ->
+      key
+      |> fetch_known_key(map)
+      |> case do
+        {:ok, value} -> value
+        :error -> nil
+      end
+    end)
+  end
+
+  defp fetch_known_key(key, map) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> {:ok, value}
+      :error -> Map.fetch(map, known_key_atom(key))
+    end
+  end
+
+  defp known_key_atom("tool_id"), do: :tool_id
+  defp known_key_atom("tool"), do: :tool
+  defp known_key_atom("id"), do: :id
+  defp known_key_atom("name"), do: :name
+  defp known_key_atom("path"), do: :path
+  defp known_key_atom("arguments"), do: :arguments
+  defp known_key_atom("args"), do: :args
+  defp known_key_atom("input"), do: :input
 
   defp decode_lua_args(args, state) when is_list(args), do: Lua.decode_list!(state, args)
   defp decode_lua_args(arg, state), do: [Lua.decode!(state, arg)]

@@ -12,9 +12,11 @@ defmodule JidokaExample.LuaToolsAgent.Actions.ListUnpaidInvoices do
       })
 
   @impl true
-  def run(params, _context) do
+  def run(params, context) do
     customer_id = params |> customer_id() |> to_string()
     limit = params |> get(:limit, 5) |> clamp_limit()
+
+    maybe_wait_for_parallel_test(customer_id, context)
 
     invoices =
       invoices()
@@ -51,6 +53,22 @@ defmodule JidokaExample.LuaToolsAgent.Actions.ListUnpaidInvoices do
       customer_id -> customer_id
     end
   end
+
+  defp maybe_wait_for_parallel_test(customer_id, %{lua_test_pid: pid}) when is_pid(pid) do
+    send(pid, {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, self()})
+
+    receive do
+      :continue_lua_hidden_action -> :ok
+    after
+      1_000 -> :ok
+    end
+  end
+
+  defp maybe_wait_for_parallel_test(customer_id, %{"lua_test_pid" => pid}) when is_pid(pid) do
+    maybe_wait_for_parallel_test(customer_id, %{lua_test_pid: pid})
+  end
+
+  defp maybe_wait_for_parallel_test(_customer_id, _context), do: :ok
 
   defp invoices do
     %{

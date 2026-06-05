@@ -6,6 +6,18 @@ defmodule JidokaExample.LuaToolsAgentTest do
   alias JidokaExample.LuaToolsAgent.Actions.LuaToolsQuery
   alias JidokaExample.LuaToolsAgent.Agent
   alias JidokaExample.LuaToolsAgent.LuaRuntime
+  alias JidokaExample.LuaToolsAgent.Surface
+
+  test "hidden Lua tools are backed by a Jido action catalog" do
+    assert %Jido.Action.Catalog{} = catalog = Surface.catalog()
+    assert [%Jido.Action.Catalog.Entry{} | _entries] = Surface.entries()
+
+    assert {:ok, entry} = Jido.Action.Catalog.fetch(catalog, "billing.invoice.list_unpaid")
+    assert entry.module == JidokaExample.LuaToolsAgent.Actions.ListUnpaidInvoices
+    assert entry.visibility == :hidden
+    assert entry.read_only?
+    assert Surface.lua_path(entry) == ["billing", "invoice", "list_unpaid"]
+  end
 
   @script """
   local customers = crm.customer.search({query = "Northwind", limit = 2})
@@ -83,6 +95,50 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
     assert [%{"note" => %{"note" => note}}] = result["result"]["items"]
     assert note =~ "Ada Lovelace"
+  end
+
+  test "jidoka.parallel maps hidden Lua tool calls into a Runic workflow" do
+    test_pid = self()
+
+    script = """
+    local results = jidoka.parallel({
+      {tool = "billing.invoice.list_unpaid", arguments = {customer_id = "cus_ada", limit = 1}},
+      {tool = "billing.invoice.list_unpaid", arguments = {customer_id = "cus_grace", limit = 1}}
+    })
+
+    return {
+      customers = {results[1].customer_id, results[2].customer_id},
+      totals = {results[1].total_due_cents, results[2].total_due_cents}
+    }
+    """
+
+    task =
+      Task.async(fn ->
+        LuaRuntime.execute(script,
+          allowed_tools: ["billing.invoice.list_unpaid"],
+          context: %{lua_test_pid: test_pid},
+          max_parallel_calls: 2,
+          timeout: 3_000
+        )
+      end)
+
+    started =
+      for _ <- 1..2 do
+        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, action_pid},
+                       1_000
+
+        {customer_id, action_pid}
+      end
+
+    assert started |> Enum.map(&elem(&1, 0)) |> Enum.sort() == ["cus_ada", "cus_grace"]
+    Enum.each(started, fn {_customer_id, action_pid} -> send(action_pid, :continue_lua_hidden_action) end)
+
+    assert {:ok, result} = Task.await(task, 3_000)
+    assert result["status"] == "completed"
+    assert result["call_count"] == 2
+    assert result["policy"]["max_parallel_calls"] == 2
+    assert result["result"]["customers"] == ["cus_ada", "cus_grace"]
+    assert result["result"]["totals"] == [42_500, 132_000]
   end
 
   test "execute returns Lua script failures as structured tool observations" do

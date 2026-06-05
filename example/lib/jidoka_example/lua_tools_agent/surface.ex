@@ -1,26 +1,56 @@
 defmodule JidokaExample.LuaToolsAgent.Surface do
   @moduledoc false
 
-  @type entry :: %{
-          required(:id) => String.t(),
-          required(:path) => [String.t()],
-          required(:action) => module(),
-          required(:description) => String.t(),
-          required(:tags) => [String.t()],
-          required(:read_only?) => boolean(),
-          required(:returns) => String.t(),
-          required(:example) => String.t()
-        }
+  alias Jido.Action.Catalog
+  alias Jido.Action.Catalog.Entry
 
-  @spec entries() :: [entry()]
-  def entries do
+  @type entry :: Entry.t()
+
+  @spec catalog() :: Catalog.t()
+  def catalog do
+    Enum.reduce(entries_metadata(), Catalog.new!(catalog_attrs()), fn metadata, catalog ->
+      Catalog.register!(
+        catalog,
+        metadata.action,
+        id: metadata.id,
+        description: metadata.description,
+        summary: metadata.description,
+        namespace: metadata.namespace,
+        tags: metadata.tags,
+        capabilities: metadata.capabilities,
+        visibility: :hidden,
+        risk: :low,
+        read_only?: metadata.read_only?,
+        metadata: %{
+          "lua" => %{
+            "path" => metadata.path,
+            "returns" => metadata.returns,
+            "example" => metadata.example
+          }
+        }
+      )
+    end)
+  end
+
+  defp catalog_attrs do
+    [
+      id: "jidoka-example-lua-tools",
+      name: "Jidoka Example Lua Tools",
+      description: "Hidden read-only host actions exposed through the Lua tools demo.",
+      metadata: %{"surface" => "lua_tools"}
+    ]
+  end
+
+  defp entries_metadata do
     [
       %{
         id: "crm.customer.search",
         path: ["crm", "customer", "search"],
         action: JidokaExample.LuaToolsAgent.Actions.SearchCustomers,
         description: "Find CRM customers by name, company, status, tier, or tag.",
+        namespace: "crm.customer",
         tags: ["crm", "customer", "search", "account"],
+        capabilities: ["search", "customer_lookup"],
         read_only?: true,
         returns:
           "Returns the JSON map directly. If assigned to local search, use search.customers for the customer list and search.count for the total count.",
@@ -31,12 +61,13 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
         path: ["billing", "invoice", "list_unpaid"],
         action: JidokaExample.LuaToolsAgent.Actions.ListUnpaidInvoices,
         description: "List unpaid invoices for a customer id.",
+        namespace: "billing.invoice",
         tags: ["billing", "invoice", "unpaid", "collections"],
+        capabilities: ["invoice_lookup", "collections"],
         read_only?: true,
         returns:
           "Returns the JSON map directly. If assigned to local invoices, use invoices.invoices, invoices.total_due_cents, and invoices.count.",
-        example:
-          ~s|local invoices = billing.invoice.list_unpaid({customer_id = customer.id, limit = 5})|
+        example: ~s|local invoices = billing.invoice.list_unpaid({customer_id = customer.id, limit = 5})|
       },
       %{
         id: "support.note.draft_followup",
@@ -44,7 +75,9 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
         action: JidokaExample.LuaToolsAgent.Actions.DraftFollowupNote,
         description:
           "Draft a support follow-up note for open invoice context. Required args: customer_name, company, invoice_count, total_due_cents.",
+        namespace: "support.note",
         tags: ["support", "note", "draft", "collections"],
+        capabilities: ["draft_note", "collections"],
         read_only?: true,
         returns:
           "Returns the JSON map directly. If assigned to local note, use note.note for the drafted customer message.",
@@ -54,20 +87,25 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
     ]
   end
 
+  @spec entries() :: [entry()]
+  def entries, do: Catalog.list(catalog())
+
   @spec ids() :: [String.t()]
   def ids, do: Enum.map(entries(), & &1.id)
 
   @spec query(String.t(), keyword()) :: [map()]
   def query(query, opts \\ []) when is_binary(query) do
     limit = opts |> Keyword.get(:limit, 5) |> clamp_limit()
-    normalized_query = normalize(query)
 
-    entries()
-    |> Enum.map(&{score(&1, normalized_query), &1})
-    |> Enum.reject(fn {score, _entry} -> score <= 0 end)
-    |> Enum.sort_by(fn {score, entry} -> {-score, entry.id} end)
-    |> Enum.take(limit)
-    |> Enum.map(fn {_score, entry} -> compact(entry) end)
+    {:ok, hits} =
+      Catalog.search(catalog(), %{
+        text: query,
+        limit: limit,
+        visibility: [:hidden],
+        filters: %{read_only?: true}
+      })
+
+    Enum.map(hits, &compact(&1.entry))
   end
 
   @spec describe([String.t()]) :: {:ok, [map()]} | {:error, term()}
@@ -83,9 +121,9 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
 
   @spec fetch(String.t()) :: {:ok, entry()} | {:error, term()}
   def fetch(id) when is_binary(id) do
-    case Enum.find(entries(), &(&1.id == id)) do
-      nil -> {:error, {:unknown_lua_tool, id}}
-      entry -> {:ok, entry}
+    case Catalog.fetch(catalog(), id) do
+      {:ok, %Entry{} = entry} -> {:ok, entry}
+      {:error, _reason} -> {:error, {:unknown_lua_tool, id}}
     end
   end
 
@@ -93,9 +131,9 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
   def compact(entry) do
     %{
       "id" => entry.id,
-      "lua_path" => Enum.join(entry.path, "."),
+      "lua_path" => entry |> lua_path() |> Enum.join("."),
       "description" => entry.description,
-      "returns" => entry.returns,
+      "returns" => lua_metadata(entry, "returns"),
       "tags" => entry.tags,
       "read_only" => entry.read_only?
     }
@@ -103,39 +141,25 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
 
   @spec description(entry()) :: map()
   def description(entry) do
-    tool = entry.action.to_tool()
+    tool = entry.module.to_tool()
 
     %{
       "id" => entry.id,
-      "lua_path" => Enum.join(entry.path, "."),
+      "lua_path" => entry |> lua_path() |> Enum.join("."),
       "description" => entry.description,
       "parameters_schema" => tool.parameters_schema,
-      "returns" => entry.returns,
+      "returns" => lua_metadata(entry, "returns"),
       "safety" => if(entry.read_only?, do: "read_only", else: "mutating"),
-      "example" => entry.example
+      "example" => lua_metadata(entry, "example")
     }
   end
 
-  defp score(_entry, ""), do: 1
+  @spec lua_path(entry()) :: [String.t()]
+  def lua_path(%Entry{} = entry), do: lua_metadata(entry, "path") || []
 
-  defp score(entry, query) do
-    haystack =
-      [entry.id, entry.description | entry.tags]
-      |> Enum.join(" ")
-      |> normalize()
-
-    query
-    |> String.split(" ", trim: true)
-    |> Enum.count(&String.contains?(haystack, &1))
-  end
-
-  defp normalize(value) do
-    value
-    |> to_string()
-    |> String.downcase()
-    |> String.replace(~r/[^a-z0-9_.]+/, " ")
-    |> String.trim()
-  end
+  defp lua_metadata(%Entry{metadata: %{"lua" => metadata}}, key), do: Map.get(metadata, key)
+  defp lua_metadata(%Entry{metadata: %{lua: metadata}}, key), do: Map.get(metadata, key)
+  defp lua_metadata(_entry, _key), do: nil
 
   defp clamp_limit(limit) when is_integer(limit), do: limit |> max(1) |> min(10)
 

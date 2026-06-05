@@ -5,6 +5,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
 
   @default_timeout_ms 1_500
   @default_max_calls 12
+  @default_max_parallel_calls 8
   @default_max_call_depth 64
   @max_script_bytes 6_000
 
@@ -12,6 +13,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
     :allowed_tools,
     :entries,
     :max_calls,
+    :max_parallel_calls,
     :max_call_depth,
     :max_script_bytes,
     :timeout_ms
@@ -20,6 +22,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
     :allowed_tools,
     :entries,
     :max_calls,
+    :max_parallel_calls,
     :max_call_depth,
     :max_script_bytes,
     :timeout_ms
@@ -29,6 +32,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
           allowed_tools: [String.t()],
           entries: [Surface.entry()],
           max_calls: pos_integer(),
+          max_parallel_calls: pos_integer(),
           max_call_depth: pos_integer(),
           max_script_bytes: pos_integer(),
           timeout_ms: pos_integer()
@@ -42,8 +46,11 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
       allowed_tools: allowed_tools,
       entries: [],
       max_calls: opts |> Keyword.get(:max_calls, @default_max_calls) |> clamp_max_calls(),
-      max_call_depth:
-        opts |> Keyword.get(:max_call_depth, @default_max_call_depth) |> clamp_max_call_depth(),
+      max_parallel_calls:
+        opts
+        |> Keyword.get(:max_parallel_calls, @default_max_parallel_calls)
+        |> clamp_max_parallel_calls(),
+      max_call_depth: opts |> Keyword.get(:max_call_depth, @default_max_call_depth) |> clamp_max_call_depth(),
       max_script_bytes: @max_script_bytes,
       timeout_ms: opts |> Keyword.get(:timeout, @default_timeout_ms) |> clamp_timeout()
     }
@@ -63,6 +70,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
       "mode" => "read_only",
       "timeout_ms" => policy.timeout_ms,
       "max_calls" => policy.max_calls,
+      "max_parallel_calls" => policy.max_parallel_calls,
       "max_call_depth" => policy.max_call_depth,
       "max_script_bytes" => policy.max_script_bytes,
       "sandbox" => "lua_default"
@@ -111,6 +119,12 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
 
   defp clamp_max_calls(max_calls) when is_integer(max_calls), do: max_calls |> max(1) |> min(25)
   defp clamp_max_calls(_max_calls), do: @default_max_calls
+
+  defp clamp_max_parallel_calls(max_parallel_calls) when is_integer(max_parallel_calls) do
+    max_parallel_calls |> max(1) |> min(16)
+  end
+
+  defp clamp_max_parallel_calls(_max_parallel_calls), do: @default_max_parallel_calls
 
   defp clamp_max_call_depth(max_call_depth) when is_integer(max_call_depth) do
     max_call_depth |> max(4) |> min(256)
