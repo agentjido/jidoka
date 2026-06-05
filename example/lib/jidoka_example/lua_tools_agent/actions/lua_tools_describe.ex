@@ -3,7 +3,7 @@ defmodule JidokaExample.LuaToolsAgent.Actions.LuaToolsDescribe do
 
   use Jidoka.Action,
     name: "lua_tools_describe",
-    description: "Returns exact Lua function specs for selected hidden host capabilities.",
+    description: "Returns exact workflow step specs for selected hidden host capabilities.",
     schema:
       Zoi.object(%{
         ids: Zoi.array(Zoi.string())
@@ -21,7 +21,7 @@ defmodule JidokaExample.LuaToolsAgent.Actions.LuaToolsDescribe do
          "tools" => tools,
          "allowed_tools" => ids,
          "next" =>
-           "Call lua_tools_execute with a short Lua script using only these Lua paths. Lua calls return their JSON maps directly; they are not wrapped in a result field."
+           "Call lua_tools_execute with a short script that returns jidoka.workflow({...}). Use selected ids as step tool values. Do not call hidden tools as Lua globals. Step outputs are JSON maps directly; they are not wrapped in a result field."
        }}
     end
   end

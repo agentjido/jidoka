@@ -78,10 +78,11 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
     assert Enum.any?(describe_result["tools"], fn tool ->
              tool["lua_path"] == "crm.customer.search" and
-               tool["returns"] =~ "search.customers"
+               tool["returns"] =~ ~s|{from = "search", path = {"customers"}}|
            end)
 
-    assert describe_result["next"] =~ "not wrapped in a result field"
+    assert describe_result["next"] =~ "step tool values"
+    assert describe_result["next"] =~ "Do not call hidden tools as Lua globals"
 
     assert {:ok, draft_result} =
              LuaToolsDescribe.run(%{"ids" => ["support.note.draft_followup"]}, %{})
@@ -216,7 +217,10 @@ defmodule JidokaExample.LuaToolsAgentTest do
       end
 
     assert started |> Enum.map(&elem(&1, 0)) |> Enum.sort() == ["cus_ada", "cus_grace"]
-    Enum.each(started, fn {_customer_id, action_pid} -> send(action_pid, :continue_lua_hidden_action) end)
+
+    Enum.each(started, fn {_customer_id, action_pid} ->
+      send(action_pid, :continue_lua_hidden_action)
+    end)
 
     assert {:ok, result} = Task.await(task, 3_000)
     assert result["status"] == "completed"
@@ -303,7 +307,10 @@ defmodule JidokaExample.LuaToolsAgentTest do
       end
 
     assert started |> Enum.map(&elem(&1, 0)) |> Enum.sort() == ["cus_ada", "cus_grace"]
-    Enum.each(started, fn {_customer_id, action_pid} -> send(action_pid, :continue_lua_hidden_action) end)
+
+    Enum.each(started, fn {_customer_id, action_pid} ->
+      send(action_pid, :continue_lua_hidden_action)
+    end)
 
     assert {:ok, result} = Task.await(task, 4_000)
     assert result["status"] == "completed"
@@ -356,7 +363,11 @@ defmodule JidokaExample.LuaToolsAgentTest do
     assert result["status"] == "completed"
     assert result["call_count"] == 0
     assert result["result"]["output"]["gate"] == false
-    assert result["result"]["output"]["note"] == %{"reason" => "condition_false", "status" => "skipped"}
+
+    assert result["result"]["output"]["note"] == %{
+             "reason" => "condition_false",
+             "status" => "skipped"
+           }
   end
 
   test "jidoka.workflow rejects ambiguous compound steps with top-level action fields" do

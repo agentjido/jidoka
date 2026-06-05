@@ -11,7 +11,7 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
 
   @stream_message_tag Jidoka.Stream.message_tag()
   @default_question """
-  Find Northwind customers, list unpaid invoices for each customer, draft a follow-up note with the hidden support note tool, and summarize every hidden Lua tool call you made.
+  Find all enterprise customers, list unpaid invoices for each one in parallel, sum the total due, draft one follow-up note only if total due is over $1,000, and summarize every hidden Lua tool call you made.
   """
   @example_root Path.expand("../../../..", __DIR__)
   @package_root Path.expand("..", @example_root)
@@ -55,6 +55,12 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
       label: "Lua Policy",
       root: :package,
       path: "lib/jidoka/workflow/lua/policy.ex"
+    },
+    %{
+      id: "workflow_lua_trace",
+      label: "Lua Call Trace",
+      root: :package,
+      path: "lib/jidoka/workflow/lua/call_trace.ex"
     },
     %{
       id: "query",
@@ -167,15 +173,15 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
       guide={@guide}
       status={@agent_view.status}
       panel_title="Lua tool session"
-      panel_subtitle="Discover, describe, execute."
+      panel_subtitle="Discover, plan, execute."
       messages={View.visible_messages(@agent_view)}
-      empty_title="Start with the sample backoffice task."
-      empty_body="The agent should query the hidden catalog, describe selected tools, then execute one Lua script."
+      empty_title="Start with the sample workflow task."
+      empty_body="The agent should query hidden tools, describe selected ids, then execute one Lua-authored workflow plan."
       error_text={@agent_view.error_text}
       form={@form}
-      field_label="Backoffice task"
-      field_placeholder="Ask for a dynamic multi-tool task..."
-      button_label="Run script"
+      field_label="Workflow task"
+      field_placeholder="Ask for a dynamic workflow over hidden tools..."
+      button_label="Run workflow"
       active_tab={@active_tab}
       active_source={@active_source}
       agent_view={@agent_view}

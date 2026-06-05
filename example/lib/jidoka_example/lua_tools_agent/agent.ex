@@ -1,16 +1,18 @@
 defmodule JidokaExample.LuaToolsAgent.Agent do
   @guide """
-  This example demonstrates a governed Lua scripting layer over a constrained
+  This example demonstrates `Jidoka.Workflow.Lua`: a governed Lua scripting
+  layer that lets an agent author a bounded workflow plan over a constrained
   host capability catalog.
 
   The agent only sees three Jidoka tools: query, describe, and execute. The
-  execute step runs a short sandboxed Lua script that defines a small
-  Lua-authored workflow over hidden read-only host actions, then returns the
-  workflow result plus a trace of each hidden action call.
+  execute step runs a short sandboxed Lua script. That script can only return a
+  `jidoka.workflow({...})` plan; Jidoka validates and executes the hidden
+  read-only host actions, then returns the workflow result plus a trace of each
+  hidden action call.
 
-  Use this when a normal handful of direct tool calls is not enough, but you
-  still want the host application to decide what capabilities are visible,
-  allowed, and traced.
+  Use this when direct one-by-one tool calling is too rigid, but the host
+  application still needs to control what capabilities are visible, allowed,
+  bounded, and traced.
   """
   @moduledoc @guide
 
@@ -31,12 +33,14 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     You are a dynamic scripting demo agent for Jidoka.
 
     You have a governed Lua scripting layer for hidden read-only host capabilities.
-    Do not guess hidden function names.
+    The only Lua host API is jidoka.workflow({...}). Hidden tools are never Lua globals.
+    Do not guess hidden tool ids.
 
     For tasks that need scripting:
     1. Call lua_tools_query to find relevant hidden capabilities.
     2. Call lua_tools_describe with the smallest useful set of ids.
     3. Call lua_tools_execute with a short Lua script that returns jidoka.workflow({...}).
+       Pass allowed_tools with exactly the ids you described.
 
     The Lua execution API is jidoka.workflow({...}). Keep scripts short,
     deterministic, and read-only. After execution, summarize what happened and
@@ -53,6 +57,10 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     Dependent steps use {from = "step_id", path = {...}} refs. Map arguments
     can use {var = "item", path = {...}} refs, or a custom variable name set by
     as = "customer".
+
+    Prefer map when applying the same hidden tool to a list of customers or
+    invoices. Prefer reduce when combining map outputs. Use gate plus when for
+    follow-up steps that should only run above a threshold.
 
     If lua_tools_execute returns a validation or execution error, revise the Lua
     script and call lua_tools_execute again with a simpler workflow. Do not keep

@@ -53,8 +53,8 @@ defmodule JidokaExample.LuaToolsAgent.Catalog do
         capabilities: ["search", "customer_lookup"],
         read_only?: true,
         returns:
-          "Returns the JSON map directly. If assigned to local search, use search.customers for the customer list and search.count for the total count.",
-        example: ~s|local search = crm.customer.search({query = "Northwind", limit = 2})|
+          "Step output is the JSON map directly. Reference customers with {from = \"search\", path = {\"customers\"}} and count with {from = \"search\", path = {\"count\"}}.",
+        example: ~s|{id = "search", tool = "crm.customer.search", arguments = {query = "enterprise", limit = 5}}|
       },
       %{
         id: "billing.invoice.list_unpaid",
@@ -66,8 +66,9 @@ defmodule JidokaExample.LuaToolsAgent.Catalog do
         capabilities: ["invoice_lookup", "collections"],
         read_only?: true,
         returns:
-          "Returns the JSON map directly. If assigned to local invoices, use invoices.invoices, invoices.total_due_cents, and invoices.count.",
-        example: ~s|local invoices = billing.invoice.list_unpaid({customer_id = customer.id, limit = 5})|
+          "Step output is the JSON map directly. Reference invoices with {from = \"invoices\", path = {\"invoices\"}}, total due with {from = \"invoices\", path = {\"total_due_cents\"}}, and count with {from = \"invoices\", path = {\"count\"}}.",
+        example:
+          ~s|{id = "invoices", tool = "billing.invoice.list_unpaid", arguments = {customer_id = {from = "search", path = {"customers", 1, "id"}}, limit = 5}}|
       },
       %{
         id: "support.note.draft_followup",
@@ -80,9 +81,9 @@ defmodule JidokaExample.LuaToolsAgent.Catalog do
         capabilities: ["draft_note", "collections"],
         read_only?: true,
         returns:
-          "Returns the JSON map directly. If assigned to local note, use note.note for the drafted customer message.",
+          "Step output is the JSON map directly. Reference the drafted message with {from = \"note\", path = {\"note\"}}.",
         example:
-          ~s|local note = support.note.draft_followup({customer_name = customer.name, company = customer.company, invoice_count = invoices.count, total_due_cents = invoices.total_due_cents})|
+          ~s|{id = "note", tool = "support.note.draft_followup", arguments = {customer_name = "Portfolio Team", company = "ExampleCo", invoice_count = {from = "invoices", path = {"count"}}, total_due_cents = {from = "total_due", path = {"value"}}}}|
       }
     ]
   end
