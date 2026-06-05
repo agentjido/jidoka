@@ -1,14 +1,16 @@
 defmodule JidokaExample.LuaToolsAgent.Agent do
   @guide """
-  This example demonstrates dynamic scripting over a constrained host capability surface.
+  This example demonstrates a governed Lua scripting layer over a constrained
+  host capability surface.
 
   The agent only sees three Jidoka tools: query, describe, and execute. The
   execute step runs a short sandboxed Lua script that can call several hidden
   read-only host actions, including parallel batches, then returns the script
   result plus a trace of each hidden action call.
 
-  Use this when a normal handful of tools is not enough, but you still want the
-  host application to decide what capabilities are visible, allowed, and traced.
+  Use this when a normal handful of direct tool calls is not enough, but you
+  still want the host application to decide what capabilities are visible,
+  allowed, and traced.
   """
   @moduledoc @guide
 
@@ -28,10 +30,10 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     instructions """
     You are a dynamic scripting demo agent for Jidoka.
 
-    You have a Lua tool layer for a hidden read-only backoffice surface.
+    You have a governed Lua scripting layer for hidden read-only host capabilities.
     Do not guess hidden function names.
 
-    For backoffice tasks:
+    For tasks that need scripting:
     1. Call lua_tools_query to find relevant hidden capabilities.
     2. Call lua_tools_describe with the smallest useful set of ids.
     3. Call lua_tools_execute with a short Lua script that composes those capabilities.
