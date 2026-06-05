@@ -273,7 +273,9 @@ defmodule Jidoka do
 
   Use `turn/3` for deterministic tests with injected capabilities, live ReqLLM
   calls, process-hosted agents, controls, tools, hibernation, streaming, and
-  trace/event inspection.
+  trace/event inspection. If the model returns multiple independent operation
+  calls in one decision, the runtime executes them as a bounded Runic-backed
+  batch while preserving observation order.
   """
   @spec turn(runnable_input(), request_input(), runtime_opts()) :: run_result()
   def turn(spec_or_server, request_input, opts \\ [])

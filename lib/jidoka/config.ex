@@ -9,6 +9,7 @@ defmodule Jidoka.Config do
   @default_generation %{params: %{temperature: 0.0, max_tokens: 500}}
   @default_max_model_turns 8
   @default_turn_timeout_ms 30_000
+  @default_max_parallel_operations 4
 
   @type model_spec :: ReqLLM.model_input()
   @type model :: LLMDB.Model.t()
@@ -51,6 +52,17 @@ defmodule Jidoka.Config do
     :jidoka
     |> Application.get_env(:default_turn_timeout_ms, @default_turn_timeout_ms)
     |> normalize_positive_integer!(:default_turn_timeout_ms)
+  end
+
+  @doc """
+  Returns the default concurrency bound for operation batches planned by one
+  model turn.
+  """
+  @spec default_max_parallel_operations() :: pos_integer()
+  def default_max_parallel_operations do
+    :jidoka
+    |> Application.get_env(:default_max_parallel_operations, @default_max_parallel_operations)
+    |> normalize_positive_integer!(:default_max_parallel_operations)
   end
 
   @doc """

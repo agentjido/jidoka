@@ -121,8 +121,8 @@ Ephemeral value threaded through the workflow.
 | `memory` | `Memory.RecallResult.t() \| nil` | Most recent recall. |
 | `prompt` | provider-neutral prompt or `nil` | Materialized prompt after assembly. |
 | `llm_result` | `Effect.LLMDecision.t() \| nil` | Last decoded LLM decision. |
-| `operation_plan` | `Effect.OperationRequest.t() \| nil` | Pending operation request. |
-| `pending_effects` | `[Effect.Intent.t()]` | Effects awaiting interpretation. |
+| `operation_plan` | `Effect.OperationRequest.t() \| nil` | First pending operation request, kept for inspection compatibility. |
+| `pending_effects` | `[Effect.Intent.t()]` | Effects awaiting interpretation. Operation batches are stored here in model order. |
 | `pending_interrupt` | `Review.Interrupt.t() \| nil` | Review boundary, if any. |
 | `result` / `result_value` | string / term | Final assistant content and validated structured value. |
 | `result_repair_count` | non-negative integer | Repair attempts so far. |
@@ -277,23 +277,26 @@ Constrained JSON decision protocol returned by every LLM capability.
 
 | Field | Type | Purpose |
 | --- | --- | --- |
-| `type` | `:final \| :operation` | Branch of the decision protocol. |
-| `content` | string or `nil` | Required for `:final`. Optional metadata text for `:operation`. |
+| `type` | `:final \| :operation \| :operations` | Branch of the decision protocol. |
+| `content` | string or `nil` | Required for `:final`. Optional metadata text for operation decisions. |
 | `result` | term or `nil` | Structured result for `:final` when `spec.result` is set. |
 | `name` | non-empty string or `nil` | Required for `:operation`. |
 | `arguments` | map | Operation arguments. Required for `:operation`. |
+| `operations` | list of `OperationRequest` | Ordered operation requests for `:operations`. |
 | `metadata` | map | Provider metadata. |
 
-`LLMDecision.final/2` and `LLMDecision.operation/3` are the two builder
-helpers. Capabilities may return either an `LLMDecision` struct or a map that
-`LLMDecision.from_input/1` accepts.
+`LLMDecision.final/2`, `LLMDecision.operation/3`, and
+`LLMDecision.operations/2` are the builder helpers. Capabilities may return
+either an `LLMDecision` struct or a map that `LLMDecision.from_input/1`
+accepts.
 
 ## Common Patterns
 
 - **Treat `Effect.Intent.id` as the only identity that matters.** The journal,
   cursor metadata, and `Effect.Result.intent_id` all key off it.
-- **Decide once, observe once.** An LLM decision returns one `Intent`; that
-  intent's result is the only payload the runtime trusts.
+- **Decide once, observe once.** An LLM decision returns either one final
+  answer, one operation intent, or one ordered operation batch. Each resulting
+  intent is recorded and observed once.
 - **Use the cursor for resume boundaries, not the state.** A cursor is small,
   serializable, and stable across versions; the state can carry rich data.
 - **Prefer `LLMDecision` structs in fake LLMs.** Returning a map works (the
@@ -328,7 +331,7 @@ end
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
 | `{:error, {:effect_result_mismatch, _, _}}` | A capability returned a result whose `intent_id` does not match the current pending intent. | Ensure capabilities pass through the `Intent` they were given and only call `Effect.Result.ok/error` against it. |
-| `{:error, {:invalid_llm_decision_type, _}}` | LLM output is missing or has a non-`:final`/`:operation` type. | Tighten the prompt or use the deterministic LLM path. |
+| `{:error, {:invalid_llm_decision_type, _}}` | LLM output is missing or has a non-`:final`/`:operation`/`:operations` type. | Tighten the prompt or use the deterministic LLM path. |
 | `{:error, {:unknown_operation, name}}` | Decision named an operation that is not in `spec.operations`. | Add the operation or change the model's allowed tools. |
 | `Turn.State.status` stays `:waiting` forever | A `pending_interrupt` was not resolved. | Resume the snapshot through the review API before continuing. |
 | `Turn.Result.events` is empty | The state was committed without any `Transition.event/3` calls. | Use `Turn.Transition` instead of mutating state directly. |

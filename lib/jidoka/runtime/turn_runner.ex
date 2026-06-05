@@ -146,9 +146,9 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   defp continue_after_pending_effect(%Turn.State{} = state, capabilities, opts) do
     with :ok <- enforce_timeout(state, opts),
-         {:ok, effect_result, state} <- interpret_or_hibernate(state, capabilities, opts),
+         {:ok, effect_results, state} <- interpret_or_hibernate(state, capabilities, opts),
          state_before_apply <- state,
-         {:ok, %Turn.State{} = state} <- Turn.State.apply_effect_result(state, effect_result),
+         {:ok, %Turn.State{} = state} <- apply_effect_results(state, List.wrap(effect_results)),
          :ok <- emit_new_events(state_before_apply, state, opts),
          :ok <- enforce_timeout(state, opts) do
       continue_after_effect_applied(state, capabilities, opts)
@@ -177,9 +177,12 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp interpret_or_hibernate(%Turn.State{} = state, capabilities, opts) do
-    case EffectInterpreter.interpret_pending(state, capabilities, opts) do
+    case interpret_next_effects(state, capabilities, opts) do
       {:ok, %Effect.Result{} = result, %Turn.State{} = state} ->
         {:ok, result, state}
+
+      {:ok, results, %Turn.State{} = state} when is_list(results) ->
+        {:ok, results, state}
 
       {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
         hibernate_for_interrupt(state, interrupt, opts)
@@ -187,6 +190,32 @@ defmodule Jidoka.Runtime.TurnRunner do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp interpret_next_effects(%Turn.State{} = state, %Capabilities{} = capabilities, opts) do
+    if parallel_operation_batch?(state, opts) do
+      EffectInterpreter.interpret_operation_batch(state, capabilities, opts)
+    else
+      EffectInterpreter.interpret_pending(state, capabilities, opts)
+    end
+  end
+
+  defp parallel_operation_batch?(%Turn.State{pending_effects: pending_effects}, opts) do
+    batch_size =
+      pending_effects
+      |> Enum.take_while(&match?(%Effect.Intent{kind: :operation}, &1))
+      |> length()
+
+    checkpoint_policy(opts) not in [:before_each_effect, :after_each_phase] and batch_size > 1
+  end
+
+  defp apply_effect_results(%Turn.State{} = state, results) when is_list(results) do
+    Enum.reduce_while(results, {:ok, state}, fn result, {:ok, state} ->
+      case Turn.State.apply_effect_result(state, result) do
+        {:ok, %Turn.State{} = state} -> {:cont, {:ok, state}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp hibernate_for_interrupt(%Turn.State{} = state, %Interrupt{} = interrupt, opts) do

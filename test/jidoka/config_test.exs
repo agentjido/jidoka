@@ -44,17 +44,21 @@ defmodule Jidoka.ConfigTest do
   test "reads runtime control defaults from application config" do
     previous_max_turns = Application.get_env(:jidoka, :default_max_model_turns)
     previous_timeout = Application.get_env(:jidoka, :default_turn_timeout_ms)
+    previous_parallel_operations = Application.get_env(:jidoka, :default_max_parallel_operations)
 
     on_exit(fn ->
       restore_env(:default_max_model_turns, previous_max_turns)
       restore_env(:default_turn_timeout_ms, previous_timeout)
+      restore_env(:default_max_parallel_operations, previous_parallel_operations)
     end)
 
     Application.put_env(:jidoka, :default_max_model_turns, "5")
     Application.put_env(:jidoka, :default_turn_timeout_ms, "2500")
+    Application.put_env(:jidoka, :default_max_parallel_operations, "3")
 
     assert Jidoka.Config.default_max_model_turns() == 5
     assert Jidoka.Config.default_turn_timeout_ms() == 2_500
+    assert Jidoka.Config.default_max_parallel_operations() == 3
 
     spec =
       Jidoka.agent!(

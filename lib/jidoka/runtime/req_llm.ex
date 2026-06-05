@@ -332,6 +332,9 @@ defmodule Jidoka.Runtime.ReqLLM do
         To call an available operation:
         {"type":"operation","name":"operation_name","arguments":{}}
 
+        To call multiple independent operations in the same turn:
+        {"type":"operations","operations":[{"name":"first_operation","arguments":{}},{"name":"second_operation","arguments":{}}]}
+
         Use only operations listed in the prompt payload. Never invent operation
         names. If a tool observation is present in the message history, use it
         to produce the final answer.

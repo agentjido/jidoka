@@ -59,6 +59,32 @@ defmodule Jidoka.Runtime.ReqLLM.DecisionTest do
              Decision.parse_text(~s({"tool_call":{"name":"read_page","arguments":{"url":"https://example.com"}}}))
   end
 
+  test "parses batched operation decisions" do
+    assert {:ok,
+            %{
+              type: :operations,
+              operations: [
+                %{name: "lookup_order", arguments: %{"order_id" => "A1001"}},
+                %{name: "lookup_customer", arguments: %{"customer_id" => "C42"}}
+              ]
+            }} =
+             Decision.parse_text(
+               ~s({"type":"operations","operations":[{"name":"lookup_order","arguments":{"order_id":"A1001"}},{"name":"lookup_customer","arguments":{"customer_id":"C42"}}]})
+             )
+
+    assert {:ok,
+            %{
+              type: :operations,
+              operations: [
+                %{name: "lookup_order", arguments: %{"order_id" => "A1001"}},
+                %{name: "lookup_customer", arguments: %{"customer_id" => "C42"}}
+              ]
+            }} =
+             Decision.parse_text(
+               ~s({"tool_calls":[{"function":{"name":"lookup_order","arguments":"{\\"order_id\\":\\"A1001\\"}"}},{"function":{"name":"lookup_customer","arguments":{"customer_id":"C42"}}}]})
+             )
+  end
+
   test "parses JSON decisions from markdown fences and surrounding text" do
     assert {:ok, %{type: :final, content: "fenced"}} =
              Decision.parse_text("""
@@ -100,6 +126,12 @@ defmodule Jidoka.Runtime.ReqLLM.DecisionTest do
 
     assert {:error, {:invalid_operation_arguments, "bad"}} =
              Decision.parse_text(~s({"type":"operation","name":"weather","arguments":"bad"}))
+
+    assert {:error, {:empty_operations, []}} =
+             Decision.parse_text(~s({"type":"operations","operations":[]}))
+
+    assert {:error, {:invalid_operation_name, nil}} =
+             Decision.parse_text(~s({"type":"operations","operations":[{"arguments":{}}]}))
   end
 
   test "rejects JSON arrays as decision protocol but falls back only for non-json text" do

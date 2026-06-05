@@ -46,6 +46,53 @@ defmodule Jidoka.Turn.StateTest do
              )
   end
 
+  test "plans multiple operation effects from one model decision" do
+    {state, intent} = state_with_pending_llm(operations: ["weather", "calendar"])
+
+    assert {:ok, next_state} =
+             Turn.State.apply_effect_result(
+               state,
+               Effect.Result.ok(intent, %{
+                 type: "operations",
+                 operations: [
+                   %{name: "weather", arguments: %{"city" => "Paris"}},
+                   %{name: "calendar", arguments: %{"day" => "today"}}
+                 ]
+               })
+             )
+
+    assert [
+             %Effect.Intent{kind: :operation, payload: %{name: "weather", arguments: %{"city" => "Paris"}}},
+             %Effect.Intent{kind: :operation, payload: %{name: "calendar", arguments: %{"day" => "today"}}}
+           ] = next_state.pending_effects
+
+    assert [first, second] = next_state.pending_effects
+    assert first.id != second.id
+    assert first.idempotency_key != second.idempotency_key
+    assert first.metadata == %{"batch_index" => 0, "batch_size" => 2}
+    assert second.metadata == %{"batch_index" => 1, "batch_size" => 2}
+  end
+
+  test "keeps duplicate operation calls distinct inside a batch" do
+    {state, intent} = state_with_pending_llm(operations: ["weather"])
+
+    assert {:ok, next_state} =
+             Turn.State.apply_effect_result(
+               state,
+               Effect.Result.ok(intent, %{
+                 type: "operations",
+                 operations: [
+                   %{name: "weather", arguments: %{"city" => "Paris"}},
+                   %{name: "weather", arguments: %{"city" => "Paris"}}
+                 ]
+               })
+             )
+
+    assert [first, second] = next_state.pending_effects
+    assert first.id != second.id
+    assert first.idempotency_key != second.idempotency_key
+  end
+
   test "propagates failed effects and reports unexpected results" do
     {state, intent} = state_with_pending_llm()
     operation_intent = Effect.Intent.new(:operation, %{name: "weather", arguments: %{}})
@@ -112,13 +159,18 @@ defmodule Jidoka.Turn.StateTest do
     assert intent_id == operation_intent.id
   end
 
-  defp state_with_pending_llm do
+  defp state_with_pending_llm(opts \\ []) do
+    operations =
+      opts
+      |> Keyword.get(:operations, ["weather"])
+      |> Enum.map(&Operation.new!(name: &1))
+
     spec =
       Agent.Spec.new!(
         id: "state_test_agent",
         instructions: "Test state transitions.",
         model: %{provider: :test, id: "model"},
-        operations: [Operation.new!(name: "weather")]
+        operations: operations
       )
 
     plan = Turn.Plan.new!(spec)

@@ -269,7 +269,8 @@ the same `Effect.Intent` / `Effect.Result` journal path.
 1. run input controls;
 2. run the Runic prompt/effect planning workflow;
 3. optionally hibernate at a safe checkpoint;
-4. interpret pending effects through runtime capabilities;
+4. interpret pending effects through runtime capabilities; independent
+   operation batches run through Runic with bounded concurrency;
 5. apply effect results to turn state;
 6. validate and optionally repair structured final results;
 7. loop until final answer or max model turns;
@@ -279,6 +280,14 @@ Operation controls run inside the effect interpreter immediately before an
 operation capability is called. If a control returns `{:interrupt, reason}`, the
 runner marks the turn state as `:waiting` and hibernates at a review cursor
 instead of calling the operation.
+
+When one LLM decision returns multiple operation calls, Jidoka keeps the
+model's order in `pending_effects`, preflights controls for the batch, then
+executes allowed operations in parallel. `:max_parallel_operations` can be
+passed to `turn/3` / `resume/2`, or configured globally with
+`:default_max_parallel_operations`. Checkpoint policies `:after_each_phase` and
+`:before_each_effect` keep the older one-effect-at-a-time pause behavior for
+debugging and durable replay.
 
 ## Effects
 

@@ -81,8 +81,8 @@ A Jidoka operation has two parts:
 │  tools block  │────▶│ Agent.Spec.Operation │────▶│ Model decision │
 │  (or source)  │     │  (name + metadata)   │     ╰────────┬───────╯
 ╰───────┬───────╯     ╰──────────────────────╯              │
-        │                                                   │ {:operation,
-        │                                                   │  name, args}
+        │                                                   │ {:operation, name, args}
+        │                                                   │ or {:operations, [...]}
         ▼                                                   ▼
 ╭───────────────────────╮                       ╭────────────────────╮
 │ Runtime capability fn │◀──────────────────────│ Operation request  │
@@ -93,9 +93,10 @@ A Jidoka operation has two parts:
      {:ok, output} | {:error, reason}
 ```
 
-The model asks for `{:operation, name, arguments}`. Jidoka executes the
-operation and records the result in the turn journal before asking the model
-for the final answer.
+The model asks for one operation or an ordered batch of independent operations.
+Jidoka records each intent, executes allowed batch members through Runic with a
+bounded concurrency limit, records each result in the turn journal, then asks
+the model for the final answer.
 
 ### Operation Kinds And Matching
 
@@ -118,6 +119,10 @@ operation MyApp.SourceGuard,
 
 The first matching control wins per intent. See [Controls](controls.md) for
 the policy decisions a control can return.
+
+When a batch contains an operation control that interrupts for review, Jidoka
+hibernates before starting any operation capability in that batch. After
+approval, the batch resumes from the pending intents.
 
 ### Idempotency Policies (Overview)
 
