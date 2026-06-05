@@ -3,7 +3,8 @@ defmodule Jidoka.Operation.Source.Workflow do
   Operation source for deterministic Jidoka workflows.
 
   The model sees one operation. The workflow module owns the deterministic
-  ordered work behind that operation.
+  step graph behind that operation. Sources can opt into async execution for
+  independent workflow steps.
   """
 
   @behaviour Jidoka.Operation.Source
@@ -24,6 +25,8 @@ defmodule Jidoka.Operation.Source.Workflow do
           name: String.t(),
           description: String.t() | nil,
           timeout: pos_integer(),
+          async: boolean(),
+          max_concurrency: pos_integer() | nil,
           forward_context: forward_context(),
           result: result_mode(),
           idempotency: Operation.idempotency(),
@@ -37,6 +40,8 @@ defmodule Jidoka.Operation.Source.Workflow do
     :description,
     :definition,
     timeout: 30_000,
+    async: false,
+    max_concurrency: nil,
     forward_context: :public,
     result: :output,
     idempotency: :idempotent,
@@ -54,6 +59,8 @@ defmodule Jidoka.Operation.Source.Workflow do
              definition.id
            ),
          {:ok, timeout} <- normalize_timeout(Schema.get_key(attrs, :timeout, 30_000)),
+         {:ok, async} <- normalize_async(Schema.get_key(attrs, :async, false)),
+         {:ok, max_concurrency} <- normalize_max_concurrency(Schema.get_key(attrs, :max_concurrency)),
          {:ok, forward_context} <-
            normalize_forward_context(Schema.get_key(attrs, :forward_context, :public)),
          {:ok, result} <- normalize_result(Schema.get_key(attrs, :result, :output)),
@@ -65,6 +72,8 @@ defmodule Jidoka.Operation.Source.Workflow do
          name: name,
          description: Schema.get_key(attrs, :description) || definition.description,
          timeout: timeout,
+         async: async,
+         max_concurrency: max_concurrency,
          forward_context: forward_context,
          result: result,
          idempotency: idempotency,
@@ -98,6 +107,8 @@ defmodule Jidoka.Operation.Source.Workflow do
              "workflow" => source.definition.id,
              "module" => inspect(source.workflow),
              "timeout" => source.timeout,
+             "async" => source.async,
+             "max_concurrency" => source.max_concurrency,
              "forward_context" => inspect(source.forward_context),
              "result" => Atom.to_string(source.result),
              "idempotency" => Atom.to_string(source.idempotency),
@@ -134,6 +145,8 @@ defmodule Jidoka.Operation.Source.Workflow do
         Jidoka.Workflow.run(source.workflow, arguments,
           context: task_context,
           timeout: source.timeout,
+          async: source.async,
+          max_concurrency: source.max_concurrency,
           agent_opts: agent_opts(context)
         )
       end)
@@ -233,6 +246,19 @@ defmodule Jidoka.Operation.Source.Workflow do
 
   defp normalize_timeout(timeout) when is_integer(timeout) and timeout > 0, do: {:ok, timeout}
   defp normalize_timeout(timeout), do: {:error, {:invalid_workflow_timeout, timeout}}
+
+  defp normalize_async(async) when is_boolean(async), do: {:ok, async}
+  defp normalize_async(async), do: {:error, {:invalid_workflow_async, async}}
+
+  defp normalize_max_concurrency(nil), do: {:ok, nil}
+
+  defp normalize_max_concurrency(max_concurrency)
+       when is_integer(max_concurrency) and max_concurrency > 0 do
+    {:ok, max_concurrency}
+  end
+
+  defp normalize_max_concurrency(max_concurrency),
+    do: {:error, {:invalid_workflow_max_concurrency, max_concurrency}}
 
   defp normalize_forward_context(policy) when policy in [:public, :none], do: {:ok, policy}
 

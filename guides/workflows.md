@@ -12,8 +12,9 @@ Jidoka/Jido actions, or a bounded agent step.
 - Use a workflow when you need a typed input contract, deterministic data
   wiring, context forwarding, and a stable output shape.
 - Do not use a workflow for one simple tool. Use `Jidoka.Action`.
-- Do not use a workflow for open-ended orchestration. The first workflow DSL
-  is deterministic: no loops, branches, scheduling, or parallel fanout.
+- Do not use a workflow for open-ended orchestration. The workflow DSL is
+  deterministic: no loops, branches, scheduling, or dynamic fanout. Independent
+  DAG steps can run concurrently when async execution is enabled.
 
 ## Quick Example
 
@@ -70,6 +71,8 @@ defmodule MyApp.SupportAgent do
     workflow MyApp.Workflows.RefundReview,
       as: :review_refund,
       timeout: 30_000,
+      async: true,
+      max_concurrency: 4,
       forward_context: {:only, [:tenant]},
       result: :structured
   end
@@ -83,7 +86,9 @@ Run it directly in a test:
   Jidoka.Workflow.run(
     MyApp.Workflows.RefundReview,
     %{"order_id" => "A1001", "amount" => 42.50},
-    context: %{tenant: "acme"}
+    context: %{tenant: "acme"},
+    async: true,
+    max_concurrency: 4
   )
 
 output.approved
@@ -185,6 +190,11 @@ Agent steps are useful for small bounded drafting or classification tasks.
 They are not subagents. If you want the parent model to decide when to
 delegate, use `tools do subagent ... end` instead.
 
+Independent roots and joins form a DAG. Jidoka evaluates the graph serially by
+default. Pass `async: true` to `Jidoka.Workflow.run/3` or to the agent
+`tools.workflow` entry when independent steps should execute concurrently
+through Runic. `max_concurrency:` caps how many workflow steps can run at once.
+
 ### `output`
 
 `output` selects the workflow return value.
@@ -244,6 +254,8 @@ tools do
     as: :review_refund,
     description: "Review whether a refund can be queued.",
     timeout: 30_000,
+    async: true,
+    max_concurrency: 4,
     forward_context: {:only, [:tenant, :actor]},
     result: :structured,
     idempotency: :idempotent
@@ -257,6 +269,8 @@ Options:
 | `as:` | workflow id | Operation name the model sees. Must be lower snake case. |
 | `description:` | workflow description | Tool description. |
 | `timeout:` | `30_000` | Total wall-clock timeout in milliseconds. |
+| `async:` | `false` | Run independent workflow steps concurrently through Runic. |
+| `max_concurrency:` | scheduler default | Maximum concurrent workflow steps when `async: true`. |
 | `forward_context:` | `:public` | Context visible to the workflow: `:public`, `:none`, `{:only, keys}`, or `{:except, keys}`. |
 | `result:` | `:output` | `:output` returns raw workflow output; `:structured` wraps workflow metadata. |
 | `idempotency:` | `:idempotent` | Operation idempotency. Use `:unsafe_once` only with an operation control. |
@@ -309,6 +323,8 @@ Do not mix forms. `use Jidoka.Workflow, id: ...` cannot also declare
 - Step refs are resolved as each step runs.
 - A step returning `{:error, reason}`, raising, throwing, or producing an
   invalid action/agent result fails the workflow with step metadata attached.
+- With `async: true`, Runic executes currently runnable independent steps in
+  parallel and applies their results back into the deterministic workflow graph.
 - Direct `Jidoka.Workflow.run/3` and tool execution both enforce total
   wall-clock timeout.
 - A workflow agent step that hibernates is treated as a workflow error for

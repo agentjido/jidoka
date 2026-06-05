@@ -56,6 +56,7 @@ defmodule Jidoka.Agent.DslSectionsTest do
 
     assert entities.workflow.target == Jidoka.Agent.Dsl.Workflow
     assert entities.workflow.args == [:workflow]
+    assert get_in(entities.workflow.schema, [:async, :default]) == false
     assert get_in(entities.workflow.schema, [:result, :default]) == :output
   end
 
