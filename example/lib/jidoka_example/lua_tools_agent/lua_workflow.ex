@@ -84,14 +84,225 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow do
     do: state
 
   defp execute_step(state, step, trace, %Policy{} = policy, context) do
-    with {:ok, arguments} <- Ref.resolve(step.arguments, state),
-         {:ok, output} <- run_action_with_retries(step, arguments, trace, policy, context) do
+    with {:ok, true} <- step_condition_passed?(step, state),
+         {:ok, output} <- execute_step_kind(state, step, trace, policy, context) do
       put_in(state, [:steps, step.id], output)
     else
+      {:ok, false} ->
+        put_in(state, [:steps, step.id], skipped_output())
+
       {:error, reason} ->
         %{state | error: {:lua_workflow_step_failed, step.id, reason}}
     end
   end
+
+  defp step_condition_passed?(%{condition: nil}, _state), do: {:ok, true}
+
+  defp step_condition_passed?(%{condition: condition}, state) do
+    with {:ok, value} <- Ref.resolve(condition, state) do
+      {:ok, truthy?(value)}
+    end
+  end
+
+  defp execute_step_kind(state, %{kind: :action} = step, trace, %Policy{} = policy, context) do
+    with {:ok, arguments} <- Ref.resolve(step.arguments, state) do
+      run_action_with_retries(step, arguments, trace, policy, context)
+    end
+  end
+
+  defp execute_step_kind(state, %{kind: :map, map: map} = step, trace, %Policy{} = policy, context) do
+    with {:ok, source_items} <- Ref.resolve(map.over, state),
+         {:ok, source_items} <- ensure_list(source_items, :map_over),
+         {:ok, calls} <- map_calls(step, source_items, state),
+         {:ok, items} <- execute_map_calls(calls, trace, policy, context, map.max_concurrency) do
+      {:ok,
+       %{
+         "items" => items,
+         "count" => length(items),
+         "source_count" => length(source_items),
+         "truncated" => length(source_items) > length(calls)
+       }}
+    end
+  end
+
+  defp execute_step_kind(state, %{kind: :reduce, reduce: reduce}, _trace, _policy, _context) do
+    with {:ok, values} <- Ref.resolve(reduce.over, state),
+         {:ok, values} <- ensure_list(values, :reduce_over) do
+      reduce_values(values, reduce)
+    end
+  end
+
+  defp execute_step_kind(state, %{kind: :gate, gate: gate}, _trace, _policy, _context) do
+    with {:ok, left} <- Ref.resolve(gate.left, state),
+         {:ok, right} <- Ref.resolve(gate.right, state),
+         {:ok, passed} <- evaluate_gate(gate.op, left, right) do
+      {:ok,
+       %{
+         "passed" => passed,
+         "op" => gate.op,
+         "left" => left,
+         "right" => right
+       }}
+    end
+  end
+
+  defp execute_step_kind(_state, step, _trace, _policy, _context), do: {:error, {:unsupported_lua_workflow_step, step}}
+
+  defp skipped_output, do: %{"status" => "skipped", "reason" => "condition_false"}
+
+  defp map_calls(%{map: map}, source_items, state) do
+    source_items
+    |> Enum.take(map.max_items)
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {item, index}, {:ok, calls} ->
+      vars = %{map.as => item}
+
+      case Ref.resolve(map.arguments, state, vars) do
+        {:ok, arguments} when is_map(arguments) ->
+          call = %{
+            id: "map_item_#{index}",
+            entry: map.entry,
+            arguments: arguments,
+            retries: map.retries
+          }
+
+          {:cont, {:ok, calls ++ [call]}}
+
+        {:ok, arguments} ->
+          {:halt, {:error, {:invalid_lua_workflow_map_arguments, arguments}}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp execute_map_calls([], _trace, _policy, _context, _max_concurrency), do: {:ok, []}
+
+  defp execute_map_calls(calls, trace, %Policy{} = policy, context, max_concurrency) do
+    workflow =
+      calls
+      |> Enum.reduce(Workflow.new(name: :lua_workflow_map), fn call, workflow ->
+        workflow_step =
+          Runic.step(
+            fn _state ->
+              __MODULE__.run_map_item(
+                ^call,
+                context(:trace),
+                context(:policy),
+                context(:context)
+              )
+            end,
+            name: call.id
+          )
+
+        Workflow.add(workflow, workflow_step)
+      end)
+
+    workflow =
+      Workflow.react_until_satisfied(workflow, %{},
+        async: true,
+        max_concurrency: min(max_concurrency, policy.max_parallel_calls),
+        deadline_ms: policy.timeout_ms,
+        timeout: policy.timeout_ms,
+        run_context: %{_global: %{trace: trace, policy: policy, context: context}}
+      )
+
+    collect_map_results(workflow, calls)
+  rescue
+    exception -> {:error, exception}
+  catch
+    kind, reason -> {:error, {kind, reason}}
+  end
+
+  @doc false
+  @spec run_map_item(map(), pid(), Policy.t(), map()) :: {:ok, term()} | {:error, term()}
+  def run_map_item(call, trace, %Policy{} = policy, context) do
+    run_action_with_retries(call, call.arguments, trace, policy, context)
+  end
+
+  defp collect_map_results(%Workflow{} = workflow, calls) do
+    calls
+    |> Enum.reduce_while({:ok, []}, fn call, {:ok, results} ->
+      case workflow |> Workflow.raw_productions(call.id) |> List.last() do
+        {:ok, result} -> {:cont, {:ok, results ++ [result]}}
+        {:error, reason} -> {:halt, {:error, {:lua_workflow_map_item_failed, call.id, reason}}}
+        other -> {:halt, {:error, {:missing_lua_workflow_map_result, call.id, other}}}
+      end
+    end)
+  end
+
+  defp reduce_values(values, %{mode: "collect", path: path}) do
+    with {:ok, items} <- reduce_path_values(values, path) do
+      {:ok, %{"mode" => "collect", "items" => items, "count" => length(items)}}
+    end
+  end
+
+  defp reduce_values(values, %{mode: "count"}),
+    do: {:ok, %{"mode" => "count", "value" => length(values), "count" => length(values)}}
+
+  defp reduce_values(values, %{mode: "first", path: path}) do
+    with {:ok, items} <- reduce_path_values(values, path) do
+      {:ok, %{"mode" => "first", "value" => List.first(items), "count" => length(items)}}
+    end
+  end
+
+  defp reduce_values(values, %{mode: "sum", path: path}) do
+    with {:ok, items} <- reduce_path_values(values, path),
+         {:ok, total} <- sum_values(items) do
+      {:ok, %{"mode" => "sum", "value" => total, "count" => length(items)}}
+    end
+  end
+
+  defp reduce_values(_values, reduce), do: {:error, {:unsupported_lua_workflow_reduce, reduce}}
+
+  defp reduce_path_values(values, nil), do: {:ok, values}
+
+  defp reduce_path_values(values, path) do
+    values
+    |> Enum.reduce_while({:ok, []}, fn value, {:ok, acc} ->
+      case Ref.resolve(%{"value" => %{"var" => "item", "path" => path}}, %{steps: %{}}, %{"item" => value}) do
+        {:ok, %{"value" => resolved}} -> {:cont, {:ok, acc ++ [resolved]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp sum_values(values) do
+    values
+    |> Enum.reduce_while({:ok, 0}, fn
+      value, {:ok, total} when is_integer(value) or is_float(value) -> {:cont, {:ok, total + value}}
+      value, _acc -> {:halt, {:error, {:invalid_lua_workflow_sum_value, value}}}
+    end)
+  end
+
+  defp evaluate_gate("exists", left, _right), do: {:ok, not is_nil(left)}
+  defp evaluate_gate("empty", left, _right), do: {:ok, empty?(left)}
+  defp evaluate_gate("not_empty", left, _right), do: {:ok, not empty?(left)}
+  defp evaluate_gate("eq", left, right), do: {:ok, left == right}
+  defp evaluate_gate("neq", left, right), do: {:ok, left != right}
+  defp evaluate_gate("gt", left, right) when is_number(left) and is_number(right), do: {:ok, left > right}
+  defp evaluate_gate("gte", left, right) when is_number(left) and is_number(right), do: {:ok, left >= right}
+  defp evaluate_gate("lt", left, right) when is_number(left) and is_number(right), do: {:ok, left < right}
+  defp evaluate_gate("lte", left, right) when is_number(left) and is_number(right), do: {:ok, left <= right}
+  defp evaluate_gate("contains", left, right) when is_binary(left), do: {:ok, String.contains?(left, to_string(right))}
+  defp evaluate_gate("contains", left, right) when is_list(left), do: {:ok, right in left}
+  defp evaluate_gate(op, left, right), do: {:error, {:invalid_lua_workflow_gate, op, left, right}}
+
+  defp ensure_list(values, _field) when is_list(values), do: {:ok, values}
+  defp ensure_list(value, field), do: {:error, {:expected_lua_workflow_list, field, value}}
+
+  defp truthy?(false), do: false
+  defp truthy?(nil), do: false
+  defp truthy?(%{"passed" => passed}) when is_boolean(passed), do: passed
+  defp truthy?(%{passed: passed}) when is_boolean(passed), do: passed
+  defp truthy?(_value), do: true
+
+  defp empty?(nil), do: true
+  defp empty?(value) when is_binary(value), do: value == ""
+  defp empty?(value) when is_list(value), do: value == []
+  defp empty?(value) when is_map(value), do: map_size(value) == 0
+  defp empty?(_value), do: false
 
   defp final_state(%Workflow{} = workflow, steps, initial_state) do
     states =

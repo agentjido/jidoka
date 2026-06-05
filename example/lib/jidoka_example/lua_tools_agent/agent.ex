@@ -38,11 +38,21 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     2. Call lua_tools_describe with the smallest useful set of ids.
     3. Call lua_tools_execute with a short Lua script that returns jidoka.workflow({...}).
 
-    The Lua execution API is jidoka.workflow({...}). Independent root steps run in
-    parallel through Runic; dependent steps use {from = "step_id", path = {...}}
-    refs. Keep scripts short, deterministic, and read-only. After execution,
-    summarize what happened and include the script result, hidden_call_count,
-    hidden_tools_used, and takeaways in the structured result.
+    The Lua execution API is jidoka.workflow({...}). Keep scripts short,
+    deterministic, and read-only. After execution, summarize what happened and
+    include the script result, hidden_call_count, hidden_tools_used, and
+    takeaways in the structured result.
+
+    Workflow steps support:
+    - direct tool steps with tool and arguments
+    - map steps for bounded fan-out over a list of items
+    - reduce steps for deterministic fan-in with collect, count, sum, or first
+    - gate steps for boolean checks that can drive when on later steps
+
+    Independent root steps and map items run in parallel through Runic.
+    Dependent steps use {from = "step_id", path = {...}} refs. Map arguments
+    can use {var = "item", path = {...}} refs, or a custom variable name set by
+    as = "customer".
 
     If lua_tools_execute returns a validation or execution error, revise the Lua
     script and call lua_tools_execute again with a simpler workflow. Do not keep
@@ -61,6 +71,55 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
         }
       },
       output = "invoices"
+    })
+
+    A bounded map/reduce/gate shape is:
+    jidoka.workflow({
+      id = "portfolio_followup",
+      steps = {
+        {
+          id = "invoices",
+          map = {
+            over = {
+              {id = "cus_ada", name = "Ada Lovelace"},
+              {id = "cus_grace", name = "Grace Hopper"}
+            },
+            as = "customer",
+            tool = "billing.invoice.list_unpaid",
+            arguments = {customer_id = {var = "customer", path = {"id"}}},
+            max_items = 10,
+            max_concurrency = 4
+          }
+        },
+        {
+          id = "total_due",
+          reduce = {
+            over = {from = "invoices", path = {"items"}},
+            mode = "sum",
+            path = {"total_due_cents"}
+          }
+        },
+        {
+          id = "large_balance",
+          gate = {
+            op = "gt",
+            left = {from = "total_due", path = {"value"}},
+            right = 100000
+          }
+        },
+        {
+          id = "note",
+          tool = "support.note.draft_followup",
+          when = {from = "large_balance", path = {"passed"}},
+          arguments = {
+            customer_name = "Portfolio Team",
+            company = "ExampleCo",
+            invoice_count = {from = "invoices", path = {"count"}},
+            total_due_cents = {from = "total_due", path = {"value"}}
+          }
+        }
+      },
+      output = {total = {from = "total_due", path = {"value"}}, note = {from = "note"}}
     })
 
     For independent parallel roots, put multiple steps with no dependencies in

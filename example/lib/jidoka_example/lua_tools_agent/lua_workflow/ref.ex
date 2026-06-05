@@ -4,34 +4,42 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Ref do
   @spec collect(term()) :: [String.t()]
   def collect(value), do: value |> do_collect([]) |> Enum.uniq()
 
-  @spec resolve(term(), map()) :: {:ok, term()} | {:error, term()}
-  def resolve(%{} = value, state) do
+  @spec resolve(term(), map(), map()) :: {:ok, term()} | {:error, term()}
+  def resolve(value, state, vars \\ %{})
+
+  def resolve(%{} = value, state, vars) do
     case from(value) do
       nil ->
-        value
-        |> Enum.reduce_while({:ok, %{}}, fn {key, nested}, {:ok, acc} ->
-          case resolve(nested, state) do
-            {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        end)
+        case var(value) do
+          nil ->
+            value
+            |> Enum.reduce_while({:ok, %{}}, fn {key, nested}, {:ok, acc} ->
+              case resolve(nested, state, vars) do
+                {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
+                {:error, reason} -> {:halt, {:error, reason}}
+              end
+            end)
+
+          var_name ->
+            resolve_var(var_name, known_value(value, "path", []), vars)
+        end
 
       step_id ->
         resolve_ref(step_id, known_value(value, "path", []), state)
     end
   end
 
-  def resolve(values, state) when is_list(values) do
+  def resolve(values, state, vars) when is_list(values) do
     values
     |> Enum.reduce_while({:ok, []}, fn value, {:ok, acc} ->
-      case resolve(value, state) do
+      case resolve(value, state, vars) do
         {:ok, resolved} -> {:cont, {:ok, acc ++ [resolved]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
   end
 
-  def resolve(value, _state), do: {:ok, value}
+  def resolve(value, _state, _vars), do: {:ok, value}
 
   defp do_collect(%{} = value, refs) do
     case from(value) do
@@ -47,6 +55,13 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Ref do
     case Map.fetch(steps, step_id) do
       {:ok, output} -> resolve_path(output, normalize_path(path), step_id)
       :error -> {:error, {:missing_lua_workflow_ref, step_id}}
+    end
+  end
+
+  defp resolve_var(var_name, path, vars) do
+    case Map.fetch(vars, var_name) do
+      {:ok, value} -> resolve_path(value, normalize_path(path), var_name)
+      :error -> {:error, {:missing_lua_workflow_var, var_name}}
     end
   end
 
@@ -114,6 +129,16 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Ref do
 
   defp from(_value), do: nil
 
+  defp var(value) when is_map(value) do
+    case known_value(value, "var", nil) do
+      var when is_binary(var) -> var
+      var when is_atom(var) and not is_nil(var) -> Atom.to_string(var)
+      _other -> nil
+    end
+  end
+
+  defp var(_value), do: nil
+
   defp known_value(map, key, default) do
     case Map.fetch(map, key) do
       {:ok, value} -> value
@@ -123,6 +148,7 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Ref do
 
   defp known_key_atom("from"), do: :from
   defp known_key_atom("path"), do: :path
+  defp known_key_atom("var"), do: :var
 
   defp known_path_atom("customer_id"), do: :customer_id
   defp known_path_atom("id"), do: :id

@@ -224,6 +224,172 @@ defmodule JidokaExample.LuaToolsAgentTest do
     assert result["result"]["output"] == %{"ada" => 42_500, "grace" => 132_000}
   end
 
+  test "jidoka.workflow maps tool calls, reduces results, and gates downstream steps" do
+    test_pid = self()
+
+    script = """
+    return jidoka.workflow({
+      id = "mapped_invoice_followup",
+      steps = {
+        {
+          id = "invoices",
+          map = {
+            over = {
+              {id = "cus_ada", name = "Ada Lovelace", company = "Northwind"},
+              {id = "cus_grace", name = "Grace Hopper", company = "Contoso"}
+            },
+            as = "customer",
+            tool = "billing.invoice.list_unpaid",
+            arguments = {
+              customer_id = {var = "customer", path = {"id"}},
+              limit = 5
+            },
+            max_items = 2,
+            max_concurrency = 2
+          }
+        },
+        {
+          id = "total_due",
+          reduce = {
+            over = {from = "invoices", path = {"items"}},
+            mode = "sum",
+            path = {"total_due_cents"}
+          }
+        },
+        {
+          id = "large_balance",
+          gate = {
+            op = "gt",
+            left = {from = "total_due", path = {"value"}},
+            right = 100000
+          }
+        },
+        {
+          id = "note",
+          tool = "support.note.draft_followup",
+          when = {from = "large_balance", path = {"passed"}},
+          arguments = {
+            customer_name = "Portfolio Team",
+            company = "ExampleCo",
+            invoice_count = {from = "invoices", path = {"count"}},
+            total_due_cents = {from = "total_due", path = {"value"}}
+          }
+        }
+      },
+      output = {
+        total = {from = "total_due", path = {"value"}},
+        gate = {from = "large_balance", path = {"passed"}},
+        note = {from = "note", path = {"note"}}
+      }
+    })
+    """
+
+    task =
+      Task.async(fn ->
+        LuaRuntime.execute(script,
+          allowed_tools: ["billing.invoice.list_unpaid", "support.note.draft_followup"],
+          context: %{lua_test_pid: test_pid},
+          max_parallel_calls: 2,
+          timeout: 4_000
+        )
+      end)
+
+    started =
+      for _ <- 1..2 do
+        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, action_pid},
+                       1_000
+
+        {customer_id, action_pid}
+      end
+
+    assert started |> Enum.map(&elem(&1, 0)) |> Enum.sort() == ["cus_ada", "cus_grace"]
+    Enum.each(started, fn {_customer_id, action_pid} -> send(action_pid, :continue_lua_hidden_action) end)
+
+    assert {:ok, result} = Task.await(task, 4_000)
+    assert result["status"] == "completed"
+    assert result["call_count"] == 3
+    assert result["result"]["output"]["total"] == 192_500
+    assert result["result"]["output"]["gate"] == true
+    assert result["result"]["output"]["note"] =~ "Portfolio Team"
+    assert result["result"]["steps"]["invoices"]["count"] == 2
+    assert result["result"]["steps"]["invoices"]["truncated"] == false
+  end
+
+  test "jidoka.workflow gate can skip a downstream tool step" do
+    script = """
+    return jidoka.workflow({
+      id = "skip_followup",
+      steps = {
+        {
+          id = "large_balance",
+          gate = {
+            op = "gt",
+            left = 10,
+            right = 100
+          }
+        },
+        {
+          id = "note",
+          tool = "support.note.draft_followup",
+          when = {from = "large_balance", path = {"passed"}},
+          arguments = {
+            customer_name = "Portfolio Team",
+            company = "ExampleCo",
+            invoice_count = 1,
+            total_due_cents = 1000
+          }
+        }
+      },
+      output = {
+        gate = {from = "large_balance", path = {"passed"}},
+        note = {from = "note"}
+      }
+    })
+    """
+
+    assert {:ok, result} =
+             LuaRuntime.execute(script,
+               allowed_tools: ["support.note.draft_followup"],
+               timeout: 3_000
+             )
+
+    assert result["status"] == "completed"
+    assert result["call_count"] == 0
+    assert result["result"]["output"]["gate"] == false
+    assert result["result"]["output"]["note"] == %{"reason" => "condition_false", "status" => "skipped"}
+  end
+
+  test "jidoka.workflow rejects ambiguous compound steps with top-level action fields" do
+    script = """
+    return jidoka.workflow({
+      id = "ambiguous_map",
+      steps = {
+        {
+          id = "invoices",
+          tool = "billing.invoice.list_unpaid",
+          map = {
+            over = {{id = "cus_ada"}},
+            tool = "billing.invoice.list_unpaid",
+            arguments = {customer_id = {var = "item", path = {"id"}}}
+          }
+        }
+      },
+      output = "invoices"
+    })
+    """
+
+    assert {:error, result} =
+             LuaRuntime.execute(script,
+               allowed_tools: ["billing.invoice.list_unpaid"],
+               timeout: 3_000
+             )
+
+    assert result["status"] == "failed"
+    assert result["call_count"] == 0
+    assert result["reason"] =~ "ambiguous_lua_workflow_step"
+    assert result["reason"] =~ "tool"
+  end
+
   test "jidoka.workflow returns repairable validation errors for invalid refs" do
     script = """
     return jidoka.workflow({

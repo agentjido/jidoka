@@ -10,10 +10,15 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
 
   @type step :: %{
           required(:id) => String.t(),
-          required(:entry) => Entry.t(),
-          required(:arguments) => map(),
+          required(:kind) => :action | :map | :reduce | :gate,
           required(:after) => [String.t()],
-          required(:retries) => non_neg_integer()
+          required(:condition) => term() | nil,
+          required(:retries) => non_neg_integer(),
+          optional(:entry) => Entry.t(),
+          optional(:arguments) => map(),
+          optional(:map) => map(),
+          optional(:reduce) => map(),
+          optional(:gate) => map()
         }
 
   @type t :: %__MODULE__{
@@ -62,29 +67,135 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
 
   defp normalize_step(raw_step, allowed, workflow_retries) when is_map(raw_step) do
     with {:ok, id} <- fetch_step_id(raw_step),
-         {:ok, tool_id} <- fetch_step_tool(raw_step),
-         {:ok, entry} <- fetch_allowed_entry(allowed, tool_id),
-         {:ok, arguments} <- fetch_step_arguments(raw_step),
+         {:ok, step} <- fetch_step_kind(raw_step, allowed, workflow_retries),
+         {:ok, condition} <- fetch_step_condition(raw_step),
          {:ok, explicit_after} <- fetch_step_after(raw_step) do
-      retries =
-        raw_step
-        |> known_value("retries", workflow_retries)
-        |> clamp_retries()
-
       {:ok,
-       %{
+       step
+       |> Map.merge(%{
          id: id,
-         entry: entry,
-         arguments: arguments,
+         condition: condition,
          explicit_after: explicit_after,
-         after: explicit_after,
-         retries: retries
-       }}
+         after: explicit_after
+       })}
     end
   end
 
   defp normalize_step(raw_step, _allowed, _workflow_retries),
     do: {:error, {:invalid_lua_workflow_step, raw_step}}
+
+  defp fetch_step_kind(raw_step, allowed, workflow_retries) do
+    cond do
+      has_known_key?(raw_step, "map") ->
+        with :ok <- reject_top_level_action_fields(raw_step, "map") do
+          normalize_map_step(raw_step, known_value(raw_step, "map", nil), allowed, workflow_retries)
+        end
+
+      has_known_key?(raw_step, "reduce") ->
+        with :ok <- reject_top_level_action_fields(raw_step, "reduce") do
+          normalize_reduce_step(known_value(raw_step, "reduce", nil))
+        end
+
+      has_known_key?(raw_step, "gate") ->
+        with :ok <- reject_top_level_action_fields(raw_step, "gate") do
+          normalize_gate_step(known_value(raw_step, "gate", nil))
+        end
+
+      true ->
+        normalize_action_step(raw_step, allowed, workflow_retries)
+    end
+  end
+
+  defp reject_top_level_action_fields(raw_step, kind) do
+    conflicting_fields =
+      ["tool", "tool_id", "arguments", "args"]
+      |> Enum.filter(&has_known_key?(raw_step, &1))
+
+    case conflicting_fields do
+      [] -> :ok
+      fields -> {:error, {:ambiguous_lua_workflow_step, kind, fields}}
+    end
+  end
+
+  defp normalize_action_step(raw_step, allowed, workflow_retries) do
+    with {:ok, tool_id} <- fetch_step_tool(raw_step),
+         {:ok, entry} <- fetch_allowed_entry(allowed, tool_id),
+         {:ok, arguments} <- fetch_step_arguments(raw_step) do
+      retries =
+        raw_step
+        |> known_value("retries", workflow_retries)
+        |> clamp_retries()
+
+      {:ok, %{kind: :action, entry: entry, arguments: arguments, retries: retries}}
+    end
+  end
+
+  defp normalize_map_step(raw_step, raw_map, allowed, workflow_retries) when is_map(raw_map) do
+    with {:ok, over} <- fetch_required_map_field(raw_map, "over"),
+         {:ok, as} <- fetch_map_as(raw_map),
+         {:ok, tool_id} <- fetch_map_tool(raw_map),
+         {:ok, entry} <- fetch_allowed_entry(allowed, tool_id),
+         {:ok, arguments} <- fetch_map_arguments(raw_map) do
+      retries =
+        raw_map
+        |> known_value("retries", known_value(raw_step, "retries", workflow_retries))
+        |> clamp_retries()
+
+      {:ok,
+       %{
+         kind: :map,
+         map: %{
+           over: over,
+           as: as,
+           entry: entry,
+           arguments: arguments,
+           max_items: raw_map |> known_value("max_items", 10) |> clamp_max_items(),
+           max_concurrency: raw_map |> known_value("max_concurrency", 8) |> clamp_max_concurrency(),
+           retries: retries
+         },
+         retries: retries
+       }}
+    end
+  end
+
+  defp normalize_map_step(_raw_step, raw_map, _allowed, _workflow_retries),
+    do: {:error, {:invalid_lua_workflow_map_step, raw_map}}
+
+  defp normalize_reduce_step(raw_reduce) when is_map(raw_reduce) do
+    with {:ok, over} <- fetch_required_map_field(raw_reduce, "over"),
+         {:ok, mode} <- fetch_reduce_mode(raw_reduce) do
+      {:ok,
+       %{
+         kind: :reduce,
+         reduce: %{
+           over: over,
+           mode: mode,
+           path: known_value(raw_reduce, "path", nil)
+         },
+         retries: 0
+       }}
+    end
+  end
+
+  defp normalize_reduce_step(raw_reduce), do: {:error, {:invalid_lua_workflow_reduce_step, raw_reduce}}
+
+  defp normalize_gate_step(raw_gate) when is_map(raw_gate) do
+    with {:ok, op} <- fetch_gate_op(raw_gate),
+         {:ok, left} <- fetch_required_map_field(raw_gate, "left") do
+      {:ok,
+       %{
+         kind: :gate,
+         gate: %{
+           op: op,
+           left: left,
+           right: known_value(raw_gate, "right", nil)
+         },
+         retries: 0
+       }}
+    end
+  end
+
+  defp normalize_gate_step(raw_gate), do: {:error, {:invalid_lua_workflow_gate_step, raw_gate}}
 
   defp fetch_step_id(raw_step) do
     case known_value(raw_step, "id", known_value(raw_step, "name", nil)) do
@@ -114,6 +225,65 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
       nil -> {:ok, %{}}
       arguments when is_map(arguments) -> {:ok, arguments}
       arguments -> {:error, {:invalid_lua_workflow_step_arguments, arguments}}
+    end
+  end
+
+  defp fetch_step_condition(raw_step), do: {:ok, known_value(raw_step, "when", nil)}
+
+  defp fetch_required_map_field(map, key) do
+    case known_value(map, key, nil) do
+      nil -> {:error, {:missing_lua_workflow_field, key}}
+      value -> {:ok, value}
+    end
+  end
+
+  defp fetch_map_as(raw_map) do
+    case known_value(raw_map, "as", "item") do
+      as when is_binary(as) and as != "" -> {:ok, as}
+      as when is_atom(as) and not is_nil(as) -> {:ok, Atom.to_string(as)}
+      as -> {:error, {:invalid_lua_workflow_map_as, as}}
+    end
+  end
+
+  defp fetch_map_tool(raw_map) do
+    case known_value(raw_map, "tool", known_value(raw_map, "tool_id", nil)) do
+      tool_id when is_binary(tool_id) -> {:ok, tool_id}
+      path when is_list(path) -> {:ok, Enum.map_join(path, ".", &to_string/1)}
+      tool_id -> {:error, {:invalid_lua_workflow_map_tool, tool_id}}
+    end
+  end
+
+  defp fetch_map_arguments(raw_map) do
+    case known_value(raw_map, "arguments", known_value(raw_map, "args", %{})) do
+      nil -> {:ok, %{}}
+      arguments when is_map(arguments) -> {:ok, arguments}
+      arguments -> {:error, {:invalid_lua_workflow_map_arguments, arguments}}
+    end
+  end
+
+  defp fetch_reduce_mode(raw_reduce) do
+    mode =
+      raw_reduce
+      |> known_value("mode", "collect")
+      |> to_string()
+
+    if mode in ["collect", "count", "sum", "first"] do
+      {:ok, mode}
+    else
+      {:error, {:invalid_lua_workflow_reduce_mode, mode}}
+    end
+  end
+
+  defp fetch_gate_op(raw_gate) do
+    op =
+      raw_gate
+      |> known_value("op", "exists")
+      |> to_string()
+
+    if op in ["exists", "empty", "not_empty", "eq", "neq", "gt", "gte", "lt", "lte", "contains"] do
+      {:ok, op}
+    else
+      {:error, {:invalid_lua_workflow_gate_op, op}}
     end
   end
 
@@ -150,9 +320,23 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
 
   defp put_implicit_dependencies(steps) do
     Enum.map(steps, fn step ->
-      refs = Ref.collect(step.arguments)
+      refs = step_refs(step)
       Map.put(step, :after, Enum.uniq(step.explicit_after ++ refs))
     end)
+  end
+
+  defp step_refs(%{kind: :action} = step), do: Ref.collect(step.arguments) ++ Ref.collect(step.condition)
+
+  defp step_refs(%{kind: :map, map: map} = step) do
+    Ref.collect(map.over) ++ Ref.collect(map.arguments) ++ Ref.collect(step.condition)
+  end
+
+  defp step_refs(%{kind: :reduce, reduce: reduce} = step) do
+    Ref.collect(reduce.over) ++ Ref.collect(step.condition)
+  end
+
+  defp step_refs(%{kind: :gate, gate: gate} = step) do
+    Ref.collect(gate.left) ++ Ref.collect(gate.right) ++ Ref.collect(step.condition)
   end
 
   defp validate_dependencies(steps) do
@@ -241,13 +425,28 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
   defp known_key_atom("arguments"), do: :arguments
   defp known_key_atom("args"), do: :args
   defp known_key_atom("depends_on"), do: :depends_on
+  defp known_key_atom("as"), do: :as
+  defp known_key_atom("gate"), do: :gate
   defp known_key_atom("id"), do: :id
+  defp known_key_atom("left"), do: :left
+  defp known_key_atom("map"), do: :map
+  defp known_key_atom("max_concurrency"), do: :max_concurrency
+  defp known_key_atom("max_items"), do: :max_items
+  defp known_key_atom("mode"), do: :mode
   defp known_key_atom("name"), do: :name
+  defp known_key_atom("op"), do: :op
   defp known_key_atom("output"), do: :output
+  defp known_key_atom("over"), do: :over
+  defp known_key_atom("path"), do: :path
+  defp known_key_atom("reduce"), do: :reduce
   defp known_key_atom("retries"), do: :retries
+  defp known_key_atom("right"), do: :right
   defp known_key_atom("steps"), do: :steps
   defp known_key_atom("tool"), do: :tool
   defp known_key_atom("tool_id"), do: :tool_id
+  defp known_key_atom("when"), do: :when
+
+  defp has_known_key?(map, key), do: Map.has_key?(map, key) or Map.has_key?(map, known_key_atom(key))
 
   defp clamp_retries(retries) when is_integer(retries), do: retries |> max(0) |> min(2)
 
@@ -259,4 +458,28 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
   end
 
   defp clamp_retries(_retries), do: 0
+
+  defp clamp_max_items(max_items) when is_integer(max_items), do: max_items |> max(1) |> min(25)
+
+  defp clamp_max_items(max_items) when is_binary(max_items) do
+    case Integer.parse(max_items) do
+      {parsed, _rest} -> clamp_max_items(parsed)
+      :error -> 10
+    end
+  end
+
+  defp clamp_max_items(_max_items), do: 10
+
+  defp clamp_max_concurrency(max_concurrency) when is_integer(max_concurrency) do
+    max_concurrency |> max(1) |> min(16)
+  end
+
+  defp clamp_max_concurrency(max_concurrency) when is_binary(max_concurrency) do
+    case Integer.parse(max_concurrency) do
+      {parsed, _rest} -> clamp_max_concurrency(parsed)
+      :error -> 8
+    end
+  end
+
+  defp clamp_max_concurrency(_max_concurrency), do: 8
 end
