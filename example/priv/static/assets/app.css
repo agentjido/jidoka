@@ -688,6 +688,62 @@ summary:focus-visible {
   text-underline-offset: 2px;
 }
 
+.script-block {
+  display: grid;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: oklch(0.985 0.004 245);
+}
+
+.script-block span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.script-block pre {
+  margin: 0;
+}
+
+.call-list {
+  display: grid;
+  gap: 8px;
+}
+
+.call-row {
+  display: grid;
+  gap: 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--panel);
+}
+
+.call-row > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.call-row strong {
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+
+.call-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.call-row pre {
+  margin: 0;
+}
+
 .tool-result details {
   border-top: 1px solid var(--line);
   padding-top: 10px;

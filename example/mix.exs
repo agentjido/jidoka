@@ -25,6 +25,7 @@ defmodule JidokaExample.MixProject do
       {:bandit, "~> 1.6"},
       {:dotenvy, "~> 1.1"},
       {:jason, "~> 1.4"},
+      {:lua, "~> 1.0.0-rc"},
       {:mdex, "~> 0.12.2"},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
