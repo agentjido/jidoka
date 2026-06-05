@@ -167,7 +167,17 @@ defmodule Jidoka.Workflow do
     end
   end
 
-  @doc "Runs a workflow with normalized map input and optional context."
+  @doc """
+  Runs a workflow with normalized map input.
+
+  Options:
+
+  * `:context` - runtime context passed to workflow functions, actions, and agent steps.
+  * `:timeout` - total workflow wall-clock timeout in milliseconds.
+  * `:async` - when `true`, independent workflow steps may execute concurrently.
+  * `:max_concurrency` - maximum concurrent workflow steps when `:async` is enabled.
+  * `:agent_opts` - options forwarded to nested agent steps.
+  """
   @spec run(module(), map() | keyword(), keyword()) :: {:ok, term()} | {:error, term()}
   def run(workflow_module, input, opts \\ []) when is_atom(workflow_module) and is_list(opts) do
     with {:ok, spec} <- definition(workflow_module) do

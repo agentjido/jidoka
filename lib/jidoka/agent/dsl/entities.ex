@@ -117,6 +117,8 @@ defmodule Jidoka.Agent.Dsl.Workflow do
     :as,
     :description,
     :timeout,
+    :async,
+    :max_concurrency,
     :forward_context,
     :result,
     :idempotency,

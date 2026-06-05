@@ -54,6 +54,23 @@ defmodule Jidoka.WorkflowDslTest do
       Process.sleep(ms)
       {:ok, %{slept: ms}}
     end
+
+    def wait_for_release(%{tag: tag}, context) do
+      test_pid = Map.get(context, :test_pid, Map.get(context, "test_pid"))
+      send(test_pid, {:workflow_step_started, tag, self()})
+
+      receive do
+        {:release_workflow_step, ^tag} -> {:ok, %{tag: tag}}
+      after
+        1_000 -> {:error, {:release_timeout, tag}}
+      end
+    end
+
+    def collect_tags(%{left: left, right: right}, _context) do
+      {:ok, %{tags: [left.tag, right.tag]}}
+    end
+
+    def pass_tag(%{tag: tag}, _context), do: {:ok, %{tag: tag}}
   end
 
   defmodule EchoAgent do
@@ -174,6 +191,53 @@ defmodule Jidoka.WorkflowDslTest do
     output from(:sleep)
   end
 
+  defmodule ParallelWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:parallel_workflow)
+      input Zoi.object(%{})
+    end
+
+    steps do
+      function :left, {Fns, :wait_for_release, 2}, input: %{tag: value(:left)}
+      function :right, {Fns, :wait_for_release, 2}, input: %{tag: value(:right)}
+
+      function :collect, {Fns, :collect_tags, 2},
+        input: %{
+          left: from(:left),
+          right: from(:right)
+        }
+    end
+
+    output from(:collect)
+  end
+
+  defmodule DependentWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:dependent_workflow)
+      input Zoi.object(%{})
+    end
+
+    steps do
+      function :first, {Fns, :wait_for_release, 2}, input: %{tag: value(:first)}
+
+      function :second, {Fns, :wait_for_release, 2},
+        input: %{
+          tag: value(:second),
+          first: from(:first)
+        }
+    end
+
+    output from(:second)
+  end
+
   defmodule AgentWorkflow do
     @moduledoc false
 
@@ -245,6 +309,8 @@ defmodule Jidoka.WorkflowDslTest do
     tools do
       workflow ActionWorkflow,
         as: :run_workflow,
+        async: true,
+        max_concurrency: 4,
         forward_context: {:only, [:suffix]},
         result: :structured
     end
@@ -433,6 +499,12 @@ defmodule Jidoka.WorkflowDslTest do
     assert {:error, error} = Workflow.run(ActionWorkflow, %{value: 1}, timeout: 0)
     assert error.details.reason == :invalid_workflow_timeout
 
+    assert {:error, error} = Workflow.run(ActionWorkflow, %{value: 1}, async: :yes)
+    assert error.details.reason == :invalid_workflow_async
+
+    assert {:error, error} = Workflow.run(ActionWorkflow, %{value: 1}, max_concurrency: 0)
+    assert error.details.reason == :invalid_workflow_max_concurrency
+
     assert {:error, error} = Workflow.run(ActionWorkflow, %{value: 1}, agent_opts: %{})
     assert error.details.reason == :invalid_workflow_agent_opts
 
@@ -457,6 +529,52 @@ defmodule Jidoka.WorkflowDslTest do
     assert error.details.workflow_id == "slow_workflow"
     assert error.details.reason == :timeout
     assert error.details.timeout == 10
+  end
+
+  test "workflow runtime can execute independent steps concurrently" do
+    test_pid = self()
+
+    task =
+      Task.async(fn ->
+        Workflow.run(ParallelWorkflow, %{},
+          context: %{test_pid: test_pid},
+          async: true,
+          max_concurrency: 2,
+          timeout: 2_000
+        )
+      end)
+
+    assert_receive {:workflow_step_started, :left, left_pid}, 500
+    assert_receive {:workflow_step_started, :right, right_pid}, 500
+
+    send(left_pid, {:release_workflow_step, :left})
+    send(right_pid, {:release_workflow_step, :right})
+
+    assert {:ok, %{tags: [:left, :right]}} = Task.await(task, 2_000)
+  end
+
+  test "workflow runtime still gates dependent steps when async is enabled" do
+    test_pid = self()
+
+    task =
+      Task.async(fn ->
+        Workflow.run(DependentWorkflow, %{},
+          context: %{test_pid: test_pid},
+          async: true,
+          max_concurrency: 2,
+          timeout: 2_000
+        )
+      end)
+
+    assert_receive {:workflow_step_started, :first, first_pid}, 500
+    refute_receive {:workflow_step_started, :second, _second_pid}, 100
+
+    send(first_pid, {:release_workflow_step, :first})
+
+    assert_receive {:workflow_step_started, :second, second_pid}, 500
+    send(second_pid, {:release_workflow_step, :second})
+
+    assert {:ok, %{tag: :second}} = Task.await(task, 2_000)
   end
 
   test "workflow step runner exposes clear failure modes" do
@@ -552,6 +670,8 @@ defmodule Jidoka.WorkflowDslTest do
                  "source" => "workflow",
                  "kind" => "workflow",
                  "workflow" => "action_workflow",
+                 "async" => true,
+                 "max_concurrency" => 4,
                  "parameters_schema" => %{"required" => ["value"]}
                }
              } = operation
@@ -590,6 +710,8 @@ defmodule Jidoka.WorkflowDslTest do
                workflow: ActionWorkflow,
                as: "math_workflow",
                timeout: 1_000,
+               async: true,
+               max_concurrency: 2,
                forward_context: :none,
                result: "output",
                idempotency: "idempotent",
@@ -600,6 +722,8 @@ defmodule Jidoka.WorkflowDslTest do
              WorkflowSource.operations(source, [])
 
     assert operation.metadata["result"] == "output"
+    assert operation.metadata["async"] == true
+    assert operation.metadata["max_concurrency"] == 2
     assert operation.metadata["parameters_schema"]["required"] == ["value"]
 
     assert {:ok, capability} =
@@ -621,6 +745,10 @@ defmodule Jidoka.WorkflowDslTest do
     assert {:error, {:invalid_workflow_module, "bad"}} = WorkflowSource.new(workflow: "bad")
     assert {:error, {:invalid_workflow_name, "Bad Name"}} = WorkflowSource.new(workflow: ActionWorkflow, as: "Bad Name")
     assert {:error, {:invalid_workflow_timeout, 0}} = WorkflowSource.new(workflow: ActionWorkflow, timeout: 0)
+    assert {:error, {:invalid_workflow_async, :yes}} = WorkflowSource.new(workflow: ActionWorkflow, async: :yes)
+
+    assert {:error, {:invalid_workflow_max_concurrency, 0}} =
+             WorkflowSource.new(workflow: ActionWorkflow, max_concurrency: 0)
 
     assert {:error, {:invalid_workflow_forward_context, {:only, :tenant}}} =
              WorkflowSource.new(workflow: ActionWorkflow, forward_context: {:only, :tenant})

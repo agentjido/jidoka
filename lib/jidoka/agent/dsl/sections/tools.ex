@@ -376,6 +376,17 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
           default: 30_000,
           doc: "Workflow timeout in milliseconds."
         ],
+        async: [
+          type: :boolean,
+          required: false,
+          default: false,
+          doc: "Run independent workflow steps concurrently."
+        ],
+        max_concurrency: [
+          type: :pos_integer,
+          required: false,
+          doc: "Maximum concurrent workflow steps when async is enabled."
+        ],
         forward_context: [
           type: :any,
           required: false,
