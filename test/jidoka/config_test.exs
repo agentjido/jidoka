@@ -70,6 +70,18 @@ defmodule Jidoka.ConfigTest do
     assert %{max_model_turns: 5, timeout_ms: 2_500} = Jidoka.plan!(spec)
   end
 
+  test "defaults operation batch parallelism to eight" do
+    previous_parallel_operations = Application.get_env(:jidoka, :default_max_parallel_operations)
+
+    on_exit(fn ->
+      restore_env(:default_max_parallel_operations, previous_parallel_operations)
+    end)
+
+    Application.delete_env(:jidoka, :default_max_parallel_operations)
+
+    assert Jidoka.Config.default_max_parallel_operations() == 8
+  end
+
   test "model_ref accepts model input and normalized structs" do
     model = Jidoka.Config.normalize_model_spec!(%{provider: :test, id: "ref-model"})
 

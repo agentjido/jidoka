@@ -9,7 +9,7 @@ defmodule Jidoka.Config do
   @default_generation %{params: %{temperature: 0.0, max_tokens: 500}}
   @default_max_model_turns 8
   @default_turn_timeout_ms 30_000
-  @default_max_parallel_operations 4
+  @default_max_parallel_operations 8
 
   @type model_spec :: ReqLLM.model_input()
   @type model :: LLMDB.Model.t()
