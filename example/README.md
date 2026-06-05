@@ -43,7 +43,8 @@ running Phoenix route as the primary validation path.
 - `/agents/memory` - session memory backed by `jido_memory`.
 - `/agents/knowledge` - skills plus MCP tools with optional browser-backed evidence.
 - `/agents/debug` - `Jidoka.inspect/1` and `Jidoka.preflight/3` over the example agents.
-- `/agents/kitchen-sink` - all stable V2 features composed in one inspectable agent, including agent context and controls-as-hooks.
+- `/agents/lua-tools` - dynamic Lua scripting over a constrained hidden host tool surface.
+- `/agents/kitchen-sink` - all stable features composed in one inspectable agent, including agent context and controls-as-hooks.
 
 See `AGENT_LADDER.md` for the V1 parity map and the examples that should come
-back as Jidoka V2 grows the missing features.
+back as Jidoka grows the missing features.

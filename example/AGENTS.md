@@ -24,6 +24,7 @@ The runnable V2 baseline currently includes:
 - Memory Agent
 - Knowledge Agent
 - Debug Agent
+- Lua Tools Agent
 - Kitchen Sink Agent
 
 Other V1 examples are tracked in `AGENT_LADDER.md` as parity gaps. Do not add
@@ -69,6 +70,7 @@ children = [
   {JidokaExample.MemoryAgent.Agent, jido: JidokaExample.Jido},
   {JidokaExample.KnowledgeAgent.Agent, jido: JidokaExample.Jido},
   {JidokaExample.DebugAgent.Agent, jido: JidokaExample.Jido},
+  {JidokaExample.LuaToolsAgent.Agent, jido: JidokaExample.Jido},
   {JidokaExample.KitchenSinkAgent.Agent, jido: JidokaExample.Jido},
   {Phoenix.PubSub, name: JidokaExample.PubSub},
   JidokaExampleWeb.Endpoint
