@@ -55,6 +55,7 @@ defmodule Jidoka.MixProject do
       {:git_ops, "~> 2.9", only: :dev, runtime: false},
       {:jason, "~> 1.4"},
       {:jido, "~> 2.3"},
+      {:jido_action, github: "agentjido/jido_action", branch: "main", override: true},
       {:jido_ai, "~> 2.2"},
       {:jido_browser, "~> 2.1"},
       {:jido_memory, "~> 1.0"},

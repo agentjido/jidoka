@@ -69,6 +69,14 @@ defmodule JidokaExampleWeb.HomeLive do
       status_class: "idle"
     },
     %{
+      id: :lua_tools,
+      title: "Lua Tools Agent",
+      description: "Dynamic scripting over hidden host tools",
+      path: "/agents/lua-tools",
+      status: "Ready",
+      status_class: "idle"
+    },
+    %{
       id: :kitchen_sink,
       title: "Kitchen Sink Agent",
       description: "Every stable V2 feature in one route",

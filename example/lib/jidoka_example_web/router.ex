@@ -22,6 +22,7 @@ defmodule JidokaExampleWeb.Router do
     live "/agents/memory", MemoryAgentLive.Index, :index
     live "/agents/knowledge", KnowledgeAgentLive.Index, :index
     live "/agents/debug", DebugAgentLive.Index, :index
+    live "/agents/lua-tools", LuaToolsAgentLive.Index, :index
     live "/agents/kitchen-sink", KitchenSinkAgentLive.Index, :index
   end
 end
