@@ -8,24 +8,27 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Ref do
   def resolve(value, state, vars \\ %{})
 
   def resolve(%{} = value, state, vars) do
-    case from(value) do
-      nil ->
-        case var(value) do
-          nil ->
-            value
-            |> Enum.reduce_while({:ok, %{}}, fn {key, nested}, {:ok, acc} ->
-              case resolve(nested, state, vars) do
-                {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
-                {:error, reason} -> {:halt, {:error, reason}}
-              end
-            end)
+    step_id = from(value)
+    var_name = var(value)
 
-          var_name ->
-            resolve_var(var_name, known_value(value, "path", []), vars)
-        end
+    cond do
+      is_binary(step_id) and is_binary(var_name) ->
+        {:error, {:ambiguous_lua_workflow_ref, value}}
 
-      step_id ->
+      is_binary(step_id) ->
         resolve_ref(step_id, known_value(value, "path", []), state)
+
+      is_binary(var_name) ->
+        resolve_var(var_name, known_value(value, "path", []), vars)
+
+      true ->
+        value
+        |> Enum.reduce_while({:ok, %{}}, fn {key, nested}, {:ok, acc} ->
+          case resolve(nested, state, vars) do
+            {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
+            {:error, reason} -> {:halt, {:error, reason}}
+          end
+        end)
     end
   end
 

@@ -390,6 +390,39 @@ defmodule JidokaExample.LuaToolsAgentTest do
     assert result["reason"] =~ "tool"
   end
 
+  test "jidoka.workflow rejects multi-step dependency cycles before execution" do
+    script = """
+    return jidoka.workflow({
+      id = "cyclic_workflow",
+      steps = {
+        {
+          id = "first",
+          tool = "billing.invoice.list_unpaid",
+          after = {"second"},
+          arguments = {customer_id = "cus_ada"}
+        },
+        {
+          id = "second",
+          tool = "billing.invoice.list_unpaid",
+          after = {"first"},
+          arguments = {customer_id = "cus_grace"}
+        }
+      },
+      output = "second"
+    })
+    """
+
+    assert {:error, result} =
+             LuaRuntime.execute(script,
+               allowed_tools: ["billing.invoice.list_unpaid"],
+               timeout: 3_000
+             )
+
+    assert result["status"] == "failed"
+    assert result["call_count"] == 0
+    assert result["reason"] =~ "cyclic_lua_workflow_dependency"
+  end
+
   test "jidoka.workflow returns repairable validation errors for invalid refs" do
     script = """
     return jidoka.workflow({
@@ -414,6 +447,43 @@ defmodule JidokaExample.LuaToolsAgentTest do
     assert result["call_count"] == 0
     assert result["reason"] =~ "missing_lua_workflow_dependencies"
     assert result["reason"] =~ "missing_customer"
+  end
+
+  test "jidoka.workflow returns repairable execution errors for ambiguous refs" do
+    script = """
+    return jidoka.workflow({
+      id = "ambiguous_ref",
+      steps = {
+        {
+          id = "search",
+          tool = "crm.customer.search",
+          arguments = {query = "Northwind", limit = 1}
+        },
+        {
+          id = "invoices",
+          tool = "billing.invoice.list_unpaid",
+          arguments = {
+            customer_id = {
+              from = "search",
+              var = "customer",
+              path = {"customers", 1, "id"}
+            }
+          }
+        }
+      },
+      output = "invoices"
+    })
+    """
+
+    assert {:error, result} =
+             LuaRuntime.execute(script,
+               allowed_tools: ["crm.customer.search", "billing.invoice.list_unpaid"],
+               timeout: 3_000
+             )
+
+    assert result["status"] == "failed"
+    assert result["call_count"] == 1
+    assert result["reason"] =~ "ambiguous_lua_workflow_ref"
   end
 
   test "jidoka.workflow retries failed DAG steps within policy limits" do

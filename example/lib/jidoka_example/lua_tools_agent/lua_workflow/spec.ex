@@ -367,34 +367,40 @@ defmodule JidokaExample.LuaToolsAgent.LuaWorkflow.Spec do
 
     graph
     |> Map.keys()
-    |> Enum.reduce_while(:ok, fn step_id, :ok ->
-      case visit_step(step_id, graph, MapSet.new(), MapSet.new()) do
-        :ok -> {:cont, :ok}
+    |> Enum.reduce_while({:ok, MapSet.new()}, fn step_id, {:ok, visited} ->
+      case visit_step(step_id, graph, MapSet.new(), visited) do
+        {:ok, visited} -> {:cont, {:ok, visited}}
         {:error, _reason} = error -> {:halt, error}
       end
     end)
+    |> case do
+      {:ok, _visited} -> :ok
+      {:error, _reason} = error -> error
+    end
   end
 
   defp visit_step(step_id, graph, visiting, visited) do
     cond do
-      MapSet.member?(visited, step_id) ->
-        :ok
-
       MapSet.member?(visiting, step_id) ->
         {:error, {:cyclic_lua_workflow_dependency, step_id}}
 
+      MapSet.member?(visited, step_id) ->
+        {:ok, visited}
+
       true ->
         visiting = MapSet.put(visiting, step_id)
-        visited = MapSet.put(visited, step_id)
 
-        graph
-        |> Map.get(step_id, [])
-        |> Enum.reduce_while(:ok, fn dependency, :ok ->
-          case visit_step(dependency, graph, visiting, visited) do
-            :ok -> {:cont, :ok}
-            {:error, _reason} = error -> {:halt, error}
-          end
-        end)
+        with {:ok, visited} <-
+               graph
+               |> Map.get(step_id, [])
+               |> Enum.reduce_while({:ok, visited}, fn dependency, {:ok, visited} ->
+                 case visit_step(dependency, graph, visiting, visited) do
+                   {:ok, visited} -> {:cont, {:ok, visited}}
+                   {:error, _reason} = error -> {:halt, error}
+                 end
+               end) do
+          {:ok, MapSet.put(visited, step_id)}
+        end
     end
   end
 
