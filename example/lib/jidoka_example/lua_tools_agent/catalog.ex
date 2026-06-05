@@ -1,15 +1,15 @@
-defmodule JidokaExample.LuaToolsAgent.Surface do
+defmodule JidokaExample.LuaToolsAgent.Catalog do
   @moduledoc false
 
-  alias Jido.Action.Catalog
+  alias Jido.Action.Catalog, as: ActionCatalog
   alias Jido.Action.Catalog.Entry
 
   @type entry :: Entry.t()
 
-  @spec catalog() :: Catalog.t()
+  @spec catalog() :: ActionCatalog.t()
   def catalog do
-    Enum.reduce(entries_metadata(), Catalog.new!(catalog_attrs()), fn metadata, catalog ->
-      Catalog.register!(
+    Enum.reduce(entries_metadata(), ActionCatalog.new!(catalog_attrs()), fn metadata, catalog ->
+      ActionCatalog.register!(
         catalog,
         metadata.action,
         id: metadata.id,
@@ -37,7 +37,7 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
       id: "jidoka-example-lua-tools",
       name: "Jidoka Example Lua Tools",
       description: "Hidden read-only host actions exposed through the Lua tools demo.",
-      metadata: %{"surface" => "lua_tools"}
+      metadata: %{"catalog" => "lua_tools"}
     ]
   end
 
@@ -88,7 +88,7 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
   end
 
   @spec entries() :: [entry()]
-  def entries, do: Catalog.list(catalog())
+  def entries, do: ActionCatalog.list(catalog())
 
   @spec ids() :: [String.t()]
   def ids, do: Enum.map(entries(), & &1.id)
@@ -98,7 +98,7 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
     limit = opts |> Keyword.get(:limit, 5) |> clamp_limit()
 
     {:ok, hits} =
-      Catalog.search(catalog(), %{
+      ActionCatalog.search(catalog(), %{
         text: query,
         limit: limit,
         visibility: [:hidden],
@@ -121,7 +121,7 @@ defmodule JidokaExample.LuaToolsAgent.Surface do
 
   @spec fetch(String.t()) :: {:ok, entry()} | {:error, term()}
   def fetch(id) when is_binary(id) do
-    case Catalog.fetch(catalog(), id) do
+    case ActionCatalog.fetch(catalog(), id) do
       {:ok, %Entry{} = entry} -> {:ok, entry}
       {:error, _reason} -> {:error, {:unknown_lua_tool, id}}
     end

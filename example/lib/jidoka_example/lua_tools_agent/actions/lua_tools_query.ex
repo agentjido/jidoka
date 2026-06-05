@@ -3,20 +3,20 @@ defmodule JidokaExample.LuaToolsAgent.Actions.LuaToolsQuery do
 
   use Jidoka.Action,
     name: "lua_tools_query",
-    description: "Searches the hidden Lua tool surface for relevant host capabilities.",
+    description: "Searches the hidden Lua tool catalog for relevant host capabilities.",
     schema:
       Zoi.object(%{
         query: Zoi.string(),
         limit: Zoi.integer() |> Zoi.default(5)
       })
 
-  alias JidokaExample.LuaToolsAgent.Surface
+  alias JidokaExample.LuaToolsAgent.Catalog
 
   @impl true
   def run(params, _context) do
     query = params |> get(:query, "") |> to_string()
     limit = params |> get(:limit, 5) |> to_limit()
-    results = Surface.query(query, limit: limit)
+    results = Catalog.query(query, limit: limit)
 
     {:ok,
      %{

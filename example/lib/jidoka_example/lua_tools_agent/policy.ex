@@ -1,7 +1,7 @@
 defmodule JidokaExample.LuaToolsAgent.Policy do
   @moduledoc false
 
-  alias JidokaExample.LuaToolsAgent.Surface
+  alias JidokaExample.LuaToolsAgent.Catalog
 
   @default_timeout_ms 1_500
   @default_max_calls 12
@@ -30,7 +30,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
 
   @type t :: %__MODULE__{
           allowed_tools: [String.t()],
-          entries: [Surface.entry()],
+          entries: [Catalog.entry()],
           max_calls: pos_integer(),
           max_parallel_calls: pos_integer(),
           max_call_depth: pos_integer(),
@@ -40,7 +40,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
 
   @spec build(String.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def build(script, opts) when is_binary(script) and is_list(opts) do
-    allowed_tools = normalize_allowed_tools(Keyword.get(opts, :allowed_tools, Surface.ids()))
+    allowed_tools = normalize_allowed_tools(Keyword.get(opts, :allowed_tools, Catalog.ids()))
 
     policy = %__MODULE__{
       allowed_tools: allowed_tools,
@@ -93,7 +93,7 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
   defp allowed_entries(allowed_tools) do
     allowed_tools
     |> Enum.reduce_while({:ok, []}, fn id, {:ok, entries} ->
-      case Surface.fetch(id) do
+      case Catalog.fetch(id) do
         {:ok, %{read_only?: true} = entry} -> {:cont, {:ok, entries ++ [entry]}}
         {:ok, entry} -> {:halt, {:error, {:lua_tool_not_read_only, entry.id}}}
         {:error, reason} -> {:halt, {:error, reason}}
@@ -101,8 +101,8 @@ defmodule JidokaExample.LuaToolsAgent.Policy do
     end)
   end
 
-  defp normalize_allowed_tools(nil), do: Surface.ids()
-  defp normalize_allowed_tools([]), do: Surface.ids()
+  defp normalize_allowed_tools(nil), do: Catalog.ids()
+  defp normalize_allowed_tools([]), do: Catalog.ids()
 
   defp normalize_allowed_tools(values) when is_list(values) do
     values

@@ -1,12 +1,12 @@
 defmodule JidokaExample.LuaToolsAgent.Agent do
   @guide """
   This example demonstrates a governed Lua scripting layer over a constrained
-  host capability surface.
+  host capability catalog.
 
   The agent only sees three Jidoka tools: query, describe, and execute. The
   execute step runs a short sandboxed Lua script that can call several hidden
-  read-only host actions, including parallel batches, then returns the script
-  result plus a trace of each hidden action call.
+  read-only host actions, including parallel batches and Lua-authored workflows,
+  then returns the script result plus a trace of each hidden action call.
 
   Use this when a normal handful of direct tool calls is not enough, but you
   still want the host application to decide what capabilities are visible,
@@ -40,9 +40,14 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
 
     Prefer scripts that call multiple host functions when that reduces model/tool
     round trips. Use jidoka.parallel([...]) for independent host calls that can run
-    at the same time. Keep scripts short, deterministic, and read-only. After
-    execution, summarize what happened and include the script result,
+    at the same time. Use jidoka.workflow({...}) when calls form a small DAG with
+    dependencies between steps. Keep scripts short, deterministic, and read-only.
+    After execution, summarize what happened and include the script result,
     hidden_call_count, hidden_tools_used, and takeaways in the structured result.
+
+    If lua_tools_execute returns a validation or execution error, revise the Lua
+    script and call lua_tools_execute again with a simpler workflow. Do not keep
+    retrying the same failed script.
 
     For the default unpaid-invoice follow-up task, the Lua script must:
     - search customers with crm.customer.search;
@@ -63,6 +68,21 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     jidoka.parallel({
       {tool = "billing.invoice.list_unpaid", arguments = {customer_id = "cus_ada", limit = 5}},
       {tool = "billing.invoice.list_unpaid", arguments = {customer_id = "cus_grace", limit = 5}}
+    })
+
+    The workflow call shape is:
+    jidoka.workflow({
+      id = "invoice_followup",
+      retries = 1,
+      steps = {
+        {id = "search", tool = "crm.customer.search", arguments = {query = "Northwind", limit = 1}},
+        {
+          id = "invoices",
+          tool = "billing.invoice.list_unpaid",
+          arguments = {customer_id = {from = "search", path = {"customers", 1, "id"}}}
+        }
+      },
+      output = "invoices"
     })
 
     Do not synthesize a note in Lua if support.note.draft_followup is available.

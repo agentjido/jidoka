@@ -3,7 +3,7 @@ defmodule JidokaExample.LuaToolsAgent.LuaRuntime do
 
   alias JidokaExample.LuaToolsAgent.CallTrace
   alias JidokaExample.LuaToolsAgent.Policy
-  alias JidokaExample.LuaToolsAgent.Surface
+  alias JidokaExample.LuaToolsAgent.Catalog
   alias JidokaExample.LuaToolsAgent.ToolWorkflow
 
   @spec execute(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
@@ -73,12 +73,15 @@ defmodule JidokaExample.LuaToolsAgent.LuaRuntime do
     lua =
       policy.entries
       |> Enum.reduce(new_lua(policy), fn entry, lua ->
-        Lua.set!(lua, Surface.lua_path(entry), fn args, state ->
+        Lua.set!(lua, Catalog.lua_path(entry), fn args, state ->
           call_entry(entry, args, state, trace, policy, context)
         end)
       end)
       |> Lua.set!(["jidoka", "parallel"], fn args, state ->
         call_parallel(args, state, trace, policy, context)
+      end)
+      |> Lua.set!(["jidoka", "workflow"], fn args, state ->
+        call_workflow(args, state, trace, policy, context)
       end)
 
     case Lua.eval!(lua, script) do
@@ -125,6 +128,32 @@ defmodule JidokaExample.LuaToolsAgent.LuaRuntime do
       {[encoded], state}
     else
       {:error, reason} -> {:error, format_reason(reason), state}
+    end
+  end
+
+  defp call_workflow(args, state, trace, policy, context) do
+    with {:ok, workflow_spec} <- normalize_workflow_args(args, state),
+         {:ok, result} <- ToolWorkflow.run_dag(workflow_spec, trace, policy, context) do
+      {encoded, state} = Lua.encode!(state, result)
+      {[encoded], state}
+    else
+      {:error, reason} -> {:error, format_reason(reason), state}
+    end
+  end
+
+  defp normalize_workflow_args(args, state) do
+    args =
+      args
+      |> decode_lua_args(state)
+      |> case do
+        [arg] -> normalize_lua_value(arg)
+        [] -> %{}
+        args -> %{"args" => Enum.map(args, &normalize_lua_value/1)}
+      end
+
+    case args do
+      %{} = workflow_spec -> {:ok, workflow_spec}
+      workflow_spec -> {:error, {:invalid_lua_workflow, workflow_spec}}
     end
   end
 

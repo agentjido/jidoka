@@ -18,18 +18,20 @@ defmodule JidokaExample.LuaToolsAgent.Actions.ListUnpaidInvoices do
 
     maybe_wait_for_parallel_test(customer_id, context)
 
-    invoices =
-      invoices()
-      |> Map.get(customer_id, [])
-      |> Enum.take(limit)
+    with :ok <- maybe_fail_for_retry_test(customer_id, context) do
+      invoices =
+        invoices()
+        |> Map.get(customer_id, [])
+        |> Enum.take(limit)
 
-    {:ok,
-     %{
-       "customer_id" => customer_id,
-       "invoices" => invoices,
-       "count" => length(invoices),
-       "total_due_cents" => Enum.reduce(invoices, 0, &(&1["amount_cents"] + &2))
-     }}
+      {:ok,
+       %{
+         "customer_id" => customer_id,
+         "invoices" => invoices,
+         "count" => length(invoices),
+         "total_due_cents" => Enum.reduce(invoices, 0, &(&1["amount_cents"] + &2))
+       }}
+    end
   end
 
   defp clamp_limit(limit) when is_integer(limit), do: limit |> max(1) |> min(10)
@@ -69,6 +71,23 @@ defmodule JidokaExample.LuaToolsAgent.Actions.ListUnpaidInvoices do
   end
 
   defp maybe_wait_for_parallel_test(_customer_id, _context), do: :ok
+
+  defp maybe_fail_for_retry_test(customer_id, %{lua_retry_test_pid: pid}) when is_pid(pid) do
+    send(pid, {:lua_retry_invoice_attempt, customer_id, self()})
+
+    receive do
+      :fail_lua_invoice_attempt -> {:error, %{"reason" => "forced retry test failure"}}
+      :continue_lua_invoice_attempt -> :ok
+    after
+      1_000 -> :ok
+    end
+  end
+
+  defp maybe_fail_for_retry_test(customer_id, %{"lua_retry_test_pid" => pid}) when is_pid(pid) do
+    maybe_fail_for_retry_test(customer_id, %{lua_retry_test_pid: pid})
+  end
+
+  defp maybe_fail_for_retry_test(_customer_id, _context), do: :ok
 
   defp invoices do
     %{

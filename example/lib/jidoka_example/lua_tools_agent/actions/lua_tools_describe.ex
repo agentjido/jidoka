@@ -9,13 +9,13 @@ defmodule JidokaExample.LuaToolsAgent.Actions.LuaToolsDescribe do
         ids: Zoi.array(Zoi.string())
       })
 
-  alias JidokaExample.LuaToolsAgent.Surface
+  alias JidokaExample.LuaToolsAgent.Catalog
 
   @impl true
   def run(params, _context) do
     ids = params |> get(:ids, []) |> List.wrap() |> Enum.map(&to_string/1)
 
-    with {:ok, tools} <- Surface.describe(ids) do
+    with {:ok, tools} <- Catalog.describe(ids) do
       {:ok,
        %{
          "tools" => tools,

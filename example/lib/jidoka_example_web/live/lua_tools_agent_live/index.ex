@@ -19,11 +19,16 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     %{id: "jido", label: "Jido", path: "lib/jidoka_example/jido.ex"},
     %{id: "application", label: "Application", path: "lib/jidoka_example/application.ex"},
     %{id: "agent", label: "Agent", path: "lib/jidoka_example/lua_tools_agent/agent.ex"},
-    %{id: "surface", label: "Lua Surface", path: "lib/jidoka_example/lua_tools_agent/surface.ex"},
+    %{id: "catalog", label: "Lua Catalog", path: "lib/jidoka_example/lua_tools_agent/catalog.ex"},
     %{
       id: "runtime",
       label: "Lua Runtime",
       path: "lib/jidoka_example/lua_tools_agent/lua_runtime.ex"
+    },
+    %{
+      id: "workflow",
+      label: "Lua Workflow",
+      path: "lib/jidoka_example/lua_tools_agent/tool_workflow.ex"
     },
     %{
       id: "query",
@@ -138,7 +143,7 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
       panel_subtitle="Discover, describe, execute."
       messages={View.visible_messages(@agent_view)}
       empty_title="Start with the sample backoffice task."
-      empty_body="The agent should query the hidden surface, describe selected tools, then execute one Lua script."
+      empty_body="The agent should query the hidden catalog, describe selected tools, then execute one Lua script."
       error_text={@agent_view.error_text}
       form={@form}
       field_label="Backoffice task"
@@ -160,7 +165,7 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     """
   end
 
-  attr :value, :any, required: true
+  attr(:value, :any, required: true)
 
   defp lua_structured_result(%{value: nil} = assigns), do: ~H""
 
@@ -209,7 +214,7 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     """
   end
 
-  attr :payload, :map, required: true
+  attr(:payload, :map, required: true)
 
   defp operation_payload(assigns) do
     operation = AgentLive.payload_value(assigns.payload, :operation)
