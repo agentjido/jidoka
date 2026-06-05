@@ -28,7 +28,17 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     %{
       id: "workflow",
       label: "Lua Workflow",
-      path: "lib/jidoka_example/lua_tools_agent/tool_workflow.ex"
+      path: "lib/jidoka_example/lua_tools_agent/lua_workflow.ex"
+    },
+    %{
+      id: "workflow_spec",
+      label: "Workflow Spec",
+      path: "lib/jidoka_example/lua_tools_agent/lua_workflow/spec.ex"
+    },
+    %{
+      id: "workflow_ref",
+      label: "Workflow Refs",
+      path: "lib/jidoka_example/lua_tools_agent/lua_workflow/ref.ex"
     },
     %{
       id: "query",

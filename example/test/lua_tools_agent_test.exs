@@ -20,14 +20,35 @@ defmodule JidokaExample.LuaToolsAgentTest do
   end
 
   @script """
-  local customers = crm.customer.search({query = "Northwind", limit = 2})
-  local output = {}
-  for _, customer in ipairs(customers.customers) do
-    local invoices = billing.invoice.list_unpaid({customer_id = customer.id, limit = 5})
-    local note = support.note.draft_followup({customer_name = customer.name, company = customer.company, invoice_count = invoices.count, total_due_cents = invoices.total_due_cents})
-    table.insert(output, {customer = customer, invoices = invoices, note = note})
-  end
-  return {items = output}
+  return jidoka.workflow({
+    id = "invoice_followup",
+    steps = {
+      {
+        id = "search",
+        tool = "crm.customer.search",
+        arguments = {query = "Northwind", limit = 1}
+      },
+      {
+        id = "invoices",
+        tool = "billing.invoice.list_unpaid",
+        arguments = {
+          customer_id = {from = "search", path = {"customers", 1, "id"}},
+          limit = 5
+        }
+      },
+      {
+        id = "note",
+        tool = "support.note.draft_followup",
+        arguments = {
+          customer_name = {from = "search", path = {"customers", 1, "name"}},
+          company = {from = "search", path = {"customers", 1, "company"}},
+          invoice_count = {from = "invoices", path = {"count"}},
+          total_due_cents = {from = "invoices", path = {"total_due_cents"}}
+        }
+      }
+    },
+    output = "note"
+  })
   """
 
   test "agent exposes only the three model-visible Lua layer operations" do
@@ -70,7 +91,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     assert description =~ "total_due_cents"
   end
 
-  test "execute runs a Lua script over multiple hidden read-only actions" do
+  test "execute runs a Lua-authored workflow over multiple hidden read-only actions" do
     assert {:ok, result} =
              LuaToolsExecute.run(
                %{
@@ -93,52 +114,8 @@ defmodule JidokaExample.LuaToolsAgentTest do
              "support.note.draft_followup"
            ]
 
-    assert [%{"note" => %{"note" => note}}] = result["result"]["items"]
+    assert %{"note" => note} = result["result"]["output"]
     assert note =~ "Ada Lovelace"
-  end
-
-  test "jidoka.parallel maps hidden Lua tool calls into a Runic workflow" do
-    test_pid = self()
-
-    script = """
-    local results = jidoka.parallel({
-      {tool = "billing.invoice.list_unpaid", arguments = {customer_id = "cus_ada", limit = 1}},
-      {tool = "billing.invoice.list_unpaid", arguments = {customer_id = "cus_grace", limit = 1}}
-    })
-
-    return {
-      customers = {results[1].customer_id, results[2].customer_id},
-      totals = {results[1].total_due_cents, results[2].total_due_cents}
-    }
-    """
-
-    task =
-      Task.async(fn ->
-        LuaRuntime.execute(script,
-          allowed_tools: ["billing.invoice.list_unpaid"],
-          context: %{lua_test_pid: test_pid},
-          max_parallel_calls: 2,
-          timeout: 3_000
-        )
-      end)
-
-    started =
-      for _ <- 1..2 do
-        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, action_pid},
-                       1_000
-
-        {customer_id, action_pid}
-      end
-
-    assert started |> Enum.map(&elem(&1, 0)) |> Enum.sort() == ["cus_ada", "cus_grace"]
-    Enum.each(started, fn {_customer_id, action_pid} -> send(action_pid, :continue_lua_hidden_action) end)
-
-    assert {:ok, result} = Task.await(task, 3_000)
-    assert result["status"] == "completed"
-    assert result["call_count"] == 2
-    assert result["policy"]["max_parallel_calls"] == 2
-    assert result["result"]["customers"] == ["cus_ada", "cus_grace"]
-    assert result["result"]["totals"] == [42_500, 132_000]
   end
 
   test "jidoka.workflow executes a Lua-authored DAG with resolved step refs" do
@@ -317,8 +294,16 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
   test "execute returns Lua script failures as structured tool observations" do
     script = """
-    local search = crm.customer.search({query = "Northwind", limit = 1})
-    return search.result.customers
+    return jidoka.workflow({
+      steps = {
+        {
+          id = "search",
+          tool = "crm.customer.search",
+          arguments = {query = "Northwind", limit = 1}
+        }
+      },
+      output = {from = "search", path = {"result", "customers"}}
+    })
     """
 
     assert {:ok, result} =
@@ -331,29 +316,14 @@ defmodule JidokaExample.LuaToolsAgentTest do
              )
 
     assert result["status"] == "failed"
-    assert result["reason"] =~ "attempt to index a nil value"
-    assert result["reason"] =~ "field 'result'"
+    assert result["reason"] =~ "missing_lua_workflow_path"
+    assert result["reason"] =~ "result"
     assert result["call_count"] == 1
   end
 
-  test "execute tolerates common Lua shorthand argument shapes" do
+  test "runtime does not expose hidden catalog functions directly" do
     script = """
-    local search = crm.customer.search({name = "Northwind"})
-    local results = {}
-
-    for _, customer in pairs(search.customers) do
-      local invoices = billing.invoice.list_unpaid(customer.id)
-      local note = support.note.draft_followup({
-        customer_name = customer.name,
-        company = customer.company,
-        invoice_count = invoices.count,
-        total_due_cents = invoices.total_due_cents
-      })
-
-      table.insert(results, {customer = customer, invoices = invoices, note = note})
-    end
-
-    return results
+    return crm.customer.search({name = "Northwind"})
     """
 
     assert {:ok, result} =
@@ -369,17 +339,28 @@ defmodule JidokaExample.LuaToolsAgentTest do
                %{}
              )
 
-    assert result["status"] == "completed"
-    assert result["call_count"] == 3
-    assert [%{"note" => %{"note" => note}}] = result["result"]
-    assert note =~ "Ada Lovelace"
+    assert result["status"] == "failed"
+    assert result["call_count"] == 0
+    assert result["reason"] =~ "global 'crm'"
   end
 
   test "runtime rejects scripts that exceed the hidden call limit" do
     script = """
-    crm.customer.search({query = "Northwind"})
-    billing.invoice.list_unpaid({customer_id = "cus_ada"})
-    return {ok = true}
+    return jidoka.workflow({
+      steps = {
+        {
+          id = "ada",
+          tool = "billing.invoice.list_unpaid",
+          arguments = {customer_id = "cus_ada"}
+        },
+        {
+          id = "grace",
+          tool = "billing.invoice.list_unpaid",
+          arguments = {customer_id = "cus_grace"}
+        }
+      },
+      output = {ada = {from = "ada"}, grace = {from = "grace"}}
+    })
     """
 
     assert {:error, result} = LuaRuntime.execute(script, max_calls: 1)

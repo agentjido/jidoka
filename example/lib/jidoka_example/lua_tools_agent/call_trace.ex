@@ -11,48 +11,24 @@ defmodule JidokaExample.LuaToolsAgent.CallTrace do
     end)
   end
 
-  @spec count(pid()) :: non_neg_integer()
-  def count(pid), do: Agent.get(pid, & &1.count)
-
   @spec reserve(pid(), String.t(), map(), pos_integer()) ::
           {:ok, pos_integer()} | {:error, term()}
   def reserve(pid, tool_id, arguments, max_calls) do
-    case reserve_many(pid, [{tool_id, arguments}], max_calls) do
-      {:ok, [%{call_id: call_id}]} -> {:ok, call_id}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  @spec reserve_many(pid(), [{String.t(), map()}], pos_integer()) ::
-          {:ok, [%{call_id: pos_integer(), tool_id: String.t(), arguments: map()}]}
-          | {:error, term()}
-  def reserve_many(pid, calls, max_calls) when is_list(calls) do
     Agent.get_and_update(pid, fn state ->
-      requested_count = length(calls)
-
-      if state.count + requested_count > max_calls do
+      if state.count >= max_calls do
         {{:error, {:max_lua_tool_calls_exceeded, max_calls}}, state}
       else
-        reserved =
-          calls
-          |> Enum.with_index(state.next_id)
-          |> Enum.map(fn {{tool_id, arguments}, call_id} ->
-            %{call_id: call_id, tool_id: tool_id, arguments: arguments}
-          end)
-
-        pending =
-          Enum.map(reserved, fn %{call_id: call_id, tool_id: tool_id, arguments: arguments} ->
-            call_record(call_id, tool_id, arguments, "started", nil)
-          end)
+        call_id = state.next_id
+        pending = call_record(call_id, tool_id, arguments, "started", nil)
 
         next_state = %{
           state
-          | calls: state.calls ++ pending,
-            count: state.count + requested_count,
-            next_id: state.next_id + requested_count
+          | calls: state.calls ++ [pending],
+            count: state.count + 1,
+            next_id: call_id + 1
         }
 
-        {{:ok, reserved}, next_state}
+        {{:ok, call_id}, next_state}
       end
     end)
   end
