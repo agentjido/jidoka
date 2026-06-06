@@ -28,6 +28,7 @@ defmodule Jidoka.ImportTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Import.AgentDocument
   alias Jidoka.ImportTest.Support.{EchoAction, EchoControl}
+  alias Jidoka.Review
 
   test "imports the smallest possible agent document with default instructions" do
     assert {:ok, %Agent.Spec{} = spec} =
@@ -64,6 +65,44 @@ defmodule Jidoka.ImportTest do
     assert [%{name: "lookup", idempotency: :pure}] = spec.operations
     assert spec.metadata["source_ref"]["kind"] == "string"
     assert spec.metadata["source_ref"]["format"] == "yaml"
+  end
+
+  test "approval policies export and import as portable operation data" do
+    spec =
+      Agent.Spec.new!(
+        id: "approval_export_agent",
+        model: %{provider: :test, id: "approval-model"},
+        instructions: "Use approval-protected operations.",
+        operations: [
+          Operation.new!(
+            name: "refund_order",
+            description: "Refunds an order.",
+            idempotency: :unsafe_once,
+            approval: %{
+              reason: "refund_review",
+              message: "Review the refund.",
+              ttl_ms: 30_000,
+              metadata: %{risk: :high}
+            }
+          )
+        ]
+      )
+
+    assert {:ok, json} = Jidoka.export(spec, format: :json)
+    assert {:ok, %Agent.Spec{} = imported} = Jidoka.import(json)
+
+    assert [
+             %Operation{
+               name: "refund_order",
+               idempotency: :unsafe_once,
+               approval: %Review.Policy{
+                 reason: "refund_review",
+                 message: "Review the refund.",
+                 ttl_ms: 30_000,
+                 metadata: %{"risk" => "high"}
+               }
+             }
+           ] = imported.operations
   end
 
   test "imports memory policy data" do

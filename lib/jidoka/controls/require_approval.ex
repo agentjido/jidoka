@@ -34,4 +34,6 @@ defmodule Jidoka.Controls.RequireApproval do
   defp policy_metadata(metadata) when is_map(metadata) do
     Map.get(metadata, :policy) || Map.get(metadata, "policy") || %{}
   end
+
+  defp policy_metadata(_metadata), do: %{}
 end

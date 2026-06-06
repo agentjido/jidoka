@@ -443,15 +443,21 @@ defmodule Jidoka do
   end
 
   defp resume_review_target(%Session{} = session, %Review.Response{} = response, opts) do
-    Harness.resume_session(session, Keyword.put(opts, :approval, response))
+    Harness.resume_session(session, resume_review_opts(opts, response))
   end
 
   defp resume_review_target(snapshot_input, %Review.Response{} = response, opts) do
-    resume(snapshot_input, Keyword.put(opts, :approval, response))
+    resume(snapshot_input, resume_review_opts(opts, response))
   end
 
   defp review_response_opts(opts) do
     Keyword.take(opts, [:reason, :responded_at_ms, :metadata])
+  end
+
+  defp resume_review_opts(opts, %Review.Response{} = response) do
+    opts
+    |> Keyword.drop([:reason, :responded_at_ms, :metadata])
+    |> Keyword.put(:approval, response)
   end
 
   @doc """

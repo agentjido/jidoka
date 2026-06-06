@@ -161,12 +161,37 @@ defmodule Jidoka.Review.Approval do
   defp normalize_name(value, field), do: {:error, {:invalid_approval_filter, field, value}}
 
   defp operation_name(%Operation{name: name}), do: name
-  defp operation_name(%{} = operation), do: get_any(operation, [:name, "name", :operation, "operation"])
+
+  defp operation_name(%{} = operation) do
+    operation
+    |> get_any([:name, "name", :operation, "operation"])
+    |> normalize_operation_name()
+  end
 
   defp operation_idempotency(%Operation{idempotency: idempotency}), do: idempotency
 
-  defp operation_idempotency(%{} = operation),
-    do: get_any(operation, [:idempotency, "idempotency"])
+  defp operation_idempotency(%{} = operation) do
+    operation
+    |> get_any([:idempotency, "idempotency"])
+    |> normalize_idempotency()
+  end
+
+  defp normalize_operation_name(value) when is_atom(value) and not is_nil(value),
+    do: Atom.to_string(value)
+
+  defp normalize_operation_name(value) when is_binary(value), do: value
+  defp normalize_operation_name(_value), do: nil
+
+  defp normalize_idempotency(value) when is_atom(value), do: value
+
+  defp normalize_idempotency(value) when is_binary(value) do
+    case String.trim(value) do
+      "unsafe_once" -> :unsafe_once
+      other -> other
+    end
+  end
+
+  defp normalize_idempotency(value), do: value
 
   defp get_any(map, keys), do: Enum.find_value(keys, &Map.get(map, &1))
 

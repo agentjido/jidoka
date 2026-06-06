@@ -105,6 +105,36 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
     assert Enum.any?(events, &match?(%{event: :control_interrupted, operation: "review_lookup"}, &1))
   end
 
+  test "facade approval helpers work with durable sessions" do
+    test_pid = self()
+
+    assert {:ok, session} = Jidoka.session(approval_spec(), "approval-session")
+
+    assert {:hibernate, session, %AgentSnapshot{}} =
+             Jidoka.chat(session, "Look up approved.",
+               llm: single_operation_llm("approved_lookup", %{"id" => "A1001"}, "Approved lookup done."),
+               operations: observed_operations(test_pid, ["approved_lookup"]),
+               clock: clock(4_000)
+             )
+
+    assert {:ok, [%Review.Request{} = review]} = Jidoka.pending_reviews(session)
+    assert review.operation == "approved_lookup"
+    refute_received {:operation_called, "approved_lookup"}
+
+    assert {:ok, session, %Turn.Result{content: "Approved lookup done."}} =
+             Jidoka.approve(session, review,
+               reason: :approved_by_test,
+               metadata: %{reviewer: "unit"},
+               llm: single_operation_llm("approved_lookup", %{"id" => "A1001"}, "Approved lookup done."),
+               operations: observed_operations(test_pid, ["approved_lookup"]),
+               clock: clock(4_001)
+             )
+
+    assert session.status == :finished
+    assert session.pending_reviews == []
+    assert_receive {:operation_called, "approved_lookup"}, 1_000
+  end
+
   defp approval_spec do
     Agent.Spec.new!(
       id: "approval_sugar_agent",

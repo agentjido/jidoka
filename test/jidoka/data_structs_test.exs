@@ -134,6 +134,12 @@ defmodule Jidoka.DataStructsTest do
                [except: [:delete_record], reason: "review_all"],
                unsafe
              )
+
+    assert {:ok, %Review.Policy{}} =
+             Review.Approval.policy_for_operation(
+               :unsafe_once,
+               %{"name" => :delete_record, "idempotency" => "unsafe_once"}
+             )
   end
 
   test "operation policies expose replay and control semantics" do
