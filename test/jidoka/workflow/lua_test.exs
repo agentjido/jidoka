@@ -3,6 +3,7 @@ defmodule Jidoka.Workflow.LuaTest do
 
   alias Jido.Action.Catalog
   alias Jidoka.Workflow.Lua
+  alias Jidoka.Workflow.Lua.Plan.Spec.Helpers
 
   defmodule SearchCustomers do
     @moduledoc false
@@ -104,6 +105,64 @@ defmodule Jidoka.Workflow.LuaTest do
 
   test "requires a catalog or entries" do
     assert {:error, :missing_lua_workflow_catalog} = Lua.execute("return {}")
+  end
+
+  test "Lua plan helpers normalize known atom and string keys without creating atoms" do
+    known_keys = [
+      "after",
+      "arguments",
+      "args",
+      "depends_on",
+      "as",
+      "gate",
+      "id",
+      "left",
+      "map",
+      "max_concurrency",
+      "max_items",
+      "mode",
+      "name",
+      "op",
+      "output",
+      "over",
+      "path",
+      "reduce",
+      "retries",
+      "right",
+      "steps",
+      "tool",
+      "tool_id",
+      "when"
+    ]
+
+    for key <- known_keys do
+      atom_key = String.to_existing_atom(key)
+      assert Helpers.known_value(%{atom_key => :atom_value}, key, :missing) == :atom_value
+      assert Helpers.known_value(%{key => :string_value}, key, :missing) == :string_value
+      assert Helpers.has_known_key?(%{atom_key => true}, key)
+      assert Helpers.has_known_key?(%{key => true}, key)
+    end
+
+    refute Helpers.has_known_key?(%{}, "id")
+    assert Helpers.known_value(%{}, "id", :missing) == :missing
+
+    assert Helpers.clamp_retries(-1) == 0
+    assert Helpers.clamp_retries(9) == 2
+    assert Helpers.clamp_retries("2") == 2
+    assert Helpers.clamp_retries("bad") == 0
+    assert Helpers.clamp_retries(:bad) == 0
+
+    assert Helpers.clamp_max_items(0) == 1
+    assert Helpers.clamp_max_items(99) == 25
+    assert Helpers.clamp_max_items("7") == 7
+    assert Helpers.clamp_max_items("bad") == 10
+    assert Helpers.clamp_max_items(:bad) == 10
+
+    assert Helpers.clamp_max_concurrency(0) == 1
+    assert Helpers.clamp_max_concurrency(99) == 16
+    assert Helpers.clamp_max_concurrency("7") == 7
+    assert Helpers.clamp_max_concurrency("bad") == 8
+    assert Helpers.clamp_max_concurrency(:bad) == 8
   end
 
   test "executes a Lua-authored workflow against catalog entries" do

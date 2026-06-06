@@ -18,7 +18,21 @@ defmodule Jidoka.Stream do
           events: Enumerable.t()
         }
 
-  defstruct [:request, :events]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              request: Zoi.any() |> Zoi.nullish(),
+              events: Zoi.any() |> Zoi.nullish()
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @doc "Builds a stream wrapper for an async chat request."
   @spec new(Jidoka.Chat.Request.t(), keyword()) :: t()

@@ -31,9 +31,7 @@ defmodule Jidoka do
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
   alias Jidoka.Inspection
-  alias Jidoka.Runtime.AgentServerState
   alias Jidoka.Runtime.AgentSnapshot
-  alias Jidoka.Runtime.Signals
   alias Jidoka.Turn
 
   @type agent_input :: Agent.Spec.t() | keyword() | map()
@@ -282,43 +280,7 @@ defmodule Jidoka do
 
   def turn(server, input, opts)
       when is_binary(input) and is_server_ref(server) and is_list(opts) do
-    timeout = Keyword.get(opts, :timeout, 30_000)
-
-    runtime_opts =
-      opts
-      |> Keyword.drop([:context, :metadata, :request_id, :timeout])
-      |> Keyword.merge(Keyword.get(opts, :runtime_opts, []))
-
-    signal =
-      Signals.turn_run(input,
-        request_id: Keyword.get(opts, :request_id),
-        context: Keyword.get(opts, :context),
-        metadata: Keyword.get(opts, :metadata),
-        runtime_opts: runtime_opts
-      )
-
-    result =
-      with {:ok, server} <- resolve_server_ref(server),
-           {:ok, agent} <- Jido.AgentServer.call(server, signal, timeout) do
-        run_result_from_jido_agent(agent)
-      end
-
-    case result do
-      {:ok, _result} = ok ->
-        ok
-
-      {:hibernate, _snapshot} = hibernate ->
-        hibernate
-
-      {:error, reason} ->
-        {:error,
-         Error.normalize(reason,
-           operation: :turn,
-           phase: :agent_server,
-           target: server,
-           request_id: Keyword.get(opts, :request_id)
-         )}
-    end
+    Jidoka.Facade.AgentServer.turn(server, input, opts)
   end
 
   def turn(spec_or_plan, request_input, opts) do
@@ -341,20 +303,7 @@ defmodule Jidoka do
   needed for direct `turn/3` or `chat/3` calls.
   """
   @spec await_agent(server_ref(), keyword()) :: {:ok, map()} | {:error, term()}
-  def await_agent(server, opts \\ []) do
-    result =
-      with {:ok, server} <- resolve_server_ref(server) do
-        Jido.AgentServer.await_completion(server, opts)
-      end
-
-    case result do
-      {:ok, _result} = ok ->
-        ok
-
-      {:error, reason} ->
-        {:error, Error.normalize(reason, operation: :await_agent, target: server)}
-    end
-  end
+  def await_agent(server, opts \\ []), do: Jidoka.Facade.AgentServer.await(server, opts)
 
   @doc """
   Resumes from a durable agent snapshot.
@@ -447,23 +396,4 @@ defmodule Jidoka do
 
   defp plan_from_agent!({:error, reason}),
     do: raise(ArgumentError, "invalid agent spec: #{Kernel.inspect(reason)}")
-
-  defp run_result_from_jido_agent(%Jido.Agent{state: state}) do
-    case AgentServerState.from_jido_state(state) do
-      {:ok, agent_server_state} ->
-        AgentServerState.to_run_result(agent_server_state)
-
-      {:error, reason} ->
-        {:error, Error.normalize(reason, operation: :turn, phase: :agent_server)}
-    end
-  end
-
-  defp resolve_server_ref(server) when is_binary(server) do
-    case whereis(server) do
-      nil -> {:error, :not_found}
-      pid -> {:ok, pid}
-    end
-  end
-
-  defp resolve_server_ref(server), do: {:ok, server}
 end

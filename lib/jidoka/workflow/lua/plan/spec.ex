@@ -1,12 +1,29 @@
 defmodule Jidoka.Workflow.Lua.Plan.Spec do
   @moduledoc false
 
+  import Jidoka.Workflow.Lua.Plan.Spec.Graph
+  import Jidoka.Workflow.Lua.Plan.Spec.Helpers
+
   alias Jido.Action.Catalog.Entry
   alias Jidoka.Workflow.Lua.Plan.Ref
   alias Jidoka.Workflow.Lua.Policy
 
-  @enforce_keys [:id, :steps, :output]
-  defstruct [:id, :steps, :output]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              id: Zoi.string(),
+              steps: Zoi.array(Zoi.map()),
+              output: Zoi.any()
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @type step :: %{
           required(:id) => String.t(),
@@ -295,117 +312,6 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec do
     end
   end
 
-  defp validate_unique_step_ids(steps) do
-    ids = Enum.map(steps, & &1.id)
-
-    case ids -- Enum.uniq(ids) do
-      [] -> :ok
-      duplicates -> {:error, {:duplicate_lua_workflow_steps, Enum.uniq(duplicates)}}
-    end
-  end
-
-  defp validate_step_ids(steps) do
-    invalid_ids =
-      steps
-      |> Enum.map(& &1.id)
-      |> Enum.reject(&valid_step_id?/1)
-
-    case invalid_ids do
-      [] -> :ok
-      invalid_ids -> {:error, {:invalid_lua_workflow_step_ids, invalid_ids}}
-    end
-  end
-
-  defp valid_step_id?(id), do: is_binary(id) and String.match?(id, ~r/^[a-z][a-z0-9_]*$/)
-
-  defp put_implicit_dependencies(steps) do
-    Enum.map(steps, fn step ->
-      refs = step_refs(step)
-      Map.put(step, :after, Enum.uniq(step.explicit_after ++ refs))
-    end)
-  end
-
-  defp step_refs(%{kind: :action} = step), do: Ref.collect(step.arguments) ++ Ref.collect(step.condition)
-
-  defp step_refs(%{kind: :map, map: map} = step) do
-    Ref.collect(map.over) ++ Ref.collect(map.arguments) ++ Ref.collect(step.condition)
-  end
-
-  defp step_refs(%{kind: :reduce, reduce: reduce} = step) do
-    Ref.collect(reduce.over) ++ Ref.collect(step.condition)
-  end
-
-  defp step_refs(%{kind: :gate, gate: gate} = step) do
-    Ref.collect(gate.left) ++ Ref.collect(gate.right) ++ Ref.collect(step.condition)
-  end
-
-  defp validate_dependencies(steps) do
-    step_ids = steps |> Enum.map(& &1.id) |> MapSet.new()
-
-    missing =
-      steps
-      |> Enum.flat_map(fn step ->
-        step.after
-        |> Enum.reject(&MapSet.member?(step_ids, &1))
-        |> Enum.map(&{step.id, &1})
-      end)
-
-    self_dependencies =
-      steps
-      |> Enum.filter(fn step -> step.id in step.after end)
-      |> Enum.map(& &1.id)
-
-    cond do
-      missing != [] -> {:error, {:missing_lua_workflow_dependencies, missing}}
-      self_dependencies != [] -> {:error, {:self_referential_lua_workflow_steps, self_dependencies}}
-      true -> :ok
-    end
-  end
-
-  defp validate_acyclic_dependencies(steps) do
-    graph = Map.new(steps, &{&1.id, &1.after})
-
-    graph
-    |> Map.keys()
-    |> Enum.reduce_while({:ok, %{}}, fn step_id, {:ok, visited} ->
-      case visit_step(step_id, graph, %{}, visited) do
-        {:ok, visited} -> {:cont, {:ok, visited}}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
-    |> case do
-      {:ok, _visited} -> :ok
-      {:error, _reason} = error -> error
-    end
-  end
-
-  @spec visit_step(String.t(), %{String.t() => [String.t()]}, map(), map()) ::
-          {:ok, map()} | {:error, term()}
-  defp visit_step(step_id, graph, visiting, visited) do
-    cond do
-      Map.has_key?(visiting, step_id) ->
-        {:error, {:cyclic_lua_workflow_dependency, step_id}}
-
-      Map.has_key?(visited, step_id) ->
-        {:ok, visited}
-
-      true ->
-        visiting = Map.put(visiting, step_id, true)
-
-        with {:ok, visited} <-
-               graph
-               |> Map.get(step_id, [])
-               |> Enum.reduce_while({:ok, visited}, fn dependency, {:ok, visited} ->
-                 case visit_step(dependency, graph, visiting, visited) do
-                   {:ok, visited} -> {:cont, {:ok, visited}}
-                   {:error, _reason} = error -> {:halt, error}
-                 end
-               end) do
-          {:ok, Map.put(visited, step_id, true)}
-        end
-    end
-  end
-
   defp normalize_output(nil, steps), do: {:ok, %{"from" => steps |> List.last() |> Map.fetch!(:id)}}
   defp normalize_output(output, _steps) when is_binary(output), do: {:ok, %{"from" => output}}
   defp normalize_output(output, _steps), do: {:ok, output}
@@ -421,73 +327,4 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec do
       missing -> {:error, {:missing_lua_workflow_output_refs, missing}}
     end
   end
-
-  defp known_value(map, key, default) do
-    case Map.fetch(map, key) do
-      {:ok, value} -> value
-      :error -> Map.get(map, known_key_atom(key), default)
-    end
-  end
-
-  defp known_key_atom("after"), do: :after
-  defp known_key_atom("arguments"), do: :arguments
-  defp known_key_atom("args"), do: :args
-  defp known_key_atom("depends_on"), do: :depends_on
-  defp known_key_atom("as"), do: :as
-  defp known_key_atom("gate"), do: :gate
-  defp known_key_atom("id"), do: :id
-  defp known_key_atom("left"), do: :left
-  defp known_key_atom("map"), do: :map
-  defp known_key_atom("max_concurrency"), do: :max_concurrency
-  defp known_key_atom("max_items"), do: :max_items
-  defp known_key_atom("mode"), do: :mode
-  defp known_key_atom("name"), do: :name
-  defp known_key_atom("op"), do: :op
-  defp known_key_atom("output"), do: :output
-  defp known_key_atom("over"), do: :over
-  defp known_key_atom("path"), do: :path
-  defp known_key_atom("reduce"), do: :reduce
-  defp known_key_atom("retries"), do: :retries
-  defp known_key_atom("right"), do: :right
-  defp known_key_atom("steps"), do: :steps
-  defp known_key_atom("tool"), do: :tool
-  defp known_key_atom("tool_id"), do: :tool_id
-  defp known_key_atom("when"), do: :when
-
-  defp has_known_key?(map, key), do: Map.has_key?(map, key) or Map.has_key?(map, known_key_atom(key))
-
-  defp clamp_retries(retries) when is_integer(retries), do: retries |> max(0) |> min(2)
-
-  defp clamp_retries(retries) when is_binary(retries) do
-    case Integer.parse(retries) do
-      {parsed, _rest} -> clamp_retries(parsed)
-      :error -> 0
-    end
-  end
-
-  defp clamp_retries(_retries), do: 0
-
-  defp clamp_max_items(max_items) when is_integer(max_items), do: max_items |> max(1) |> min(25)
-
-  defp clamp_max_items(max_items) when is_binary(max_items) do
-    case Integer.parse(max_items) do
-      {parsed, _rest} -> clamp_max_items(parsed)
-      :error -> 10
-    end
-  end
-
-  defp clamp_max_items(_max_items), do: 10
-
-  defp clamp_max_concurrency(max_concurrency) when is_integer(max_concurrency) do
-    max_concurrency |> max(1) |> min(16)
-  end
-
-  defp clamp_max_concurrency(max_concurrency) when is_binary(max_concurrency) do
-    case Integer.parse(max_concurrency) do
-      {parsed, _rest} -> clamp_max_concurrency(parsed)
-      :error -> 8
-    end
-  end
-
-  defp clamp_max_concurrency(_max_concurrency), do: 8
 end

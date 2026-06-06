@@ -2,6 +2,7 @@ defmodule Jidoka.Workflow.Definition do
   @moduledoc false
 
   alias Jidoka.Workflow
+  alias Jidoka.Workflow.Definition.{Graph, Refs, Targets}
   alias Jidoka.Workflow.Spec
   alias Jidoka.Workflow.Step
 
@@ -32,13 +33,13 @@ defmodule Jidoka.Workflow.Definition do
       |> Spark.Dsl.Extension.get_opt([:workflow_output], :output)
       |> require_output!(owner_module)
 
-    refs = collect_refs([steps, output])
-    output_refs = collect_refs(output).from
+    refs = Refs.collect([steps, output])
+    output_refs = Refs.collect(output).from
 
     validate_input_refs!(owner_module, input_schema, refs.input)
     validate_output_refs!(owner_module, output_refs, output)
 
-    dependencies = infer_dependencies(steps)
+    dependencies = Graph.infer_dependencies(steps)
     validate_step_refs!(owner_module, steps, dependencies, refs.from)
     sorted_steps = sort_steps!(owner_module, steps, dependencies)
 
@@ -154,7 +155,7 @@ defmodule Jidoka.Workflow.Definition do
 
   defp normalize_step!(%Jidoka.Workflow.Dsl.ActionStep{} = step, owner_module) do
     validate_step_name!(owner_module, step.name, [:steps, :action])
-    validate_action_target!(owner_module, step)
+    Targets.validate_action!(owner_module, step)
 
     Step.new!(
       kind: :action,
@@ -168,7 +169,7 @@ defmodule Jidoka.Workflow.Definition do
 
   defp normalize_step!(%Jidoka.Workflow.Dsl.FunctionStep{} = step, owner_module) do
     validate_step_name!(owner_module, step.name, [:steps, :function])
-    validate_function_target!(owner_module, step)
+    Targets.validate_function!(owner_module, step)
 
     Step.new!(
       kind: :function,
@@ -182,7 +183,7 @@ defmodule Jidoka.Workflow.Definition do
 
   defp normalize_step!(%Jidoka.Workflow.Dsl.AgentStep{} = step, owner_module) do
     validate_step_name!(owner_module, step.name, [:steps, :agent])
-    validate_agent_target!(owner_module, step)
+    Targets.validate_agent!(owner_module, step)
 
     Step.new!(
       kind: :agent,
@@ -219,93 +220,6 @@ defmodule Jidoka.Workflow.Definition do
     )
   end
 
-  defp validate_action_target!(owner_module, step) do
-    cond do
-      not is_atom(step.module) ->
-        raise_error!(
-          owner_module,
-          "Workflow action step target is not a valid action-backed module.",
-          [:steps, step.name, :action],
-          step.module,
-          "Use a module defined with `use Jidoka.Action` or another Jido action module exposing `to_tool/0`."
-        )
-
-      Code.ensure_loaded?(step.module) and function_exported?(step.module, :to_tool, 0) ->
-        :ok
-
-      Code.ensure_loaded?(step.module) ->
-        raise_error!(
-          owner_module,
-          "Workflow action step target is not a valid action-backed module.",
-          [:steps, step.name, :action],
-          step.module,
-          "Use a module defined with `use Jidoka.Action` or another Jido action module exposing `to_tool/0`."
-        )
-
-      true ->
-        :ok
-    end
-  end
-
-  defp validate_function_target!(owner_module, %{mfa: {module, function, 2}} = step)
-       when is_atom(module) and is_atom(function) do
-    cond do
-      Code.ensure_loaded?(module) and function_exported?(module, function, 2) ->
-        :ok
-
-      Code.ensure_loaded?(module) ->
-        raise_error!(
-          owner_module,
-          "Workflow function step target is not exported.",
-          [:steps, step.name, :function],
-          {module, function, 2},
-          "Use a `{module, function, 2}` tuple for a public function."
-        )
-
-      true ->
-        :ok
-    end
-  end
-
-  defp validate_function_target!(owner_module, step) do
-    raise_error!(
-      owner_module,
-      "Workflow function steps require a `{module, function, 2}` target.",
-      [:steps, step.name, :function],
-      step.mfa,
-      "Use `function :normalize, {MyApp.WorkflowFns, :normalize, 2}, input: ...`."
-    )
-  end
-
-  defp validate_agent_target!(owner_module, %{agent: module} = step) when is_atom(module) do
-    cond do
-      Code.ensure_loaded?(module) and function_exported?(module, :run_turn, 2) ->
-        :ok
-
-      Code.ensure_loaded?(module) ->
-        raise_error!(
-          owner_module,
-          "Workflow agent step target is not a Jidoka-compatible agent.",
-          [:steps, step.name, :agent],
-          module,
-          "Use a compiled Jidoka agent module exposing `run_turn/2`."
-        )
-
-      true ->
-        :ok
-    end
-  end
-
-  defp validate_agent_target!(owner_module, step) do
-    raise_error!(
-      owner_module,
-      "Workflow agent steps require a Jidoka agent module target.",
-      [:steps, step.name, :agent],
-      step.agent,
-      "Use `agent :draft, MyApp.Agents.Writer, prompt: ...`."
-    )
-  end
-
   defp ensure_unique_step_names!(owner_module, steps) do
     duplicate =
       steps
@@ -327,26 +241,6 @@ defmodule Jidoka.Workflow.Definition do
         )
     end
   end
-
-  defp infer_dependencies(steps) do
-    Map.new(steps, fn step ->
-      refs =
-        step
-        |> step_ref_terms()
-        |> collect_refs()
-
-      dependencies =
-        refs.from
-        |> Enum.concat(step.after)
-        |> Enum.uniq()
-
-      {step.name, dependencies}
-    end)
-  end
-
-  defp step_ref_terms(%Step{kind: :action} = step), do: [step.input]
-  defp step_ref_terms(%Step{kind: :function} = step), do: [step.input]
-  defp step_ref_terms(%Step{kind: :agent} = step), do: [step.prompt, step.context]
 
   defp validate_step_refs!(owner_module, steps, dependencies, all_from_refs) do
     names = MapSet.new(Enum.map(steps, & &1.name))
@@ -421,12 +315,9 @@ defmodule Jidoka.Workflow.Definition do
   defp equivalent_key?(left, right), do: left == right or to_string(left) == to_string(right)
 
   defp sort_steps!(owner_module, steps, dependencies) do
-    order = Enum.map(steps, & &1.name)
-    by_name = Map.new(steps, &{&1.name, &1})
-
-    case topo_sort(dependencies, order, []) do
+    case Graph.sort_steps(steps, dependencies) do
       {:ok, sorted_names} ->
-        Enum.map(sorted_names, &Map.fetch!(by_name, &1))
+        sorted_names
 
       {:error, cyclic_names} ->
         raise_error!(
@@ -437,70 +328,6 @@ defmodule Jidoka.Workflow.Definition do
           "Remove the circular `from/1`, `from/2`, or `after:` dependency."
         )
     end
-  end
-
-  defp topo_sort(dependencies, _order, acc) when map_size(dependencies) == 0 do
-    {:ok, Enum.reverse(acc)}
-  end
-
-  defp topo_sort(dependencies, order, acc) do
-    ready =
-      order
-      |> Enum.filter(fn name -> Map.get(dependencies, name) == [] end)
-
-    case ready do
-      [] ->
-        {:error, Map.keys(dependencies)}
-
-      _ ->
-        ready_set = MapSet.new(ready)
-
-        dependencies =
-          dependencies
-          |> Map.drop(ready)
-          |> Map.new(fn {name, deps} ->
-            {name, Enum.reject(deps, &MapSet.member?(ready_set, &1))}
-          end)
-
-        topo_sort(dependencies, Enum.reject(order, &MapSet.member?(ready_set, &1)), Enum.reverse(ready) ++ acc)
-    end
-  end
-
-  defp collect_refs(term) do
-    term
-    |> collect_refs(%{input: [], from: [], context: []})
-    |> normalize_refs()
-  end
-
-  defp collect_refs({:jidoka_workflow_ref, :input, key}, acc),
-    do: Map.update!(acc, :input, &[key | &1])
-
-  defp collect_refs({:jidoka_workflow_ref, :from, step, _path}, acc),
-    do: Map.update!(acc, :from, &[step | &1])
-
-  defp collect_refs({:jidoka_workflow_ref, :context, key}, acc),
-    do: Map.update!(acc, :context, &[key | &1])
-
-  defp collect_refs({:jidoka_workflow_ref, :value, _value}, acc), do: acc
-
-  defp collect_refs(%{} = map, acc), do: Enum.reduce(Map.values(map), acc, &collect_refs/2)
-
-  defp collect_refs(list, acc) when is_list(list), do: Enum.reduce(list, acc, &collect_refs/2)
-
-  defp collect_refs(tuple, acc) when is_tuple(tuple) do
-    tuple
-    |> Tuple.to_list()
-    |> Enum.reduce(acc, &collect_refs/2)
-  end
-
-  defp collect_refs(_other, acc), do: acc
-
-  defp normalize_refs(acc) do
-    %{
-      input: Enum.uniq(acc.input),
-      from: Enum.uniq(acc.from),
-      context: Enum.uniq(acc.context)
-    }
   end
 
   defp raise_error!(owner_module, message, path, value, hint) do

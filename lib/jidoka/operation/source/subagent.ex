@@ -29,15 +29,26 @@ defmodule Jidoka.Operation.Source.Subagent do
           metadata: map()
         }
 
-  defstruct [
-    :agent,
-    :name,
-    :description,
-    timeout: 30_000,
-    forward_context: :public,
-    result: :structured,
-    metadata: %{}
-  ]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              agent: Zoi.atom() |> Zoi.nullish(),
+              name: Zoi.string() |> Zoi.nullish(),
+              description: Zoi.string() |> Zoi.nullish(),
+              timeout: Zoi.integer() |> Zoi.default(30_000),
+              forward_context: Zoi.any() |> Zoi.default(:public),
+              result: Schema.atom_enum(@result_modes) |> Zoi.default(:structured),
+              metadata: Zoi.map() |> Zoi.default(%{})
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do

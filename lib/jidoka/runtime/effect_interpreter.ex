@@ -7,17 +7,14 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   effect id.
   """
 
-  require Runic
-
-  alias Jidoka.Config
   alias Jidoka.Error
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Controls
-  alias Jidoka.Stream, as: EventStream
+  alias Jidoka.Runtime.OperationBatch
+  alias Jidoka.Runtime.EffectTrace
   alias Jidoka.Effect
   alias Jidoka.Review.Interrupt
   alias Jidoka.Turn
-  alias Runic.Workflow
 
   @spec interpret_pending(Turn.State.t(), Capabilities.t(), keyword()) ::
           {:ok, Effect.Result.t(), Turn.State.t()}
@@ -67,13 +64,13 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     case Effect.Journal.result_for(state.journal, intent) do
       %Effect.Result{} = result ->
-        {:ok, result, append_effect_trace(state, intent, :effect_replayed, [], opts)}
+        {:ok, result, EffectTrace.append(state, intent, :effect_replayed, [], opts)}
 
       nil ->
         with :ok <- validate_incomplete_effect_replay(state, intent) do
           journal = Effect.Journal.put_intent(state.journal, intent)
           state = %Turn.State{state | journal: journal}
-          state = append_effect_trace(state, intent, :effect_started, [], opts)
+          state = EffectTrace.append(state, intent, :effect_started, [], opts)
 
           interpret_after_controls(state, intent, capabilities, journal, opts)
         end
@@ -91,7 +88,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       Effect.Journal.incomplete_intent?(journal, intent) ->
         {:error,
          Error.normalize({:unsafe_once_incomplete_effect, intent},
-           operation: effect_operation(intent),
+           operation: EffectTrace.operation(intent),
            phase: :effect,
            intent_id: intent.id,
            effect_kind: intent.kind
@@ -117,13 +114,13 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     case run_effect_controls(state, intent, opts) do
       {:ok, %Turn.State{} = state} ->
-        state = append_effect_trace(state, intent, :capability_call_started, [], opts)
+        state = EffectTrace.append(state, intent, :capability_call_started, [], opts)
 
         with {:ok, result} <- call_capability(intent, capabilities, journal) do
           journal = Effect.Journal.put_result(journal, result)
           state = %Turn.State{state | journal: journal}
-          state = append_capability_result_trace(state, intent, result, opts)
-          state = append_effect_result_trace(state, intent, result, opts)
+          state = EffectTrace.append_capability_result(state, intent, result, opts)
+          state = EffectTrace.append_effect_result(state, intent, result, opts)
 
           {:ok, result, state}
         end
@@ -149,20 +146,20 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     else
       case Controls.run_operation_controls(state, intent) do
         {:ok, %Turn.State{} = state} ->
-          emit_events(Enum.drop(state.events, event_count), opts)
+          EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
           {:ok, state}
 
         {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
-          emit_events(Enum.drop(state.events, event_count), opts)
+          EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
           {:interrupt, interrupt, state}
 
         {:error, reason} ->
           {:error,
            Error.normalize(reason,
-             operation: effect_operation(intent),
+             operation: EffectTrace.operation(intent),
              phase: :control,
              agent_id: state.spec.id,
-             request_id: effect_request_id(state, intent),
+             request_id: EffectTrace.request_id(state, intent),
              intent_id: intent.id,
              effect_kind: intent.kind
            )}
@@ -236,96 +233,6 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   defp output_metadata(%{"metadata" => metadata}) when is_map(metadata), do: metadata
   defp output_metadata(_output), do: %{}
 
-  defp append_capability_result_trace(
-         %Turn.State{} = state,
-         %Effect.Intent{} = intent,
-         result,
-         opts
-       ) do
-    event =
-      case result.status do
-        :ok -> :capability_call_completed
-        :error -> :capability_call_failed
-      end
-
-    append_effect_trace(state, intent, event, [error: result_error(result)], opts)
-  end
-
-  defp append_effect_result_trace(
-         %Turn.State{} = state,
-         %Effect.Intent{} = intent,
-         result,
-         opts
-       ) do
-    event =
-      case result.status do
-        :ok -> :effect_completed
-        :error -> :effect_failed
-      end
-
-    append_effect_trace(state, intent, event, [error: result_error(result)], opts)
-  end
-
-  defp append_effect_trace(
-         %Turn.State{} = state,
-         %Effect.Intent{} = intent,
-         event,
-         attrs,
-         opts
-       ) do
-    trace_attrs =
-      [
-        agent_id: state.spec.id,
-        request_id: effect_request_id(state, intent),
-        loop_index: effect_loop_index(state, intent),
-        effect_id: intent.id,
-        effect_kind: intent.kind,
-        operation: effect_operation(intent),
-        data: %{
-          idempotency: intent.idempotency,
-          idempotency_key: intent.idempotency_key
-        }
-      ]
-      |> Keyword.merge(attrs)
-      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-
-    %Turn.State{} =
-      state =
-      state
-      |> Turn.Transition.new!()
-      |> Turn.Transition.event(event, trace_attrs)
-      |> Turn.Transition.commit()
-
-    state.events
-    |> List.last()
-    |> then(&EventStream.emit(&1, opts))
-
-    state
-  end
-
-  defp emit_events(events, opts), do: EventStream.emit_events(events, opts)
-
-  defp effect_request_id(%Turn.State{} = state, %Effect.Intent{} = intent) do
-    Map.get(intent.payload, :request_id) ||
-      Map.get(intent.payload, "request_id") ||
-      state.request.request_id
-  end
-
-  defp effect_loop_index(%Turn.State{} = state, %Effect.Intent{} = intent) do
-    Map.get(intent.payload, :loop_index) ||
-      Map.get(intent.payload, "loop_index") ||
-      state.loop_index
-  end
-
-  defp effect_operation(%Effect.Intent{kind: :operation, payload: payload}) do
-    Map.get(payload, :name) || Map.get(payload, "name")
-  end
-
-  defp effect_operation(_intent), do: nil
-
-  defp result_error(%Effect.Result{status: :error, output: output}), do: Error.to_map(output)
-  defp result_error(_result), do: nil
-
   defp current_operation_batch(%Turn.State{pending_effects: effects}) do
     Enum.take_while(effects, &match?(%Effect.Intent{kind: :operation}, &1))
   end
@@ -366,7 +273,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     case Effect.Journal.result_for(state.journal, intent) do
       %Effect.Result{} = result ->
-        state = append_effect_trace(state, intent, :effect_replayed, [], opts)
+        state = EffectTrace.append(state, intent, :effect_replayed, [], opts)
         {:cont, {:ok, state, runnable_intents, Map.put(replayed_results, intent.id, result)}}
 
       nil ->
@@ -389,7 +296,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
   defp preflight_operation_intent(%Turn.State{} = state, %Effect.Intent{} = intent, opts) do
     with :ok <- validate_incomplete_effect_replay(state, intent) do
-      state = append_effect_trace(state, intent, :effect_started, [], opts)
+      state = EffectTrace.append(state, intent, :effect_started, [], opts)
 
       case run_effect_controls(state, intent, opts) do
         {:ok, %Turn.State{} = state} ->
@@ -417,9 +324,9 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     journal = Enum.reduce(intents, state.journal, &Effect.Journal.put_intent(&2, &1))
     state = %Turn.State{state | journal: journal}
-    state = Enum.reduce(intents, state, &append_effect_trace(&2, &1, :capability_call_started, [], opts))
+    state = Enum.reduce(intents, state, &EffectTrace.append(&2, &1, :capability_call_started, [], opts))
 
-    case execute_operation_batch_workflow(intents, capabilities, journal, opts) do
+    case OperationBatch.execute(intents, capabilities, journal, opts) do
       {:ok, results} ->
         state =
           results
@@ -433,8 +340,8 @@ defmodule Jidoka.Runtime.EffectInterpreter do
             result = Map.fetch!(results, intent.id)
 
             state
-            |> append_capability_result_trace(intent, result, opts)
-            |> append_effect_result_trace(intent, result, opts)
+            |> EffectTrace.append_capability_result(intent, result, opts)
+            |> EffectTrace.append_effect_result(intent, result, opts)
           end)
 
         {:ok, state, results}
@@ -442,76 +349,6 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       {:error, reason} ->
         {:error, reason}
     end
-  end
-
-  defp execute_operation_batch_workflow(intents, %Capabilities{} = capabilities, %Effect.Journal{} = journal, opts) do
-    step_names = operation_batch_step_names(intents)
-
-    workflow =
-      intents
-      |> Enum.zip(step_names)
-      |> Enum.reduce(Workflow.new(name: :jidoka_operation_batch), fn {intent, step_name}, workflow ->
-        workflow_step =
-          Runic.step(
-            fn _state ->
-              call_operation_batch_step(^intent, ^capabilities, ^journal)
-            end,
-            name: step_name
-          )
-
-        Workflow.add(workflow, workflow_step)
-      end)
-
-    workflow =
-      Workflow.react_until_satisfied(workflow, %{},
-        async: true,
-        max_concurrency: max_parallel_operations(opts),
-        timeout: :infinity
-      )
-
-    results =
-      intents
-      |> Enum.zip(step_names)
-      |> Enum.reduce_while({:ok, %{}}, fn {intent, step_name}, {:ok, acc} ->
-        case workflow |> Workflow.raw_productions(step_name) |> List.last() do
-          %Effect.Result{} = result ->
-            {:cont, {:ok, Map.put(acc, intent.id, result)}}
-
-          other ->
-            {:halt,
-             {:error,
-              Error.normalize({:missing_operation_batch_result, intent.id, other},
-                operation: effect_operation(intent),
-                phase: :effect,
-                intent_id: intent.id,
-                effect_kind: intent.kind
-              )}}
-        end
-      end)
-
-    results
-  rescue
-    exception -> {:error, Error.normalize(exception, operation: :operation, phase: :effect)}
-  catch
-    kind, reason -> {:error, Error.normalize({kind, reason}, operation: :operation, phase: :effect)}
-  end
-
-  defp call_operation_batch_step(%Effect.Intent{} = intent, %Capabilities{} = capabilities, %Effect.Journal{} = journal) do
-    case call_capability(intent, capabilities, journal) do
-      {:ok, %Effect.Result{} = result} -> result
-    end
-  end
-
-  defp operation_batch_step_names(intents) do
-    intents
-    |> Enum.with_index()
-    |> Enum.map(fn {_intent, index} -> "operation_#{index}" end)
-  end
-
-  defp max_parallel_operations(opts) do
-    opts
-    |> Keyword.get(:max_parallel_operations, Config.default_max_parallel_operations())
-    |> Config.normalize_positive_integer!(:max_parallel_operations)
   end
 
   defp mark_operation_controls_allowed(%Effect.Intent{} = intent) do

@@ -1,5 +1,15 @@
 defmodule Jidoka.ErrorTest.Support.NonSplodeClass do
-  defstruct [:errors, :message]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              errors: Zoi.any() |> Zoi.nullish(),
+              message: Zoi.any() |> Zoi.nullish()
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
 end
 
 defmodule Jidoka.ErrorTest do

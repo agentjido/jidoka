@@ -19,10 +19,11 @@ defmodule Jidoka.Agent do
   """
 
   alias Jidoka.Agent.Spec
-  alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Agent.Spec.Memory
   alias Jidoka.Agent.Spec.Result
+  alias Jidoka.Agent.ControlCompiler
+  alias Jidoka.Agent.ServerOptions
   alias Jidoka.Agent.ToolSources
   alias Jidoka.Config
   alias Jidoka.Runtime.Actions.RunTurn
@@ -99,28 +100,11 @@ defmodule Jidoka.Agent do
   @doc false
   @spec agent_server_child_opts(module(), keyword() | map()) :: keyword() | map()
   def agent_server_child_opts(agent_module, opts) when is_atom(agent_module) and is_list(opts) do
-    opts
-    |> Keyword.put_new(:agent, agent_module)
-    |> Keyword.put_new(:jido, Jidoka.Jido)
-    |> Keyword.put_new(:id, default_agent_id(agent_module))
+    ServerOptions.child_opts(agent_module, opts)
   end
 
   def agent_server_child_opts(agent_module, opts) when is_atom(agent_module) and is_map(opts) do
-    opts
-    |> Map.put_new(:agent, agent_module)
-    |> Map.put_new(:jido, Jidoka.Jido)
-    |> Map.put_new(:id, default_agent_id(agent_module))
-  end
-
-  defp default_agent_id(agent_module) do
-    if Code.ensure_loaded?(agent_module) and function_exported?(agent_module, :__jidoka_agent_id__, 0) do
-      agent_module.__jidoka_agent_id__()
-    else
-      agent_module
-      |> Module.split()
-      |> List.last()
-      |> Macro.underscore()
-    end
+    ServerOptions.child_opts(agent_module, opts)
   end
 
   @doc """
@@ -138,7 +122,7 @@ defmodule Jidoka.Agent do
           required(:actions) => [module()],
           required(:operations) => [Spec.Operation.t()],
           required(:tool_sources) => [map()],
-          required(:controls) => Controls.t()
+          required(:controls) => Jidoka.Agent.Spec.Controls.t()
         }
   def definition!(agent_module) when is_atom(agent_module) do
     agent = fetch_agent!(agent_module)
@@ -187,79 +171,9 @@ defmodule Jidoka.Agent do
   end
 
   @doc false
-  @spec controls!(module()) :: Controls.t()
+  @spec controls!(module()) :: Jidoka.Agent.Spec.Controls.t()
   def controls!(agent_module) when is_atom(agent_module) do
-    entities = Spark.Dsl.Extension.get_entities(agent_module, [:controls])
-
-    operations =
-      entities
-      |> Enum.flat_map(fn
-        %Jidoka.Agent.Dsl.OperationControl{} = control ->
-          [
-            normalize_dsl_value!(agent_module, [:controls, :operation], fn ->
-              Controls.Operation.new!(
-                control: control.control,
-                match: control.match
-              )
-            end)
-          ]
-
-        _entity ->
-          []
-      end)
-
-    inputs =
-      entities
-      |> Enum.flat_map(fn
-        %Jidoka.Agent.Dsl.InputControl{} = input ->
-          [
-            normalize_dsl_value!(agent_module, [:controls, :input], fn ->
-              Controls.Input.new!(
-                control: input.control,
-                metadata: input.metadata || %{}
-              )
-            end)
-          ]
-
-        _entity ->
-          []
-      end)
-
-    outputs =
-      entities
-      |> Enum.flat_map(fn
-        %Jidoka.Agent.Dsl.OutputControl{} = output ->
-          [
-            normalize_dsl_value!(agent_module, [:controls, :output], fn ->
-              Controls.Output.new!(
-                control: output.control,
-                metadata: output.metadata || %{}
-              )
-            end)
-          ]
-
-        _entity ->
-          []
-      end)
-
-    normalize_dsl_value!(agent_module, [:controls], fn ->
-      Controls.new!(
-        max_turns: singleton_control_value(entities, Jidoka.Agent.Dsl.MaxTurnsControl),
-        timeout_ms: singleton_control_value(entities, Jidoka.Agent.Dsl.TimeoutControl),
-        inputs: inputs,
-        operations: operations,
-        outputs: outputs
-      )
-    end)
-  end
-
-  defp singleton_control_value(entities, entity_module) do
-    entities
-    |> Enum.filter(&match?(%{__struct__: ^entity_module}, &1))
-    |> case do
-      [] -> nil
-      [%{value: value}] -> value
-    end
+    ControlCompiler.compile!(agent_module)
   end
 
   @doc """

@@ -5,6 +5,7 @@ defmodule Jidoka.Operation.Source.CatalogTest do
   alias Jidoka.Effect
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Catalog, as: CatalogSource
+  alias Jidoka.Operation.Source.Catalog.Normalize
 
   defmodule SearchCustomers do
     @moduledoc false
@@ -94,6 +95,19 @@ defmodule Jidoka.Operation.Source.CatalogTest do
     @moduledoc false
   end
 
+  defmodule BadReturnCatalog do
+    @moduledoc false
+
+    def catalog, do: :not_a_catalog
+  end
+
+  defmodule BadTemplatesCatalog do
+    @moduledoc false
+
+    def catalog, do: ActionCatalog.new!(id: "bad-templates", name: "Bad Templates")
+    def templates, do: [:not, :a, :map]
+  end
+
   test "publishes generated query, describe, and execute operations" do
     source = CatalogSource.new!(catalog: TestCatalog)
 
@@ -114,6 +128,52 @@ defmodule Jidoka.Operation.Source.CatalogTest do
 
     assert {:ok, operations} = Source.operations(source)
     assert Enum.map(operations, & &1.name) == ["crm_query", "crm_describe", "crm_execute"]
+  end
+
+  test "catalog normalizers keep operation source inputs bounded and predictable" do
+    assert {:ok, TestCatalog} = Normalize.catalog_module(TestCatalog)
+
+    assert {:error, {:invalid_catalog_module, InvalidCatalog, :missing_catalog_callback}} =
+             Normalize.catalog_module(InvalidCatalog)
+
+    assert {:error, {:invalid_catalog_return, BadReturnCatalog, :not_a_catalog}} =
+             Normalize.catalog_value(BadReturnCatalog)
+
+    assert {:error, {:invalid_catalog_templates, BadTemplatesCatalog, [:not, :a, :map]}} =
+             Normalize.templates(BadTemplatesCatalog)
+
+    assert {:ok, "catalog_"} = Normalize.prefix(nil)
+    assert {:ok, "crm_"} = Normalize.prefix(:crm)
+    assert {:ok, "crm_"} = Normalize.prefix("crm_")
+    assert {:error, {:invalid_catalog_prefix, "Bad Prefix"}} = Normalize.prefix("Bad Prefix")
+
+    assert {:ok, 12} = Normalize.positive_integer("12", :max_calls)
+
+    assert {:error, {:invalid_catalog_positive_integer, :max_calls, "0"}} =
+             Normalize.positive_integer("0", :max_calls)
+
+    assert {:ok, false} = Normalize.boolean(false, :require_read_only?)
+
+    assert {:error, {:invalid_catalog_boolean, :require_read_only?, "false"}} =
+             Normalize.boolean("false", :require_read_only?)
+
+    assert {:ok, :structured} = Normalize.result(:structured)
+    assert {:error, {:invalid_catalog_result, :output}} = Normalize.result(:output)
+
+    assert {:ok, :pure} = Normalize.idempotency(:pure)
+    assert {:error, {:invalid_catalog_idempotency, "pure"}} = Normalize.idempotency("pure")
+
+    assert {:ok, %{"kind" => "demo"}} = Normalize.metadata(%{"kind" => "demo"})
+    assert {:error, {:invalid_catalog_metadata, []}} = Normalize.metadata([])
+
+    assert Normalize.context(tenant: "northwind") == %{tenant: "northwind"}
+    assert Normalize.context(:invalid) == %{}
+    assert Normalize.get(%{"limit" => 2}, :limit, 5) == 2
+    assert Normalize.positive_integer_or_default("bad", 8) == 8
+    assert Normalize.clamp(99, 1, 10) == 10
+    assert Normalize.stringify_keys(%{mode: :safe}) == %{"mode" => :safe}
+    assert Normalize.format_reason(:bad) == ":bad"
+    assert Normalize.reject_nil_values(%{a: 1, b: nil}) == %{a: 1}
   end
 
   test "queries and describes catalog metadata without executing hidden actions" do

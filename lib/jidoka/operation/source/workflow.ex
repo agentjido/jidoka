@@ -34,19 +34,30 @@ defmodule Jidoka.Operation.Source.Workflow do
           definition: Spec.t()
         }
 
-  defstruct [
-    :workflow,
-    :name,
-    :description,
-    :definition,
-    timeout: 30_000,
-    async: false,
-    max_concurrency: nil,
-    forward_context: :public,
-    result: :output,
-    idempotency: :idempotent,
-    metadata: %{}
-  ]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              workflow: Zoi.atom() |> Zoi.nullish(),
+              name: Zoi.string() |> Zoi.nullish(),
+              description: Zoi.string() |> Zoi.nullish(),
+              timeout: Zoi.integer() |> Zoi.default(30_000),
+              async: Zoi.boolean() |> Zoi.default(false),
+              max_concurrency: Zoi.integer() |> Zoi.nullish(),
+              forward_context: Zoi.any() |> Zoi.default(:public),
+              result: Schema.atom_enum(@result_modes) |> Zoi.default(:output),
+              idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
+              metadata: Zoi.map() |> Zoi.default(%{}),
+              definition: Zoi.any() |> Zoi.nullish()
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do

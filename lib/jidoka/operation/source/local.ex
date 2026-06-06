@@ -24,7 +24,20 @@ defmodule Jidoka.Operation.Source.Local do
         }
   @type t :: %__MODULE__{operations: [operation_def()]}
 
-  defstruct operations: []
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              operations: Zoi.array(Zoi.map()) |> Zoi.default([])
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do

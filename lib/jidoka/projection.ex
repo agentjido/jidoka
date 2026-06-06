@@ -11,9 +11,11 @@ defmodule Jidoka.Projection do
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Event
-  alias Jidoka.Error
   alias Jidoka.Handoff
   alias Jidoka.Harness
+  alias Jidoka.Projection.AgentSpec, as: AgentSpecProjection
+  alias Jidoka.Projection.Value
+  alias Jidoka.Projection.Workflow, as: WorkflowProjection
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
@@ -21,58 +23,11 @@ defmodule Jidoka.Projection do
 
   @doc "Projects a supported Jidoka data contract into a stable map."
   @spec project(term()) :: term()
-  def project(%Agent.Spec{} = spec) do
-    %{
-      id: spec.id,
-      instructions: spec.instructions,
-      model: Jidoka.Config.model_ref(spec.model),
-      generation: project(spec.generation),
-      context_schema?: not is_nil(spec.context_schema),
-      result: project(spec.result),
-      memory: project(spec.memory),
-      operations: Enum.map(spec.operations, &project/1),
-      controls: project(spec.controls),
-      runtime_defaults: project_value(spec.runtime_defaults),
-      metadata: project_agent_metadata(spec.metadata)
-    }
-  end
-
-  def project(%Agent.Spec.Generation{} = generation) do
-    %{
-      params: project_value(generation.params),
-      provider_options: project_value(generation.provider_options),
-      extra: project_value(generation.extra)
-    }
-  end
-
-  def project(%Agent.Spec.Result{} = result) do
-    %{
-      schema?: not is_nil(result.schema),
-      max_repairs: result.max_repairs,
-      metadata: project_value(result.metadata)
-    }
-  end
-
-  def project(%Agent.Spec.Memory{} = memory) do
-    %{
-      enabled: memory.enabled,
-      scope: memory.scope,
-      namespace: project_value(memory.namespace),
-      capture: memory.capture,
-      inject: memory.inject,
-      max_entries: memory.max_entries,
-      metadata: project_value(memory.metadata)
-    }
-  end
-
-  def project(%Agent.Spec.Operation{} = operation) do
-    %{
-      name: operation.name,
-      description: operation.description,
-      idempotency: operation.idempotency,
-      metadata: project_operation_metadata(operation.metadata)
-    }
-  end
+  def project(%Agent.Spec{} = spec), do: AgentSpecProjection.project(spec)
+  def project(%Agent.Spec.Generation{} = generation), do: AgentSpecProjection.project(generation)
+  def project(%Agent.Spec.Result{} = result), do: AgentSpecProjection.project(result)
+  def project(%Agent.Spec.Memory{} = memory), do: AgentSpecProjection.project(memory)
+  def project(%Agent.Spec.Operation{} = operation), do: AgentSpecProjection.project(operation)
 
   def project(%Workflow.Spec{} = workflow) do
     %{
@@ -82,11 +37,11 @@ defmodule Jidoka.Projection do
       mode: workflow.mode,
       parameters_schema?: is_map(workflow.parameters_schema),
       steps: Enum.map(workflow.steps, &project/1),
-      dependencies: project_value(workflow.dependencies),
-      output: project_workflow_ref(workflow.output),
-      input_refs: Enum.map(workflow.input_refs, &project_value/1),
-      context_refs: Enum.map(workflow.context_refs, &project_value/1),
-      metadata: project_value(workflow.metadata)
+      dependencies: Value.project(workflow.dependencies),
+      output: WorkflowProjection.ref(workflow.output),
+      input_refs: Enum.map(workflow.input_refs, &Value.project/1),
+      context_refs: Enum.map(workflow.context_refs, &Value.project/1),
+      metadata: Value.project(workflow.metadata)
     }
   end
 
@@ -94,12 +49,12 @@ defmodule Jidoka.Projection do
     %{
       name: step.name,
       kind: step.kind,
-      target: project_workflow_target(step.target),
-      input: project_workflow_ref(step.input),
-      prompt: project_workflow_ref(step.prompt),
-      context: project_workflow_ref(step.context),
+      target: WorkflowProjection.target(step.target),
+      input: WorkflowProjection.ref(step.input),
+      prompt: WorkflowProjection.ref(step.prompt),
+      context: WorkflowProjection.ref(step.context),
       after: step.after,
-      metadata: project_value(step.metadata)
+      metadata: Value.project(step.metadata)
     }
   end
 
@@ -107,54 +62,23 @@ defmodule Jidoka.Projection do
     %{
       id: handoff.id,
       conversation_id: handoff.conversation_id,
-      from_agent: project_value(handoff.from_agent),
+      from_agent: Value.project(handoff.from_agent),
       to_agent: inspect(handoff.to_agent),
       to_agent_id: handoff.to_agent_id,
       name: handoff.name,
       message: handoff.message,
       summary: handoff.summary,
       reason: handoff.reason,
-      context: project_value(handoff.context),
+      context: Value.project(handoff.context),
       request_id: handoff.request_id,
-      metadata: project_value(handoff.metadata)
+      metadata: Value.project(handoff.metadata)
     }
   end
 
-  def project(%Agent.Spec.Controls{} = controls) do
-    %{
-      max_turns: controls.max_turns,
-      timeout_ms: controls.timeout_ms,
-      inputs: Enum.map(controls.inputs, &project/1),
-      operations: Enum.map(controls.operations, &project/1),
-      outputs: Enum.map(controls.outputs, &project/1),
-      metadata: project_value(controls.metadata)
-    }
-  end
-
-  def project(%Agent.Spec.Controls.Input{} = input) do
-    %{
-      control: control_name(input.control),
-      module: inspect(input.control),
-      metadata: project_value(input.metadata)
-    }
-  end
-
-  def project(%Agent.Spec.Controls.Output{} = output) do
-    %{
-      control: control_name(output.control),
-      module: inspect(output.control),
-      metadata: project_value(output.metadata)
-    }
-  end
-
-  def project(%Agent.Spec.Controls.Operation{} = operation_control) do
-    %{
-      control: control_name(operation_control.control),
-      module: inspect(operation_control.control),
-      match: project_value(operation_control.match),
-      metadata: project_value(operation_control.metadata)
-    }
-  end
+  def project(%Agent.Spec.Controls{} = controls), do: AgentSpecProjection.project(controls)
+  def project(%Agent.Spec.Controls.Input{} = input), do: AgentSpecProjection.project(input)
+  def project(%Agent.Spec.Controls.Output{} = output), do: AgentSpecProjection.project(output)
+  def project(%Agent.Spec.Controls.Operation{} = operation_control), do: AgentSpecProjection.project(operation_control)
 
   def project(%Turn.Plan{} = plan) do
     %{
@@ -163,7 +87,7 @@ defmodule Jidoka.Projection do
       max_model_turns: plan.max_model_turns,
       timeout_ms: plan.timeout_ms,
       phases: plan.phases,
-      metadata: project_value(plan.metadata)
+      metadata: Value.project(plan.metadata)
     }
   end
 
@@ -171,8 +95,8 @@ defmodule Jidoka.Projection do
     %{
       request_id: request.request_id,
       input: request.input,
-      context: project_value(request.context),
-      metadata: project_value(request.metadata),
+      context: Value.project(request.context),
+      metadata: Value.project(request.metadata),
       agent_state: project(request.agent_state)
     }
   end
@@ -181,7 +105,7 @@ defmodule Jidoka.Projection do
     %{
       messages: Enum.map(state.messages, &project/1),
       operation_results: Enum.map(state.operation_results, &project/1),
-      metadata: project_value(state.metadata)
+      metadata: Value.project(state.metadata)
     }
   end
 
@@ -194,20 +118,20 @@ defmodule Jidoka.Projection do
       request: project(state.request),
       agent_state: project(state.agent_state),
       memory: project(state.memory),
-      prompt: project_value(state.prompt),
-      llm_result: project_value(state.llm_result),
-      operation_plan: project_value(state.operation_plan),
+      prompt: Value.project(state.prompt),
+      llm_result: Value.project(state.llm_result),
+      operation_plan: Value.project(state.operation_plan),
       pending_effects: Enum.map(state.pending_effects, &project/1),
       pending_interrupt: project(state.pending_interrupt),
       result: state.result,
-      result_value: project_value(state.result_value),
+      result_value: Value.project(state.result_value),
       result_repair_count: state.result_repair_count,
       status: state.status,
       loop_index: state.loop_index,
       started_at_ms: state.started_at_ms,
       journal: project(state.journal),
-      events: project_value(state.events),
-      diagnostics: project_value(state.diagnostics)
+      events: Value.project(state.events),
+      diagnostics: Value.project(state.diagnostics)
     }
   end
 
@@ -215,19 +139,19 @@ defmodule Jidoka.Projection do
     %{
       phase: cursor.phase,
       loop_index: cursor.loop_index,
-      metadata: project_value(cursor.metadata)
+      metadata: Value.project(cursor.metadata)
     }
   end
 
   def project(%Turn.Result{} = result) do
     %{
       content: result.content,
-      value: project_value(result.value),
+      value: Value.project(result.value),
       agent_state: project(result.agent_state),
       journal: project(result.journal),
-      events: project_value(result.events),
-      usage: project_value(result.usage),
-      metadata: project_value(result.metadata)
+      events: Value.project(result.events),
+      usage: Value.project(result.usage),
+      metadata: Value.project(result.metadata)
     }
   end
 
@@ -250,35 +174,35 @@ defmodule Jidoka.Projection do
     %{
       id: intent.id,
       kind: intent.kind,
-      payload: project_value(intent.payload),
+      payload: Value.project(intent.payload),
       idempotency_key: intent.idempotency_key,
       idempotency: intent.idempotency,
-      metadata: project_value(intent.metadata)
+      metadata: Value.project(intent.metadata)
     }
   end
 
   def project(%Effect.LLMDecision{} = decision) do
     decision
     |> Effect.LLMDecision.to_payload()
-    |> Map.put(:metadata, project_value(decision.metadata))
+    |> Map.put(:metadata, Value.project(decision.metadata))
   end
 
   def project(%Effect.OperationRequest{} = request) do
     request
     |> Effect.OperationRequest.to_payload()
-    |> project_value()
+    |> Value.project()
   end
 
   def project(%Effect.OperationResult{} = result) do
     %{
       operation: result.operation,
-      arguments: project_value(result.arguments),
-      output: project_value(result.output),
+      arguments: Value.project(result.arguments),
+      output: Value.project(result.output),
       content: result.content,
       request_id: result.request_id,
       loop_index: result.loop_index,
       effect_id: result.effect_id,
-      metadata: project_value(result.metadata)
+      metadata: Value.project(result.metadata)
     }
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
@@ -289,8 +213,8 @@ defmodule Jidoka.Projection do
       intent_id: result.intent_id,
       kind: result.kind,
       status: result.status,
-      output: project_value(result.output),
-      metadata: project_value(result.metadata)
+      output: Value.project(result.output),
+      metadata: Value.project(result.metadata)
     }
   end
 
@@ -300,7 +224,7 @@ defmodule Jidoka.Projection do
       agent_id: entry.agent_id,
       session_id: entry.session_id,
       content: entry.content,
-      metadata: project_value(entry.metadata)
+      metadata: Value.project(entry.metadata)
     }
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
@@ -313,7 +237,7 @@ defmodule Jidoka.Projection do
       scope: request.scope,
       query: request.query,
       limit: request.limit,
-      metadata: project_value(request.metadata)
+      metadata: Value.project(request.metadata)
     }
     |> Enum.reject(fn {_key, value} -> is_nil(value) end)
     |> Map.new()
@@ -323,14 +247,14 @@ defmodule Jidoka.Projection do
     %{
       request: project(result.request),
       entries: Enum.map(result.entries, &project/1),
-      metadata: project_value(result.metadata)
+      metadata: Value.project(result.metadata)
     }
   end
 
   def project(%Jidoka.Memory.WriteRequest{} = request) do
     %{
       entry: project(request.entry),
-      metadata: project_value(request.metadata)
+      metadata: Value.project(request.metadata)
     }
   end
 
@@ -339,7 +263,7 @@ defmodule Jidoka.Projection do
       request: project(result.request),
       entry: project(result.entry),
       status: result.status,
-      metadata: project_value(result.metadata)
+      metadata: Value.project(result.metadata)
     }
   end
 
@@ -350,7 +274,7 @@ defmodule Jidoka.Projection do
       agent_id: snapshot.agent_id,
       cursor: project(snapshot.cursor),
       turn_state: project(snapshot.turn_state),
-      metadata: project_value(snapshot.metadata)
+      metadata: Value.project(snapshot.metadata)
     }
   end
 
@@ -364,27 +288,27 @@ defmodule Jidoka.Projection do
       snapshots: Enum.map(session.snapshots, &project/1),
       result: project(session.result),
       pending_reviews: Enum.map(session.pending_reviews, &project/1),
-      error: project_value(session.error),
-      metadata: project_value(session.metadata)
+      error: Value.project(session.error),
+      metadata: Value.project(session.metadata)
     }
   end
 
   def project(%Harness.Replay{} = replay) do
     replay
     |> Map.from_struct()
-    |> project_value()
+    |> Value.project()
   end
 
   def project(%Jidoka.Debug.RequestSummary{} = summary) do
     summary
     |> Map.from_struct()
-    |> project_value()
+    |> Value.project()
   end
 
   def project(%Jidoka.Debug.ReplayDiagnostics{} = diagnostics) do
     diagnostics
     |> Map.from_struct()
-    |> project_value()
+    |> Value.project()
   end
 
   def project(%Jidoka.Trace.Policy{} = policy) do
@@ -393,7 +317,7 @@ defmodule Jidoka.Projection do
       sample_rate: policy.sample_rate,
       redact_keys: policy.redact_keys,
       omit_keys: policy.omit_keys,
-      metadata: project_value(policy.metadata)
+      metadata: Value.project(policy.metadata)
     }
   end
 
@@ -402,8 +326,8 @@ defmodule Jidoka.Projection do
       id: eval_case.id,
       agent: project(eval_case.agent),
       request: project(eval_case.request),
-      assertions: project_value(eval_case.assertions),
-      metadata: project_value(eval_case.metadata)
+      assertions: Value.project(eval_case.assertions),
+      metadata: Value.project(eval_case.metadata)
     }
   end
 
@@ -412,10 +336,10 @@ defmodule Jidoka.Projection do
       case_id: run.case_id,
       status: run.status,
       result: project(run.result),
-      error: project_value(run.error),
-      assertions: project_value(run.assertions),
-      observations: project_value(run.observations),
-      metadata: project_value(run.metadata)
+      error: Value.project(run.error),
+      assertions: Value.project(run.assertions),
+      observations: Value.project(run.observations),
+      metadata: Value.project(run.metadata)
     }
   end
 
@@ -424,7 +348,7 @@ defmodule Jidoka.Projection do
       id: interrupt.id,
       boundary: interrupt.boundary,
       control: interrupt.control_name,
-      reason: project_value(interrupt.reason),
+      reason: Value.project(interrupt.reason),
       agent_id: interrupt.agent_id,
       request_id: interrupt.request_id,
       loop_index: interrupt.loop_index,
@@ -432,12 +356,12 @@ defmodule Jidoka.Projection do
       effect_kind: interrupt.effect_kind,
       operation: interrupt.operation,
       operation_kind: interrupt.operation_kind,
-      arguments: project_value(interrupt.arguments),
+      arguments: Value.project(interrupt.arguments),
       idempotency: interrupt.idempotency,
       idempotency_key: interrupt.idempotency_key,
       created_at_ms: interrupt.created_at_ms,
       expires_at_ms: interrupt.expires_at_ms,
-      metadata: project_value(interrupt.metadata)
+      metadata: Value.project(interrupt.metadata)
     }
   end
 
@@ -449,11 +373,11 @@ defmodule Jidoka.Projection do
       request_id: request.request_id,
       boundary: request.boundary,
       operation: request.operation,
-      arguments: project_value(request.arguments),
-      reason: project_value(request.reason),
+      arguments: Value.project(request.arguments),
+      reason: Value.project(request.reason),
       created_at_ms: request.created_at_ms,
       expires_at_ms: request.expires_at_ms,
-      metadata: project_value(request.metadata)
+      metadata: Value.project(request.metadata)
     }
   end
 
@@ -461,89 +385,13 @@ defmodule Jidoka.Projection do
     %{
       interrupt_id: response.interrupt_id,
       decision: response.decision,
-      reason: project_value(response.reason),
+      reason: Value.project(response.reason),
       responded_at_ms: response.responded_at_ms,
-      metadata: project_value(response.metadata)
+      metadata: Value.project(response.metadata)
     }
   end
 
   def project(%Event{} = event), do: Event.to_map(event)
 
-  def project(value), do: project_value(value)
-
-  defp project_agent_metadata(metadata) when is_map(metadata) do
-    metadata
-    |> Map.drop(["dsl_module", :dsl_module])
-    |> project_value()
-  end
-
-  defp project_agent_metadata(metadata), do: project_value(metadata)
-
-  defp project_operation_metadata(metadata) when is_map(metadata) do
-    has_parameters_schema? =
-      is_map(Map.get(metadata, "parameters_schema") || Map.get(metadata, :parameters_schema))
-
-    metadata
-    |> Map.drop(["parameters_schema", :parameters_schema])
-    |> project_value()
-    |> Map.put("parameters_schema?", has_parameters_schema?)
-  end
-
-  defp project_operation_metadata(metadata), do: project_value(metadata)
-
-  defp project_workflow_target({module, function, arity})
-       when is_atom(module) and is_atom(function) and is_integer(arity) do
-    "#{inspect(module)}.#{function}/#{arity}"
-  end
-
-  defp project_workflow_target(target) when is_atom(target), do: inspect(target)
-  defp project_workflow_target(target), do: project_value(target)
-
-  defp project_workflow_ref({:jidoka_workflow_ref, :input, key}), do: %{ref: :input, key: key}
-  defp project_workflow_ref({:jidoka_workflow_ref, :context, key}), do: %{ref: :context, key: key}
-  defp project_workflow_ref({:jidoka_workflow_ref, :value, value}), do: %{ref: :value, value: project_value(value)}
-
-  defp project_workflow_ref({:jidoka_workflow_ref, :from, step, nil}), do: %{ref: :from, step: step}
-
-  defp project_workflow_ref({:jidoka_workflow_ref, :from, step, path}),
-    do: %{ref: :from, step: step, path: path}
-
-  defp project_workflow_ref(%{} = map), do: Map.new(map, fn {key, value} -> {key, project_workflow_ref(value)} end)
-  defp project_workflow_ref(list) when is_list(list), do: Enum.map(list, &project_workflow_ref/1)
-  defp project_workflow_ref(nil), do: nil
-  defp project_workflow_ref(value), do: project_value(value)
-
-  defp control_name(module) when is_atom(module) do
-    case Jidoka.Control.control_name(module) do
-      {:ok, name} -> name
-      {:error, _reason} -> inspect(module)
-    end
-  end
-
-  defp project_value(%_{} = exception) when is_exception(exception), do: Error.to_map(exception)
-
-  defp project_value(%LLMDB.Model{} = model), do: Jidoka.Config.model_ref(model)
-
-  defp project_value(%module{} = struct) do
-    if zoi_schema?(module) do
-      %{schema?: true}
-    else
-      struct
-      |> Map.from_struct()
-      |> project_value()
-    end
-  end
-
-  defp project_value(%{} = map) do
-    Map.new(map, fn {key, value} -> {key, project_value(value)} end)
-  end
-
-  defp project_value(list) when is_list(list), do: Enum.map(list, &project_value/1)
-  defp project_value(value), do: value
-
-  defp zoi_schema?(module) when is_atom(module) do
-    module
-    |> Atom.to_string()
-    |> String.starts_with?("Elixir.Zoi.Types.")
-  end
+  def project(value), do: Value.project(value)
 end

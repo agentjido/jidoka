@@ -39,6 +39,39 @@ defmodule Jidoka.SkillTest do
       """
   end
 
+  defmodule EscalationLookupAction do
+    @moduledoc false
+
+    use Jidoka.Action,
+      name: "skill_escalation_lookup",
+      description: "Looks up an escalation policy by topic.",
+      schema:
+        Zoi.object(%{
+          topic: Zoi.string()
+        })
+
+    @impl true
+    def run(params, _context) do
+      topic = Map.get(params, :topic) || Map.get(params, "topic")
+      {:ok, %{topic: topic, policy: "Escalate urgent enterprise requests to the duty manager."}}
+    end
+  end
+
+  defmodule EscalationPolicySkill do
+    @moduledoc false
+
+    use Jido.AI.Skill,
+      name: "escalation-policy",
+      description: "Adds escalation policy lookup behavior.",
+      allowed_tools: ["skill_escalation_lookup"],
+      actions: [EscalationLookupAction],
+      body: """
+      # Escalation Policy
+
+      Use skill_escalation_lookup before answering escalation questions.
+      """
+  end
+
   defmodule SkillAgent do
     @moduledoc false
 
@@ -51,6 +84,22 @@ defmodule Jidoka.SkillTest do
 
     tools do
       skill SupportPolicySkill
+    end
+  end
+
+  defmodule MultiSkillAgent do
+    @moduledoc false
+
+    use Jidoka.Agent
+
+    agent :multi_skill_agent do
+      model %{provider: :test, id: "model"}
+      instructions "Answer support questions with available capabilities."
+    end
+
+    tools do
+      skill SupportPolicySkill
+      skill EscalationPolicySkill
     end
   end
 
@@ -69,6 +118,13 @@ defmodule Jidoka.SkillTest do
 
     assert [%{"source" => "skill", "name" => "support-policy"}] =
              spec.metadata["tool_sources"]
+  end
+
+  test "multiple skills contribute one metadata entry each" do
+    assert [
+             %{"source" => "skill", "name" => "support-policy"},
+             %{"source" => "skill", "name" => "escalation-policy"}
+           ] = MultiSkillAgent.spec().metadata["tool_sources"]
   end
 
   test "skill actions execute through the normal operation effect path" do

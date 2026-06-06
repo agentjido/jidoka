@@ -20,6 +20,8 @@ defmodule Jidoka.Operation.Source.Catalog do
   alias Jido.Action.Catalog.Entry
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
+  alias Jidoka.Operation.Source.Catalog.Normalize
+  alias Jidoka.Operation.Source.Catalog.Parameters
   alias Jidoka.Schema
   alias Jidoka.Workflow.Lua
 
@@ -27,8 +29,6 @@ defmodule Jidoka.Operation.Source.Catalog do
   @default_timeout 1_500
   @default_max_calls 12
   @default_max_parallel_calls 8
-  @result_modes [:structured]
-
   @type t :: %__MODULE__{
           catalog: module(),
           prefix: String.t(),
@@ -44,42 +44,53 @@ defmodule Jidoka.Operation.Source.Catalog do
           templates: map()
         }
 
-  defstruct [
-    :catalog,
-    :description,
-    :catalog_value,
-    prefix: @default_prefix,
-    timeout: @default_timeout,
-    max_calls: @default_max_calls,
-    max_parallel_calls: @default_max_parallel_calls,
-    require_read_only?: true,
-    result: :structured,
-    idempotency: :idempotent,
-    metadata: %{},
-    templates: %{}
-  ]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              catalog: Zoi.atom() |> Zoi.nullish(),
+              prefix: Zoi.string() |> Zoi.default(@default_prefix),
+              description: Zoi.string() |> Zoi.nullish(),
+              timeout: Zoi.integer() |> Zoi.default(@default_timeout),
+              max_calls: Zoi.integer() |> Zoi.default(@default_max_calls),
+              max_parallel_calls: Zoi.integer() |> Zoi.default(@default_max_parallel_calls),
+              require_read_only?: Zoi.boolean() |> Zoi.default(true),
+              result: Schema.atom_enum([:structured]) |> Zoi.default(:structured),
+              idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
+              metadata: Zoi.map() |> Zoi.default(%{}),
+              catalog_value: Zoi.any() |> Zoi.nullish(),
+              templates: Zoi.map() |> Zoi.default(%{})
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
 
-    with {:ok, catalog_module} <- normalize_catalog_module(Schema.get_key(attrs, :catalog)),
-         {:ok, catalog_value} <- fetch_catalog(catalog_module),
-         {:ok, prefix} <- normalize_prefix(Schema.get_key(attrs, :prefix, @default_prefix)),
-         {:ok, timeout} <- normalize_positive_integer(Schema.get_key(attrs, :timeout, @default_timeout), :timeout),
+    with {:ok, catalog_module} <- Normalize.catalog_module(Schema.get_key(attrs, :catalog)),
+         {:ok, catalog_value} <- Normalize.catalog_value(catalog_module),
+         {:ok, prefix} <- Normalize.prefix(Schema.get_key(attrs, :prefix, @default_prefix)),
+         {:ok, timeout} <- Normalize.positive_integer(Schema.get_key(attrs, :timeout, @default_timeout), :timeout),
          {:ok, max_calls} <-
-           normalize_positive_integer(Schema.get_key(attrs, :max_calls, @default_max_calls), :max_calls),
+           Normalize.positive_integer(Schema.get_key(attrs, :max_calls, @default_max_calls), :max_calls),
          {:ok, max_parallel_calls} <-
-           normalize_positive_integer(
+           Normalize.positive_integer(
              Schema.get_key(attrs, :max_parallel_calls, @default_max_parallel_calls),
              :max_parallel_calls
            ),
          {:ok, require_read_only?} <-
-           normalize_boolean(Schema.get_key(attrs, :require_read_only?, true), :require_read_only?),
-         {:ok, result} <- normalize_result(Schema.get_key(attrs, :result, :structured)),
-         {:ok, idempotency} <- normalize_idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
-         {:ok, metadata} <- normalize_metadata(Schema.get_key(attrs, :metadata, %{})),
-         {:ok, templates} <- fetch_templates(catalog_module) do
+           Normalize.boolean(Schema.get_key(attrs, :require_read_only?, true), :require_read_only?),
+         {:ok, result} <- Normalize.result(Schema.get_key(attrs, :result, :structured)),
+         {:ok, idempotency} <- Normalize.idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
+         {:ok, metadata} <- Normalize.metadata(Schema.get_key(attrs, :metadata, %{})),
+         {:ok, templates} <- Normalize.templates(catalog_module) do
       {:ok,
        %__MODULE__{
          catalog: catalog_module,
@@ -118,7 +129,7 @@ defmodule Jidoka.Operation.Source.Catalog do
 
   @impl true
   def capability(%__MODULE__{} = source, opts) do
-    context = opts |> Keyword.get(:context, %{}) |> normalize_context()
+    context = opts |> Keyword.get(:context, %{}) |> Normalize.context()
 
     {:ok,
      fn
@@ -151,9 +162,9 @@ defmodule Jidoka.Operation.Source.Catalog do
           "max_parallel_calls" => source.max_parallel_calls,
           "require_read_only?" => source.require_read_only?,
           "result" => Atom.to_string(source.result),
-          "parameters_schema" => parameters_schema(suffix)
+          "parameters_schema" => Parameters.schema(suffix)
         })
-        |> reject_nil_values()
+        |> Normalize.reject_nil_values()
     )
   end
 
@@ -174,8 +185,8 @@ defmodule Jidoka.Operation.Source.Catalog do
   end
 
   defp query(%__MODULE__{} = source, arguments) do
-    query = arguments |> get(:query, "") |> to_string()
-    limit = arguments |> get(:limit, 5) |> to_integer(5) |> clamp(1, 10)
+    query = arguments |> Normalize.get(:query, "") |> to_string()
+    limit = arguments |> Normalize.get(:limit, 5) |> Normalize.positive_integer_or_default(5) |> Normalize.clamp(1, 10)
 
     with {:ok, hits} <- ActionCatalog.search(source.catalog_value, query_attrs(source, query, limit)) do
       {:ok,
@@ -190,7 +201,7 @@ defmodule Jidoka.Operation.Source.Catalog do
   end
 
   defp describe(%__MODULE__{} = source, arguments) do
-    ids = arguments |> get(:ids, []) |> List.wrap() |> Enum.map(&to_string/1)
+    ids = arguments |> Normalize.get(:ids, []) |> List.wrap() |> Enum.map(&to_string/1)
 
     with {:ok, entries} <- fetch_entries(source, ids) do
       {:ok,
@@ -206,16 +217,23 @@ defmodule Jidoka.Operation.Source.Catalog do
   end
 
   defp execute(%__MODULE__{} = source, arguments, context) do
-    script = arguments |> get(:script, "") |> to_string()
-    allowed_tools = arguments |> get(:allowed_tools, []) |> List.wrap() |> Enum.map(&to_string/1)
-    max_calls = arguments |> get(:max_calls, source.max_calls) |> to_integer(source.max_calls)
+    script = arguments |> Normalize.get(:script, "") |> to_string()
+    allowed_tools = arguments |> Normalize.get(:allowed_tools, []) |> List.wrap() |> Enum.map(&to_string/1)
+
+    max_calls =
+      arguments
+      |> Normalize.get(:max_calls, source.max_calls)
+      |> Normalize.positive_integer_or_default(source.max_calls)
 
     max_parallel_calls =
       arguments
-      |> get(:max_parallel_calls, source.max_parallel_calls)
-      |> to_integer(source.max_parallel_calls)
+      |> Normalize.get(:max_parallel_calls, source.max_parallel_calls)
+      |> Normalize.positive_integer_or_default(source.max_parallel_calls)
 
-    timeout = arguments |> get(:timeout, source.timeout) |> to_integer(source.timeout)
+    timeout =
+      arguments
+      |> Normalize.get(:timeout, source.timeout)
+      |> Normalize.positive_integer_or_default(source.timeout)
 
     result =
       Lua.execute(script,
@@ -250,7 +268,7 @@ defmodule Jidoka.Operation.Source.Catalog do
       "id" => entry.id,
       "name" => entry.name,
       "description" => entry.description,
-      "returns" => lua_metadata(entry, "returns"),
+      "returns" => Normalize.lua_metadata(entry, "returns"),
       "tags" => entry.tags,
       "read_only" => entry.read_only?
     }
@@ -262,9 +280,9 @@ defmodule Jidoka.Operation.Source.Catalog do
       "name" => entry.name,
       "description" => entry.description,
       "parameters_schema" => entry.input_schema,
-      "returns" => lua_metadata(entry, "returns"),
+      "returns" => Normalize.lua_metadata(entry, "returns"),
       "safety" => if(entry.read_only?, do: "read_only", else: "mutating"),
-      "example" => lua_metadata(entry, "example")
+      "example" => Normalize.lua_metadata(entry, "example")
     }
   end
 
@@ -272,7 +290,7 @@ defmodule Jidoka.Operation.Source.Catalog do
     %{
       "status" => "failed",
       "script" => script,
-      "reason" => format_reason(reason),
+      "reason" => Normalize.format_reason(reason),
       "calls" => [],
       "call_count" => 0,
       "allowed_tools" => allowed_tools
@@ -287,69 +305,6 @@ defmodule Jidoka.Operation.Source.Catalog do
     )
   end
 
-  defp normalize_catalog_module(module) when is_atom(module) and not is_nil(module) do
-    case Code.ensure_compiled(module) do
-      {:module, _module} ->
-        if function_exported?(module, :catalog, 0) do
-          {:ok, module}
-        else
-          {:error, {:invalid_catalog_module, module, :missing_catalog_callback}}
-        end
-
-      {:error, reason} ->
-        {:error, {:invalid_catalog_module, module, reason}}
-    end
-  end
-
-  defp normalize_catalog_module(module), do: {:error, {:invalid_catalog_module, module}}
-
-  defp fetch_catalog(module) do
-    case module.catalog() do
-      %ActionCatalog{} = catalog -> {:ok, catalog}
-      other -> {:error, {:invalid_catalog_return, module, other}}
-    end
-  rescue
-    exception -> {:error, {:invalid_catalog_return, module, exception}}
-  end
-
-  defp fetch_templates(module) do
-    if function_exported?(module, :templates, 0) do
-      case module.templates() do
-        templates when is_map(templates) -> {:ok, stringify_keys(templates)}
-        templates -> {:error, {:invalid_catalog_templates, module, templates}}
-      end
-    else
-      {:ok, %{}}
-    end
-  rescue
-    exception -> {:error, {:invalid_catalog_templates, module, exception}}
-  end
-
-  defp normalize_prefix(nil), do: {:ok, @default_prefix}
-
-  defp normalize_prefix(prefix) when is_atom(prefix) and not is_nil(prefix),
-    do: prefix |> Atom.to_string() |> normalize_prefix()
-
-  defp normalize_prefix(prefix) when is_binary(prefix) do
-    prefix = String.trim(prefix)
-
-    cond do
-      prefix == "" ->
-        {:ok, @default_prefix}
-
-      Regex.match?(~r/^[a-z][a-z0-9_]*_$/, prefix) ->
-        {:ok, prefix}
-
-      Regex.match?(~r/^[a-z][a-z0-9_]*$/, prefix) ->
-        {:ok, prefix <> "_"}
-
-      true ->
-        {:error, {:invalid_catalog_prefix, prefix}}
-    end
-  end
-
-  defp normalize_prefix(prefix), do: {:error, {:invalid_catalog_prefix, prefix}}
-
   defp query_attrs(%__MODULE__{} = source, query, limit) do
     attrs = %{
       text: query,
@@ -362,112 +317,5 @@ defmodule Jidoka.Operation.Source.Catalog do
     else
       attrs
     end
-  end
-
-  defp normalize_positive_integer(value, _field) when is_integer(value) and value > 0,
-    do: {:ok, value}
-
-  defp normalize_positive_integer(value, field) when is_binary(value) do
-    case Integer.parse(String.trim(value)) do
-      {integer, ""} when integer > 0 -> {:ok, integer}
-      _other -> {:error, {:invalid_catalog_positive_integer, field, value}}
-    end
-  end
-
-  defp normalize_positive_integer(value, field),
-    do: {:error, {:invalid_catalog_positive_integer, field, value}}
-
-  defp normalize_boolean(value, _field) when is_boolean(value), do: {:ok, value}
-  defp normalize_boolean(value, field), do: {:error, {:invalid_catalog_boolean, field, value}}
-
-  defp normalize_result(result) when result in @result_modes, do: {:ok, result}
-  defp normalize_result(result), do: {:error, {:invalid_catalog_result, result}}
-
-  defp normalize_idempotency(idempotency) when is_atom(idempotency) do
-    if idempotency in Operation.valid_idempotencies() do
-      {:ok, idempotency}
-    else
-      {:error, {:invalid_catalog_idempotency, idempotency}}
-    end
-  end
-
-  defp normalize_idempotency(idempotency),
-    do: {:error, {:invalid_catalog_idempotency, idempotency}}
-
-  defp normalize_metadata(metadata) when is_map(metadata), do: {:ok, metadata}
-  defp normalize_metadata(metadata), do: {:error, {:invalid_catalog_metadata, metadata}}
-
-  defp normalize_context(context) when is_map(context), do: context
-  defp normalize_context(context) when is_list(context), do: Map.new(context)
-  defp normalize_context(_context), do: %{}
-
-  defp get(map, key, default) when is_map(map) and is_atom(key) do
-    Map.get(map, key, Map.get(map, Atom.to_string(key), default))
-  end
-
-  defp to_integer(value, _default) when is_integer(value) and value > 0, do: value
-
-  defp to_integer(value, default) when is_binary(value) do
-    case Integer.parse(String.trim(value)) do
-      {integer, ""} when integer > 0 -> integer
-      _other -> default
-    end
-  end
-
-  defp to_integer(_value, default), do: default
-
-  defp clamp(value, min, max), do: value |> Kernel.max(min) |> Kernel.min(max)
-
-  defp lua_metadata(%Entry{metadata: %{"lua" => metadata}}, key), do: Map.get(metadata, key)
-  defp lua_metadata(%Entry{metadata: %{lua: metadata}}, key), do: Map.get(metadata, key)
-  defp lua_metadata(_entry, _key), do: nil
-
-  defp stringify_keys(map) when is_map(map) do
-    Map.new(map, fn {key, value} -> {to_string(key), value} end)
-  end
-
-  defp format_reason(reason) when is_binary(reason), do: reason
-  defp format_reason(reason), do: inspect(reason)
-
-  defp parameters_schema("query") do
-    %{
-      "type" => "object",
-      "additionalProperties" => false,
-      "properties" => %{
-        "query" => %{"type" => "string"},
-        "limit" => %{"type" => "integer", "default" => 5}
-      },
-      "required" => ["query"]
-    }
-  end
-
-  defp parameters_schema("describe") do
-    %{
-      "type" => "object",
-      "additionalProperties" => false,
-      "properties" => %{
-        "ids" => %{"type" => "array", "items" => %{"type" => "string"}}
-      },
-      "required" => ["ids"]
-    }
-  end
-
-  defp parameters_schema("execute") do
-    %{
-      "type" => "object",
-      "additionalProperties" => false,
-      "properties" => %{
-        "script" => %{"type" => "string"},
-        "allowed_tools" => %{"type" => "array", "items" => %{"type" => "string"}},
-        "max_calls" => %{"type" => "integer"},
-        "max_parallel_calls" => %{"type" => "integer"},
-        "timeout" => %{"type" => "integer"}
-      },
-      "required" => ["script", "allowed_tools"]
-    }
-  end
-
-  defp reject_nil_values(map) do
-    Map.reject(map, fn {_key, value} -> is_nil(value) end)
   end
 end

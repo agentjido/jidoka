@@ -17,16 +17,26 @@ defmodule Jidoka.Chat.Request do
           metadata: map()
         }
 
-  @enforce_keys [:request_id, :task, :target, :started_at_ms]
-  defstruct [
-    :request_id,
-    :task,
-    :target,
-    :session_id,
-    :stream_to,
-    :started_at_ms,
-    metadata: %{}
-  ]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              request_id: Zoi.string(),
+              task: Zoi.any(),
+              target: Zoi.any(),
+              session_id: Zoi.string() |> Zoi.nullish(),
+              stream_to: Zoi.any() |> Zoi.nullish(),
+              started_at_ms: Zoi.integer(),
+              metadata: Zoi.map() |> Zoi.default(%{})
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @doc false
   @spec new(keyword()) :: t()

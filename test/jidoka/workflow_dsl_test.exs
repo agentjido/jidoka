@@ -9,6 +9,7 @@ defmodule Jidoka.WorkflowDslTest do
   alias Jidoka.Workflow.ParametersSchema
   alias Jidoka.Workflow.Runtime.StepRunner
   alias Jidoka.Workflow.Runtime.Value
+  alias Jidoka.Workflow.Definition.Targets
   alias Jidoka.Workflow.{Ref, Spec, Step}
 
   import Jidoka.TestSupport, only: [count_results: 2]
@@ -107,6 +108,14 @@ defmodule Jidoka.WorkflowDslTest do
     def to_tool, do: %{function: fn _arguments, _context -> :not_a_tool_result end}
   end
 
+  defmodule NotAnAction do
+    @moduledoc false
+  end
+
+  defmodule NotAnAgent do
+    @moduledoc false
+  end
+
   defmodule ToolErrorAction do
     @moduledoc false
 
@@ -126,6 +135,49 @@ defmodule Jidoka.WorkflowDslTest do
 
     @impl true
     def call(_context), do: :cont
+  end
+
+  test "workflow DSL entity schemas remain Spark-compatible Zoi structs" do
+    cases = [
+      {Jidoka.Workflow.Dsl.ActionStep,
+       %{name: :lookup, module: AddAmount, input: %{value: Ref.input(:value)}, after: [], metadata: %{}}},
+      {Jidoka.Workflow.Dsl.FunctionStep,
+       %{name: :normalize, mfa: {Fns, :normalize, 2}, input: %{}, after: [:lookup], metadata: %{}}},
+      {Jidoka.Workflow.Dsl.AgentStep,
+       %{name: :draft, agent: EchoAgent, prompt: Ref.input(:prompt), context: %{}, after: [], metadata: %{}}}
+    ]
+
+    for {module, attrs} <- cases do
+      assert {:ok, struct} = Zoi.parse(module.schema(), attrs)
+      assert struct.__struct__ == module
+      assert struct.__spark_metadata__ == nil
+    end
+  end
+
+  test "workflow target validation reports invalid action, function, and agent targets" do
+    assert :ok = Targets.validate_action!(__MODULE__, %{name: :valid, module: AddAmount})
+    assert :ok = Targets.validate_function!(__MODULE__, %{name: :valid, mfa: {Fns, :normalize, 2}})
+    assert :ok = Targets.validate_agent!(__MODULE__, %{name: :valid, agent: EchoAgent})
+
+    assert_raise Spark.Error.DslError, ~r/not a valid action-backed module/, fn ->
+      Targets.validate_action!(__MODULE__, %{name: :bad, module: NotAnAction})
+    end
+
+    assert_raise Spark.Error.DslError, ~r/function steps require/, fn ->
+      Targets.validate_function!(__MODULE__, %{name: :bad, mfa: {Fns, :normalize, 1}})
+    end
+
+    assert_raise Spark.Error.DslError, ~r/not exported/, fn ->
+      Targets.validate_function!(__MODULE__, %{name: :bad, mfa: {Fns, :missing, 2}})
+    end
+
+    assert_raise Spark.Error.DslError, ~r/not a Jidoka-compatible agent/, fn ->
+      Targets.validate_agent!(__MODULE__, %{name: :bad, agent: NotAnAgent})
+    end
+
+    assert_raise Spark.Error.DslError, ~r/require a Jidoka agent module target/, fn ->
+      Targets.validate_agent!(__MODULE__, %{name: :bad, agent: "not_a_module"})
+    end
   end
 
   defmodule FunctionWorkflow do

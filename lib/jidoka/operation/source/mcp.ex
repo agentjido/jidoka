@@ -11,21 +11,9 @@ defmodule Jidoka.Operation.Source.MCP do
 
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
+  alias Jidoka.Operation.Source.MCP.Tools
+  alias Jidoka.Operation.Source.MCP.Transport
   alias Jidoka.Schema
-
-  @transport_layers [:stdio, :shell, :sse, :streamable_http]
-  @transport_option_keys [
-    :command,
-    :args,
-    :env,
-    :cwd,
-    :base_url,
-    :base_path,
-    :sse_path,
-    :headers,
-    :method,
-    :url
-  ]
 
   @type tool_spec :: %{
           required(:name) => String.t(),
@@ -50,22 +38,33 @@ defmodule Jidoka.Operation.Source.MCP do
           client: module()
         }
 
-  defstruct [
-    :endpoint,
-    :prefix,
-    tools: [],
-    required: false,
-    transport: nil,
-    client_info: %{"name" => "jidoka"},
-    protocol_version: nil,
-    capabilities: %{},
-    timeouts: %{},
-    timeout: nil,
-    description: nil,
-    idempotency: :idempotent,
-    metadata: %{},
-    client: Jido.MCP
-  ]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              endpoint: Zoi.any() |> Zoi.nullish(),
+              prefix: Zoi.string() |> Zoi.nullish(),
+              tools: Zoi.array(Zoi.map()) |> Zoi.default([]),
+              required: Zoi.boolean() |> Zoi.default(false),
+              transport: Zoi.any() |> Zoi.nullish(),
+              client_info: Zoi.map() |> Zoi.default(%{"name" => "jidoka"}),
+              protocol_version: Zoi.string() |> Zoi.nullish(),
+              capabilities: Zoi.map() |> Zoi.default(%{}),
+              timeouts: Zoi.map() |> Zoi.default(%{}),
+              timeout: Zoi.integer() |> Zoi.nullish(),
+              description: Zoi.string() |> Zoi.nullish(),
+              idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
+              metadata: Zoi.map() |> Zoi.default(%{}),
+              client: Zoi.atom() |> Zoi.default(Jido.MCP)
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
@@ -73,9 +72,9 @@ defmodule Jidoka.Operation.Source.MCP do
 
     with {:ok, endpoint} <- normalize_endpoint(Schema.get_key(attrs, :endpoint)),
          {:ok, prefix} <- normalize_prefix(Schema.get_key(attrs, :prefix)),
-         {:ok, tools} <- normalize_static_tools(Schema.get_key(attrs, :tools, [])),
+         {:ok, tools} <- Tools.normalize_static(Schema.get_key(attrs, :tools, [])),
          {:ok, required} <- normalize_required(Schema.get_key(attrs, :required, false)),
-         {:ok, transport} <- normalize_transport(Schema.get_key(attrs, :transport)),
+         {:ok, transport} <- Transport.normalize(Schema.get_key(attrs, :transport)),
          {:ok, client_info} <-
            normalize_client_info(Schema.get_key(attrs, :client_info, %{"name" => "jidoka"})),
          {:ok, protocol_version} <-
@@ -134,7 +133,7 @@ defmodule Jidoka.Operation.Source.MCP do
          %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
            with {:ok, request} <- Effect.OperationRequest.from_input(payload),
                 {:ok, remote_name} <- fetch_remote_tool(routes, request.name) do
-             call_tool(client, source, remote_name, request.arguments, call_opts(source))
+             call_tool(client, source, remote_name, request.arguments, Transport.call_opts(source))
            end
 
          %Effect.Intent{kind: kind}, _journal ->
@@ -174,7 +173,7 @@ defmodule Jidoka.Operation.Source.MCP do
 
     result =
       with :ok <- prepare_endpoint(client, source) do
-        list_tools(client, source, call_opts(source))
+        list_tools(client, source, Transport.call_opts(source))
       end
 
     case result do
@@ -194,7 +193,7 @@ defmodule Jidoka.Operation.Source.MCP do
     if ensure_client_function?(client, :list_tools, 2) do
       client
       |> apply(:list_tools, [source.endpoint, opts])
-      |> normalize_list_tools_response()
+      |> Tools.normalize_list_tools_response()
     else
       {:error, {:invalid_mcp_client, client}}
     end
@@ -221,7 +220,7 @@ defmodule Jidoka.Operation.Source.MCP do
   defp prepare_endpoint(client, %__MODULE__{} = source) do
     with :ok <- ensure_runtime_endpoint(source.endpoint),
          true <- ensure_client_function?(client, :register_endpoint, 1),
-         {:ok, endpoint} <- endpoint(source) do
+         {:ok, endpoint} <- Transport.endpoint(source) do
       case apply(client, :register_endpoint, [endpoint]) do
         {:ok, _endpoint} -> :ok
         {:error, {:endpoint_already_registered, _endpoint_id}} -> :ok
@@ -241,31 +240,9 @@ defmodule Jidoka.Operation.Source.MCP do
   defp ensure_runtime_endpoint(endpoint),
     do: {:error, {:invalid_mcp_runtime_endpoint, endpoint}}
 
-  defp endpoint(%__MODULE__{} = source) do
-    Jido.MCP.Endpoint.new(source.endpoint, %{
-      transport: source.transport,
-      client_info: source.client_info,
-      protocol_version: source.protocol_version,
-      capabilities: source.capabilities,
-      timeouts: source.timeouts
-    })
-  end
-
   defp ensure_client_function?(client, function, arity) when is_atom(client) do
     Code.ensure_loaded?(client) and function_exported?(client, function, arity)
   end
-
-  defp normalize_list_tools_response({:ok, %{data: data}}),
-    do: normalize_list_tools_response({:ok, data})
-
-  defp normalize_list_tools_response({:ok, data}) do
-    data
-    |> extract_tools()
-    |> normalize_static_tools()
-  end
-
-  defp normalize_list_tools_response({:error, reason}), do: {:error, reason}
-  defp normalize_list_tools_response(other), do: {:error, {:invalid_mcp_tools_response, other}}
 
   defp normalize_call_tool_response({:ok, %{data: data}}, source, remote_name) do
     {:ok,
@@ -289,54 +266,6 @@ defmodule Jidoka.Operation.Source.MCP do
 
   defp normalize_call_tool_response(other, _source, _remote_name),
     do: {:error, {:invalid_mcp_call_response, other}}
-
-  defp extract_tools(data) when is_list(data), do: data
-
-  defp extract_tools(data) when is_map(data) do
-    Schema.get_key(data, :tools, [])
-  end
-
-  defp extract_tools(_data), do: []
-
-  defp normalize_static_tools(tools) when is_list(tools) do
-    tools
-    |> Enum.reduce_while({:ok, []}, fn tool, {:ok, acc} ->
-      case normalize_tool(tool) do
-        {:ok, tool} -> {:cont, {:ok, acc ++ [tool]}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-  end
-
-  defp normalize_static_tools(tools), do: {:error, {:invalid_mcp_tools, tools}}
-
-  defp normalize_tool(tool) when is_map(tool) do
-    with {:ok, name} <- normalize_remote_name(Schema.get_key(tool, :name)),
-         {:ok, input_schema} <- normalize_input_schema(tool) do
-      {:ok,
-       %{
-         name: name,
-         description: Schema.get_key(tool, :description),
-         input_schema: input_schema
-       }}
-    end
-  end
-
-  defp normalize_tool(tool), do: {:error, {:invalid_mcp_tool, tool}}
-
-  defp normalize_input_schema(tool) do
-    schema =
-      Schema.get_key(tool, :input_schema) ||
-        Schema.get_key(tool, :inputSchema) ||
-        Schema.get_key(tool, :parameters_schema) ||
-        Schema.get_key(tool, :schema)
-
-    cond do
-      is_nil(schema) -> {:ok, nil}
-      is_map(schema) -> {:ok, schema}
-      true -> {:error, {:invalid_mcp_tool_schema, schema}}
-    end
-  end
 
   defp normalize_endpoint(endpoint) when is_atom(endpoint) and not is_nil(endpoint),
     do: {:ok, endpoint}
@@ -364,69 +293,6 @@ defmodule Jidoka.Operation.Source.MCP do
 
   defp normalize_required(required) when is_boolean(required), do: {:ok, required}
   defp normalize_required(required), do: {:error, {:invalid_mcp_required, required}}
-
-  defp normalize_transport(nil), do: {:ok, nil}
-
-  defp normalize_transport({layer, opts} = transport)
-       when layer in @transport_layers and is_list(opts),
-       do: {:ok, transport}
-
-  defp normalize_transport(%{} = transport) do
-    with {:ok, layer} <-
-           normalize_transport_layer(
-             Schema.get_key(transport, :type) ||
-               Schema.get_key(transport, :layer) ||
-               Schema.get_key(transport, :transport)
-           ),
-         {:ok, opts} <-
-           normalize_transport_opts(Map.drop(transport, [:type, "type", :layer, "layer", :transport, "transport"])) do
-      {:ok, {layer, opts}}
-    end
-  end
-
-  defp normalize_transport(transport), do: {:error, {:invalid_mcp_transport, transport}}
-
-  defp normalize_transport_layer(layer) when layer in @transport_layers, do: {:ok, layer}
-
-  defp normalize_transport_layer(layer) when is_binary(layer) do
-    layer = layer |> String.trim() |> String.downcase()
-
-    @transport_layers
-    |> Enum.find(&(Atom.to_string(&1) == layer))
-    |> case do
-      nil -> {:error, {:invalid_mcp_transport_layer, layer}}
-      layer -> {:ok, layer}
-    end
-  end
-
-  defp normalize_transport_layer(layer), do: {:error, {:invalid_mcp_transport_layer, layer}}
-
-  defp normalize_transport_opts(opts) when is_map(opts) do
-    opts
-    |> Enum.reduce_while({:ok, []}, fn {key, value}, {:ok, acc} ->
-      case normalize_transport_option_key(key) do
-        {:ok, key} -> {:cont, {:ok, [{key, value} | acc]}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:ok, opts} -> {:ok, Enum.reverse(opts)}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp normalize_transport_option_key(key) when key in @transport_option_keys, do: {:ok, key}
-
-  defp normalize_transport_option_key(key) when is_binary(key) do
-    @transport_option_keys
-    |> Enum.find(&(Atom.to_string(&1) == key))
-    |> case do
-      nil -> {:error, {:invalid_mcp_transport_option, key}}
-      key -> {:ok, key}
-    end
-  end
-
-  defp normalize_transport_option_key(key), do: {:error, {:invalid_mcp_transport_option, key}}
 
   defp normalize_client_info(nil), do: {:ok, %{"name" => "jidoka"}}
 
@@ -484,19 +350,6 @@ defmodule Jidoka.Operation.Source.MCP do
   defp normalize_client(client) when is_atom(client), do: {:ok, client}
   defp normalize_client(client), do: {:error, {:invalid_mcp_client, client}}
 
-  defp normalize_remote_name(name) when is_atom(name) and not is_nil(name) do
-    name |> Atom.to_string() |> normalize_remote_name()
-  end
-
-  defp normalize_remote_name(name) when is_binary(name) do
-    case String.trim(name) do
-      "" -> {:error, {:invalid_mcp_tool_name, name}}
-      name -> {:ok, name}
-    end
-  end
-
-  defp normalize_remote_name(name), do: {:error, {:invalid_mcp_tool_name, name}}
-
   defp operation_name(%__MODULE__{} = source, remote_name) do
     (source.prefix || default_prefix(source.endpoint)) <> operation_slug(remote_name)
   end
@@ -532,18 +385,6 @@ defmodule Jidoka.Operation.Source.MCP do
       _context -> source.client
     end
   end
-
-  defp call_opts(%__MODULE__{} = source) do
-    []
-    |> maybe_put_timeout(source.timeout)
-    |> maybe_put_timeouts(source.timeouts)
-  end
-
-  defp maybe_put_timeout(opts, nil), do: opts
-  defp maybe_put_timeout(opts, timeout), do: Keyword.put(opts, :timeout, timeout)
-
-  defp maybe_put_timeouts(opts, timeouts) when timeouts in [nil, %{}], do: opts
-  defp maybe_put_timeouts(opts, timeouts), do: Keyword.put(opts, :timeouts, timeouts)
 
   defp metadata_value(nil), do: nil
   defp metadata_value(value) when is_atom(value), do: Atom.to_string(value)

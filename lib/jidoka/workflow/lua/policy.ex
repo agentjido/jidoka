@@ -10,26 +10,27 @@ defmodule Jidoka.Workflow.Lua.Policy do
   @default_max_call_depth 64
   @default_max_script_bytes 6_000
 
-  @enforce_keys [
-    :allowed_tools,
-    :entries,
-    :max_calls,
-    :max_parallel_calls,
-    :max_call_depth,
-    :max_script_bytes,
-    :timeout_ms,
-    :require_read_only?
-  ]
-  defstruct [
-    :allowed_tools,
-    :entries,
-    :max_calls,
-    :max_parallel_calls,
-    :max_call_depth,
-    :max_script_bytes,
-    :timeout_ms,
-    :require_read_only?
-  ]
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              allowed_tools: Zoi.array(Zoi.string()),
+              entries: Zoi.array(Zoi.any()),
+              max_calls: Zoi.integer(),
+              max_parallel_calls: Zoi.integer(),
+              max_call_depth: Zoi.integer(),
+              max_script_bytes: Zoi.integer(),
+              timeout_ms: Zoi.integer(),
+              require_read_only?: Zoi.boolean()
+            },
+            coerce: true
+          )
+
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc false
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
 
   @type t :: %__MODULE__{
           allowed_tools: [String.t()],
