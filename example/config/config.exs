@@ -21,3 +21,8 @@ config :logger, :console,
 
 config :phoenix, :json_library, Jason
 config :req_llm, load_dotenv: false
+
+# Process-hosted Jidoka agents run each turn through a Jido action. Live LLM
+# demos commonly need multiple model decisions plus tool execution, so keep the
+# action wrapper timeout aligned with the example LiveView turn timeout.
+config :jido_action, default_timeout: 90_000

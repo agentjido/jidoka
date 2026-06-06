@@ -54,7 +54,8 @@ defmodule JidokaExample.LuaToolsAgent.Catalog do
         read_only?: true,
         returns:
           "Step output is the JSON map directly. Reference customers with {from = \"search\", path = {\"customers\"}} and count with {from = \"search\", path = {\"count\"}}.",
-        example: ~s|{id = "search", tool = "crm.customer.search", arguments = {query = "enterprise", limit = 5}}|
+        example:
+          ~s|{id = "search", tool = "crm.customer.search", arguments = {query = "enterprise", limit = 5}}|
       },
       %{
         id: "billing.invoice.list_unpaid",

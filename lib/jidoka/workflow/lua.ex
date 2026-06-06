@@ -62,13 +62,29 @@ defmodule Jidoka.Workflow.Lua do
     end
   end
 
-  defp result({:ok, script_result}, script, policy, trace) do
+  defp result({:ok, %{"workflow_id" => _workflow_id} = script_result}, script, policy, trace) do
     calls = CallTrace.calls(trace)
 
     {:ok,
      %{
        "status" => "completed",
        "script" => script,
+       "result" => script_result,
+       "calls" => calls,
+       "call_count" => length(calls),
+       "allowed_tools" => policy.allowed_tools,
+       "policy" => Policy.public(policy)
+     }}
+  end
+
+  defp result({:ok, script_result}, script, policy, trace) do
+    calls = CallTrace.calls(trace)
+
+    {:error,
+     %{
+       "status" => "failed",
+       "script" => script,
+       "reason" => "Lua script must return jidoka.workflow({...}).",
        "result" => script_result,
        "calls" => calls,
        "call_count" => length(calls),

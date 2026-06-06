@@ -1,4 +1,6 @@
 defmodule JidokaExample.LuaToolsAgent.Agent do
+  alias JidokaExample.LuaToolsAgent.Controls.RequireLuaExecution
+
   @guide """
   This example demonstrates `Jidoka.Workflow.Lua`: a governed Lua scripting
   layer that lets an agent author a bounded workflow plan over a constrained
@@ -42,8 +44,23 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     3. Call lua_tools_execute with a short Lua script that returns jidoka.workflow({...}).
        Pass allowed_tools with exactly the ids you described.
 
-    The Lua execution API is jidoka.workflow({...}). Keep scripts short,
-    deterministic, and read-only. After execution, summarize what happened and
+    lua_tools_query and lua_tools_describe return catalog metadata only. They do
+    not execute hidden tools and they do not contain business data. Never produce
+    a final answer from query or describe output alone.
+
+    A valid final answer requires an observed lua_tools_execute result with
+    status "completed". Copy hidden_call_count, hidden_tools_used, and
+    script_result from that execution result. If lua_tools_execute has not run,
+    your only valid next action is lua_tools_describe or lua_tools_execute.
+
+    Invoice totals ending in _cents are cents. Convert them by dividing by 100
+    when writing dollar amounts.
+
+    The Lua execution API is return jidoka.workflow({...}). Keep scripts short,
+    deterministic, and read-only. The script must return the workflow result;
+    every script passed to lua_tools_execute must begin with return jidoka.workflow({
+    or return a local variable assigned from jidoka.workflow({...}). Calling
+    jidoka.workflow({...}) as a bare statement is invalid. After execution, summarize what happened and
     include the script result, hidden_call_count, hidden_tools_used, and
     takeaways in the structured result.
 
@@ -58,16 +75,20 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     can use {var = "item", path = {...}} refs, or a custom variable name set by
     as = "customer".
 
+    If lua_tools_describe returns a template, copy that template unless the user
+    asked for a materially different workflow.
+
     Prefer map when applying the same hidden tool to a list of customers or
     invoices. Prefer reduce when combining map outputs. Use gate plus when for
     follow-up steps that should only run above a threshold.
 
     If lua_tools_execute returns a validation or execution error, revise the Lua
     script and call lua_tools_execute again with a simpler workflow. Do not keep
-    retrying the same failed script.
+    retrying the same failed script. Do not produce a final answer after a failed
+    lua_tools_execute result.
 
     The workflow call shape is:
-    jidoka.workflow({
+    return jidoka.workflow({
       id = "invoice_followup",
       retries = 1,
       steps = {
@@ -82,16 +103,18 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     })
 
     A bounded map/reduce/gate shape is:
-    jidoka.workflow({
+    return jidoka.workflow({
       id = "portfolio_followup",
       steps = {
         {
+          id = "search",
+          tool = "crm.customer.search",
+          arguments = {tier = "enterprise", limit = 10}
+        },
+        {
           id = "invoices",
           map = {
-            over = {
-              {id = "cus_ada", name = "Ada Lovelace"},
-              {id = "cus_grace", name = "Grace Hopper"}
-            },
+            over = {from = "search", path = {"customers"}},
             as = "customer",
             tool = "billing.invoice.list_unpaid",
             arguments = {customer_id = {var = "customer", path = {"id"}}},
@@ -105,6 +128,14 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
             over = {from = "invoices", path = {"items"}},
             mode = "sum",
             path = {"total_due_cents"}
+          }
+        },
+        {
+          id = "invoice_count",
+          reduce = {
+            over = {from = "invoices", path = {"items"}},
+            mode = "sum",
+            path = {"count"}
           }
         },
         {
@@ -122,12 +153,16 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
           arguments = {
             customer_name = "Portfolio Team",
             company = "ExampleCo",
-            invoice_count = {from = "invoices", path = {"count"}},
+            invoice_count = {from = "invoice_count", path = {"value"}},
             total_due_cents = {from = "total_due", path = {"value"}}
           }
         }
       },
-      output = {total = {from = "total_due", path = {"value"}}, note = {from = "note"}}
+      output = {
+        total_due_cents = {from = "total_due", path = {"value"}},
+        invoice_count = {from = "invoice_count", path = {"value"}},
+        follow_up = {from = "note"}
+      }
     })
 
     For independent parallel roots, put multiple steps with no dependencies in
@@ -151,5 +186,6 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
   controls do
     max_turns 8
     timeout 45_000
+    output RequireLuaExecution
   end
 end

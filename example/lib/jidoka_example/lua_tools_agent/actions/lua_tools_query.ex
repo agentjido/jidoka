@@ -3,7 +3,8 @@ defmodule JidokaExample.LuaToolsAgent.Actions.LuaToolsQuery do
 
   use Jidoka.Action,
     name: "lua_tools_query",
-    description: "Searches hidden host capabilities that can be used as tool ids inside jidoka.workflow steps.",
+    description:
+      "Searches hidden host capabilities that can be used as tool ids inside jidoka.workflow steps.",
     schema:
       Zoi.object(%{
         query: Zoi.string(),
@@ -23,6 +24,8 @@ defmodule JidokaExample.LuaToolsAgent.Actions.LuaToolsQuery do
        "query" => query,
        "count" => length(results),
        "tools" => results,
+       "notice" =>
+         "Catalog metadata only. No hidden host tool has run yet, and this output is not business data.",
        "next" =>
          "Call lua_tools_describe with the smallest useful set of ids, then use those ids as workflow step tool values."
      }}

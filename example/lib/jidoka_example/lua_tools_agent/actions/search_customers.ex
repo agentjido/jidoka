@@ -9,6 +9,9 @@ defmodule JidokaExample.LuaToolsAgent.Actions.SearchCustomers do
         query: Zoi.string() |> Zoi.default(""),
         name: Zoi.string() |> Zoi.nullish(),
         company: Zoi.string() |> Zoi.nullish(),
+        tier: Zoi.string() |> Zoi.nullish(),
+        status: Zoi.string() |> Zoi.nullish(),
+        tag: Zoi.string() |> Zoi.nullish(),
         value: Zoi.string() |> Zoi.nullish(),
         limit: Zoi.integer() |> Zoi.default(5)
       })
@@ -52,7 +55,7 @@ defmodule JidokaExample.LuaToolsAgent.Actions.SearchCustomers do
   end
 
   defp query(params) do
-    [:query, :name, :company, :value]
+    [:query, :name, :company, :tier, :status, :tag, :value]
     |> Enum.map(&get(params, &1, nil))
     |> Enum.find(&present?/1)
     |> case do

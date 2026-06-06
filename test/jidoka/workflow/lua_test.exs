@@ -146,6 +146,28 @@ defmodule Jidoka.Workflow.LuaTest do
     assert result["result"]["output"]["note"] =~ "Ada Lovelace"
   end
 
+  test "requires the script to return the workflow result" do
+    script = """
+    jidoka.workflow({
+      id = "not_returned",
+      steps = {
+        {
+          id = "search",
+          tool = "crm.customer.search",
+          arguments = {query = "Northwind", limit = 1}
+        }
+      },
+      output = "search"
+    })
+    """
+
+    assert {:error, result} = Lua.execute(script, catalog: catalog())
+    assert result["status"] == "failed"
+    assert result["reason"] == "Lua script must return jidoka.workflow({...})."
+    assert result["result"] == []
+    assert result["call_count"] == 1
+  end
+
   test "supports map, reduce, gate, and conditional downstream steps" do
     script = """
     return jidoka.workflow({
