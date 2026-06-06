@@ -22,7 +22,7 @@ defmodule Jidoka.WorkflowTest do
     @impl true
     def run(input, context) do
       value = Map.get(input, :value, Map.get(input, "value"))
-      suffix = Map.get(context, :suffix, Map.get(context, "suffix", "ok"))
+      suffix = Jidoka.Context.get(context, :suffix, "ok")
 
       {:ok, %{value: (value + 1) * 2, suffix: suffix}}
     end
@@ -71,7 +71,7 @@ defmodule Jidoka.WorkflowTest do
   end
 
   test "workflow operations run deterministic workflow modules" do
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 -> {:ok, %{type: :operation, name: "run_math", arguments: %{"value" => 5}}}
         1 -> {:ok, %{type: :final, content: "The deterministic result is 12."}}
@@ -86,8 +86,7 @@ defmodule Jidoka.WorkflowTest do
 
     assert {:ok, %Turn.Result{} = result} =
              WorkflowAgent.run_turn(request,
-               llm: llm,
-               operation_context: %{parent_context: request.context}
+               llm: llm
              )
 
     assert [

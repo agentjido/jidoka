@@ -53,7 +53,7 @@ defmodule MyApp.SupportAgent do
   end
 end
 
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   case map_size(journal.results) do
     0 -> {:ok, %{type: :operation, name: "refund_order",
                  arguments: %{"order_id" => "A1001"}}}
@@ -61,7 +61,7 @@ llm = fn _intent, journal ->
   end
 end
 
-operations = fn _intent, _journal -> {:ok, %{refunded: true}} end
+operations = fn _intent, _journal, _ctx -> {:ok, %{refunded: true}} end
 
 {:hibernate, snapshot} =
   Jidoka.turn(MyApp.SupportAgent, "Refund A1001",
@@ -364,7 +364,7 @@ Use deterministic fakes for both the LLM and the operations capability.
 
 ```elixir
 test "approval resumes the pending refund" do
-  llm = fn _intent, journal ->
+  llm = fn _intent, journal, _ctx ->
     case map_size(journal.results) do
       0 -> {:ok, %{type: :operation, name: "refund_order",
                    arguments: %{"order_id" => "A1001"}}}
@@ -372,7 +372,7 @@ test "approval resumes the pending refund" do
     end
   end
 
-  operations = fn _intent, _journal -> {:ok, %{refunded: true}} end
+  operations = fn _intent, _journal, _ctx -> {:ok, %{refunded: true}} end
 
   assert {:hibernate, snapshot} =
            Jidoka.turn(MyApp.SupportAgent, "Refund A1001",

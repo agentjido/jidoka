@@ -179,11 +179,13 @@ defmodule Jidoka.Operation.Source.CatalogTest do
   test "queries and describes catalog metadata without executing hidden actions" do
     source = CatalogSource.new!(catalog: TestCatalog)
     {:ok, %{capability: capability}} = Source.compile(source)
+    ctx = Jidoka.Context.from_data!(%{})
 
     assert {:ok, query_result} =
              capability.(
                operation_intent("catalog_query", %{"query" => "customer"}),
-               Effect.Journal.new!()
+               Effect.Journal.new!(),
+               ctx
              )
 
     assert query_result["count"] == 1
@@ -193,7 +195,8 @@ defmodule Jidoka.Operation.Source.CatalogTest do
     assert {:ok, describe_result} =
              capability.(
                operation_intent("catalog_describe", %{"ids" => ["crm.customer.search"]}),
-               Effect.Journal.new!()
+               Effect.Journal.new!(),
+               ctx
              )
 
     assert describe_result["allowed_tools"] == ["crm.customer.search"]
@@ -206,6 +209,7 @@ defmodule Jidoka.Operation.Source.CatalogTest do
   test "executes a Lua workflow over selected read-only catalog actions" do
     source = CatalogSource.new!(catalog: TestCatalog)
     {:ok, %{capability: capability}} = Source.compile(source)
+    ctx = Jidoka.Context.from_data!(%{})
 
     script = """
     return jidoka.workflow({
@@ -227,7 +231,8 @@ defmodule Jidoka.Operation.Source.CatalogTest do
                  "script" => script,
                  "allowed_tools" => ["crm.customer.search"]
                }),
-               Effect.Journal.new!()
+               Effect.Journal.new!(),
+               ctx
              )
 
     assert result["status"] == "completed"
@@ -240,6 +245,7 @@ defmodule Jidoka.Operation.Source.CatalogTest do
   test "returns repair guidance for invalid Lua workflow scripts" do
     source = CatalogSource.new!(catalog: TestCatalog)
     {:ok, %{capability: capability}} = Source.compile(source)
+    ctx = Jidoka.Context.from_data!(%{})
 
     assert {:ok, result} =
              capability.(
@@ -247,7 +253,8 @@ defmodule Jidoka.Operation.Source.CatalogTest do
                  "script" => "return {}",
                  "allowed_tools" => ["crm.customer.search"]
                }),
-               Effect.Journal.new!()
+               Effect.Journal.new!(),
+               ctx
              )
 
     assert result["status"] == "failed"

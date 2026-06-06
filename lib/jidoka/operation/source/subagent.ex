@@ -10,6 +10,7 @@ defmodule Jidoka.Operation.Source.Subagent do
   @behaviour Jidoka.Operation.Source
 
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Schema
 
@@ -109,19 +110,17 @@ defmodule Jidoka.Operation.Source.Subagent do
   end
 
   @impl true
-  def capability(%__MODULE__{} = source, opts) do
-    context = Keyword.get(opts, :context, %{})
-
+  def capability(%__MODULE__{} = source, _opts) do
     {:ok,
      fn
-       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
+       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
               :ok <- ensure_operation_name(source, request.name),
               {:ok, task} <- task_from_arguments(request.arguments) do
            run_child(source, task, request.arguments, context)
          end
 
-       %Effect.Intent{kind: kind}, _journal ->
+       %Effect.Intent{kind: kind}, _journal, %Context{} ->
          {:error, {:unsupported_effect_kind, kind}}
      end}
   end
@@ -146,11 +145,11 @@ defmodule Jidoka.Operation.Source.Subagent do
     opts =
       [
         timeout: source.timeout,
-        operation_context: Map.get(context, :subagent_operation_context, %{})
+        operation_context: Context.get_runtime(context, :subagent_operation_context, %{})
       ]
-      |> maybe_put(:llm, Map.get(context, :subagent_llm))
-      |> maybe_put(:memory_store, Map.get(context, :memory_store))
-      |> maybe_put(:stream_to, Map.get(context, :stream_to))
+      |> maybe_put(:llm, Context.get_runtime(context, :subagent_llm))
+      |> maybe_put(:memory_store, Context.get_runtime(context, :memory_store))
+      |> maybe_put(:stream_to, Context.get_runtime(context, :stream_to))
 
     case apply(source.agent, :run_turn, [request, opts]) do
       {:ok, result} ->
@@ -185,16 +184,28 @@ defmodule Jidoka.Operation.Source.Subagent do
   end
 
   defp child_context(%__MODULE__{} = source, parent_context, arguments) do
-    parent_context =
+    runtime = runtime_context(parent_context)
+
+    forwarded_data =
       parent_context
-      |> Map.get(:parent_context, Map.get(parent_context, "parent_context", parent_context))
+      |> public_context_data()
       |> forward_context(source.forward_context)
 
     case Schema.get_key(arguments, :context, %{}) do
-      task_context when is_map(task_context) -> Map.merge(parent_context, task_context)
-      _other -> parent_context
+      task_context when is_map(task_context) ->
+        Context.from_data!(Map.merge(forwarded_data, task_context), runtime: runtime)
+
+      _other ->
+        Context.from_data!(forwarded_data, runtime: runtime)
     end
   end
+
+  defp public_context_data(%Context{} = context), do: Context.data(context)
+  defp public_context_data(context) when is_map(context), do: context
+  defp public_context_data(_context), do: %{}
+
+  defp runtime_context(%Context{} = context), do: Context.runtime(context)
+  defp runtime_context(_context), do: %{}
 
   defp forward_context(context, :public) when is_map(context), do: context
   defp forward_context(_context, :none), do: %{}

@@ -106,7 +106,7 @@ defmodule Jidoka.Projection do
     %{
       request_id: request.request_id,
       input: request.input,
-      context: Value.project(request.context),
+      context: Value.project(Jidoka.Context.data(request.context)),
       metadata: Value.project(request.metadata),
       agent_state: project(request.agent_state)
     }

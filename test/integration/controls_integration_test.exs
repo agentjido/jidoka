@@ -45,7 +45,7 @@ defmodule Jidoka.ControlsIntegrationTest do
              }
            } = Jidoka.project(spec)
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -133,7 +133,7 @@ defmodule Jidoka.ControlsIntegrationTest do
              %Agent.Spec.Controls.Input{control: BlockInputControl}
            ] = spec.controls.inputs
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       assert_received {:input_control_called, "allowed lookup"}
       {:ok, %{type: :final, content: "allowed"}}
     end
@@ -155,7 +155,7 @@ defmodule Jidoka.ControlsIntegrationTest do
   end
 
   test "input controls block the turn before LLM or operation effects run" do
-    llm = fn _intent, _journal -> flunk("blocked input must not call the LLM") end
+    llm = fn _intent, _journal, _ctx -> flunk("blocked input must not call the LLM") end
 
     assert {:error,
             %Jidoka.Error.ExecutionError{
@@ -183,7 +183,7 @@ defmodule Jidoka.ControlsIntegrationTest do
         }
       )
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "allowed"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "allowed"}} end
 
     assert {:ok, %Turn.Result{content: "allowed"}} =
              Jidoka.turn(spec, Turn.Request.new!(input: "short input", context: %{"tenant_id" => "t1"}), llm: llm)
@@ -359,7 +359,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     end
     """)
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => "nonmatch"}}}
@@ -409,13 +409,13 @@ defmodule Jidoka.ControlsIntegrationTest do
 
     operations =
       LocalOperations.operations(%{
-        "local_lookup" => fn %{"id" => id} ->
+        "local_lookup" => fn %{"id" => id}, _ctx ->
           send(test_pid, {:local_lookup_called, id})
           {:ok, %{id: id, value: "local-value"}}
         end
       })
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 -> {:ok, %{type: :operation, name: "local_lookup", arguments: %{"id" => "local"}}}
         1 -> {:ok, %{type: :final, content: "local done"}}
@@ -483,7 +483,7 @@ defmodule Jidoka.ControlsIntegrationTest do
              }
            ] = agent_module.spec().controls.operations
 
-    tenant_llm = fn _intent, %Effect.Journal{} = journal ->
+    tenant_llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :operation) do
         0 -> {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => "tenant"}}}
         _count -> {:ok, %{type: :final, content: "tenant lookup done"}}
@@ -544,7 +544,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     end
     """)
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => "max"}}}
     end
 
@@ -590,7 +590,7 @@ defmodule Jidoka.ControlsIntegrationTest do
       end
     end
 
-    llm = fn _intent, _journal -> flunk("timed out turn must not call the LLM") end
+    llm = fn _intent, _journal, _ctx -> flunk("timed out turn must not call the LLM") end
 
     assert {:error,
             %Jidoka.Error.ExecutionError{
@@ -641,7 +641,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     assert result_control.name() == "block_output_control_#{suffix}"
     control_name = "block_output_control_#{suffix}"
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "blocked answer"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "blocked answer"}} end
 
     assert {:error,
             %Jidoka.Error.ExecutionError{
@@ -680,7 +680,7 @@ defmodule Jidoka.ControlsIntegrationTest do
     end
     """)
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "allowed answer"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "allowed answer"}} end
 
     assert {:ok, %Turn.Result{} = result} = agent_module.run_turn("hello", llm: llm)
 
@@ -888,7 +888,7 @@ defmodule Jidoka.ControlsIntegrationTest do
   end
 
   defp operation_llm(id) do
-    fn _intent, _journal ->
+    fn _intent, _journal, _ctx ->
       {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => id}}}
     end
   end

@@ -228,7 +228,7 @@ defmodule FakeMCPClient do
   end
 end
 
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   llm_calls = Enum.count(journal.results, fn {_id, r} -> r.kind == :llm end)
 
   case llm_calls do
@@ -282,7 +282,7 @@ defmodule MyApp.PolicyAgentTest do
   end
 
   test "lookup_policy round trip" do
-    llm = fn _intent, journal ->
+    llm = fn _intent, journal, _ctx ->
       llm_calls = Enum.count(journal.results, fn {_id, r} -> r.kind == :llm end)
 
       case llm_calls do

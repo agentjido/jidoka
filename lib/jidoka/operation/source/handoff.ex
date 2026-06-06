@@ -10,6 +10,7 @@ defmodule Jidoka.Operation.Source.Handoff do
   @behaviour Jidoka.Operation.Source
 
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Handoff
   alias Jidoka.Schema
@@ -103,12 +104,10 @@ defmodule Jidoka.Operation.Source.Handoff do
   end
 
   @impl true
-  def capability(%__MODULE__{} = source, opts) do
-    context = Keyword.get(opts, :context, %{})
-
+  def capability(%__MODULE__{} = source, _opts) do
     {:ok,
      fn
-       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
+       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
               :ok <- ensure_operation_name(source, request.name),
               {:ok, handoff} <- build_handoff(source, request, context) do
@@ -121,7 +120,7 @@ defmodule Jidoka.Operation.Source.Handoff do
             }}
          end
 
-       %Effect.Intent{kind: kind}, _journal ->
+       %Effect.Intent{kind: kind}, _journal, %Context{} ->
          {:error, {:unsupported_effect_kind, kind}}
      end}
   end
@@ -142,7 +141,7 @@ defmodule Jidoka.Operation.Source.Handoff do
 
   defp build_handoff(%__MODULE__{} = source, request, context) do
     arguments = request.arguments
-    public_context = public_context(context)
+    public_context = public_context_data(context)
 
     with {:ok, message} <- required_string(arguments, :message),
          conversation_id <- conversation_id(arguments, public_context),
@@ -165,7 +164,7 @@ defmodule Jidoka.Operation.Source.Handoff do
   end
 
   defp child_context(%__MODULE__{} = source, parent_context, arguments) do
-    parent_context = parent_context |> public_context() |> forward_context(source.forward_context)
+    parent_context = parent_context |> public_context_data() |> forward_context(source.forward_context)
 
     case Schema.get_key(arguments, :context, %{}) do
       task_context when is_map(task_context) -> Map.merge(parent_context, task_context)
@@ -181,11 +180,10 @@ defmodule Jidoka.Operation.Source.Handoff do
       context_value(context, :session_id)
   end
 
-  defp public_context(context) when is_map(context) do
-    Map.get(context, :parent_context, Map.get(context, "parent_context", context))
-  end
+  defp public_context_data(%Context{} = context), do: Context.data(context)
 
-  defp public_context(_context), do: %{}
+  defp public_context_data(context) when is_map(context), do: context
+  defp public_context_data(_context), do: %{}
 
   defp target_agent_id(%__MODULE__{target: :auto, name: name}, nil, _context), do: {:ok, name}
 
@@ -236,11 +234,23 @@ defmodule Jidoka.Operation.Source.Handoff do
   end
 
   defp from_agent(context) do
-    case context_value(context, :jidoka_spec) do
-      %{id: id} -> id
-      _other -> context |> context_value(:agent_module) |> maybe_inspect()
+    case spec_id(context) do
+      id when is_binary(id) -> id
+      _other -> context |> runtime_value(:agent_module) |> maybe_inspect()
     end
   end
+
+  defp spec_id(%Context{spec: %{id: id}}), do: id
+
+  defp spec_id(context) do
+    case runtime_value(context, :jidoka_spec) do
+      %{id: id} -> id
+      _other -> nil
+    end
+  end
+
+  defp runtime_value(%Context{} = context, key), do: Context.get_runtime(context, key)
+  defp runtime_value(context, key), do: context_value(context, key)
 
   defp maybe_inspect(nil), do: nil
   defp maybe_inspect(value) when is_binary(value), do: value

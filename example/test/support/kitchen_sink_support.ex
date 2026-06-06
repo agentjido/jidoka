@@ -89,10 +89,14 @@ defmodule JidokaExample.KitchenSinkSupport do
   end
 
   def session_run_opts(llm, context, memory_store, extra_context \\ %{}) do
+    operation_context =
+      operation_context(context, llm, Map.put(extra_context, :memory_store, memory_store))
+      |> agent_runtime_context()
+
     [
       llm: llm,
-      operations:
-        operation_capability(context, llm, Map.put(extra_context, :memory_store, memory_store)),
+      operations: operation_capability(),
+      operation_context: operation_context,
       memory_store: memory_store
     ]
   end
@@ -100,21 +104,16 @@ defmodule JidokaExample.KitchenSinkSupport do
   def resume_opts(llm, context, extra_context \\ %{}) do
     [
       llm: llm,
-      operations: operation_capability(context, llm, extra_context)
+      operations: operation_capability(),
+      operation_context:
+        context
+        |> operation_context(llm, extra_context)
+        |> agent_runtime_context()
     ]
   end
 
-  def operation_capability(context, llm, extra_context \\ %{}) do
-    Jidoka.Agent.ToolSources.operation_capability(Agent,
-      context:
-        context
-        |> operation_context(llm, extra_context)
-        |> Map.merge(%{
-          agent_module: Agent,
-          jido_agent: Agent.new(),
-          jidoka_spec: Agent.spec()
-        })
-    )
+  def operation_capability do
+    Jidoka.Agent.ToolSources.operation_capability(Agent)
   end
 
   def operation_context(context, llm, extra_context \\ %{}) do
@@ -123,11 +122,18 @@ defmodule JidokaExample.KitchenSinkSupport do
         domain: Domain,
         mcp_client: LocalClient,
         memory_store: Memory.store(),
-        parent_context: context,
         subagent_llm: llm
       },
       Map.merge(context, extra_context)
     )
+  end
+
+  defp agent_runtime_context(context) do
+    Map.merge(context, %{
+      agent_module: Agent,
+      jido_agent: Agent.new(),
+      jidoka_spec: Agent.spec()
+    })
   end
 
   def count_results(%Effect.Journal{results: results}, kind) do

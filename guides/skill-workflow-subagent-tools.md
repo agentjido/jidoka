@@ -331,7 +331,7 @@ defmodule MyApp.HelperAgentTest do
   use ExUnit.Case, async: true
 
   test "workflow round trip" do
-    llm = fn _intent, journal ->
+    llm = fn _intent, journal, _ctx ->
       llm_calls = Enum.count(journal.results, fn {_id, r} -> r.kind == :llm end)
 
       case llm_calls do

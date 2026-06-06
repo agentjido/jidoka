@@ -118,7 +118,7 @@ defmodule Jidoka.SubagentTest do
   test "subagent operations execute a child Jidoka turn" do
     test_pid = self()
 
-    llm = fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal ->
+    llm = fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _ctx ->
       send(test_pid, {:llm_called, payload.agent_id, payload.prompt.context})
 
       case {payload.agent_id, count_results(journal, :llm)} do
@@ -141,13 +141,16 @@ defmodule Jidoka.SubagentTest do
       end
     end
 
+    request =
+      Turn.Request.new!(
+        input: "Should I delegate?",
+        context: %{tenant: "acme", secret: "hidden"}
+      )
+
     assert {:ok, %Turn.Result{} = result} =
-             ParentAgent.run_turn("Should I delegate?",
+             ParentAgent.run_turn(request,
                llm: llm,
-               operation_context: %{
-                 subagent_llm: llm,
-                 parent_context: %{tenant: "acme", secret: "hidden"}
-               }
+               operation_context: %{subagent_llm: llm}
              )
 
     assert result.content == "Parent answer uses child evidence."
@@ -170,7 +173,7 @@ defmodule Jidoka.SubagentTest do
   end
 
   test "subagents delegate a bounded child loop and return results to the parent" do
-    llm = fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal ->
+    llm = fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _ctx ->
       case {payload.agent_id, count_results(journal, :llm)} do
         {"iterative_parent_agent", 0} ->
           {:ok,

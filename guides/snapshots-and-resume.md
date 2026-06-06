@@ -242,7 +242,7 @@ A round-trip test gives you most of the value with very little setup:
 
 ```elixir
 test "snapshot round-trips through opaque serialization" do
-  llm = fn _intent, _journal ->
+  llm = fn _intent, _journal, _ctx ->
     {:ok, %{type: :final, content: "ok"}}
   end
 

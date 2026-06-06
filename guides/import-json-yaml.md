@@ -316,7 +316,7 @@ defmodule MyApp.ImportTest do
     assert spec.id == "time_agent"
     assert [%Jidoka.Agent.Spec.Operation{name: "local_time"}] = spec.operations
 
-    llm = fn _intent, journal ->
+    llm = fn _intent, journal, _ctx ->
       case map_size(journal.results) do
         0 -> {:ok, %{type: :operation, name: "local_time", arguments: %{}}}
         _ -> {:ok, %{type: :final, content: "09:30"}}

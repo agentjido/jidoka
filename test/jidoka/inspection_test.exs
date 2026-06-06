@@ -51,7 +51,7 @@ defmodule Jidoka.InspectionTest do
   end
 
   test "Jidoka.inspect summarizes completed turns" do
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "inspection ok"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "inspection ok"}} end
 
     assert {:ok, result} =
              Jidoka.turn(Agent.spec(), [input: "Hello", context: %{tenant_id: "tenant_1"}], llm: llm)
@@ -83,7 +83,7 @@ defmodule Jidoka.InspectionTest do
   end
 
   test "Jidoka.inspect summarizes sessions and replay data" do
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "session inspected"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "session inspected"}} end
 
     assert {:ok, %Session{} = session} =
              Harness.start_session(Agent.spec(), session_id: "sess_inspection")

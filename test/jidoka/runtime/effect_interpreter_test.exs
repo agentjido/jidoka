@@ -10,7 +10,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     intent = Effect.Intent.new(:llm, %{prompt: %{messages: []}})
     state = state_with_pending_effect(intent)
 
-    llm = fn received_intent, %Effect.Journal{} = journal ->
+    llm = fn received_intent, %Effect.Journal{} = journal, _ctx ->
       assert received_intent.id == intent.id
       assert Map.has_key?(journal.intents, intent.id)
       {:ok, %{type: :final, content: "ok"}}
@@ -38,7 +38,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     intent = Effect.Intent.new(:operation, %{name: "weather", arguments: %{}})
     state = state_with_pending_effect(intent)
 
-    operations = fn _intent, _journal -> {:error, :tool_failed} end
+    operations = fn _intent, _journal, _ctx -> {:error, :tool_failed} end
     {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
 
     assert {:ok,
@@ -76,7 +76,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
       |> Effect.Journal.put_result(result)
 
     state = state_with_pending_effect(intent, journal: journal)
-    llm = fn _intent, _journal -> flunk("capability should not be called when result exists") end
+    llm = fn _intent, _journal, _ctx -> flunk("capability should not be called when result exists") end
     {:ok, capabilities} = Capabilities.new(llm: llm)
 
     assert {:ok, ^result, next_state} = EffectInterpreter.interpret_pending(state, capabilities)
@@ -99,7 +99,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
     state = state_with_pending_effect(intent, journal: journal)
 
-    operations = fn _intent, _journal ->
+    operations = fn _intent, _journal, _ctx ->
       flunk("operation should not be called when result exists")
     end
 
@@ -124,7 +124,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
     state = state_with_pending_effect(intent, journal: journal)
 
-    operations = fn _intent, _journal ->
+    operations = fn _intent, _journal, _ctx ->
       flunk("unsafe operation should not be retried when its prior intent is incomplete")
     end
 
@@ -176,5 +176,5 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     )
   end
 
-  defp missing_llm, do: fn _intent, _journal -> {:error, :missing_llm} end
+  defp missing_llm, do: fn _intent, _journal, _ctx -> {:error, :missing_llm} end
 end

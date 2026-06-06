@@ -50,7 +50,7 @@ operations =
     "local_time" => fn _args -> {:ok, %{city: "Chicago", time: "09:30"}} end
   })
 
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   case map_size(journal.results) do
     0 -> {:ok, %{type: :operation, name: "local_time", arguments: %{}}}
     _ -> {:ok, %{type: :final, content: "Chicago time is 09:30."}}
@@ -83,8 +83,8 @@ The run is reproducible. The same inputs always produce the same
 
 Deterministic testing in Jidoka uses four building blocks.
 
-1. **Fake LLM function.** Every LLM capability is a 2-arity function
-   `fn intent, journal -> {:ok, decision} | {:error, reason} end`. The
+1. **Fake LLM function.** Every LLM capability is a 3-arity function
+   `fn intent, journal, _ctx -> {:ok, decision} | {:error, reason} end`. The
    decision shape is `%{type: :operation, name: ..., arguments: ...}` or
    `%{type: :final, content: ...}`. The journal is the replay trace;
    counting `map_size(journal.results)` is the standard way to drive
@@ -157,7 +157,7 @@ Deterministic testing in Jidoka uses four building blocks.
 The simplest fake returns one decision regardless of journal:
 
 ```elixir
-llm = fn _intent, _journal ->
+llm = fn _intent, _journal, _ctx ->
   {:ok, %{type: :final, content: "pong"}}
 end
 ```
@@ -165,7 +165,7 @@ end
 For multi-step tests, branch on `map_size(journal.results)`:
 
 ```elixir
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   case map_size(journal.results) do
     0 -> {:ok, %{type: :operation, name: "local_time", arguments: %{}}}
     1 -> {:ok, %{type: :final, content: "09:30"}}
@@ -327,7 +327,7 @@ test "passes when content and operations match" do
       "echo" => fn %{"phrase" => phrase} -> {:ok, %{echoed: phrase}} end
     })
 
-  llm = fn _intent, journal ->
+  llm = fn _intent, journal, _ctx ->
     case map_size(journal.results) do
       0 -> {:ok, %{type: :operation, name: "echo", arguments: %{"phrase" => "hi"}}}
       _ -> {:ok, %{type: :final, content: "hi"}}

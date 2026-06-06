@@ -122,12 +122,14 @@ defmodule Jidoka.MCPTest do
         arguments: %{"topic" => "runtime"}
       })
 
+    ctx = Jidoka.Context.from_data!(%{}, runtime: %{mcp_client: FakeMCPClient})
+
     assert {:ok,
             %{
               endpoint: "demo_mcp",
               tool: "lookup_policy",
               result: %{"policy" => "Use MCP through Jidoka.", "topic" => "runtime"}
-            }} = capability.(intent, Effect.Journal.new!())
+            }} = capability.(intent, Effect.Journal.new!(), ctx)
   end
 
   test "MCP sources normalize defaults, runtime client overrides, and malformed responses" do
@@ -156,8 +158,10 @@ defmodule Jidoka.MCPTest do
         arguments: %{}
       })
 
+    ctx = Jidoka.Context.from_data!(%{}, runtime: %{mcp_client: FakeMCPClient})
+
     assert {:ok, %{endpoint: "list_response", tool: "Remote Tool", result: %{ok: true}}} =
-             capability.(intent, Effect.Journal.new!())
+             capability.(intent, Effect.Journal.new!(), ctx)
 
     bad_list = MCP.new!(endpoint: :bad_list_response, client: FakeMCPClient, required: true)
 
@@ -176,7 +180,7 @@ defmodule Jidoka.MCPTest do
     bad_intent = Effect.Intent.new(:operation, %{name: "mcp_bad_call_response_broken"})
 
     assert {:error, {:invalid_mcp_call_response, :bad_response}} =
-             bad_call_capability.(bad_intent, Effect.Journal.new!())
+             bad_call_capability.(bad_intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 
   test "MCP sources support inline endpoint depth and pass timeout configuration" do
@@ -215,14 +219,14 @@ defmodule Jidoka.MCPTest do
       })
 
     assert {:ok, %{result: %{args: %{"topic" => "depth"}, endpoint_opts: call_opts}}} =
-             capability.(intent, Effect.Journal.new!())
+             capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
 
     assert call_opts[:timeout] == 123
     assert call_opts[:timeouts] == %{"request_ms" => 777}
   end
 
   test "MCP tools declared in the DSL execute through the normal operation loop" do
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,

@@ -50,7 +50,7 @@ defmodule Jidoka.OperationSourceIntegrationTest do
             name: "lookup_ticket",
             description: "Looks up a ticket.",
             kind: :tool,
-            handler: fn args -> %{ticket_id: args["ticket_id"], status: "open"} end
+            handler: fn args, _ctx -> %{ticket_id: args["ticket_id"], status: "open"} end
           }
         ]
       )
@@ -72,7 +72,7 @@ defmodule Jidoka.OperationSourceIntegrationTest do
         runtime_defaults: %{max_model_turns: 4}
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -114,7 +114,7 @@ defmodule Jidoka.OperationSourceIntegrationTest do
             idempotency: :unsafe_once,
             kind: :tool,
             metadata: %{"source" => "payments", "risk" => "high"},
-            handler: fn args -> %{charge_id: args["charge_id"], status: "approved"} end
+            handler: fn args, _ctx -> %{charge_id: args["charge_id"], status: "approved"} end
           }
         ]
       )
@@ -142,7 +142,7 @@ defmodule Jidoka.OperationSourceIntegrationTest do
           )
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,

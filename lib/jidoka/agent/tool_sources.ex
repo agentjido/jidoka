@@ -40,13 +40,12 @@ defmodule Jidoka.Agent.ToolSources do
   @spec operation_capability(module(), keyword()) ::
           Jidoka.Runtime.Capabilities.operation_capability()
   def operation_capability(agent_module, opts \\ []) when is_atom(agent_module) do
-    context = Keyword.get(opts, :context, %{})
-    action_capability = Jidoka.Runtime.JidoActions.operations(action_modules(agent_module), context: context)
-    source_capability = source_capability(agent_module, context)
+    action_capability = Jidoka.Runtime.JidoActions.operations(action_modules(agent_module))
+    source_capability = source_capability(agent_module, opts)
 
-    fn intent, journal ->
-      case action_capability.(intent, journal) do
-        {:error, {:missing_jido_action, _name}} -> source_capability.(intent, journal)
+    fn intent, journal, ctx ->
+      case action_capability.(intent, journal, ctx) do
+        {:error, {:missing_jido_action, _name}} -> source_capability.(intent, journal, ctx)
         result -> result
       end
       |> normalize_missing_action_error()
@@ -190,13 +189,13 @@ defmodule Jidoka.Agent.ToolSources do
     end)
   end
 
-  defp source_capability(agent_module, context) do
-    case Source.compile(operation_sources!(agent_module), context: context) do
+  defp source_capability(agent_module, opts) do
+    case Source.compile(operation_sources!(agent_module), opts) do
       {:ok, %{capability: capability}} ->
         capability
 
       {:error, reason} ->
-        fn _intent, _journal -> {:error, reason} end
+        fn _intent, _journal, _ctx -> {:error, reason} end
     end
   end
 

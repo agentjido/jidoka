@@ -73,16 +73,20 @@ defmodule JidokaExample.KitchenSinkAgentTest do
     assert {:ok, result} =
              ShowContext.run(
                %{},
-               %{
-                 agent_module: Agent,
-                 actor: %{id: "dev-1", role: "developer"},
-                 channel: "kitchen_sink",
-                 example: "kitchen_sink_agent",
-                 memory_store: :private,
-                 session_id: "session_123",
-                 surface: "test",
-                 tenant: "demo"
-               }
+               Jidoka.Context.from_data!(
+                 %{
+                   actor: %{id: "dev-1", role: "developer"},
+                   channel: "kitchen_sink",
+                   example: "kitchen_sink_agent",
+                   session_id: "session_123",
+                   surface: "test",
+                   tenant: "demo"
+                 },
+                 runtime: %{
+                   agent_module: Agent,
+                   memory_store: :private
+                 }
+               )
              )
 
     assert result["actor"] == %{id: "dev-1", role: "developer"}

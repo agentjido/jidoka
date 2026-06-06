@@ -324,7 +324,7 @@ defmodule MyApp.MemoryAgentTest do
     system_message = Enum.find(preflight.prompt.messages, &(&1.role == :system))
     assert system_message.content =~ "prefers the name Alex"
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "Welcome back, Alex."}}
     end
 

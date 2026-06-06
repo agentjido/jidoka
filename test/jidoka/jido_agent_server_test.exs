@@ -11,7 +11,7 @@ defmodule Jidoka.JidoAgentServerTest.Support.LocalTimeAction do
   def run(params, context) do
     city = Map.get(params, :city) || Map.get(params, "city") || "Chicago"
 
-    if pid = context[:test_pid] do
+    if pid = Jidoka.Context.get(context, :test_pid) || Jidoka.Context.get_runtime(context, :test_pid) do
       send(pid, {:server_local_time_called, city})
     end
 
@@ -45,7 +45,7 @@ defmodule Jidoka.JidoAgentServerTest do
     id = "jidoka_server_test_#{System.unique_integer([:positive])}"
     test_pid = self()
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -76,7 +76,7 @@ defmodule Jidoka.JidoAgentServerTest do
 
     assert {:ok, "Second turn works by id."} =
              Jidoka.chat(id, "Confirm by id.",
-               llm: fn _intent, _journal ->
+               llm: fn _intent, _journal, _ctx ->
                  {:ok, %{type: :final, content: "Second turn works by id."}}
                end
              )
@@ -93,7 +93,7 @@ defmodule Jidoka.JidoAgentServerTest do
 
     assert {:ok, "Supervised child responded."} =
              Jidoka.chat(pid, "Confirm direct supervision.",
-               llm: fn _intent, _journal ->
+               llm: fn _intent, _journal, _ctx ->
                  {:ok, %{type: :final, content: "Supervised child responded."}}
                end
              )

@@ -233,7 +233,7 @@ The runtime's own tests use `assert_receive` against the mailbox tag.
 
 ```elixir
 test "stream_to publishes lifecycle events" do
-  llm = fn _intent, _journal ->
+  llm = fn _intent, _journal, _ctx ->
     {:ok, %{type: :final, content: "stream ok"}}
   end
 

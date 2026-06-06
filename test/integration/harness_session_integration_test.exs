@@ -62,7 +62,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
     assert {:ok, %Session{session_id: "sess_race"}} =
              Harness.start_session(spec, session_id: "sess_race", store: store)
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       send(parent, {:llm_started, self()})
 
       receive do
@@ -103,7 +103,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
     assert {:ok, %Session{session_id: "sess_review"}} =
              Harness.start_session(spec, session_id: "sess_review", store: store)
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -120,7 +120,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
 
     operations =
       LocalOperations.operations(%{
-        refund_order: fn intent, _journal ->
+        refund_order: fn intent, _journal, _ctx ->
           arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
           send(test_pid, {:refund_called, arguments})
           {:ok, %{"refund_id" => "refund_123", "order_id" => arguments["order_id"]}}

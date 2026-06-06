@@ -265,7 +265,7 @@ Use real providers in product guides and demos. In tests, inject fake
 capabilities:
 
 ```elixir
-llm = fn _intent, _journal ->
+llm = fn _intent, _journal, _ctx ->
   {:ok, %{type: :final, content: "ok"}}
 end
 

@@ -87,6 +87,7 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
   defp normalize_runtime_opts(opts) when is_map(opts), do: Map.to_list(opts)
   defp normalize_runtime_opts(_opts), do: []
 
+  defp normalize_context(%Jidoka.Context{} = context), do: Jidoka.Context.data(context)
   defp normalize_context(context) when is_list(context), do: Map.new(context)
   defp normalize_context(context) when is_map(context), do: context
   defp normalize_context(_context), do: %{}

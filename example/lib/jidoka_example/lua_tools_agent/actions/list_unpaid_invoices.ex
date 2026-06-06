@@ -56,38 +56,41 @@ defmodule JidokaExample.LuaToolsAgent.Actions.ListUnpaidInvoices do
     end
   end
 
-  defp maybe_wait_for_parallel_test(customer_id, %{lua_test_pid: pid}) when is_pid(pid) do
-    send(pid, {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, self()})
+  defp maybe_wait_for_parallel_test(customer_id, context) do
+    case Jidoka.Context.get(context, :lua_test_pid) do
+      pid when is_pid(pid) ->
+        send(
+          pid,
+          {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, self()}
+        )
 
-    receive do
-      :continue_lua_hidden_action -> :ok
-    after
-      1_000 -> :ok
+        receive do
+          :continue_lua_hidden_action -> :ok
+        after
+          1_000 -> :ok
+        end
+
+      _other ->
+        :ok
     end
   end
 
-  defp maybe_wait_for_parallel_test(customer_id, %{"lua_test_pid" => pid}) when is_pid(pid) do
-    maybe_wait_for_parallel_test(customer_id, %{lua_test_pid: pid})
-  end
+  defp maybe_fail_for_retry_test(customer_id, context) do
+    case Jidoka.Context.get(context, :lua_retry_test_pid) do
+      pid when is_pid(pid) ->
+        send(pid, {:lua_retry_invoice_attempt, customer_id, self()})
 
-  defp maybe_wait_for_parallel_test(_customer_id, _context), do: :ok
+        receive do
+          :fail_lua_invoice_attempt -> {:error, %{"reason" => "forced retry test failure"}}
+          :continue_lua_invoice_attempt -> :ok
+        after
+          1_000 -> :ok
+        end
 
-  defp maybe_fail_for_retry_test(customer_id, %{lua_retry_test_pid: pid}) when is_pid(pid) do
-    send(pid, {:lua_retry_invoice_attempt, customer_id, self()})
-
-    receive do
-      :fail_lua_invoice_attempt -> {:error, %{"reason" => "forced retry test failure"}}
-      :continue_lua_invoice_attempt -> :ok
-    after
-      1_000 -> :ok
+      _other ->
+        :ok
     end
   end
-
-  defp maybe_fail_for_retry_test(customer_id, %{"lua_retry_test_pid" => pid}) when is_pid(pid) do
-    maybe_fail_for_retry_test(customer_id, %{lua_retry_test_pid: pid})
-  end
-
-  defp maybe_fail_for_retry_test(_customer_id, _context), do: :ok
 
   defp invoices do
     %{

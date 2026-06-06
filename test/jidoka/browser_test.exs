@@ -111,7 +111,7 @@ defmodule Jidoka.BrowserTest do
         metadata: %{"allow" => ["docs.example.com"]}
       )
 
-    context = %{jidoka_spec: %{operations: [operation]}}
+    context = Jidoka.Context.from_data!(%{}, runtime: %{jidoka_spec: %{operations: [operation]}})
 
     assert :ok =
              Runtime.validate_allowlist("https://docs.example.com/guide", context, "read_page")
@@ -128,20 +128,26 @@ defmodule Jidoka.BrowserTest do
   end
 
   test "browser tools delegate through configured Jido-browser action modules" do
-    assert {:ok, %{params: search_params, context: %{request_id: "r1"}}} =
-             SearchWeb.run(%{query: "  jidoka  ", max_results: 99}, %{request_id: "r1"})
+    data_context = Jidoka.Context.from_data!(request_id: "r1")
 
+    assert {:ok, %{params: search_params, context: %Jidoka.Context{} = delegated_context}} =
+             SearchWeb.run(%{query: "  jidoka  ", max_results: 99}, data_context)
+
+    assert Jidoka.Context.get(delegated_context, :request_id) == "r1"
     assert search_params.query == "jidoka"
     assert search_params.max_results == Runtime.max_results()
 
-    context = %{
-      jidoka_spec: %{
-        operations: [
-          Operation.new!(name: "read_page", metadata: %{"allow" => ["docs.example.com"]}),
-          Operation.new!(name: "snapshot_url", metadata: %{allow: ["docs.example.com"]})
-        ]
-      }
-    }
+    context =
+      Jidoka.Context.from_data!(%{},
+        runtime: %{
+          jidoka_spec: %{
+            operations: [
+              Operation.new!(name: "read_page", metadata: %{"allow" => ["docs.example.com"]}),
+              Operation.new!(name: "snapshot_url", metadata: %{allow: ["docs.example.com"]})
+            ]
+          }
+        }
+      )
 
     assert {:ok, %{content: content, params: read_params}} =
              ReadPage.run(
@@ -190,10 +196,10 @@ defmodule Jidoka.BrowserTest do
 
   test "browser page tools validate URL and format before delegation" do
     assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :invalid_format}}} =
-             ReadPage.run(%{url: "https://example.com", format: "pdf"}, %{})
+             ReadPage.run(%{url: "https://example.com", format: "pdf"}, Jidoka.Context.from_data!(%{}))
 
     assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :invalid_url}}} =
-             SnapshotUrl.run(%{url: "http://localhost/private"}, %{})
+             SnapshotUrl.run(%{url: "http://localhost/private"}, Jidoka.Context.from_data!(%{}))
   end
 
   test "normalizes delegated browser failures" do

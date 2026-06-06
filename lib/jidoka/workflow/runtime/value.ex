@@ -3,7 +3,13 @@ defmodule Jidoka.Workflow.Runtime.Value do
 
   @spec resolve(term(), map()) :: {:ok, term()} | {:error, term()}
   def resolve({:jidoka_workflow_ref, :input, key}, state), do: fetch_equivalent(state.input, key, :input)
-  def resolve({:jidoka_workflow_ref, :context, key}, state), do: fetch_equivalent(state.context, key, :context)
+
+  def resolve({:jidoka_workflow_ref, :context, key}, state) do
+    state.context
+    |> context_data()
+    |> fetch_equivalent(key, :context)
+  end
+
   def resolve({:jidoka_workflow_ref, :value, value}, _state), do: {:ok, value}
   def resolve({:jidoka_workflow_ref, :from, step, nil}, state), do: fetch_step_output(state, step)
 
@@ -66,6 +72,9 @@ defmodule Jidoka.Workflow.Runtime.Value do
   end
 
   def resolve(value, _state), do: {:ok, value}
+
+  defp context_data(%Jidoka.Context{} = context), do: Jidoka.Context.data(context)
+  defp context_data(context), do: context
 
   @spec fetch_equivalent(map(), term()) :: {:ok, term()} | :error
   def fetch_equivalent(map, key) when is_map(map) do

@@ -9,8 +9,7 @@ defmodule Jidoka.Kino.ContextView do
                         :jidoka_spec,
                         :memory_store,
                         :domain,
-                        :mcp_client,
-                        :parent_context
+                        :mcp_client
                       ])
 
   @doc false

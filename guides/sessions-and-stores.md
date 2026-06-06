@@ -272,7 +272,7 @@ test "session keeps history across turns" do
   {:ok, pid} = Jidoka.Harness.Store.InMemory.start_link()
   store = {Jidoka.Harness.Store.InMemory, pid: pid}
 
-  llm = fn _intent, journal ->
+  llm = fn _intent, journal, _ctx ->
     case map_size(journal.results) do
       0 -> {:ok, %{type: :final, content: "first"}}
       _ -> {:ok, %{type: :final, content: "second"}}

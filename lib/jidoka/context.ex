@@ -26,6 +26,7 @@ defmodule Jidoka.Context do
               control_name: Zoi.string() |> Zoi.nullish(),
               input: Zoi.string() |> Zoi.nullish(),
               data: Zoi.map() |> Zoi.default(%{}),
+              runtime: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{}),
               request_metadata: Zoi.map() |> Zoi.default(%{}),
               operation: Zoi.string() |> Zoi.nullish(),
@@ -74,6 +75,40 @@ defmodule Jidoka.Context do
   def from_input(%__MODULE__{} = context), do: new(context)
   def from_input(input), do: new(input)
 
+  @doc "Builds a request context from caller-provided application data."
+  @spec from_data(t() | keyword() | map() | nil, keyword() | map()) :: {:ok, t()} | {:error, term()}
+  def from_data(data, attrs \\ [])
+
+  def from_data(%__MODULE__{} = context, attrs) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    context
+    |> Map.from_struct()
+    |> Map.merge(attrs)
+    |> new()
+  end
+
+  def from_data(nil, attrs), do: from_data(%{}, attrs)
+
+  def from_data(data, attrs) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    with {:ok, data} <- normalize_data(data) do
+      attrs
+      |> Map.put(:data, data)
+      |> new()
+    end
+  end
+
+  @doc "Builds a request context from caller-provided application data or raises."
+  @spec from_data!(t() | keyword() | map() | nil, keyword() | map()) :: t()
+  def from_data!(data, attrs \\ []) do
+    case from_data(data, attrs) do
+      {:ok, context} -> context
+      {:error, reason} -> raise ArgumentError, "invalid context data: #{inspect(reason)}"
+    end
+  end
+
   @spec from_turn_state(Turn.State.t(), keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_turn_state(%Turn.State{} = state, attrs \\ []) do
     attrs = Schema.normalize_attrs(attrs)
@@ -85,7 +120,8 @@ defmodule Jidoka.Context do
           request_id: state.request.request_id,
           session_id: session_id(state.request.metadata, attrs),
           input: state.request.input,
-          data: state.request.context,
+          data: data(state.request.context),
+          runtime: runtime(state.request.context),
           request_metadata: state.request.metadata,
           spec: state.spec,
           plan: state.plan,
@@ -179,6 +215,31 @@ defmodule Jidoka.Context do
     end
   end
 
+  @doc "Returns caller-provided application context data."
+  @spec data(t()) :: map()
+  def data(%__MODULE__{data: data}), do: data
+
+  @doc "Returns trusted runtime-only context values."
+  @spec runtime(t()) :: map()
+  def runtime(%__MODULE__{runtime: runtime}), do: runtime
+
+  @doc "Fetches a runtime-only value by atom or string key without creating atoms."
+  @spec fetch_runtime(t(), atom() | String.t()) :: {:ok, term()} | :error
+  def fetch_runtime(%__MODULE__{runtime: runtime}, key), do: fetch_any(runtime, key)
+
+  @doc "Returns a runtime-only value by atom or string key without creating atoms."
+  @spec get_runtime(t(), atom() | String.t(), term()) :: term()
+  def get_runtime(%__MODULE__{} = context, key, default \\ nil) do
+    case fetch_runtime(context, key) do
+      {:ok, value} -> value
+      :error -> default
+    end
+  end
+
+  @doc "Drops runtime-only values before persisting or projecting context."
+  @spec sanitize(t()) :: t()
+  def sanitize(%__MODULE__{} = context), do: %__MODULE__{context | runtime: %{}}
+
   defp normalize_context_alias(%{} = attrs) do
     attrs
     |> maybe_put_data_from(:context)
@@ -188,6 +249,17 @@ defmodule Jidoka.Context do
   end
 
   defp normalize_context_alias(attrs), do: attrs
+
+  defp normalize_data(data) when is_list(data) do
+    if Keyword.keyword?(data) do
+      {:ok, Map.new(data)}
+    else
+      {:error, {:invalid_context_data, data}}
+    end
+  end
+
+  defp normalize_data(data) when is_map(data), do: {:ok, data}
+  defp normalize_data(data), do: {:error, {:invalid_context_data, data}}
 
   defp maybe_put_data_from(attrs, key) do
     case {Schema.fetch_key(attrs, :data), Map.fetch(attrs, key)} do

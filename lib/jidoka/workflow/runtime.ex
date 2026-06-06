@@ -3,6 +3,7 @@ defmodule Jidoka.Workflow.Runtime do
 
   require Runic
 
+  alias Jidoka.Context
   alias Jidoka.Workflow.Runtime.{StepRunner, Value}
   alias Jidoka.Workflow.Spec
   alias Runic.Workflow
@@ -104,7 +105,7 @@ defmodule Jidoka.Workflow.Runtime do
       [] ->
         %{
           input: %{},
-          context: %{},
+          context: Context.from_data!(%{}),
           steps: %{},
           outcomes: %{},
           workflow_id: nil,
@@ -121,7 +122,7 @@ defmodule Jidoka.Workflow.Runtime do
   defp merge_workflow_states(state) do
     %{
       input: %{},
-      context: %{},
+      context: Context.from_data!(%{}),
       steps: %{},
       outcomes: %{},
       workflow_id: nil,
@@ -199,15 +200,14 @@ defmodule Jidoka.Workflow.Runtime do
     |> maybe_put_max_concurrency(max_concurrency)
   end
 
-  defp normalize_context(context) when is_list(context) do
-    if Keyword.keyword?(context) do
-      {:ok, Map.new(context)}
-    else
-      invalid_context(context)
+  defp normalize_context(%Context{} = context), do: {:ok, context}
+
+  defp normalize_context(context) when is_list(context) or is_map(context) do
+    case Context.from_data(context) do
+      {:ok, context} -> {:ok, context}
+      {:error, _reason} -> invalid_context(context)
     end
   end
-
-  defp normalize_context(context) when is_map(context), do: {:ok, context}
 
   defp normalize_context(context), do: invalid_context(context)
 
@@ -348,14 +348,14 @@ defmodule Jidoka.Workflow.Runtime do
 
   defp validate_context_refs(%Spec{} = spec, context) do
     Enum.reduce_while(spec.context_refs, :ok, fn key, :ok ->
-      if Value.has_equivalent_key?(context, key) do
+      if Value.has_equivalent_key?(Context.data(context), key) do
         {:cont, :ok}
       else
         {:halt,
          {:error,
           Jidoka.Error.validation_error("Missing workflow context key `#{key}`.",
             field: :context,
-            value: context,
+            value: Context.data(context),
             details: %{workflow_id: spec.id, reason: :missing_context, key: key}
           )}}
       end

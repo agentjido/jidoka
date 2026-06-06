@@ -188,7 +188,7 @@ defmodule Jidoka.Agent.DslTest do
     assert spec.operations == []
     assert spec.controls.operations == []
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "hello"}}
     end
 
@@ -561,7 +561,7 @@ defmodule Jidoka.Agent.DslTest do
 
     {:ok, counter} = Agent.start_link(fn -> 0 end)
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       case Agent.get_and_update(counter, &{&1, &1 + 1}) do
         0 ->
           {:ok,

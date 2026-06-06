@@ -72,9 +72,10 @@ A Jidoka operation has two parts:
    originating `source` (action, ash_resource, browser, mcp, subagent,
    handoff, workflow, local) and a `kind` tag used for control
    matching.
-2. **Runtime capability** is a 2-arity function Jidoka calls with the
-   `Jidoka.Effect.Intent` and the current `Jidoka.Effect.Journal`. Its job
-   is to resolve the call to `{:ok, output}` or `{:error, reason}`.
+2. **Runtime capability** is a 3-arity function Jidoka calls with the
+   `Jidoka.Effect.Intent`, the current `Jidoka.Effect.Journal`, and a
+   `%Jidoka.Context{}`. Its job is to resolve the call to `{:ok, output}` or
+   `{:error, reason}`.
 
 ```diagram
 ╭───────────────╮     ╭──────────────────────╮     ╭────────────────╮
@@ -245,7 +246,7 @@ spec =
     operations: operations
   )
 
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   case map_size(journal.results) do
     0 -> {:ok, %{type: :operation, name: "echo", arguments: %{"phrase" => "hi"}}}
     _ -> {:ok, %{type: :final, content: "done"}}
@@ -320,7 +321,7 @@ defmodule MyApp.TimeAgentTest do
         "local_time" => fn %{"city" => city} -> {:ok, %{city: city, time: "09:30"}} end
       })
 
-    llm = fn _intent, journal ->
+    llm = fn _intent, journal, _ctx ->
       case map_size(journal.results) do
         0 -> {:ok, %{type: :operation, name: "local_time", arguments: %{"city" => "Chicago"}}}
         _ -> {:ok, %{type: :final, content: "Chicago time is 09:30."}}

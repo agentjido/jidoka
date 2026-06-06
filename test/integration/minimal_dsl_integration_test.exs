@@ -11,7 +11,7 @@ defmodule Jidoka.MinimalDslIntegrationTest do
     assert MinimalChatAgent.__jidoka_agent__().actions == []
     assert MinimalChatAgent.spec().operations == []
 
-    llm = fn intent, %Effect.Journal{} = journal ->
+    llm = fn intent, %Effect.Journal{} = journal, _ctx ->
       assert count_results(journal, :llm) == 0
 
       prompt = Jidoka.Schema.get_key(intent.payload, :prompt)
@@ -30,7 +30,7 @@ defmodule Jidoka.MinimalDslIntegrationTest do
   end
 
   test "bare DSL agent rejects model-requested operations cleanly" do
-    llm = fn _intent, %Effect.Journal{} ->
+    llm = fn _intent, %Effect.Journal{}, _ctx ->
       {:ok, %{type: :operation, name: "lookup_order", arguments: %{"order_id" => "order_123"}}}
     end
 

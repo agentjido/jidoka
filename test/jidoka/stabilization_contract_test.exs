@@ -16,7 +16,7 @@ defmodule Jidoka.StabilizationContractTest.Support.WorkflowOk do
     parameters_schema: %{"type" => "object"}
 
   @impl true
-  def run(input, context), do: {:ok, %{input: input, context: context}}
+  def run(input, context), do: {:ok, %{input: input, context: Jidoka.Context.data(context)}}
 end
 
 defmodule Jidoka.StabilizationContractTest.Support.WorkflowValue do
@@ -445,8 +445,10 @@ defmodule Jidoka.StabilizationContractTest do
              ReqLLM.generate(invalid_prompt, journal, model: %{provider: :test, id: "model"})
 
     llm = ReqLLM.llm(model: %{provider: :test, id: "model"})
-    assert is_function(llm, 2)
-    assert {:error, {:unsupported_effect_kind, :operation}} = llm.(operation_intent, journal)
+    assert is_function(llm, 3)
+
+    assert {:error, {:unsupported_effect_kind, :operation}} =
+             llm.(operation_intent, journal, Jidoka.Context.from_data!(%{}))
   end
 
   defp agent_spec do

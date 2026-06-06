@@ -29,7 +29,7 @@ defmodule Jidoka.MemoryIntegrationTest do
 
     assert Enum.map(preflight.timeline, & &1.event) == [:memory_recalled, :prompt_assembled]
 
-    llm = fn %Effect.Intent{payload: payload}, _journal ->
+    llm = fn %Effect.Intent{payload: payload}, _journal, _ctx ->
       prompt = Jidoka.Schema.get_key(payload, :prompt)
 
       assert %{memory: %{count: 1}} = prompt
@@ -66,7 +66,7 @@ defmodule Jidoka.MemoryIntegrationTest do
                id_generator: fn "mem" -> "mem_global" end
              )
 
-    llm = fn %Effect.Intent{payload: payload}, _journal ->
+    llm = fn %Effect.Intent{payload: payload}, _journal, _ctx ->
       prompt = Jidoka.Schema.get_key(payload, :prompt)
 
       assert %{memory: %{count: 1}} = prompt
@@ -99,7 +99,7 @@ defmodule Jidoka.MemoryIntegrationTest do
     assert {:ok, %Memory.WriteResult{}} =
              Harness.write_memory(spec, "Ada prefers context-only memory.", memory_store: memory_store)
 
-    llm = fn %Effect.Intent{payload: payload}, _journal ->
+    llm = fn %Effect.Intent{payload: payload}, _journal, _ctx ->
       prompt = Jidoka.Schema.get_key(payload, :prompt)
 
       assert %{memory: %{count: 1}} = prompt
@@ -127,7 +127,7 @@ defmodule Jidoka.MemoryIntegrationTest do
         memory: %{capture: :conversation}
       )
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "Captured response."}}
     end
 

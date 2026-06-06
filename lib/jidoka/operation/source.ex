@@ -81,13 +81,15 @@ defmodule Jidoka.Operation.Source do
       end)
 
     fn
-      %Effect.Intent{kind: :operation, payload: payload} = intent, %Effect.Journal{} = journal ->
+      %Effect.Intent{kind: :operation, payload: payload} = intent,
+      %Effect.Journal{} = journal,
+      %Jidoka.Context{} = ctx ->
         with {:ok, request} <- Effect.OperationRequest.from_input(payload),
              {:ok, capability} <- route(routes, request.name) do
-          capability.(intent, journal)
+          capability.(intent, journal, ctx)
         end
 
-      %Effect.Intent{kind: kind}, _journal ->
+      %Effect.Intent{kind: kind}, _journal, %Jidoka.Context{} ->
         {:error, {:unsupported_effect_kind, kind}}
     end
   end

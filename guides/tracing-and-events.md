@@ -33,7 +33,7 @@ mix test
 Run a turn, project its events through a policy, and inspect the timeline.
 
 ```elixir
-llm = fn _intent, _journal ->
+llm = fn _intent, _journal, _ctx ->
   {:ok, %{type: :final, content: "done"}}
 end
 
@@ -241,7 +241,7 @@ timeline.
 
 ```elixir
 test "in-memory sink records projected entries" do
-  llm = fn _intent, _journal ->
+  llm = fn _intent, _journal, _ctx ->
     {:ok, %{type: :final, content: "done"}}
   end
 

@@ -55,7 +55,7 @@ defmodule Jidoka.StreamTest do
         model: %{provider: :test, id: "model"}
       )
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "stream ok"}}
     end
 
@@ -83,7 +83,7 @@ defmodule Jidoka.StreamTest do
 
     sink = self()
 
-    llm = fn intent, _journal ->
+    llm = fn intent, _journal, _ctx ->
       Event.new!(
         event: :llm_delta,
         request_id: intent.payload.request_id,
@@ -135,7 +135,7 @@ defmodule Jidoka.StreamTest do
         model: %{provider: :test, id: "model"}
       )
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "async stream ok"}}
     end
 

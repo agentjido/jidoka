@@ -235,7 +235,7 @@ defmodule Jidoka.Error.Normalize.Runtime do
 
   defp normalize_operation_reason({:invalid_operation_handler, handler} = reason, context) do
     {:ok,
-     config_error("Operation handler must be a one- or two-arity function.",
+     config_error("Operation handler must be a two- or three-arity function.",
        field: :operations,
        value: handler,
        details: details(context, %{reason: :invalid_operation_handler, cause: reason})

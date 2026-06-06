@@ -10,7 +10,7 @@ defmodule Jidoka.Runtime.JidoActionsTest.Support.EchoAction do
   @impl true
   def run(params, context) do
     value = Map.get(params, :value) || Map.get(params, "value")
-    {:ok, %{value: value, marker: context[:marker]}}
+    {:ok, %{value: value, marker: Jidoka.Context.get(context, :marker)}}
   end
 end
 
@@ -35,13 +35,14 @@ defmodule Jidoka.Runtime.JidoActionsTest do
   end
 
   test "executes Jido action tools and decodes JSON payloads" do
-    capability = Actions.operations([EchoAction], context: %{marker: "unit"})
+    capability = Actions.operations([EchoAction])
+    ctx = Jidoka.Context.from_data!(marker: "unit")
 
     intent =
       Effect.Intent.new(:operation, %{name: "echo_value", arguments: %{"value" => "hello"}})
 
     assert {:ok, %{"value" => "hello", "marker" => "unit"}} =
-             capability.(intent, Effect.Journal.new!())
+             capability.(intent, Effect.Journal.new!(), ctx)
   end
 
   test "reports missing Jido action tools" do
@@ -49,13 +50,14 @@ defmodule Jidoka.Runtime.JidoActionsTest do
     intent = Effect.Intent.new(:operation, %{name: "missing", arguments: %{}})
 
     assert {:error, {:missing_jido_action, "missing"}} =
-             capability.(intent, Effect.Journal.new!())
+             capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 
   test "rejects unsupported effect kinds" do
     capability = Actions.operations([EchoAction])
     intent = Effect.Intent.new(:llm, %{prompt: %{}})
 
-    assert {:error, {:unsupported_effect_kind, :llm}} = capability.(intent, Effect.Journal.new!())
+    assert {:error, {:unsupported_effect_kind, :llm}} =
+             capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 end

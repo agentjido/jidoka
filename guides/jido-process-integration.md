@@ -290,7 +290,7 @@ defmodule MyApp.TimeAgentTest do
   end
 
   test "answers the time against a hosted agent", %{id: id} do
-    llm = fn _intent, journal ->
+    llm = fn _intent, journal, _ctx ->
       llm_calls =
         Enum.count(journal.results, fn {_id, r} -> r.kind == :llm end)
 

@@ -21,7 +21,7 @@ defmodule Jidoka.CatalogLuaWorkflowIntegrationTest do
 
     @impl true
     def run(params, context) do
-      if pid = Map.get(context, :test_pid) do
+      if pid = Jidoka.Context.get(context, :test_pid) do
         send(pid, {:hidden_catalog_action_called, params})
       end
 
@@ -126,7 +126,7 @@ defmodule Jidoka.CatalogLuaWorkflowIntegrationTest do
   test "agent loop can query, describe, execute, and answer through a catalog-backed Lua workflow" do
     test_pid = self()
 
-    llm = fn intent, %Effect.Journal{} = journal ->
+    llm = fn intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           prompt = Jidoka.Schema.get_key(intent.payload, :prompt)

@@ -14,7 +14,7 @@ defmodule Jidoka.OperationSourceTest do
             name: "lookup",
             description: "Looks up a value.",
             kind: :tool,
-            handler: fn args -> %{value: args["value"]} end
+            handler: fn args, _ctx -> %{value: args["value"]} end
           }
         ]
       )
@@ -27,21 +27,21 @@ defmodule Jidoka.OperationSourceTest do
     assert {:ok, %{operations: [^operation], capability: capability}} = Source.compile(source)
 
     intent = Effect.Intent.new(:operation, %{name: "lookup", arguments: %{"value" => "ada"}})
-    assert {:ok, %{value: "ada"}} = capability.(intent, Effect.Journal.new!())
+    assert {:ok, %{value: "ada"}} = capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 
   test "source compiler routes by unique operation name" do
     first =
       Local.new!(
         operations: [
-          %{name: "alpha", handler: fn _args -> %{source: "alpha"} end}
+          %{name: "alpha", handler: fn _args, _ctx -> %{source: "alpha"} end}
         ]
       )
 
     second =
       Local.new!(
         operations: [
-          %{name: "beta", handler: fn _args -> %{source: "beta"} end}
+          %{name: "beta", handler: fn _args, _ctx -> %{source: "beta"} end}
         ]
       )
 
@@ -51,12 +51,12 @@ defmodule Jidoka.OperationSourceTest do
     assert Enum.map(operations, & &1.name) == ["alpha", "beta"]
 
     intent = Effect.Intent.new(:operation, %{name: "beta", arguments: %{}})
-    assert {:ok, %{source: "beta"}} = capability.(intent, Effect.Journal.new!())
+    assert {:ok, %{source: "beta"}} = capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 
   test "source compiler rejects duplicate operation names" do
-    first = Local.new!(operations: [%{name: "lookup", handler: fn _args -> :first end}])
-    second = Local.new!(operations: [%{name: "lookup", handler: fn _args -> :second end}])
+    first = Local.new!(operations: [%{name: "lookup", handler: fn _args, _ctx -> :first end}])
+    second = Local.new!(operations: [%{name: "lookup", handler: fn _args, _ctx -> :second end}])
 
     assert {:error, {:duplicate_operation_source_name, "lookup"}} =
              Source.compile([first, second])

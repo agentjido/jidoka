@@ -9,19 +9,19 @@ defmodule Jidoka.Runtime.CapabilitiesTest do
   end
 
   test "provides a default missing operations capability" do
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "ok"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "ok"}} end
 
     assert {:ok, %Capabilities{} = capabilities} = Capabilities.new(llm: llm)
 
     intent = Effect.Intent.new(:operation, %{name: "missing", arguments: %{}})
 
     assert {:error, :missing_operations_capability} =
-             capabilities.operations.(intent, Effect.Journal.new!())
+             capabilities.operations.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 
   test "accepts string-keyed capability maps" do
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "ok"}} end
-    operations = fn _intent, _journal -> {:ok, %{ok: true}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "ok"}} end
+    operations = fn _intent, _journal, _ctx -> {:ok, %{ok: true}} end
 
     assert {:ok, %Capabilities{llm: ^llm, operations: ^operations}} =
              Capabilities.new(%{"llm" => llm, "operations" => operations})

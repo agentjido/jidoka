@@ -276,12 +276,12 @@ test "unsafe_once requires approval or an operation control before plan compiles
 end
 
 test "incomplete unsafe_once intent fails on resume" do
-  llm = fn _intent, _journal ->
+  llm = fn _intent, _journal, _ctx ->
     {:ok, %{type: :operation, name: "charge_card",
             arguments: %{"order_id" => "A1"}}}
   end
 
-  operations = fn _intent, _journal -> raise "boom" end
+  operations = fn _intent, _journal, _ctx -> raise "boom" end
 
   assert {:error, _error} =
            Jidoka.turn(MyApp.SupportAgent, "Charge A1",

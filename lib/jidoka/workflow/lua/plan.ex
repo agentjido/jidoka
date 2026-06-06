@@ -7,11 +7,12 @@ defmodule Jidoka.Workflow.Lua.Plan do
   alias Jidoka.Workflow.Lua.CallTrace
   alias Jidoka.Workflow.Lua.Plan.{Ref, Spec}
   alias Jidoka.Workflow.Lua.Policy
+  alias Jidoka.Context
   alias Runic.Workflow
 
   @type t :: Spec.t()
 
-  @spec run(map(), pid(), Policy.t(), map()) :: {:ok, map()} | {:error, term()}
+  @spec run(map(), pid(), Policy.t(), Context.t() | map()) :: {:ok, map()} | {:error, term()}
   def run(workflow_spec, trace, %Policy{} = policy, context) when is_map(workflow_spec) do
     with {:ok, spec} <- Spec.new(workflow_spec, policy),
          {:ok, state} <- execute(spec, trace, policy, workflow_context(context, trace)),
@@ -28,15 +29,15 @@ defmodule Jidoka.Workflow.Lua.Plan do
   def run(workflow_spec, _trace, %Policy{}, _context), do: {:error, {:invalid_lua_workflow, workflow_spec}}
 
   @doc false
-  @spec run_step(map() | [map()], Spec.step(), pid(), Policy.t(), map()) :: map()
+  @spec run_step(map() | [map()], Spec.step(), pid(), Policy.t(), Context.t()) :: map()
   def run_step(state, step, trace, %Policy{} = policy, context) do
     state
     |> merge_states()
     |> execute_step(step, trace, policy, context)
   end
 
-  defp workflow_context(context, trace) when is_map(context), do: Map.put(context, :trace, trace)
-  defp workflow_context(_context, trace), do: %{trace: trace}
+  defp workflow_context(%Context{} = context, _trace), do: context
+  defp workflow_context(context, _trace), do: Context.from_data!(context)
 
   defp execute(%Spec{steps: steps} = spec, trace, %Policy{} = policy, context) do
     initial_state = %{steps: %{}, error: nil}
@@ -368,7 +369,6 @@ defmodule Jidoka.Workflow.Lua.Plan do
   end
 
   defp run_action(action, arguments, context) do
-    context = Map.delete(context, :trace)
     tool = action.to_tool()
 
     case tool.function.(arguments, context) do

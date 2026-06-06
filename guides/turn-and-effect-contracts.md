@@ -32,7 +32,7 @@ spec = MyApp.TimeAgent.spec()
 {:ok, plan} = Turn.Plan.new(spec)
 {:ok, request} = Turn.Request.from_input("What time is it in Chicago?")
 
-llm = fn _intent, _journal ->
+llm = fn _intent, _journal, _ctx ->
   {:ok, %{type: :final, content: "Chicago time is 09:30."}}
 end
 
@@ -308,7 +308,7 @@ A deterministic test asserts on the journal, not on the prompt.
 
 ```elixir
 test "operation effect is recorded once" do
-  llm = fn _intent, journal ->
+  llm = fn _intent, journal, _ctx ->
     case map_size(journal.results) do
       0 -> {:ok, Jidoka.Effect.LLMDecision.operation("local_time", %{"city" => "Chicago"})}
       _ -> {:ok, Jidoka.Effect.LLMDecision.final("Chicago time is 09:30.")}

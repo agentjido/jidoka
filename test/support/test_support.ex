@@ -15,14 +15,14 @@ defmodule Jidoka.TestSupport do
   def final_llm(content, opts \\ []) when is_binary(content) do
     result = Keyword.get(opts, :result)
 
-    fn _intent, _journal ->
+    fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: content, result: result}}
     end
   end
 
   @spec operation_llm(String.t(), map()) :: Jidoka.Runtime.Capabilities.llm_capability()
   def operation_llm(name, arguments \\ %{}) when is_binary(name) and is_map(arguments) do
-    fn _intent, _journal ->
+    fn _intent, _journal, _ctx ->
       {:ok, %{type: :operation, name: name, arguments: arguments}}
     end
   end
@@ -30,7 +30,7 @@ defmodule Jidoka.TestSupport do
   @spec operation_then_final_llm(String.t(), map(), String.t()) :: Jidoka.Runtime.Capabilities.llm_capability()
   def operation_then_final_llm(name, arguments, content)
       when is_binary(name) and is_map(arguments) and is_binary(content) do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 -> {:ok, %{type: :operation, name: name, arguments: arguments}}
         _count -> {:ok, %{type: :final, content: content}}

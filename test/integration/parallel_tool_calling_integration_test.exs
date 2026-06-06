@@ -81,7 +81,7 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
 
     operations =
       LocalOperations.operations(%{
-        "lookup" => fn %{"id" => id} ->
+        "lookup" => fn %{"id" => id}, _ctx ->
           send(test_pid, {:lookup_called, id})
           {:ok, %{"id" => id}}
         end
@@ -189,7 +189,7 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
   end
 
   defp batched_llm(operations, final_content) do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :operation) do
         0 -> {:ok, %{type: :operations, operations: operation_decisions(operations)}}
         _count -> {:ok, %{type: :final, content: final_content}}
@@ -208,7 +208,7 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
     handlers =
       Map.new(operation_names, fn name ->
         {name,
-         fn _arguments ->
+         fn _arguments, _ctx ->
            send(test_pid, {:operation_started, name, self()})
 
            receive do
@@ -226,7 +226,7 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
     handlers =
       Map.new(operation_names, fn name ->
         {name,
-         fn _arguments ->
+         fn _arguments, _ctx ->
            send(test_pid, {:operation_called, name})
            {:ok, %{"operation" => name}}
          end}

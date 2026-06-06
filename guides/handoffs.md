@@ -62,7 +62,7 @@ defmodule MyApp.TriageAgent do
   end
 end
 
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   case map_size(journal.results) do
     0 ->
       {:ok,
@@ -190,7 +190,7 @@ the owner to be tied to a conversation, a `conversation_id`. In production
 the LLM produces those arguments; in tests, pin them in a fake LLM.
 
 ```elixir
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   case map_size(journal.results) do
     0 ->
       {:ok,
@@ -227,10 +227,7 @@ request =
   )
 
 {:ok, result} =
-  MyApp.TriageAgent.run_turn(request,
-    llm: llm,
-    operation_context: %{parent_context: request.context}
-  )
+  MyApp.TriageAgent.run_turn(request, llm: llm)
 ```
 
 ### Step 3: Read Ownership From The Store
@@ -354,7 +351,7 @@ defmodule MyApp.TriageHandoffTest do
         context: %{session_id: "conv-1", tenant: "acme"}
       )
 
-    llm = fn _intent, journal ->
+    llm = fn _intent, journal, _ctx ->
       case map_size(journal.results) do
         0 ->
           {:ok,
@@ -373,10 +370,7 @@ defmodule MyApp.TriageHandoffTest do
     end
 
     assert {:ok, _result} =
-             MyApp.TriageAgent.run_turn(request,
-               llm: llm,
-               operation_context: %{parent_context: request.context}
-             )
+             MyApp.TriageAgent.run_turn(request, llm: llm)
 
     assert %{
              agent: MyApp.SpecialistAgent,

@@ -227,18 +227,16 @@ defmodule Jidoka.Agent do
 
   defp runtime_opts(agent_module, %Spec{} = spec, opts) do
     opts
+    |> Keyword.put(:operation_context, operation_context(agent_module, spec, opts))
     |> Keyword.put_new(
       :operations,
-      default_operation_capability(agent_module, spec, opts)
+      default_operation_capability(agent_module)
     )
     |> Keyword.put_new(:llm, ReqLLM.llm(default_llm_opts(spec, opts)))
   end
 
-  defp default_operation_capability(agent_module, %Spec{} = spec, opts) do
-    ToolSources.operation_capability(
-      agent_module,
-      context: operation_context(agent_module, spec, opts)
-    )
+  defp default_operation_capability(agent_module) do
+    ToolSources.operation_capability(agent_module)
   end
 
   defp operation_context(agent_module, %Spec{} = spec, opts) do
@@ -248,8 +246,15 @@ defmodule Jidoka.Agent do
       jidoka_spec: spec
     }
 
-    Map.merge(base, Keyword.get(opts, :operation_context, %{}))
+    Map.merge(base, normalize_operation_context(Keyword.get(opts, :operation_context, %{})))
   end
+
+  defp normalize_operation_context(context) when is_list(context) do
+    if Keyword.keyword?(context), do: Map.new(context), else: %{}
+  end
+
+  defp normalize_operation_context(context) when is_map(context), do: context
+  defp normalize_operation_context(_context), do: %{}
 
   defp default_llm_opts(%Spec{} = spec, opts) do
     spec.generation

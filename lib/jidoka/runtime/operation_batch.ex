@@ -7,11 +7,14 @@ defmodule Jidoka.Runtime.OperationBatch do
   alias Jidoka.Effect
   alias Jidoka.Error
   alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Runtime.Context, as: RuntimeContext
+  alias Jidoka.Turn
   alias Runic.Workflow
 
-  @spec execute([Effect.Intent.t()], Capabilities.t(), Effect.Journal.t(), keyword()) ::
+  @spec execute(Turn.State.t(), [Effect.Intent.t()], Capabilities.t(), Effect.Journal.t(), keyword()) ::
           {:ok, %{String.t() => Effect.Result.t()}} | {:error, term()}
-  def execute(intents, %Capabilities{} = capabilities, %Effect.Journal{} = journal, opts) when is_list(intents) do
+  def execute(%Turn.State{} = state, intents, %Capabilities{} = capabilities, %Effect.Journal{} = journal, opts)
+      when is_list(intents) do
     step_names = operation_batch_step_names(intents)
 
     workflow =
@@ -21,7 +24,7 @@ defmodule Jidoka.Runtime.OperationBatch do
         workflow_step =
           Runic.step(
             fn _state ->
-              call_operation_batch_step(^intent, ^capabilities, ^journal)
+              call_operation_batch_step(^state, ^intent, ^capabilities, ^journal, ^opts)
             end,
             name: step_name
           )
@@ -60,35 +63,48 @@ defmodule Jidoka.Runtime.OperationBatch do
     kind, reason -> {:error, Error.normalize({kind, reason}, operation: :operation, phase: :effect)}
   end
 
-  defp call_operation_batch_step(%Effect.Intent{} = intent, %Capabilities{} = capabilities, %Effect.Journal{} = journal) do
-    case call_operation_capability(intent, capabilities, journal) do
+  defp call_operation_batch_step(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Capabilities{} = capabilities,
+         %Effect.Journal{} = journal,
+         opts
+       ) do
+    case call_operation_capability(state, intent, capabilities, journal, opts) do
       {:ok, %Effect.Result{} = result} -> result
     end
   end
 
   defp call_operation_capability(
+         %Turn.State{} = state,
          %Effect.Intent{kind: :operation} = intent,
          %Capabilities{operations: operations},
-         journal
+         journal,
+         opts
        ) do
-    case invoke_capability(operations, intent, journal) do
-      {:ok, output} ->
-        {:ok, Effect.Result.ok(intent, output)}
+    with {:ok, ctx} <- RuntimeContext.operation(state, intent, opts) do
+      case invoke_capability(operations, intent, journal, ctx) do
+        {:ok, output} ->
+          {:ok, Effect.Result.ok(intent, output)}
 
+        {:error, reason} ->
+          {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
+
+        other ->
+          {:ok,
+           Effect.Result.error(
+             intent,
+             normalize_capability_error({:invalid_capability_result, other}, intent)
+           )}
+      end
+    else
       {:error, reason} ->
         {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
-
-      other ->
-        {:ok,
-         Effect.Result.error(
-           intent,
-           normalize_capability_error({:invalid_capability_result, other}, intent)
-         )}
     end
   end
 
-  defp invoke_capability(capability, intent, journal) do
-    capability.(intent, journal)
+  defp invoke_capability(capability, intent, journal, ctx) do
+    capability.(intent, journal, ctx)
   rescue
     exception -> {:error, exception}
   catch

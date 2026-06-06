@@ -4,6 +4,7 @@ defmodule Jidoka.Agent.Spec do
   """
 
   alias Jidoka.Config
+  alias Jidoka.Context
   alias Jidoka.Agent.Spec.{Controls, Generation, Memory, Operation, Result}
   alias Jidoka.Schema
 
@@ -58,11 +59,11 @@ defmodule Jidoka.Agent.Spec do
   def from_input(%__MODULE__{} = spec), do: new(spec)
   def from_input(input), do: new(input)
 
-  @spec validate_context(t(), map()) :: :ok | {:error, term()}
-  def validate_context(%__MODULE__{context_schema: nil}, context) when is_map(context), do: :ok
+  @spec validate_context(t(), Context.t()) :: :ok | {:error, term()}
+  def validate_context(%__MODULE__{context_schema: nil}, %Context{}), do: :ok
 
-  def validate_context(%__MODULE__{context_schema: schema}, context) when is_map(context) do
-    case Zoi.parse(schema, context) do
+  def validate_context(%__MODULE__{context_schema: schema}, %Context{} = context) do
+    case Zoi.parse(schema, Context.data(context)) do
       {:ok, _validated_context} -> :ok
       {:error, reason} -> {:error, {:invalid_context, reason}}
     end

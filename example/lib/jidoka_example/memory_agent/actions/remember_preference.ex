@@ -40,9 +40,11 @@ defmodule JidokaExample.MemoryAgent.Actions.RememberPreference do
   end
 
   defp fetch_context(context, key) do
-    case Map.get(context, key, Map.get(context, Atom.to_string(key))) do
-      nil -> {:error, {:missing_context, key}}
-      value -> {:ok, value}
+    with :error <- Jidoka.Context.fetch_runtime(context, key),
+         :error <- Jidoka.Context.fetch(context, key) do
+      {:error, {:missing_context, key}}
+    else
+      {:ok, value} -> {:ok, value}
     end
   end
 

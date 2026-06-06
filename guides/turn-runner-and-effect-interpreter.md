@@ -57,14 +57,14 @@ spec =
 {:ok, plan} = Jidoka.plan(spec)
 {:ok, request} = Turn.Request.from_input("hello")
 
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   case Enum.count(journal.results, fn {_id, result} -> result.kind == :llm end) do
     0 -> {:ok, %{type: :operation, name: "echo", arguments: %{"msg" => "hi"}}}
     1 -> {:ok, %{type: :final, content: "done"}}
   end
 end
 
-ops = fn %Jidoka.Effect.Intent{payload: %{"arguments" => args}}, _journal ->
+ops = fn %Jidoka.Effect.Intent{payload: %{"arguments" => args}}, _journal, _ctx ->
   {:ok, %{echoed: args}}
 end
 
@@ -496,8 +496,8 @@ test "interpreter records intent and replays journal on second call" do
       pending_effects: [Effect.Intent.new(:llm, %{prompt: %{}})]
     )
 
-  llm = fn _intent, _journal -> {:ok, %{type: :final, content: "ok"}} end
-  {:ok, capabilities} = Capabilities.new(llm: llm, operations: fn _i, _j -> {:error, :unused} end)
+  llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "ok"}} end
+  {:ok, capabilities} = Capabilities.new(llm: llm, operations: fn _i, _j, _ctx -> {:error, :unused} end)
 
   {:ok, %Effect.Result{status: :ok}, state} =
     EffectInterpreter.interpret_pending(state, capabilities)

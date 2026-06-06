@@ -61,7 +61,7 @@ end
 
 ```elixir
 Jidoka.Kino.chat("notebook demo", fn ->
-  llm = fn _intent, _journal ->
+  llm = fn _intent, _journal, _ctx ->
     {:ok, %{type: :final, content: "Hello from a deterministic notebook."}}
   end
 
@@ -202,7 +202,7 @@ table.
 
 ```elixir
 Jidoka.Kino.chat("deterministic time turn", fn ->
-  llm = fn _intent, _journal ->
+  llm = fn _intent, _journal, _ctx ->
     {:ok, %{type: :final, content: "Chicago time is 09:30."}}
   end
 

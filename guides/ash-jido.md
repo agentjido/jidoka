@@ -255,7 +255,7 @@ defmodule MyApp.ReadAgentTest do
   use ExUnit.Case, async: true
 
   test "agent calls read_ticket" do
-    llm = fn _intent, journal ->
+    llm = fn _intent, journal, _ctx ->
       llm_calls =
         Enum.count(journal.results, fn {_id, r} -> r.kind == :llm end)
 

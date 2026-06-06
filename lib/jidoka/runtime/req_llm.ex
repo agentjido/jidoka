@@ -36,7 +36,7 @@ defmodule Jidoka.Runtime.ReqLLM do
   """
   @spec llm([option()]) :: Jidoka.Runtime.Capabilities.llm_capability()
   def llm(opts \\ []) when is_list(opts) do
-    fn %Effect.Intent{} = intent, %Effect.Journal{} = journal ->
+    fn %Effect.Intent{} = intent, %Effect.Journal{} = journal, %Jidoka.Context{} ->
       generate(intent, journal, opts)
     end
   end

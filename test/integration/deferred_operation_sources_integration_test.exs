@@ -59,7 +59,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
             description: "Runs a policy summarization skill.",
             kind: :tool,
             metadata: %{"source" => "skill", "skill" => "policy_summary"},
-            handler: fn %{"topic" => topic} ->
+            handler: fn %{"topic" => topic}, _ctx ->
               send(test_pid, {:skill_called, topic})
               %{summary: "Policy summary for #{topic}."}
             end
@@ -117,7 +117,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
             description: "Runs the known triage workflow.",
             kind: :workflow,
             metadata: %{"source" => "workflow", "workflow" => "triage"},
-            handler: fn %{"ticket_id" => ticket_id} ->
+            handler: fn %{"ticket_id" => ticket_id}, _ctx ->
               send(test_pid, {:workflow_called, ticket_id})
               %{ticket_id: ticket_id, route: "billing"}
             end
@@ -181,7 +181,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
             kind: :handoff,
             idempotency: :unsafe_once,
             metadata: %{"source" => "handoff", "target" => "billing_agent"},
-            handler: fn %{"case_id" => case_id} ->
+            handler: fn %{"case_id" => case_id}, _ctx ->
               send(test_pid, {:handoff_called, case_id})
               {:ok, %{case_id: case_id, target: "billing_agent", status: "accepted"}}
             end
@@ -269,7 +269,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
   end
 
   defp llm(operation, arguments, final_content) do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 -> {:ok, %{type: :operation, name: operation, arguments: arguments}}
         1 -> {:ok, %{type: :final, content: final_content}}

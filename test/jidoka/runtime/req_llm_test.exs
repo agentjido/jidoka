@@ -29,9 +29,9 @@ defmodule Jidoka.Runtime.ReqLLMTest do
     capability = ReqLLM.llm(model: %{provider: :test, id: "model"})
     intent = Effect.Intent.new(:operation, %{name: "lookup", arguments: %{}})
 
-    assert is_function(capability, 2)
+    assert is_function(capability, 3)
 
     assert {:error, {:unsupported_effect_kind, :operation}} =
-             capability.(intent, Effect.Journal.new!())
+             capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 end

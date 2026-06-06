@@ -10,8 +10,8 @@ defmodule Jidoka.Runtime.LocalOperations do
   alias Jidoka.Effect
 
   @type handler ::
-          (map() -> term())
-          | (Effect.Intent.t(), Effect.Journal.t() -> term())
+          (map(), Jidoka.Context.t() -> term())
+          | (Effect.Intent.t(), Effect.Journal.t(), Jidoka.Context.t() -> term())
 
   @doc """
   Builds an operation function from a map of operation handlers.
@@ -27,13 +27,15 @@ defmodule Jidoka.Runtime.LocalOperations do
     handlers = Map.new(handlers, fn {name, fun} -> {to_string(name), fun} end)
 
     fn
-      %Effect.Intent{kind: :operation, payload: payload} = intent, %Effect.Journal{} = journal ->
+      %Effect.Intent{kind: :operation, payload: payload} = intent,
+      %Effect.Journal{} = journal,
+      %Jidoka.Context{} = ctx ->
         with {:ok, request} <- Effect.OperationRequest.from_input(payload),
              {:ok, handler} <- fetch_handler(handlers, request.name) do
-          call_handler(handler, intent, request, journal)
+          call_handler(handler, intent, request, journal, ctx)
         end
 
-      %Effect.Intent{kind: kind}, _journal ->
+      %Effect.Intent{kind: kind}, _journal, %Jidoka.Context{} ->
         {:error, {:unsupported_effect_kind, kind}}
     end
   end
@@ -49,22 +51,23 @@ defmodule Jidoka.Runtime.LocalOperations do
          handler,
          %Effect.Intent{} = intent,
          %Effect.OperationRequest{},
-         %Effect.Journal{} = journal
+         %Effect.Journal{} = journal,
+         %Jidoka.Context{} = ctx
        )
+       when is_function(handler, 3) do
+    handler
+    |> apply([intent, journal, ctx])
+    |> normalize_result()
+  end
+
+  defp call_handler(handler, %Effect.Intent{}, %Effect.OperationRequest{} = request, _journal, %Jidoka.Context{} = ctx)
        when is_function(handler, 2) do
     handler
-    |> apply([intent, journal])
+    |> apply([request.arguments, ctx])
     |> normalize_result()
   end
 
-  defp call_handler(handler, %Effect.Intent{}, %Effect.OperationRequest{} = request, _journal)
-       when is_function(handler, 1) do
-    handler
-    |> apply([request.arguments])
-    |> normalize_result()
-  end
-
-  defp call_handler(handler, _intent, _request, _journal),
+  defp call_handler(handler, _intent, _request, _journal, _ctx),
     do: {:error, {:invalid_operation_handler, handler}}
 
   defp normalize_result({:ok, _value} = result), do: result

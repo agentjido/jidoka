@@ -10,6 +10,7 @@ defmodule Jidoka.Operation.Source.Workflow do
   @behaviour Jidoka.Operation.Source
 
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Schema
   alias Jidoka.Workflow.Spec
@@ -131,19 +132,17 @@ defmodule Jidoka.Operation.Source.Workflow do
   end
 
   @impl true
-  def capability(%__MODULE__{} = source, opts) do
-    context = opts |> Keyword.get(:context, %{}) |> normalize_context()
-
+  def capability(%__MODULE__{} = source, _opts) do
     {:ok,
      fn
-       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
+       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
               :ok <- ensure_operation_name(source, request.name),
               {:ok, output} <- run_workflow(source, request.arguments, context) do
            {:ok, workflow_result(source, output)}
          end
 
-       %Effect.Intent{kind: kind}, _journal ->
+       %Effect.Intent{kind: kind}, _journal, %Context{} ->
          {:error, {:unsupported_effect_kind, kind}}
      end}
   end
@@ -181,23 +180,32 @@ defmodule Jidoka.Operation.Source.Workflow do
   end
 
   defp child_context(%__MODULE__{} = source, parent_context, arguments) do
-    parent_context = normalize_context(parent_context)
     arguments = normalize_context(arguments)
+    runtime = runtime_context(parent_context)
 
-    parent_context =
+    forwarded_data =
       parent_context
-      |> Map.get(:parent_context, Map.get(parent_context, "parent_context", parent_context))
+      |> public_context_data()
       |> normalize_context()
       |> forward_context(source.forward_context)
 
     case Schema.get_key(arguments, :context, %{}) do
       task_context when is_map(task_context) or is_list(task_context) ->
-        Map.merge(parent_context, normalize_context(task_context))
+        Context.from_data!(
+          Map.merge(forwarded_data, normalize_context(task_context)),
+          runtime: runtime
+        )
 
       _other ->
-        parent_context
+        Context.from_data!(forwarded_data, runtime: runtime)
     end
   end
+
+  defp public_context_data(%Context{} = context), do: Context.data(context)
+  defp public_context_data(context), do: normalize_context(context)
+
+  defp runtime_context(%Context{} = context), do: Context.runtime(context)
+  defp runtime_context(_context), do: %{}
 
   defp ensure_operation_name(%__MODULE__{name: expected}, name) do
     if name == expected, do: :ok, else: {:error, {:missing_operation_handler, name}}
@@ -326,7 +334,7 @@ defmodule Jidoka.Operation.Source.Workflow do
   end
 
   defp agent_opts(context) do
-    case context |> normalize_context() |> Schema.get_key(:agent_opts, []) do
+    case Context.get_runtime(context, :agent_opts, []) do
       opts when is_list(opts) -> opts
       _other -> []
     end

@@ -389,7 +389,7 @@ defmodule MyApp.LegacyWorkflow do
 
   @impl true
   def run(input, context) do
-    {:ok, %{order_id: input["order_id"], tenant: context[:tenant]}}
+    {:ok, %{order_id: input["order_id"], tenant: Jidoka.Context.get(context, :tenant)}}
   end
 end
 ```
@@ -455,7 +455,7 @@ Then test it as an agent tool with a fake LLM:
 
 ```elixir
 test "agent calls refund workflow" do
-  llm = fn _intent, journal ->
+  llm = fn _intent, journal, _ctx ->
     llm_calls = Enum.count(journal.results, fn {_id, r} -> r.kind == :llm end)
 
     case llm_calls do
@@ -479,10 +479,7 @@ test "agent calls refund workflow" do
     )
 
   assert {:ok, result} =
-           MyApp.SupportAgent.run_turn(request,
-             llm: llm,
-             operation_context: %{parent_context: request.context}
-           )
+           MyApp.SupportAgent.run_turn(request, llm: llm)
 
   assert result.content == "Refund A1001 is approved."
 end

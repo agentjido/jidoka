@@ -25,7 +25,7 @@ defmodule Jidoka.EvalTest do
         runtime_defaults: %{max_model_turns: 4}
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -42,7 +42,7 @@ defmodule Jidoka.EvalTest do
 
     operations =
       LocalOperations.operations(%{
-        lookup_account: fn %{"account_id" => account_id} ->
+        lookup_account: fn %{"account_id" => account_id}, _ctx ->
           %{account_id: account_id, status: "active"}
         end
       })
@@ -79,7 +79,7 @@ defmodule Jidoka.EvalTest do
         model: %{provider: :test, id: "model"}
       )
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "hello"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "hello"}} end
 
     assert {:ok, %Eval.Run{status: :failed, assertions: [assertion]}} =
              Eval.run_case(
@@ -141,7 +141,7 @@ defmodule Jidoka.EvalTest do
         model: %{provider: :test, id: "model"}
       )
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "hello"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "hello"}} end
 
     assert {:ok, %Eval.Run{status: :error, error: %{reason: :hibernated}}} =
              Eval.run_case(

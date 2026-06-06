@@ -128,7 +128,7 @@ defmodule Jidoka.SkillTest do
   end
 
   test "skill actions execute through the normal operation effect path" do
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,

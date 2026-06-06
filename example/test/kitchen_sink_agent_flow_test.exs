@@ -115,7 +115,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
     assert get(operations["show_context"], :session_id) == context.session_id
     assert get(operations["show_context"], :surface) == "ex_unit"
 
-    second_turn_llm = fn intent, %Effect.Journal{} = journal ->
+    second_turn_llm = fn intent, %Effect.Journal{} = journal, _ctx ->
       assert count_results(journal, :llm) == 0
 
       messages = prompt_messages(intent)
@@ -205,7 +205,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
     context: context,
     memory_store: memory_store
   } do
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       operation("mcp_showcase_notes", %{"topic" => "parity"})
     end
 
@@ -228,7 +228,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
     context: context,
     memory_store: memory_store
   } do
-    llm = fn _intent, _journal -> flunk("blocked input must not call the LLM") end
+    llm = fn _intent, _journal, _ctx -> flunk("blocked input must not call the LLM") end
 
     assert {:error,
             %Jidoka.Error.ExecutionError{
@@ -245,7 +245,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
                agent_run_opts(llm, context, memory_store)
              )
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok,
        %{
          type: :final,
@@ -289,7 +289,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
     assert {:ok, entries} = Store.list_entries(Memory.store(context.session_id))
     assert Enum.any?(entries, &String.contains?(&1.content, "concise answers"))
 
-    recall_llm = fn %Effect.Intent{payload: payload}, _journal ->
+    recall_llm = fn %Effect.Intent{payload: payload}, _journal, _ctx ->
       prompt = Jidoka.Schema.get_key(payload, :prompt)
 
       assert %{memory: %{count: 1}} = prompt
@@ -312,7 +312,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
 
     other_context = context("other-#{context.session_id}")
 
-    no_leak_llm = fn %Effect.Intent{payload: payload}, _journal ->
+    no_leak_llm = fn %Effect.Intent{payload: payload}, _journal, _ctx ->
       prompt = Jidoka.Schema.get_key(payload, :prompt)
 
       assert %{memory: %{count: 0}} = prompt
@@ -343,7 +343,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
   } do
     assert {:ok, view} = View.initial(%{conversation_id: context.session_id})
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok,
        %{
          type: :final,
@@ -382,7 +382,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
   end
 
   defp full_showcase_llm do
-    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal ->
+    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _ctx ->
       case {payload.agent_id, count_results(journal, :llm)} do
         {"kitchen_sink_agent", 0} ->
           operation("showcase_policy_lookup", %{"topic" => "parity"})
@@ -501,7 +501,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
   end
 
   defp process_hosted_llm do
-    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal ->
+    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _ctx ->
       case {payload.agent_id, count_results(journal, :llm)} do
         {"kitchen_sink_agent", 0} ->
           operation("show_context", %{})
@@ -519,7 +519,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
   end
 
   defp refund_llm do
-    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal ->
+    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _ctx ->
       case {payload.agent_id, count_results(journal, :llm)} do
         {"kitchen_sink_agent", 0} ->
           operation("issue_refund", %{
@@ -540,7 +540,7 @@ defmodule JidokaExample.KitchenSinkAgentFlowTest do
   end
 
   defp remember_then_final_llm do
-    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal ->
+    fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _ctx ->
       case {payload.agent_id, count_results(journal, :llm)} do
         {"kitchen_sink_agent", 0} ->
           operation("remember_preference", %{

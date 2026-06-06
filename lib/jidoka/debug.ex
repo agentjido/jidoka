@@ -141,7 +141,7 @@ defmodule Jidoka.Debug do
       content: state.result,
       value: state.result_value,
       prompt: prompt,
-      context_keys: context_keys(state.request.context),
+      context_keys: context_keys(Jidoka.Context.data(state.request.context)),
       operation_names: operation_names(prompt, state),
       operation_results: Enum.map(state.agent_state.operation_results, &Jidoka.project/1),
       memory: memory_from_prompt(state.prompt),
@@ -323,6 +323,9 @@ defmodule Jidoka.Debug do
 
   defp request_input(%Turn.Request{input: input}), do: input
   defp request_input(_request), do: nil
+
+  defp request_context_keys(%Turn.Request{context: %Jidoka.Context{} = context}),
+    do: context_keys(Jidoka.Context.data(context))
 
   defp request_context_keys(%Turn.Request{context: context}), do: context_keys(context)
   defp request_context_keys(_request), do: []

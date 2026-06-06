@@ -38,7 +38,7 @@ defmodule Jidoka.UsageTest do
         runtime_defaults: %{max_model_turns: 4}
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -69,7 +69,7 @@ defmodule Jidoka.UsageTest do
 
     operations =
       LocalOperations.operations(%{
-        lookup: fn intent, _journal ->
+        lookup: fn intent, _journal, _ctx ->
           {:ok, %{id: intent.payload.arguments["id"], status: "ready"}}
         end
       })

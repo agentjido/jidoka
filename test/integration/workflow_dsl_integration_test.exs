@@ -10,7 +10,7 @@ defmodule Jidoka.WorkflowDslIntegrationTest do
     @moduledoc false
 
     def review_policy(%{order_id: order_id, amount: amount}, context) do
-      tenant = Map.fetch!(context, :tenant)
+      tenant = Jidoka.Context.get(context, :tenant)
 
       {:ok,
        %{
@@ -71,7 +71,7 @@ defmodule Jidoka.WorkflowDslIntegrationTest do
   end
 
   test "DSL workflow runs as an agent tool with structured output and forwarded context" do
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -95,10 +95,7 @@ defmodule Jidoka.WorkflowDslIntegrationTest do
       )
 
     assert {:ok, %Turn.Result{content: "Refund review approved for A1001."} = result} =
-             RefundAgent.run_turn(request,
-               llm: llm,
-               operation_context: %{parent_context: request.context}
-             )
+             RefundAgent.run_turn(request, llm: llm)
 
     assert [
              %Effect.OperationResult{

@@ -197,7 +197,7 @@ Operation arguments can also include a task-local `context` map. Jidoka merges
 that with the forwarded context for the target.
 
 When testing a DSL agent directly and you want operation sources to see the
-same context as the turn request, pass it through `operation_context`:
+same context as the turn request, put the data on the request `context:`:
 
 ```elixir
 request =
@@ -207,13 +207,13 @@ request =
   )
 
 MyApp.SupportRouter.run_turn(request,
-  llm: fake_llm,
-  operation_context: %{parent_context: request.context}
+  llm: fake_llm
 )
 ```
 
 That is the context source used by `forward_context:`. Provider credentials,
-runtime handles, and other private values should stay out of it.
+runtime handles, and other private values belong in `operation_context:` and
+are available through `Jidoka.Context.get_runtime/3`.
 
 ## Result And Ownership Rules
 
@@ -232,12 +232,13 @@ and that the parent saw the child result.
 
 ```elixir
 assert {:ok, result} =
-         MyApp.SupportAgent.run_turn("Check the evidence.",
+         MyApp.SupportAgent.run_turn(
+           Jidoka.Turn.Request.new!(
+             input: "Check the evidence.",
+             context: %{tenant: "acme", secret: "do-not-forward"}
+           ),
            llm: fake_llm,
-           operation_context: %{
-             subagent_llm: fake_llm,
-             parent_context: %{tenant: "acme", secret: "do-not-forward"}
-           }
+           operation_context: %{subagent_llm: fake_llm}
          )
 
 assert [%{operation: "evidence_specialist", output: output}] =
@@ -258,8 +259,7 @@ request =
 
 assert {:ok, _result} =
          MyApp.SupportRouter.run_turn(request,
-           llm: fake_llm,
-           operation_context: %{parent_context: request.context}
+           llm: fake_llm
          )
 
 assert %{agent: MyApp.BillingAgent, handoff: handoff} =

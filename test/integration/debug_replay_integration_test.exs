@@ -198,7 +198,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
     test_pid = self()
 
     LocalOperations.operations(%{
-      "account_lookup" => fn intent, _journal ->
+      "account_lookup" => fn intent, _journal, _ctx ->
         arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
         account_id = arguments["account_id"]
         send(test_pid, {:account_lookup_called, account_id})
@@ -208,7 +208,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
   end
 
   defp account_llm(account_id) do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -253,7 +253,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
   end
 
   defp refund_llm(order_id) do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -271,7 +271,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
 
   defp refund_operations(test_pid) do
     LocalOperations.operations(%{
-      "refund_order" => fn intent, _journal ->
+      "refund_order" => fn intent, _journal, _ctx ->
         arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
         send(test_pid, {:refund_called, arguments, intent.idempotency})
         {:ok, %{"refund_id" => "refund_456", "order_id" => arguments["order_id"]}}

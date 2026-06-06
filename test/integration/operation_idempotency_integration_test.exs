@@ -36,7 +36,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
               }
             }} = Jidoka.preflight(spec, "Refund order_123")
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       flunk("LLM should not be called when unsafe operation policy is invalid")
     end
 
@@ -74,7 +74,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
         runtime_defaults: %{max_model_turns: 4}
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -91,7 +91,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
 
     operations =
       LocalOperations.operations(%{
-        refund_order: fn intent, _journal ->
+        refund_order: fn intent, _journal, _ctx ->
           arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
           send(test_pid, {:refund_called, arguments, intent.idempotency})
 
@@ -137,7 +137,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
         runtime_defaults: %{max_model_turns: 4}
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       send(test_pid, {:llm_called, count_results(journal, :llm)})
 
       case count_results(journal, :llm) do
@@ -155,7 +155,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
       end
     end
 
-    operations = fn _intent, _journal ->
+    operations = fn _intent, _journal, _ctx ->
       flunk("operation should not be called when the journal already has its result")
     end
 

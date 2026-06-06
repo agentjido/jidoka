@@ -138,6 +138,14 @@ defmodule Jidoka.DataStructsTest do
     assert Jidoka.Context.get(context, :tenant_id) == "tenant_1"
     assert Jidoka.Context.get(context, "reviewer") == "Ada"
     assert Jidoka.Context.get(context, :missing, :default) == :default
+
+    assert %Jidoka.Context{data: %{tenant: "northwind"}, runtime: %{client: :trusted}} =
+             Jidoka.Context.from_data!(%{tenant: "northwind"}, runtime: %{client: :trusted})
+
+    assert %{tenant: "northwind"} =
+             Jidoka.Context.from_data!(%{tenant: "northwind"}, runtime: %{client: :trusted})
+             |> Jidoka.Context.sanitize()
+             |> Jidoka.Context.data()
   end
 
   test "operation specs carry approval policy data" do
@@ -429,12 +437,14 @@ defmodule Jidoka.DataStructsTest do
 
     agent_state = Agent.State.new!(messages: [%{role: :user, content: "prior"}])
 
-    assert {:ok, %Turn.Request{agent_state: ^agent_state, context: %{tenant: "t1"}}} =
+    assert {:ok, %Turn.Request{agent_state: ^agent_state, context: %Jidoka.Context{} = context}} =
              Turn.Request.from_input(
                input: "Hello",
                agent_state: agent_state,
                context: %{tenant: "t1"}
              )
+
+    assert Jidoka.Context.data(context) == %{tenant: "t1"}
   end
 
   test "turn request id generation can be injected" do

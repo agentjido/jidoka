@@ -9,6 +9,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
   alias Jidoka.Error
   alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.OperationBatch
   alias Jidoka.Runtime.EffectTrace
@@ -116,7 +117,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       {:ok, %Turn.State{} = state} ->
         state = EffectTrace.append(state, intent, :capability_call_started, [], opts)
 
-        with {:ok, result} <- call_capability(intent, capabilities, journal) do
+        with {:ok, result} <- call_capability(state, intent, capabilities, journal, opts) do
           journal = Effect.Journal.put_result(journal, result)
           state = %Turn.State{state | journal: journal}
           state = EffectTrace.append_capability_result(state, intent, result, opts)
@@ -173,8 +174,16 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     metadata["operation_controls_allowed"] == true or metadata[:operation_controls_allowed] == true
   end
 
-  defp call_capability(%Effect.Intent{kind: :llm} = intent, %Capabilities{llm: llm}, journal) do
-    case invoke_capability(llm, intent, journal) do
+  defp call_capability(
+         %Turn.State{} = state,
+         %Effect.Intent{kind: :llm} = intent,
+         %Capabilities{llm: llm},
+         journal,
+         opts
+       ) do
+    ctx = RuntimeContext.llm!(state, runtime: Keyword.get(opts, :operation_context, %{}))
+
+    case invoke_capability(llm, intent, journal, ctx) do
       {:ok, output} ->
         {:ok, Effect.Result.ok(intent, output, metadata: output_metadata(output))}
 
@@ -191,28 +200,35 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   end
 
   defp call_capability(
+         %Turn.State{} = state,
          %Effect.Intent{kind: :operation} = intent,
          %Capabilities{operations: operations},
-         journal
+         journal,
+         opts
        ) do
-    case invoke_capability(operations, intent, journal) do
-      {:ok, output} ->
-        {:ok, Effect.Result.ok(intent, output)}
+    with {:ok, ctx} <- RuntimeContext.operation(state, intent, opts) do
+      case invoke_capability(operations, intent, journal, ctx) do
+        {:ok, output} ->
+          {:ok, Effect.Result.ok(intent, output)}
 
+        {:error, reason} ->
+          {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
+
+        other ->
+          {:ok,
+           Effect.Result.error(
+             intent,
+             normalize_capability_error({:invalid_capability_result, other}, intent)
+           )}
+      end
+    else
       {:error, reason} ->
         {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
-
-      other ->
-        {:ok,
-         Effect.Result.error(
-           intent,
-           normalize_capability_error({:invalid_capability_result, other}, intent)
-         )}
     end
   end
 
-  defp invoke_capability(capability, intent, journal) do
-    capability.(intent, journal)
+  defp invoke_capability(capability, intent, journal, ctx) do
+    capability.(intent, journal, ctx)
   rescue
     exception -> {:error, exception}
   catch
@@ -326,7 +342,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     state = %Turn.State{state | journal: journal}
     state = Enum.reduce(intents, state, &EffectTrace.append(&2, &1, :capability_call_started, [], opts))
 
-    case OperationBatch.execute(intents, capabilities, journal, opts) do
+    case OperationBatch.execute(state, intents, capabilities, journal, opts) do
       {:ok, results} ->
         state =
           results

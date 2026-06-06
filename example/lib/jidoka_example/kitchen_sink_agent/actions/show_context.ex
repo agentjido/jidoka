@@ -6,22 +6,9 @@ defmodule JidokaExample.KitchenSinkAgent.Actions.ShowContext do
     description: "Returns the public runtime context keys visible to a Jidoka action.",
     schema: Zoi.object(%{})
 
-  @private_keys [
-    :agent_module,
-    :domain,
-    :jido_agent,
-    :jidoka_spec,
-    :memory_store,
-    "agent_module",
-    "domain",
-    "jido_agent",
-    "jidoka_spec",
-    "memory_store"
-  ]
-
   @impl true
   def run(_params, context) do
-    public_context = Map.drop(context, @private_keys)
+    public_context = Jidoka.Context.data(context)
 
     {:ok,
      %{

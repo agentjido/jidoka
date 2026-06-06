@@ -137,19 +137,19 @@ and `operation_then_final_llm/3`:
 def final_llm(content, opts \\ []) when is_binary(content) do
   result = Keyword.get(opts, :result)
 
-  fn _intent, _journal ->
+  fn _intent, _journal, _ctx ->
     {:ok, %{type: :final, content: content, result: result}}
   end
 end
 
 def operation_llm(name, arguments \\ %{}) when is_binary(name) and is_map(arguments) do
-  fn _intent, _journal ->
+  fn _intent, _journal, _ctx ->
     {:ok, %{type: :operation, name: name, arguments: arguments}}
   end
 end
 
 def operation_then_final_llm(name, arguments, content) do
-  fn _intent, %Effect.Journal{} = journal ->
+  fn _intent, %Effect.Journal{} = journal, _ctx ->
     case count_results(journal, :llm) do
       0 -> {:ok, %{type: :operation, name: name, arguments: arguments}}
       _count -> {:ok, %{type: :final, content: content}}
@@ -171,7 +171,7 @@ For multi-step loops, write a small reduction directly inline rather than a
 helper:
 
 ```elixir
-llm = fn _intent, %Effect.Journal{} = journal ->
+llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
   case TestSupport.count_results(journal, :llm) do
     0 -> {:ok, %{type: :operation, name: "step_a", arguments: %{}}}
     1 -> {:ok, %{type: :operation, name: "step_b", arguments: %{}}}

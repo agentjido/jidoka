@@ -35,7 +35,7 @@ alias Jidoka.Operation.Source
       %{
         name: "local_time",
         description: "Returns local time for a city.",
-        handler: fn args ->
+        handler: fn args, _ctx ->
           {:ok, %{city: Map.get(args, "city", "Chicago"), time: "09:30"}}
         end
       }
@@ -88,13 +88,13 @@ across multiple sources and produces a single routed capability.
 Duplicate operation names across sources fail with
 `{:error, {:duplicate_operation_source_name, name}}`.
 
-### `operation_capability/2` Signature
+### `operation_capability/3` Signature
 
-The capability is a two-arity function that mirrors the LLM capability shape:
+The capability is a three-arity function that mirrors the LLM capability shape:
 
 ```elixir
 @type operation_capability ::
-        (Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t() ->
+        (Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t(), Jidoka.Context.t() ->
            {:ok, term()} | {:error, term()})
 ```
 
@@ -128,7 +128,7 @@ In-process operation source for tests and lightweight tools.
 | --- | --- | --- |
 | `:operations` | `[operation_def()]` | List of `%{name, handler, description?, idempotency?, kind?, metadata?}` entries. |
 
-Handlers must be 1- or 2-arity functions returning `{:ok, term()}` or
+Handlers must be 2- or 3-arity functions returning `{:ok, term()}` or
 `{:error, term()}`. See [`Jidoka.Operation.Source.Local`](`Jidoka.Operation.Source.Local`).
 
 ### Other Built-In Sources
@@ -207,7 +207,7 @@ test "local source executes its handler" do
   {:ok, source} =
     Jidoka.Operation.Source.Local.new(
       operations: [
-        %{name: "echo", handler: fn args -> {:ok, args} end}
+        %{name: "echo", handler: fn args, _ctx -> {:ok, args} end}
       ]
     )
 
@@ -220,7 +220,7 @@ test "local source executes its handler" do
     )
 
   assert {:ok, %{"value" => 42}} =
-           compiled.capability.(intent, Jidoka.Effect.Journal.new!())
+           compiled.capability.(intent, Jidoka.Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
 end
 ```
 
@@ -231,7 +231,7 @@ end
 | `{:error, {:duplicate_operation_source_name, name}}` | Two sources publish the same operation. | Rename one operation or drop the duplicate source. |
 | `{:error, {:missing_operation_handler, name}}` | The compiled capability cannot route the operation. | Ensure the operation is published by a source compiled into the same plan. |
 | `{:error, {:unsupported_effect_kind, kind}}` | Capability was called with an `:llm` intent. | Operation capabilities only handle `:operation` intents; route LLM intents through `Runtime.Capabilities.llm`. |
-| Local source raises `invalid_operation_handler` | Handler is not 1- or 2-arity. | Use `fn args -> ... end` or `fn args, context -> ... end`. |
+| Local source raises `invalid_operation_handler` | Handler is not 2- or 3-arity. | Use `fn args, context -> ... end` or `fn intent, journal, context -> ... end`. |
 | `{:error, {:workflow_failed, name, reason}}` | Workflow source ran but the workflow returned an error. | Inspect `reason`; DSL workflows include workflow id, step, kind, target, and cause on step failures. |
 | `{:error, {:workflow_timeout, name, timeout}}` | Workflow source exceeded its operation timeout. | Raise `timeout:` or move long work out of the synchronous workflow. |
 

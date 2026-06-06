@@ -39,7 +39,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
           |> Enum.filter(&OperationControl.matches?(&1, operation_match))
           |> Kernel.++(implicit_controls)
 
-        run_controls(state, controls, request, operation, operation_match, intent)
+        run_controls(state, controls, request, operation, operation_match, intent, opts)
       end
     end
   end
@@ -50,11 +50,12 @@ defmodule Jidoka.Runtime.Controls.Operation do
          %Effect.OperationRequest{} = request,
          operation,
          operation_match,
-         %Effect.Intent{} = intent
+         %Effect.Intent{} = intent,
+         opts
        )
        when is_list(controls) do
     Enum.reduce_while(controls, {:ok, state}, fn control, {:ok, state} ->
-      case call_control(control, state, request, operation, operation_match, intent)
+      case call_control(control, state, request, operation, operation_match, intent, opts)
            |> Decision.normalize() do
         :allow ->
           {:cont, {:ok, append_control_event(state, control, request, operation_match)}}
@@ -86,7 +87,8 @@ defmodule Jidoka.Runtime.Controls.Operation do
          %Effect.OperationRequest{} = request,
          operation,
          operation_match,
-         %Effect.Intent{} = intent
+         %Effect.Intent{} = intent,
+         opts
        ) do
     control_name = control_name(control.control)
 
@@ -111,7 +113,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
         plan: state.plan,
         request: state.request,
         input: state.request.input,
-        context: state.request.context,
+        context: Jidoka.Context.data(state.request.context),
         ctx:
           Jidoka.Context.from_operation!(
             state,
@@ -119,6 +121,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
             operation,
             operation_match,
             intent,
+            runtime: Keyword.get(opts, :operation_context, %{}),
             control: control.control,
             control_name: control_name,
             metadata: control.metadata

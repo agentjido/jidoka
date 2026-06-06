@@ -238,7 +238,7 @@ source =
         name: "lookup_ticket",
         description: "Looks up a ticket.",
         kind: :tool,
-        handler: fn args -> %{ticket_id: args["ticket_id"], status: "open"} end
+        handler: fn args, _ctx -> %{ticket_id: args["ticket_id"], status: "open"} end
       }
     ]
   )

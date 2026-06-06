@@ -166,7 +166,7 @@ Enum.map(view.visible_messages, & &1.role)
 `Jidoka.turn/3` call, and `after_turn` together.
 
 ```elixir
-llm = fn _intent, _journal ->
+llm = fn _intent, _journal, _ctx ->
   {:ok, %{type: :final, content: "Order A1001 is in transit."}}
 end
 
@@ -279,7 +279,7 @@ machinery.
 
 ```elixir
 test "before/after turn keep visible messages and tool events" do
-  llm = fn _intent, _journal ->
+  llm = fn _intent, _journal, _ctx ->
     {:ok, %{type: :final, content: "Order A1001 is in transit."}}
   end
 

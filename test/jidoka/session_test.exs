@@ -37,7 +37,7 @@ defmodule Jidoka.SessionTest do
   test "session chat returns updated session data with final assistant text" do
     {:ok, session} = Session.start(spec(), "chat-123")
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "session facade ok"}}
     end
 
@@ -55,7 +55,7 @@ defmodule Jidoka.SessionTest do
   test "session chat can run asynchronously for UI callers" do
     {:ok, session} = Session.start(spec(), "async-chat-123")
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "async session ok"}}
     end
 
@@ -80,7 +80,7 @@ defmodule Jidoka.SessionTest do
     assert {:ok, %HarnessSession{session_id: "async-stored-123"}} =
              Session.start(spec(), "async-stored-123", store: store)
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "async stored ok"}}
     end
 
@@ -98,7 +98,7 @@ defmodule Jidoka.SessionTest do
     assert {:ok, %HarnessSession{session_id: "stored-123"}} =
              Session.start(spec(), id: "stored-123", store: store)
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "stored session ok"}}
     end
 

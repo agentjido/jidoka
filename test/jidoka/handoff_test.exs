@@ -114,7 +114,7 @@ defmodule Jidoka.HandoffTest do
   test "handoff operations record a conversation owner" do
     test_pid = self()
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -140,10 +140,7 @@ defmodule Jidoka.HandoffTest do
       )
 
     assert {:ok, %Turn.Result{} = result} =
-             RouterAgent.run_turn(request,
-               llm: llm,
-               operation_context: %{parent_context: request.context}
-             )
+             RouterAgent.run_turn(request, llm: llm)
 
     assert_receive {:handoff_checked, :handoff, "handoff", "billing_specialist"}
 

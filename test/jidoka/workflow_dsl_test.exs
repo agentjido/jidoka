@@ -57,7 +57,7 @@ defmodule Jidoka.WorkflowDslTest do
     end
 
     def wait_for_release(%{tag: tag}, context) do
-      test_pid = Map.get(context, :test_pid, Map.get(context, "test_pid"))
+      test_pid = Jidoka.Context.get(context, :test_pid)
       send(test_pid, {:workflow_step_started, tag, self()})
 
       receive do
@@ -68,7 +68,7 @@ defmodule Jidoka.WorkflowDslTest do
     end
 
     def wait_map_item(%{index: index, value: value}, context) do
-      test_pid = Map.get(context, :test_pid, Map.get(context, "test_pid"))
+      test_pid = Jidoka.Context.get(context, :test_pid)
       send(test_pid, {:workflow_map_item_started, index, self()})
 
       receive do
@@ -102,7 +102,8 @@ defmodule Jidoka.WorkflowDslTest do
       {:ok, %{ranked: ranked}}
     end
 
-    def fail_then_succeed(%{value: value}, %{counter: counter}) do
+    def fail_then_succeed(%{value: value}, context) do
+      counter = Jidoka.Context.get(context, :counter)
       attempt = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
 
       if attempt < 3 do
@@ -134,7 +135,7 @@ defmodule Jidoka.WorkflowDslTest do
 
     def run_turn(input, opts \\ []) do
       context = Keyword.get(opts, :context, %{})
-      topic = Map.get(context, :topic, Map.get(context, "topic", "none"))
+      topic = Jidoka.Context.get(context, :topic, "none")
       {:ok, %{content: "echo:#{input}:topic=#{topic}"}}
     end
   end
@@ -380,7 +381,7 @@ defmodule Jidoka.WorkflowDslTest do
       parameters_schema: %{"type" => "object"}
 
     @impl true
-    def run(input, context), do: {:ok, %{input: input, context: context}}
+    def run(input, context), do: {:ok, %{input: input, context: Jidoka.Context.data(context)}}
   end
 
   defmodule PlainCallbackWorkflow do
@@ -389,7 +390,7 @@ defmodule Jidoka.WorkflowDslTest do
     def id, do: :plain_callback_workflow
     def description, do: ""
     def parameters_schema, do: %{"type" => "object"}
-    def run(input, context), do: {:ok, {input, context}}
+    def run(input, context), do: {:ok, {input, Jidoka.Context.data(context)}}
   end
 
   defmodule InvalidSpecWorkflow do
@@ -1147,7 +1148,7 @@ defmodule Jidoka.WorkflowDslTest do
 
     assert Operation.kind(operation) == :workflow
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 -> {:ok, %{type: :operation, name: "run_workflow", arguments: %{"value" => 5}}}
         1 -> {:ok, %{type: :final, content: "The deterministic result is 12."}}
@@ -1155,10 +1156,7 @@ defmodule Jidoka.WorkflowDslTest do
     end
 
     assert {:ok, %Turn.Result{} = result} =
-             WorkflowAgent.run_turn("Run deterministic math.",
-               llm: llm,
-               operation_context: %{parent_context: %{suffix: "done"}}
-             )
+             WorkflowAgent.run_turn("Run deterministic math.", llm: llm)
 
     assert [
              %Effect.OperationResult{
@@ -1173,7 +1171,7 @@ defmodule Jidoka.WorkflowDslTest do
   end
 
   test "workflow depth operations execute through the agent tool path" do
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -1230,21 +1228,23 @@ defmodule Jidoka.WorkflowDslTest do
     assert operation.metadata["max_concurrency"] == 2
     assert operation.metadata["parameters_schema"]["required"] == ["value"]
 
-    assert {:ok, capability} =
-             WorkflowSource.capability(source,
-               context: %{parent_context: %{suffix: "hidden"}, agent_opts: [llm: fn _, _ -> :unused end]}
-             )
+    assert {:ok, capability} = WorkflowSource.capability(source, [])
 
     journal = Effect.Journal.new!()
+    ctx = Jidoka.Context.from_data!(%{}, runtime: %{agent_opts: [llm: fn _, _, _ -> :unused end]})
 
     assert {:ok, %{"value" => 6}} =
-             capability.(Effect.Intent.new(:operation, %{name: "math_workflow", arguments: %{"value" => 2}}), journal)
+             capability.(
+               Effect.Intent.new(:operation, %{name: "math_workflow", arguments: %{"value" => 2}}),
+               journal,
+               ctx
+             )
 
     assert {:error, {:missing_operation_handler, "wrong_workflow"}} =
-             capability.(Effect.Intent.new(:operation, %{name: "wrong_workflow", arguments: %{}}), journal)
+             capability.(Effect.Intent.new(:operation, %{name: "wrong_workflow", arguments: %{}}), journal, ctx)
 
     assert {:error, {:unsupported_effect_kind, :llm}} =
-             capability.(Effect.Intent.new(:llm, %{}), journal)
+             capability.(Effect.Intent.new(:llm, %{}), journal, ctx)
 
     assert {:error, {:invalid_workflow_module, "bad"}} = WorkflowSource.new(workflow: "bad")
     assert {:error, {:invalid_workflow_name, "Bad Name"}} = WorkflowSource.new(workflow: ActionWorkflow, as: "Bad Name")
@@ -1278,17 +1278,16 @@ defmodule Jidoka.WorkflowDslTest do
                result: :output
              )
 
-    assert {:ok, capability} =
-             WorkflowSource.capability(source,
-               context: [parent_context: [suffix: "parent", secret: "hidden"]]
-             )
+    assert {:ok, capability} = WorkflowSource.capability(source, [])
 
     journal = Effect.Journal.new!()
+    ctx = Jidoka.Context.from_data!(suffix: "parent", secret: "hidden")
 
     assert {:ok, "runic:parent"} =
              capability.(
                Effect.Intent.new(:operation, %{name: "context_workflow", arguments: %{"topic" => "runic"}}),
-               journal
+               journal,
+               ctx
              )
 
     assert {:ok, "runic:child"} =
@@ -1297,7 +1296,8 @@ defmodule Jidoka.WorkflowDslTest do
                  name: "context_workflow",
                  arguments: %{"topic" => "runic", "context" => [suffix: "child"]}
                }),
-               journal
+               journal,
+               ctx
              )
 
     assert {:ok, source} = WorkflowSource.new(workflow: ActionWorkflow, as: :math_workflow)
@@ -1306,7 +1306,8 @@ defmodule Jidoka.WorkflowDslTest do
     assert {:ok, %{"value" => 4}} =
              capability.(
                Effect.Intent.new(:operation, %{name: "math_workflow", arguments: %{"value" => 1}}),
-               journal
+               journal,
+               Jidoka.Context.from_data!(%{})
              )
   end
 

@@ -45,8 +45,6 @@ defmodule Jidoka.Runtime.JidoActions do
   @spec operations([action_module()], keyword()) ::
           Jidoka.Runtime.Capabilities.operation_capability()
   def operations(actions, opts \\ []) when is_list(actions) and is_list(opts) do
-    context = Keyword.get(opts, :context, %{})
-
     tools =
       Map.new(actions, fn action ->
         tool = action.to_tool()
@@ -54,13 +52,13 @@ defmodule Jidoka.Runtime.JidoActions do
       end)
 
     fn
-      %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
+      %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Jidoka.Context{} = context ->
         with {:ok, request} <- Effect.OperationRequest.from_input(payload),
              {:ok, tool} <- fetch_tool(tools, request.name) do
           call_tool(tool, request.arguments, context)
         end
 
-      %Effect.Intent{kind: kind}, _journal ->
+      %Effect.Intent{kind: kind}, _journal, %Jidoka.Context{} ->
         {:error, {:unsupported_effect_kind, kind}}
     end
   end

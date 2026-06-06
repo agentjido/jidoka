@@ -167,7 +167,7 @@ trace.
 | `{:error, {:missing_jido_action, name}}` | Decision asked for an action not registered in `Jido.Action` list | Add the action to the operations capability or rename in the prompt. |
 | `{:error, {:missing_operation_handler, name}}` | Decision asked for a local operation not in the handler map | Add the handler or update the prompt. |
 | `{:error, {:unsupported_effect_kind, kind}}` | Adapter was called with an intent kind it does not handle | Route only `:operation` intents to the operation adapter; route `:llm` intents to the LLM adapter. |
-| `{:error, {:invalid_operation_handler, handler}}` | Local handler is not arity 1 or 2 | Use `fn args -> ... end` or `fn intent, journal -> ... end`. |
+| `{:error, {:invalid_operation_handler, handler}}` | Local handler is not arity 2 or 3 | Use `fn args, ctx -> ... end` or `fn intent, journal, ctx -> ... end`. |
 | Operation runs twice for the same intent | Code path bypassed `Effect.Journal.result_for/2` | Route the call through `Jidoka.Runtime.EffectInterpreter.interpret_pending/3`. |
 | `{:error, {:unsafe_once_incomplete_effect, intent}}` | Resume of an `:unsafe_once` intent without approval | Supply an approved `Jidoka.Review.Response` whose `interrupt_id` matches; or treat the intent as failed and discard the snapshot. |
 | Operation succeeds but `result.content` is `nil` | The agent did not loop again after the operation observation | Confirm the LLM returned `:final` after the observation; check the prompt. |
@@ -226,7 +226,7 @@ When no row matches, follow this order. Each step is cheaper than the next.
 3. **Deterministic turn with a fake LLM.** Confirms the loop, controls, and
    journal work end to end without a provider.
    ```elixir
-   llm = fn _intent, _journal -> {:ok, %{type: :final, content: "ok"}} end
+   llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "ok"}} end
    Jidoka.turn(MyApp.TimeAgent, failing_input, llm: llm)
    ```
 4. **Live turn with a single iteration.** Cap `max_turns: 1` to surface

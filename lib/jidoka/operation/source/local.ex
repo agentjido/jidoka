@@ -127,5 +127,5 @@ defmodule Jidoka.Operation.Source.Local do
     )
   end
 
-  defp valid_handler?(handler), do: is_function(handler, 1) or is_function(handler, 2)
+  defp valid_handler?(handler), do: is_function(handler, 2) or is_function(handler, 3)
 end

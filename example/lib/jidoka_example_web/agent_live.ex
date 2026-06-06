@@ -176,6 +176,7 @@ defmodule JidokaExampleWeb.AgentLive do
               approval: response,
               llm: resume_llm(model, parent),
               operations: operation_capability(agent_module),
+              operation_context: operation_context(agent_module),
               stream_to: parent
             )
 
@@ -350,15 +351,15 @@ defmodule JidokaExampleWeb.AgentLive do
   end
 
   defp operation_capability(agent_module) do
-    spec = agent_module.spec()
+    Jidoka.Agent.ToolSources.operation_capability(agent_module)
+  end
 
-    Jidoka.Agent.ToolSources.operation_capability(agent_module,
-      context: %{
-        agent_module: agent_module,
-        jido_agent: agent_module.new(),
-        jidoka_spec: spec
-      }
-    )
+  defp operation_context(agent_module) do
+    %{
+      agent_module: agent_module,
+      jido_agent: agent_module.new(),
+      jidoka_spec: agent_module.spec()
+    }
   end
 
   defp maybe_put_memory_store(opts, nil), do: opts

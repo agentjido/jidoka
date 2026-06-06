@@ -50,6 +50,7 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
     with {:ok, prompt} <- Value.resolve(step.prompt, state),
          {:ok, prompt} <- ensure_prompt(prompt),
          {:ok, context} <- resolve_map(step.context, state, :agent_context),
+         {:ok, context} <- child_context(context, state.context),
          {:ok, result} <-
            Retry.call(step, fn -> call_agent(step.target, prompt, context, state.agent_opts) end) do
       {:ok, result.content}
@@ -194,6 +195,12 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   end
 
   defp execute_map_target(%Step{} = step, _params, _context), do: {:error, {:unsupported_map_target, step.target_kind}}
+
+  defp child_context(data, %Jidoka.Context{} = parent_context) do
+    Jidoka.Context.from_data(data, runtime: Jidoka.Context.runtime(parent_context))
+  end
+
+  defp child_context(data, _parent_context), do: Jidoka.Context.from_data(data)
 
   defp map_max_concurrency(%Step{max_concurrency: step_max}, state) do
     case Enum.reject([step_max, Map.get(state, :max_concurrency)], &is_nil/1) do

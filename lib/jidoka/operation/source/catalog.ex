@@ -19,6 +19,7 @@ defmodule Jidoka.Operation.Source.Catalog do
   alias Jido.Action.Catalog, as: ActionCatalog
   alias Jido.Action.Catalog.Entry
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Operation.Source.Catalog.Normalize
   alias Jidoka.Operation.Source.Catalog.Parameters
@@ -128,17 +129,15 @@ defmodule Jidoka.Operation.Source.Catalog do
   end
 
   @impl true
-  def capability(%__MODULE__{} = source, opts) do
-    context = opts |> Keyword.get(:context, %{}) |> Normalize.context()
-
+  def capability(%__MODULE__{} = source, _opts) do
     {:ok,
      fn
-       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
+       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload) do
            route(source, request.name, request.arguments, context)
          end
 
-       %Effect.Intent{kind: kind}, _journal ->
+       %Effect.Intent{kind: kind}, _journal, %Context{} ->
          {:error, {:unsupported_effect_kind, kind}}
      end}
   end

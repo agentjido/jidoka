@@ -41,7 +41,7 @@ defmodule Jidoka.FacadeTest do
         model: %{provider: :test, id: "model"}
       )
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "facade ok"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "facade ok"}} end
 
     assert {:ok, "facade ok"} = Jidoka.chat(spec, "Hello", llm: llm)
     assert {:error, _reason} = Jidoka.resume(%{}, llm: llm)

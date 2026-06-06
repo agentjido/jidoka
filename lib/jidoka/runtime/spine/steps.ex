@@ -41,7 +41,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
       operations: operations,
       result: result_contract(state.spec.result),
       memory: memory_contract(state.memory),
-      context: state.request.context,
+      context: Jidoka.Context.data(state.request.context),
       generation: state.spec.generation.params,
       loop_index: state.loop_index
     }

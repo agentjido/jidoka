@@ -13,7 +13,7 @@ defmodule Jidoka.IntegrationSupport.ControlledLookupAction do
   def run(params, context) do
     id = Map.get(params, :id) || Map.get(params, "id")
 
-    if pid = context[:test_pid] do
+    if pid = Jidoka.Context.get(context, :test_pid) || Jidoka.Context.get_runtime(context, :test_pid) do
       send(pid, {:controlled_lookup_called, id})
     end
 

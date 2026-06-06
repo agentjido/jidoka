@@ -2,6 +2,7 @@ defmodule Jidoka.Turn.Request do
   @moduledoc "Input for one agent turn."
 
   alias Jidoka.Agent
+  alias Jidoka.Context
   alias Jidoka.Id
   alias Jidoka.Schema
 
@@ -11,7 +12,7 @@ defmodule Jidoka.Turn.Request do
               input: Schema.non_empty_string(),
               request_id: Schema.non_empty_string(),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
-              context: Zoi.map() |> Zoi.default(%{}),
+              context: Zoi.lazy({Context, :schema, []}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -56,7 +57,8 @@ defmodule Jidoka.Turn.Request do
       |> put_opt_default(:context, Keyword.get(opts, :context))
       |> put_opt_default(:metadata, Keyword.get(opts, :metadata))
 
-    with {:ok, attrs} <- put_generated_id(attrs, :request_id, "turn", generator) do
+    with {:ok, attrs} <- put_generated_id(attrs, :request_id, "turn", generator),
+         {:ok, attrs} <- normalize_context(attrs) do
       {:ok, Schema.put_default(attrs, :agent_state, Agent.State.new!())}
     end
   end
@@ -80,6 +82,23 @@ defmodule Jidoka.Turn.Request do
       with {:ok, id} <- Id.generate(prefix, generator) do
         {:ok, Map.put(attrs, key, id)}
       end
+    end
+  end
+
+  defp normalize_context(attrs) do
+    context = Map.get(attrs, :context, Map.get(attrs, "context", %{}))
+    request_id = Map.get(attrs, :request_id, Map.get(attrs, "request_id"))
+    metadata = Map.get(attrs, :metadata, Map.get(attrs, "metadata", %{}))
+
+    with {:ok, context} <-
+           Context.from_data(context,
+             request_id: request_id,
+             request_metadata: metadata
+           ) do
+      {:ok,
+       attrs
+       |> Map.delete("context")
+       |> Map.put(:context, context)}
     end
   end
 end

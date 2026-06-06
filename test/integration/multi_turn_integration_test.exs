@@ -43,7 +43,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
     operations =
       LocalOperations.operations(%{
-        lookup_order: fn intent, _journal ->
+        lookup_order: fn intent, _journal, _ctx ->
           arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
 
           send(test_pid, {:operation_called, "lookup_order", arguments, intent.idempotency})
@@ -55,7 +55,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
              "carrier" => "UPS"
            }}
         end,
-        refund_order: fn intent, _journal ->
+        refund_order: fn intent, _journal, _ctx ->
           arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
 
           send(test_pid, {:operation_called, "refund_order", arguments, intent.idempotency})
@@ -69,7 +69,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
         end
       })
 
-    first_turn_llm = fn intent, %Effect.Journal{} = journal ->
+    first_turn_llm = fn intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           assert prompt_messages(intent) |> Enum.all?(&(Map.get(&1, :role) != :assistant))
@@ -104,7 +104,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
     assert length(first_result.agent_state.messages) == 2
     assert_received {:operation_called, "lookup_order", %{"order_id" => "order_123"}, :idempotent}
 
-    second_turn_llm = fn intent, %Effect.Journal{} = journal ->
+    second_turn_llm = fn intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           messages = prompt_messages(intent)
@@ -186,7 +186,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
         runtime_defaults: %{max_model_turns: 6}
       )
 
-    llm = fn intent, %Effect.Journal{} = journal ->
+    llm = fn intent, %Effect.Journal{} = journal, _ctx ->
       loop_index = Jidoka.Schema.get_key(intent.payload, :loop_index)
       send(test_pid, {:llm_called, loop_index, intent.idempotency_key})
 
@@ -222,7 +222,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
     operations =
       LocalOperations.operations(%{
-        geocode: fn intent, _journal ->
+        geocode: fn intent, _journal, _ctx ->
           arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
           send(test_pid, {:operation_called, "geocode", intent.idempotency_key})
 
@@ -233,7 +233,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
              "lon" => -87.6226
            }}
         end,
-        weather: fn intent, _journal ->
+        weather: fn intent, _journal, _ctx ->
           arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
           send(test_pid, {:operation_called, "weather", intent.idempotency_key})
 
@@ -293,7 +293,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
     on_exit(fn -> Jidoka.stop_agent(id) end)
 
-    first_turn_llm = fn _intent, %Effect.Journal{} = journal ->
+    first_turn_llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -318,7 +318,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
     assert_receive {:account_lookup_called, "acct_123"}
 
-    second_turn_llm = fn intent, %Effect.Journal{} = journal ->
+    second_turn_llm = fn intent, %Effect.Journal{} = journal, _ctx ->
       assert count_results(journal, :llm) == 0
 
       messages = prompt_messages(intent)

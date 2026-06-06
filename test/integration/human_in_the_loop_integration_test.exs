@@ -233,7 +233,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   defp llm do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok, %{type: :operation, name: "review_lookup", arguments: %{"id" => "reviewed"}}}
@@ -248,7 +248,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
     test_pid = self()
 
     LocalOperations.operations(%{
-      "review_lookup" => fn %{"id" => id} ->
+      "review_lookup" => fn %{"id" => id}, _ctx ->
         send(test_pid, {:review_lookup_called, id})
         {:ok, %{id: id, value: "approved"}}
       end

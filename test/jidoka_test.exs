@@ -11,16 +11,18 @@ defmodule JidokaTest.Support.LocalTimeAction do
   def run(params, context) do
     city = Map.get(params, :city) || Map.get(params, "city") || "Chicago"
 
-    if pid = context[:test_pid] do
+    if pid = Jidoka.Context.get(context, :test_pid) || Jidoka.Context.get_runtime(context, :test_pid) do
       send(pid, {:local_time_called, city})
     end
+
+    agent_module = Jidoka.Context.get_runtime(context, :agent_module)
 
     {:ok,
      %{
        city: city,
        time: "09:30",
        canary: "jidoka_dsl_tool_canary",
-       jido_agent_name: context.agent_module.name()
+       jido_agent_name: agent_module.name()
      }}
   end
 end
@@ -61,7 +63,7 @@ defmodule JidokaTest do
 
     plan = Jidoka.plan!(spec)
 
-    llm = fn intent, _journal ->
+    llm = fn intent, _journal, _ctx ->
       assert Jidoka.Config.model_ref(intent.payload.model) ==
                Jidoka.Config.model_ref(default_model)
 
@@ -124,7 +126,7 @@ defmodule JidokaTest do
         runtime_defaults: %{max_model_turns: 4}
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       llm_calls = count_results(journal, :llm)
 
       case llm_calls do
@@ -138,7 +140,7 @@ defmodule JidokaTest do
 
     operations =
       LocalOperations.operations(%{
-        weather: fn intent, _journal ->
+        weather: fn intent, _journal, _ctx ->
           assert intent.payload.name == "weather"
           assert intent.idempotency == :idempotent
           assert is_binary(intent.idempotency_key)
@@ -175,7 +177,7 @@ defmodule JidokaTest do
     assert [%Operation{name: "local_time"} = operation] = spec.operations
     assert is_map(operation.metadata["parameters_schema"])
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok, %{type: :operation, name: "local_time", arguments: %{"city" => "Chicago"}}}
@@ -205,7 +207,7 @@ defmodule JidokaTest do
         runtime_defaults: %{max_model_turns: 2}
       )
 
-    llm = fn intent, _journal ->
+    llm = fn intent, _journal, _ctx ->
       model = Map.get(intent.payload, :model) || Map.get(intent.payload, "model")
 
       assert Jidoka.Config.model_ref(model) == Jidoka.Config.model_ref(default_model)
@@ -213,7 +215,7 @@ defmodule JidokaTest do
       {:ok, %{"type" => "final", "content" => "hello"}}
     end
 
-    operations = fn _intent, _journal ->
+    operations = fn _intent, _journal, _ctx ->
       {:error, :unexpected_operation}
     end
 
@@ -253,7 +255,7 @@ defmodule JidokaTest do
         runtime_defaults: %{max_model_turns: 4}
       )
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 -> {:ok, %{type: :operation, name: "weather", arguments: %{"city" => "Paris"}}}
         1 -> {:ok, %{type: :final, content: "Paris is sunny."}}
@@ -262,7 +264,7 @@ defmodule JidokaTest do
 
     operations =
       LocalOperations.operations(%{
-        weather: fn intent, _journal ->
+        weather: fn intent, _journal, _ctx ->
           arguments = Jidoka.Schema.get_key(intent.payload, :arguments)
           {:ok, %{city: arguments["city"], condition: "sunny"}}
         end
@@ -306,7 +308,7 @@ defmodule JidokaTest do
         context_schema: Zoi.object(%{tenant_id: Zoi.string()})
       )
 
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "ok"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "ok"}} end
 
     assert {:error, %Jidoka.Error.ValidationError{field: :context}} =
              Jidoka.turn(spec, Turn.Request.new!(input: "Hello", context: %{}), llm: llm)

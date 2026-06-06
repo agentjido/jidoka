@@ -10,6 +10,7 @@ defmodule Jidoka.Operation.Source.MCP do
   @behaviour Jidoka.Operation.Source
 
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Operation.Source.MCP.Tools
   alias Jidoka.Operation.Source.MCP.Transport
@@ -126,17 +127,16 @@ defmodule Jidoka.Operation.Source.MCP do
   def capability(%__MODULE__{} = source, opts) do
     with {:ok, tools} <- tools(source, opts) do
       routes = Map.new(tools, &{operation_name(source, &1.name), &1.name})
-      client = client(source, opts)
 
       {:ok,
        fn
-         %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{} ->
+         %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
            with {:ok, request} <- Effect.OperationRequest.from_input(payload),
                 {:ok, remote_name} <- fetch_remote_tool(routes, request.name) do
-             call_tool(client, source, remote_name, request.arguments, Transport.call_opts(source))
+             call_tool(client(source, context), source, remote_name, request.arguments, Transport.call_opts(source))
            end
 
-         %Effect.Intent{kind: kind}, _journal ->
+         %Effect.Intent{kind: kind}, _journal, %Context{} ->
            {:error, {:unsupported_effect_kind, kind}}
        end}
     end
@@ -377,14 +377,21 @@ defmodule Jidoka.Operation.Source.MCP do
   end
 
   defp client(%__MODULE__{} = source, opts) do
-    opts
-    |> Keyword.get(:context, %{})
-    |> case do
+    case runtime_context(opts) do
       %{mcp_client: client} when is_atom(client) -> client
       %{"mcp_client" => client} when is_atom(client) -> client
       _context -> source.client
     end
   end
+
+  defp runtime_context(%Context{} = context), do: Context.runtime(context)
+
+  defp runtime_context(opts) when is_list(opts) do
+    Keyword.get(opts, :context, %{})
+  end
+
+  defp runtime_context(context) when is_map(context), do: context
+  defp runtime_context(_context), do: %{}
 
   defp metadata_value(nil), do: nil
   defp metadata_value(value) when is_atom(value), do: Atom.to_string(value)

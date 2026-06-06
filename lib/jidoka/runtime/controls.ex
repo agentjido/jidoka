@@ -76,7 +76,7 @@ defmodule Jidoka.Runtime.Controls do
       input: state.request.input,
       result: state.result,
       result_value: state.result_value,
-      context: state.request.context,
+      context: Jidoka.Context.data(state.request.context),
       ctx:
         Jidoka.Context.from_turn_state!(state,
           boundary: boundary,

@@ -321,14 +321,14 @@ defmodule Jidoka.Workflow do
   defp normalize_input(input) when is_map(input), do: {:ok, Schema.normalize_attrs(input)}
   defp normalize_input(input), do: {:error, {:invalid_workflow_input, input}}
 
-  defp normalize_context(context) when is_list(context) do
-    if Keyword.keyword?(context) do
-      {:ok, Map.new(context)}
-    else
-      {:error, {:invalid_workflow_context, context}}
+  defp normalize_context(%Jidoka.Context{} = context), do: {:ok, context}
+
+  defp normalize_context(context) when is_list(context) or is_map(context) do
+    case Jidoka.Context.from_data(context) do
+      {:ok, context} -> {:ok, context}
+      {:error, _reason} -> {:error, {:invalid_workflow_context, context}}
     end
   end
 
-  defp normalize_context(context) when is_map(context), do: {:ok, context}
   defp normalize_context(context), do: {:error, {:invalid_workflow_context, context}}
 end

@@ -11,7 +11,7 @@ defmodule Jidoka.DocumentedExamplesIntegrationTest do
   test "getting started one-tool loop remains executable" do
     test_pid = self()
 
-    llm = fn _intent, %Effect.Journal{} = journal ->
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
         0 ->
           {:ok,
@@ -43,7 +43,7 @@ defmodule Jidoka.DocumentedExamplesIntegrationTest do
 
   test "controls guide input-control shape remains executable" do
     test_pid = self()
-    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "allowed"}} end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "allowed"}} end
 
     assert {:ok, %{content: "allowed"}} =
              InputControlledLookupAgent.run_turn(

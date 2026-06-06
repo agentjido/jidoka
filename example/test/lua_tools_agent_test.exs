@@ -810,10 +810,12 @@ defmodule JidokaExample.LuaToolsAgentTest do
   defp run_catalog_operation(operation, arguments, context \\ %{}) do
     source = CatalogSource.new!(catalog: Catalog)
     {:ok, %{capability: capability}} = Source.compile(source, context: context)
+    ctx = Jidoka.Context.from_data!(context)
 
     capability.(
       Effect.Intent.new(:operation, %{name: operation, arguments: arguments}),
-      Effect.Journal.new!()
+      Effect.Journal.new!(),
+      ctx
     )
   end
 

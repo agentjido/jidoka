@@ -37,7 +37,7 @@ defmodule Jidoka.DebugTest do
 
   test "request summaries explain completed turns" do
     assert {:ok, %Turn.Result{} = result} =
-             Agent.run_turn("Check D-100.", llm: &tool_loop_llm/2)
+             Agent.run_turn("Check D-100.", llm: &tool_loop_llm/3)
 
     assert %{
              debug: %{
@@ -75,7 +75,7 @@ defmodule Jidoka.DebugTest do
 
     assert {:ok, %Session{} = session, %Turn.Result{} = result} =
              Harness.run_session(session, "Check D-100.",
-               llm: &tool_loop_llm/2,
+               llm: &tool_loop_llm/3,
                operations: Jidoka.Runtime.JidoActions.operations([LookupAction])
              )
 
@@ -94,7 +94,7 @@ defmodule Jidoka.DebugTest do
 
   test "snapshot diagnostics flag incomplete pending effects" do
     assert {:hibernate, %AgentSnapshot{} = snapshot} =
-             Agent.run_turn("Pause after prompt.", llm: &tool_loop_llm/2, checkpoint: :after_prompt)
+             Agent.run_turn("Pause after prompt.", llm: &tool_loop_llm/3, checkpoint: :after_prompt)
 
     assert {:ok,
             %RequestSummary{
@@ -111,7 +111,7 @@ defmodule Jidoka.DebugTest do
 
   test "request summaries handle common result and error tuples" do
     assert {:ok, %Turn.Result{} = result} =
-             Agent.run_turn("Check D-100.", llm: &tool_loop_llm/2)
+             Agent.run_turn("Check D-100.", llm: &tool_loop_llm/3)
 
     assert {:ok, %RequestSummary{status: :finished, session_id: nil}} =
              Debug.request({:ok, result})
@@ -130,7 +130,7 @@ defmodule Jidoka.DebugTest do
 
   test "request summaries handle hibernate tuples and replay projections" do
     assert {:hibernate, %AgentSnapshot{} = snapshot} =
-             Agent.run_turn("Pause after prompt.", llm: &tool_loop_llm/2, checkpoint: :after_prompt)
+             Agent.run_turn("Pause after prompt.", llm: &tool_loop_llm/3, checkpoint: :after_prompt)
 
     assert {:ok, %Session{} = session} =
              Harness.start_session(Agent.spec(), session_id: "sess_snapshot_tuple")
@@ -272,13 +272,13 @@ defmodule Jidoka.DebugTest do
   end
 
   test "Kino debug_request renders without requiring Kino" do
-    assert {:ok, result} = Agent.run_turn("Check D-100.", llm: &tool_loop_llm/2)
+    assert {:ok, result} = Agent.run_turn("Check D-100.", llm: &tool_loop_llm/3)
 
     assert {:ok, %RequestSummary{operation_names: ["debug_lookup"]}} =
              Jidoka.Kino.debug_request(result)
   end
 
-  defp tool_loop_llm(_intent, %Effect.Journal{} = journal) do
+  defp tool_loop_llm(_intent, %Effect.Journal{} = journal, _ctx) do
     llm_calls =
       journal.results
       |> Map.values()

@@ -53,7 +53,7 @@ defmodule Jidoka.Turn.Result do
       agent_id: state.spec.id,
       model: Config.model_ref(state.spec.model),
       input: state.request.input,
-      context_keys: context_keys(state.request.context),
+      context_keys: context_keys(Jidoka.Context.data(state.request.context)),
       prompt: prompt_debug(state.prompt),
       diagnostics: state.diagnostics,
       started_at_ms: state.started_at_ms

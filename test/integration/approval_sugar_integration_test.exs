@@ -232,7 +232,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
   end
 
   defp single_operation_llm(name, arguments, final_content) do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :operation) do
         0 -> {:ok, %{type: :operation, name: name, arguments: arguments}}
         _count -> {:ok, %{type: :final, content: final_content}}
@@ -241,7 +241,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
   end
 
   defp batched_llm(operations, final_content) do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :operation) do
         0 ->
           {:ok,
@@ -260,7 +260,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
     handlers =
       Map.new(operation_names, fn name ->
         {name,
-         fn _arguments ->
+         fn _arguments, _ctx ->
            send(test_pid, {:operation_called, name})
            {:ok, %{"operation" => name}}
          end}

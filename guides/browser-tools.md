@@ -153,7 +153,7 @@ end
 
 The allowlist is stored on every browser operation in the agent spec.
 The browser runtime reads it back from
-`context.jidoka_spec.operations` at call time.
+`Jidoka.Context.get_runtime(context, :jidoka_spec).operations` at call time.
 
 ### Step 3: Clamp Output For Predictable Costs
 
@@ -184,7 +184,7 @@ end
 
 Application.put_env(:jidoka, :browser_actions, %{search_web: FakeSearchWeb})
 
-llm = fn _intent, journal ->
+llm = fn _intent, journal, _ctx ->
   llm_calls = Enum.count(journal.results, fn {_id, r} -> r.kind == :llm end)
 
   case llm_calls do
@@ -255,7 +255,7 @@ defmodule MyApp.DocsAgentTest do
   end
 
   test "browser turn calls search_web through a fake" do
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "Try hexdocs."}}
     end
 

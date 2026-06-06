@@ -83,7 +83,7 @@ defmodule Jidoka.StructuredResultIntegrationTest do
               }
             }} =
              Jidoka.turn(spec(max_repairs: 0), request(),
-               llm: fn _intent, _journal ->
+               llm: fn _intent, _journal, _ctx ->
                  {:ok,
                   %{
                     type: :final,
@@ -121,7 +121,7 @@ defmodule Jidoka.StructuredResultIntegrationTest do
   end
 
   defp repairing_llm do
-    fn _intent, %Effect.Journal{} = journal ->
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
       case map_size(journal.results) do
         0 ->
           {:ok,

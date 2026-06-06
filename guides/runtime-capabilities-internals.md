@@ -51,13 +51,13 @@ llm = ReqLLM.llm(model: "openai:gpt-4o-mini", temperature: 0.0)
 
 operations =
   LocalOperations.operations(%{
-    "local_time" => fn %{"city" => city} -> {:ok, %{city: city, time: "09:30"}} end
+    "local_time" => fn %{"city" => city}, _ctx -> {:ok, %{city: city, time: "09:30"}} end
   })
 
 {:ok, %Capabilities{} = caps} = Capabilities.new(llm: llm, operations: operations)
 ```
 
-The bundle is two-arity functions all the way down. Tests pass anonymous
+The bundle is three-arity functions all the way down. Tests pass anonymous
 functions directly; live runs pass the adapters in `Jidoka.Runtime.ReqLLM`
 and `Jidoka.Runtime.JidoActions`. The runner does not care which.
 
@@ -122,8 +122,8 @@ tiny:
 @schema Zoi.struct(
           __MODULE__,
           %{
-            llm: Zoi.function(arity: 2),
-            operations: Zoi.function(arity: 2)
+            llm: Zoi.function(arity: 3),
+            operations: Zoi.function(arity: 3)
           },
           coerce: true
         )
@@ -131,11 +131,11 @@ tiny:
 def new(opts) do
   opts
   |> Schema.normalize_attrs()
-  |> Schema.put_default(:operations, &missing_operations_capability/2)
+  |> Schema.put_default(:operations, &missing_operations_capability/3)
   |> then(&Schema.parse(@schema, &1))
 end
 
-defp missing_operations_capability(_intent, _journal),
+defp missing_operations_capability(_intent, _journal, _ctx),
   do: {:error, :missing_operations_capability}
 ```
 
@@ -152,12 +152,12 @@ Two properties are load-bearing:
 ### Step 2: Implement An LLM Capability (ReqLLM Adapter Shape)
 
 The reference LLM adapter is [`Jidoka.Runtime.ReqLLM`](`Jidoka.Runtime.ReqLLM`).
-Its public entrypoint is `llm/1`, which returns the two-arity function the
+Its public entrypoint is `llm/1`, which returns the three-arity function the
 runner expects:
 
 ```elixir
 def llm(opts \\ []) when is_list(opts) do
-  fn %Effect.Intent{} = intent, %Effect.Journal{} = journal ->
+  fn %Effect.Intent{} = intent, %Effect.Journal{} = journal, _ctx ->
     generate(intent, journal, opts)
   end
 end
@@ -252,8 +252,8 @@ def run_operation_controls(%Turn.State{} = state, %Effect.Intent{} = intent) do
 end
 ```
 
-Each control implementation receives an `OperationContext` map built by
-`Controls.context/3`:
+Each control implementation receives an `OperationContext` wrapper with both a
+sanitized `context` data map and the canonical `ctx` struct:
 
 ```elixir
 %{
@@ -269,7 +269,8 @@ Each control implementation receives an `OperationContext` map built by
   input: state.request.input,
   result: state.result,
   result_value: state.result_value,
-  context: state.request.context,
+  context: Jidoka.Context.data(state.request.context),
+  ctx: %Jidoka.Context{data: ..., runtime: ...},
   agent_state: state.agent_state
 }
 ```
@@ -425,14 +426,14 @@ Adding a new signal type (for example, `"jidoka.session.resume"`) requires:
   `Effect.LLMDecision.operation/3`, or `Effect.LLMDecision.operations/2`
   directly when no JSON parsing is needed.
 - **New operation sources.** Implement `Jidoka.Operation.Source` and reuse
-  `Jidoka.Runtime.LocalOperations` for arity-1/arity-2 dispatch.
+  `Jidoka.Runtime.LocalOperations` for arity-2/arity-3 dispatch.
 - **Approval providers.** Wrap `Jidoka.Runtime.Review.approval_response/1` by
   pre-populating `opts` with a fresh response from your queue before calling
   `Jidoka.resume/2`.
 
 ## Invariants
 
-1. **Capabilities are two-arity functions.** Anything else fails
+1. **Capabilities are three-arity functions.** Anything else fails
    `Capabilities.new/1`.
 2. **Adapters never call other adapters directly.** The interpreter is the
    only orchestrator; one adapter calling another bypasses the journal.

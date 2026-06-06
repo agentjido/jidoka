@@ -18,7 +18,7 @@ defmodule Jidoka.ObservabilityIntegrationTest do
         model: %{provider: :test, id: "model"}
       )
 
-    llm = fn _intent, _journal ->
+    llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "Observability evidence captured."}}
     end
 

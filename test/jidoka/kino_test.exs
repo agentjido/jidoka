@@ -114,7 +114,7 @@ defmodule JidokaTest.KinoTest do
              })
   end
 
-  defp fake_llm(_intent, journal) do
+  defp fake_llm(_intent, journal, _ctx) do
     llm_calls =
       journal.results
       |> Map.values()
@@ -131,7 +131,7 @@ defmodule JidokaTest.KinoTest do
 
   defp runtime_opts do
     [
-      llm: &fake_llm/2,
+      llm: &fake_llm/3,
       operations: Jidoka.Runtime.JidoActions.operations([LookupAction])
     ]
   end
