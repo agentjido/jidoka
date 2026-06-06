@@ -1,6 +1,8 @@
 defmodule Jidoka.Workflow.Definition.Targets do
   @moduledoc false
 
+  alias Jidoka.Workflow.Definition.Error
+
   @spec validate_action!(module(), map()) :: :ok
   def validate_action!(owner_module, step) do
     cond do
@@ -26,7 +28,7 @@ defmodule Jidoka.Workflow.Definition.Targets do
         :ok
 
       Code.ensure_loaded?(module) ->
-        raise_error!(
+        Error.raise!(
           owner_module,
           "Workflow function step target is not exported.",
           [:steps, step.name, :function],
@@ -40,7 +42,7 @@ defmodule Jidoka.Workflow.Definition.Targets do
   end
 
   def validate_function!(owner_module, step) do
-    raise_error!(
+    Error.raise!(
       owner_module,
       "Workflow function steps require a `{module, function, 2}` target.",
       [:steps, step.name, :function],
@@ -56,7 +58,7 @@ defmodule Jidoka.Workflow.Definition.Targets do
         :ok
 
       Code.ensure_loaded?(module) ->
-        raise_error!(
+        Error.raise!(
           owner_module,
           "Workflow agent step target is not a Jidoka-compatible agent.",
           [:steps, step.name, :agent],
@@ -70,7 +72,7 @@ defmodule Jidoka.Workflow.Definition.Targets do
   end
 
   def validate_agent!(owner_module, step) do
-    raise_error!(
+    Error.raise!(
       owner_module,
       "Workflow agent steps require a Jidoka agent module target.",
       [:steps, step.name, :agent],
@@ -81,22 +83,12 @@ defmodule Jidoka.Workflow.Definition.Targets do
 
   @spec invalid_action!(module(), map()) :: no_return()
   defp invalid_action!(owner_module, step) do
-    raise_error!(
+    Error.raise!(
       owner_module,
       "Workflow action step target is not a valid action-backed module.",
       [:steps, step.name, :action],
       step.module,
       "Use a module defined with `use Jidoka.Action` or another Jido action module exposing `to_tool/0`."
     )
-  end
-
-  defp raise_error!(owner_module, message, path, value, hint) do
-    raise Jidoka.Workflow.Dsl.Error.exception(
-            message: message,
-            path: path,
-            value: value,
-            hint: hint,
-            module: owner_module
-          )
   end
 end

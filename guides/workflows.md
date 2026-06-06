@@ -13,8 +13,8 @@ Jidoka/Jido actions, or a bounded agent step.
   wiring, context forwarding, and a stable output shape.
 - Do not use a workflow for one simple tool. Use `Jidoka.Action`.
 - Do not use a workflow for open-ended orchestration. The workflow DSL is
-  deterministic: no loops, branches, scheduling, or dynamic fanout. Independent
-  DAG steps can run concurrently when async execution is enabled.
+  deterministic: no loops, scheduling, persisted runs, or dynamic runtime graph
+  mutation. Gates and bounded map/reduce fanout are supported.
 
 ## Quick Example
 
@@ -185,6 +185,9 @@ Supported step kinds:
 | `function` | `{module, function, 2}` | Calls `function.(input, workflow_context)`. Accepts raw return, `{:ok, value}`, or `{:error, reason}`. |
 | `action` | Jidoka/Jido action module exposing `to_tool/0` | Runs the action through the same action tool boundary used by agents. |
 | `agent` | Jidoka-compatible agent module exposing `run_turn/2` | Runs a bounded child turn and stores `Turn.Result.content`. |
+| `gate` | Boolean ref or value | Stores `true` or `false` for conditional steps. |
+| `map` | Function or action target | Runs a bounded fanout over a resolved list and returns ordered results. |
+| `reduce` | `{module, function, 2}` | Runs one deterministic reducer over a resolved list. |
 
 Agent steps are useful for small bounded drafting or classification tasks.
 They are not subagents. If you want the parent model to decide when to
@@ -194,6 +197,78 @@ Independent roots and joins form a DAG. Jidoka evaluates the graph serially by
 default. Pass `async: true` to `Jidoka.Workflow.run/3` or to the agent
 `tools.workflow` entry when independent steps should execute concurrently
 through Runic. `max_concurrency:` caps how many workflow steps can run at once.
+
+### Gates And Conditional Steps
+
+Use a `gate` when later steps should run only for one path. `when:` runs a
+step only when the resolved value is `true`. `unless:` skips a step when the
+resolved value is `true`.
+
+```elixir
+steps do
+  function :check_policy, {MyApp.Refunds, :check_policy, 2},
+    input: %{order_id: input(:order_id)}
+
+  gate :needs_review,
+    condition: from(:check_policy, :requires_review)
+
+  action :auto_refund, MyApp.Actions.AutoRefund,
+    unless: from(:needs_review),
+    input: %{order_id: input(:order_id)}
+
+  action :request_review, MyApp.Actions.RequestReview,
+    when: from(:needs_review),
+    input: %{order_id: input(:order_id)}
+end
+
+output coalesce([maybe_from(:auto_refund), maybe_from(:request_review)])
+```
+
+Skipped steps do not write a normal output. `from(:step)` fails if the step was
+skipped. Use `maybe_from(:step)` for branch outputs that may not exist.
+
+### Map And Reduce
+
+Use `map` for bounded fanout over a list. `item()` and `index()` are valid only
+inside map input.
+
+```elixir
+steps do
+  map :score_leads,
+    over: input(:leads),
+    function: {MyApp.Leads, :score, 2},
+    input: %{lead: item(), index: index()},
+    max_concurrency: 8
+
+  reduce :rank_leads,
+    over: from(:score_leads),
+    using: {MyApp.Leads, :rank, 2},
+    input: %{scores: items(), threshold: input(:threshold)}
+end
+
+output from(:rank_leads)
+```
+
+`map` supports `function:` and `action:` targets. Results preserve input order,
+including when item work runs concurrently. A map step defaults to 8 concurrent
+items. A step-level `max_concurrency:` can raise or lower that value; a workflow
+runtime `max_concurrency:` option acts as a global cap when supplied.
+
+`reduce` is one deterministic function call over the resolved list; it is not a
+streaming accumulator.
+
+### Retry
+
+Add `retry:` to retry target execution. Ref resolution, schema parsing, skipped
+steps, and hibernated agent steps are not retried.
+
+```elixir
+function :fetch_status, {MyApp.Status, :fetch, 2},
+  input: %{id: input(:id)},
+  retry: [max_attempts: 3, backoff: [type: :exponential, min: 25, max: 250]]
+```
+
+The total workflow timeout still wins over retry backoff.
 
 ### `output`
 
@@ -230,6 +305,11 @@ the runtime validates actual values.
 | `context(:key)` | Runtime workflow context. | `%{tenant: context(:tenant)}` |
 | `from(:step)` | Prior step output. | `input: from(:lookup_order)` |
 | `from(:step, :field)` | Field/path inside prior output. | `prompt: from(:policy, :summary)` |
+| `maybe_from(:step)` | Prior step output, or `nil` if missing/skipped. | `coalesce([maybe_from(:auto), maybe_from(:review)])` |
+| `coalesce([refs])` | First resolved non-nil value. | `output coalesce([maybe_from(:left), maybe_from(:right)])` |
+| `item()` | Current map item. | `input: %{lead: item()}` |
+| `index()` | Current map item index. | `input: %{index: index()}` |
+| `items()` | Current reduce item list. | `input: %{scores: items()}` |
 | `value(term)` | Explicit static value. | `%{limit: value(100)}` |
 
 Atom and string map keys are treated as equivalent for inputs, context, and
@@ -322,8 +402,10 @@ Do not mix forms. `use Jidoka.Workflow, id: ...` cannot also declare
 - Workflow input is parsed through the Zoi input schema before any step runs.
 - Context refs must exist before execution starts.
 - Step refs are resolved as each step runs.
+- A skipped conditional step writes an outcome but not a normal step output.
 - A step returning `{:error, reason}`, raising, throwing, or producing an
   invalid action/agent result fails the workflow with step metadata attached.
+- Step retry applies only around target execution.
 - With `async: true`, Runic executes currently runnable independent steps in
   parallel and applies their results back into the deterministic workflow graph.
 - Direct `Jidoka.Workflow.run/3` and tool execution both enforce total
@@ -340,7 +422,7 @@ Do not mix forms. `use Jidoka.Workflow, id: ...` cannot also declare
 Jidoka.inspect(MyApp.Workflows.RefundReview)
 #=> %{
 #=>   kind: :workflow,
-#=>   module: "MyApp.Workflows.RefundReview",
+#=>   graph: %{nodes: [%{name: :check_policy, kind: :function}], edges: []},
 #=>   workflow: %{
 #=>     id: "refund_review",
 #=>     mode: :dsl,

@@ -5,13 +5,32 @@ defmodule Jidoka.Workflow.Runtime.Value do
   def resolve({:jidoka_workflow_ref, :input, key}, state), do: fetch_equivalent(state.input, key, :input)
   def resolve({:jidoka_workflow_ref, :context, key}, state), do: fetch_equivalent(state.context, key, :context)
   def resolve({:jidoka_workflow_ref, :value, value}, _state), do: {:ok, value}
-  def resolve({:jidoka_workflow_ref, :from, step, nil}, state), do: fetch_equivalent(state.steps, step, :step)
+  def resolve({:jidoka_workflow_ref, :from, step, nil}, state), do: fetch_step_output(state, step)
 
   def resolve({:jidoka_workflow_ref, :from, step, path}, state) when is_list(path) do
-    with {:ok, value} <- fetch_equivalent(state.steps, step, :step) do
+    with {:ok, value} <- fetch_step_output(state, step) do
       resolve_path(value, path)
     end
   end
+
+  def resolve({:jidoka_workflow_ref, :maybe_from, step, nil}, state), do: maybe_step_output(state, step)
+
+  def resolve({:jidoka_workflow_ref, :maybe_from, step, path}, state) when is_list(path) do
+    with {:ok, value} <- maybe_step_output(state, step) do
+      case value do
+        nil -> {:ok, nil}
+        value -> maybe_resolve_path(value, path)
+      end
+    end
+  end
+
+  def resolve({:jidoka_workflow_ref, :coalesce, values}, state) when is_list(values) do
+    coalesce(values, state)
+  end
+
+  def resolve({:jidoka_workflow_ref, :item}, state), do: fetch_equivalent(state, :item, :item)
+  def resolve({:jidoka_workflow_ref, :index}, state), do: fetch_equivalent(state, :index, :index)
+  def resolve({:jidoka_workflow_ref, :items}, state), do: fetch_equivalent(state, :items, :items)
 
   def resolve(%{} = map, state) do
     Enum.reduce_while(map, {:ok, %{}}, fn {key, value}, {:ok, acc} ->
@@ -92,4 +111,47 @@ defmodule Jidoka.Workflow.Runtime.Value do
   end
 
   defp resolve_path(value, path), do: {:error, {:missing_field, path, value}}
+
+  defp maybe_resolve_path(value, path) do
+    case resolve_path(value, path) do
+      {:ok, value} -> {:ok, value}
+      {:error, {:missing_field, _path, _value}} -> {:ok, nil}
+    end
+  end
+
+  defp fetch_step_output(state, step) do
+    case fetch_equivalent(state.steps, step) do
+      {:ok, value} ->
+        {:ok, value}
+
+      :error ->
+        case step_outcome(state, step) do
+          {:ok, %{status: :skipped} = outcome} -> {:error, {:skipped_ref, step, outcome}}
+          _other -> {:error, {:missing_ref, :step, step}}
+        end
+    end
+  end
+
+  defp maybe_step_output(state, step) do
+    case fetch_equivalent(state.steps, step) do
+      {:ok, value} -> {:ok, value}
+      :error -> {:ok, nil}
+    end
+  end
+
+  defp step_outcome(state, step) do
+    state
+    |> Map.get(:outcomes, %{})
+    |> fetch_equivalent(step)
+  end
+
+  defp coalesce([], _state), do: {:ok, nil}
+
+  defp coalesce([value | rest], state) do
+    case resolve(value, state) do
+      {:ok, nil} -> coalesce(rest, state)
+      {:ok, value} -> {:ok, value}
+      {:error, reason} -> {:error, reason}
+    end
+  end
 end

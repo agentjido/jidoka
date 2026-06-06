@@ -30,9 +30,14 @@ defmodule Jidoka.Workflow.Definition.Graph do
     end
   end
 
-  defp step_ref_terms(%Step{kind: :action} = step), do: [step.input]
-  defp step_ref_terms(%Step{kind: :function} = step), do: [step.input]
-  defp step_ref_terms(%Step{kind: :agent} = step), do: [step.prompt, step.context]
+  defp step_ref_terms(%Step{kind: :action} = step), do: condition_ref_terms(step) ++ [step.input]
+  defp step_ref_terms(%Step{kind: :function} = step), do: condition_ref_terms(step) ++ [step.input]
+  defp step_ref_terms(%Step{kind: :agent} = step), do: condition_ref_terms(step) ++ [step.prompt, step.context]
+  defp step_ref_terms(%Step{kind: :gate} = step), do: [step.condition]
+  defp step_ref_terms(%Step{kind: :map} = step), do: condition_ref_terms(step) ++ [step.over, step.input]
+  defp step_ref_terms(%Step{kind: :reduce} = step), do: condition_ref_terms(step) ++ [step.over, step.input]
+
+  defp condition_ref_terms(%Step{} = step), do: [step.condition_when, step.condition_unless]
 
   defp topo_sort(dependencies, _order, acc) when map_size(dependencies) == 0 do
     {:ok, Enum.reverse(acc)}
