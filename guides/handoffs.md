@@ -151,7 +151,7 @@ ownership change only affects future turns the application chooses to route.
 | --- | --- | --- |
 | Scope | Future turns of a conversation. | One nested task during the current turn. |
 | Result to caller | A small data payload (`handoff`, `owner`). | The subagent's structured output. |
-| Idempotency | `:unsafe_once`. Recommended to gate with a control. | `:idempotent` by default. |
+| Idempotency | `:unsafe_once`. Recommended to gate with approval or a control. | `:idempotent` by default. |
 | Routing | Application dispatcher reads `Jidoka.handoff/1`. | Jidoka runs the subagent call inside the turn. |
 | Reset | `Jidoka.reset_handoff/1`. | N/A. |
 

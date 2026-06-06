@@ -5,6 +5,7 @@ defmodule Jidoka.Agent.ToolSources.MCP do
   alias Jidoka.Agent.ToolSources.Common
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.MCP, as: MCPSource
+  alias Jidoka.Review.Approval
 
   @spec source!(term()) :: MCPSource.t()
   def source!(%MCPTools{} = mcp_tools) do
@@ -31,7 +32,7 @@ defmodule Jidoka.Agent.ToolSources.MCP do
     |> source!()
     |> Source.operations()
     |> case do
-      {:ok, operations} -> operations
+      {:ok, operations} -> Approval.apply_to_operations!(operations, mcp_tools.approval)
       {:error, reason} -> raise ArgumentError, "invalid MCP source: #{inspect(reason)}"
     end
   end
@@ -51,7 +52,8 @@ defmodule Jidoka.Agent.ToolSources.MCP do
         "protocol_version" => source.protocol_version,
         "capabilities" => source.capabilities,
         "timeouts" => source.timeouts,
-        "tools" => Enum.map(source.tools, & &1.name)
+        "tools" => Enum.map(source.tools, & &1.name),
+        "approval" => Approval.source_policy_map(mcp_tools.approval)
       }
       |> Common.reject_nil_values()
     ]

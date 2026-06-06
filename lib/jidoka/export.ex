@@ -156,9 +156,18 @@ defmodule Jidoka.Export do
       "name" => operation.name,
       "description" => operation.description,
       "idempotency" => Atom.to_string(operation.idempotency),
+      "approval" => portable_approval(operation.approval),
       "metadata" => portable_value(operation.metadata)
     }
     |> reject_empty_values()
+  end
+
+  defp portable_approval(nil), do: nil
+
+  defp portable_approval(%Jidoka.Review.Policy{} = policy) do
+    policy
+    |> Jidoka.Review.Policy.to_map()
+    |> portable_value()
   end
 
   defp portable_generation(nil), do: nil

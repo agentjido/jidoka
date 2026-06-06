@@ -6,36 +6,41 @@ defmodule Jidoka.Runtime.Controls.Operation do
   alias Jidoka.Agent.Spec.Controls.Operation, as: OperationControl
   alias Jidoka.Agent.Spec.Operation, as: OperationSpec
   alias Jidoka.Effect
+  alias Jidoka.Review.Approval
   alias Jidoka.Review.Interrupt
+  alias Jidoka.Review.Policy
   alias Jidoka.Runtime.Controls.Decision
   alias Jidoka.Runtime.Controls.OperationContext
   alias Jidoka.Turn
 
-  @spec run(Turn.State.t(), Effect.Intent.t()) ::
+  @spec run(Turn.State.t(), Effect.Intent.t(), keyword()) ::
           {:ok, Turn.State.t()} | {:interrupt, Interrupt.t(), Turn.State.t()} | {:error, term()}
-  def run(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent) do
+  def run(state, intent, opts \\ [])
+
+  def run(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent, opts) do
     if approved_interrupt_id(intent) do
       {:ok, append_approval_reused_event(state, intent)}
     else
-      run_unapproved(state, intent)
+      run_unapproved(state, intent, opts)
     end
   end
 
-  def run(%Turn.State{} = state, %Effect.Intent{}), do: {:ok, state}
+  def run(%Turn.State{} = state, %Effect.Intent{}, _opts), do: {:ok, state}
 
-  defp run_unapproved(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent) do
+  defp run_unapproved(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent, opts) do
     with {:ok, request} <- Effect.OperationRequest.from_input(intent.payload) do
       operation = operation_for(state, request.name)
       operation_kind = operation_kind(operation, request)
       operation_match = operation_match_data(operation, request, operation_kind, intent)
 
-      controls =
-        Enum.filter(
-          state.spec.controls.operations,
-          &OperationControl.matches?(&1, operation_match)
-        )
+      with {:ok, implicit_controls} <- implicit_approval_controls(operation, operation_match, opts) do
+        controls =
+          state.spec.controls.operations
+          |> Enum.filter(&OperationControl.matches?(&1, operation_match))
+          |> Kernel.++(implicit_controls)
 
-      run_controls(state, controls, request, operation, operation_match, intent)
+        run_controls(state, controls, request, operation, operation_match, intent)
+      end
     end
   end
 
@@ -204,6 +209,44 @@ defmodule Jidoka.Runtime.Controls.Operation do
       metadata: %{
         "operation_match" => control.match,
         "control_metadata" => control.metadata
+      }
+    )
+  end
+
+  defp implicit_approval_controls(operation, operation_match, opts) do
+    with {:ok, operation_controls} <- operation_approval_controls(operation, operation_match),
+         {:ok, request_controls} <- request_approval_controls(operation || operation_match, operation_match, opts) do
+      {:ok, operation_controls ++ request_controls}
+    end
+  end
+
+  defp operation_approval_controls(%OperationSpec{approval: %Policy{} = policy}, operation_match) do
+    {:ok, [approval_control(policy, operation_match, :operation)]}
+  end
+
+  defp operation_approval_controls(_operation, _operation_match), do: {:ok, []}
+
+  defp request_approval_controls(operation, operation_match, opts) do
+    case Keyword.get(opts, :require_tool_approval) do
+      nil ->
+        {:ok, []}
+
+      approval ->
+        case Approval.policy_for_operation(approval, operation) do
+          {:ok, %Policy{} = policy} -> {:ok, [approval_control(policy, operation_match, :request)]}
+          {:ok, nil} -> {:ok, []}
+          {:error, reason} -> {:error, {:invalid_request_approval_policy, reason}}
+        end
+    end
+  end
+
+  defp approval_control(%Policy{} = policy, operation_match, source) do
+    OperationControl.new!(
+      control: Jidoka.Controls.RequireApproval,
+      match: %{name: Map.get(operation_match, :name)},
+      metadata: %{
+        "source" => Atom.to_string(source),
+        "policy" => Policy.to_map(policy)
       }
     )
   end

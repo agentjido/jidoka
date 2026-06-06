@@ -7,6 +7,7 @@ defmodule Jidoka.Import.Tools do
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Catalog, as: CatalogSource
   alias Jidoka.Operation.Source.MCP, as: MCPSource
+  alias Jidoka.Review.Approval
   alias Jidoka.Runtime.JidoActions
   alias Jidoka.Schema
 
@@ -48,6 +49,7 @@ defmodule Jidoka.Import.Tools do
     |> Enum.reduce_while({:ok, []}, fn action_ref, {:ok, operations} ->
       with {:ok, action} <- resolve_action(action_ref, opts),
            {:ok, operation} <- operation_from_action(action) do
+        operation = Approval.apply_to_operation!(operation, approval_from_ref(action_ref))
         {:cont, {:ok, [operation | operations]}}
       else
         {:error, reason} -> {:halt, {:error, reason}}
@@ -80,7 +82,8 @@ defmodule Jidoka.Import.Tools do
           "source" => "browser",
           "name" => browser.name,
           "mode" => Atom.to_string(browser.mode),
-          "allow" => browser.allow
+          "allow" => browser.allow,
+          "approval" => Approval.source_policy_map(browser.approval)
         }
 
         {:cont, {:ok, operations ++ browser_operations, sources ++ [source]}}
@@ -96,6 +99,9 @@ defmodule Jidoka.Import.Tools do
     |> Enum.reduce_while({:ok, [], []}, fn mcp_ref, {:ok, acc_operations, sources} ->
       with {:ok, source} <- normalize_mcp_ref(mcp_ref),
            {:ok, source_operations} <- Source.operations(source) do
+        approval = approval_from_ref(mcp_ref)
+        source_operations = Approval.apply_to_operations!(source_operations, approval)
+
         source_metadata = %{
           "source" => "mcp",
           "endpoint" => Normalize.metadata_value(source.endpoint),
@@ -106,7 +112,8 @@ defmodule Jidoka.Import.Tools do
           "protocol_version" => source.protocol_version,
           "capabilities" => source.capabilities,
           "timeouts" => source.timeouts,
-          "tools" => Enum.map(source.tools, & &1.name)
+          "tools" => Enum.map(source.tools, & &1.name),
+          "approval" => Approval.source_policy_map(approval)
         }
 
         {:cont, {:ok, acc_operations ++ source_operations, sources ++ [Normalize.reject_nil_values(source_metadata)]}}
@@ -122,6 +129,9 @@ defmodule Jidoka.Import.Tools do
     |> Enum.reduce_while({:ok, [], []}, fn catalog_ref, {:ok, acc_operations, sources} ->
       with {:ok, source} <- normalize_catalog_ref(catalog_ref, opts),
            {:ok, source_operations} <- Source.operations(source) do
+        approval = approval_from_ref(catalog_ref)
+        source_operations = Approval.apply_to_operations!(source_operations, approval)
+
         source_metadata = %{
           "source" => "catalog",
           "catalog" => inspect(source.catalog),
@@ -132,7 +142,8 @@ defmodule Jidoka.Import.Tools do
           "max_parallel_calls" => source.max_parallel_calls,
           "require_read_only?" => source.require_read_only?,
           "result" => Atom.to_string(source.result),
-          "tools" => Enum.map(Jido.Action.Catalog.list(source.catalog_value), & &1.id)
+          "tools" => Enum.map(Jido.Action.Catalog.list(source.catalog_value), & &1.id),
+          "approval" => Approval.source_policy_map(approval)
         }
 
         {:cont, {:ok, acc_operations ++ source_operations, sources ++ [Normalize.reject_nil_values(source_metadata)]}}
@@ -177,12 +188,14 @@ defmodule Jidoka.Import.Tools do
       actions
       |> Enum.map(&JidoActions.operation_from_action!/1)
       |> Enum.map(&tag_ash_operation(&1, resource_data))
+      |> Approval.apply_to_operations!(resource_data.approval)
 
     source = %{
       "source" => "ash_resource",
       "resource" => inspect(resource_data.resource),
       "actions" => resource_data.actions,
-      "expanded?" => actions != []
+      "expanded?" => actions != [],
+      "approval" => Approval.source_policy_map(resource_data.approval)
     }
 
     {:ok, operations, source}
@@ -196,6 +209,7 @@ defmodule Jidoka.Import.Tools do
       |> Jidoka.Browser.tool_modules()
       |> Enum.map(&JidoActions.operation_from_action!/1)
       |> Enum.map(&tag_browser_operation(&1, browser))
+      |> Approval.apply_to_operations!(browser.approval)
 
     {:ok, operations}
   rescue
@@ -300,6 +314,7 @@ defmodule Jidoka.Import.Tools do
          actions: actions,
          description: Schema.get_key(attrs, :description),
          idempotency: idempotency,
+         approval: Schema.get_key(attrs, :approval),
          metadata: metadata
        }}
     end
@@ -332,6 +347,7 @@ defmodule Jidoka.Import.Tools do
          allow: allow,
          description: Schema.get_key(attrs, :description),
          idempotency: idempotency,
+         approval: Schema.get_key(attrs, :approval),
          metadata: metadata
        }}
     end
@@ -385,6 +401,14 @@ defmodule Jidoka.Import.Tools do
   end
 
   defp normalize_catalog_ref(ref, opts), do: normalize_catalog_ref(%{"catalog" => ref}, opts)
+
+  defp approval_from_ref(%{} = attrs) do
+    attrs
+    |> Normalize.stringify_keys()
+    |> Schema.get_key(:approval)
+  end
+
+  defp approval_from_ref(_ref), do: nil
 
   defp resolve_catalog(nil, _opts), do: {:error, :missing_catalog_ref}
 

@@ -4,6 +4,7 @@ defmodule Jidoka.Agent.ToolSources.Subagent do
   alias Jidoka.Agent.Dsl.Subagent
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Subagent, as: SubagentSource
+  alias Jidoka.Review.Approval
 
   @spec source!(term()) :: SubagentSource.t()
   def source!(%Subagent{} = subagent) do
@@ -24,7 +25,7 @@ defmodule Jidoka.Agent.ToolSources.Subagent do
     |> source!()
     |> Source.operations()
     |> case do
-      {:ok, operations} -> operations
+      {:ok, operations} -> Approval.apply_to_operations!(operations, subagent.approval)
       {:error, reason} -> raise ArgumentError, "invalid subagent source: #{inspect(reason)}"
     end
   end
@@ -40,8 +41,10 @@ defmodule Jidoka.Agent.ToolSources.Subagent do
         "agent" => inspect(source.agent),
         "timeout" => source.timeout,
         "forward_context" => inspect(source.forward_context),
-        "result" => Atom.to_string(source.result)
+        "result" => Atom.to_string(source.result),
+        "approval" => Approval.source_policy_map(subagent.approval)
       }
+      |> Jidoka.Agent.ToolSources.Common.reject_nil_values()
     ]
   end
 end

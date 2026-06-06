@@ -273,7 +273,8 @@ Options:
 | `max_concurrency:` | scheduler default | Maximum concurrent workflow steps when `async: true`. |
 | `forward_context:` | `:public` | Context visible to the workflow: `:public`, `:none`, `{:only, keys}`, or `{:except, keys}`. |
 | `result:` | `:output` | `:output` returns raw workflow output; `:structured` wraps workflow metadata. |
-| `idempotency:` | `:idempotent` | Operation idempotency. Use `:unsafe_once` only with an operation control. |
+| `idempotency:` | `:idempotent` | Operation idempotency. Use `:unsafe_once` only with approval or an operation control. |
+| `approval:` | omitted | Pause before the workflow operation executes. |
 | `metadata:` | `%{}` | Extra operation metadata. |
 
 `result: :structured` returns this shape to the parent turn:

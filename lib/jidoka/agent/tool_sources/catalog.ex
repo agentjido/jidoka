@@ -5,6 +5,7 @@ defmodule Jidoka.Agent.ToolSources.Catalog do
   alias Jidoka.Agent.ToolSources.Common
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Catalog, as: CatalogSource
+  alias Jidoka.Review.Approval
 
   @spec source!(term()) :: CatalogSource.t()
   def source!(%Catalog{} = catalog) do
@@ -28,7 +29,7 @@ defmodule Jidoka.Agent.ToolSources.Catalog do
     |> source!()
     |> Source.operations()
     |> case do
-      {:ok, operations} -> operations
+      {:ok, operations} -> Approval.apply_to_operations!(operations, catalog.approval)
       {:error, reason} -> raise ArgumentError, "invalid catalog source: #{inspect(reason)}"
     end
   end
@@ -48,7 +49,8 @@ defmodule Jidoka.Agent.ToolSources.Catalog do
         "max_parallel_calls" => source.max_parallel_calls,
         "require_read_only?" => source.require_read_only?,
         "result" => Atom.to_string(source.result),
-        "tools" => Enum.map(Jido.Action.Catalog.list(source.catalog_value), & &1.id)
+        "tools" => Enum.map(Jido.Action.Catalog.list(source.catalog_value), & &1.id),
+        "approval" => Approval.source_policy_map(catalog.approval)
       }
       |> Common.reject_nil_values()
     ]

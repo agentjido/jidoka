@@ -4,6 +4,7 @@ defmodule Jidoka.Agent.ToolSources.Browser do
   alias Jidoka.Agent.Dsl.Browser
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Agent.ToolSources.Common
+  alias Jidoka.Review.Approval
 
   @spec action_modules(term()) :: [module()]
   def action_modules(%Browser{} = browser) do
@@ -18,6 +19,7 @@ defmodule Jidoka.Agent.ToolSources.Browser do
     |> action_modules()
     |> Enum.map(&Common.operation_from_action!/1)
     |> Enum.map(&tag_operation(&1, browser))
+    |> Approval.apply_to_operations!(browser.approval)
   end
 
   @spec metadata!(term()) :: [map()]
@@ -27,8 +29,10 @@ defmodule Jidoka.Agent.ToolSources.Browser do
         "source" => "browser",
         "name" => Common.normalize_name!(browser.name, "browser name"),
         "mode" => Atom.to_string(mode!(browser)),
-        "allow" => Common.normalize_string_list!(browser.allow || [], "browser allowlist")
+        "allow" => Common.normalize_string_list!(browser.allow || [], "browser allowlist"),
+        "approval" => Approval.source_policy_map(browser.approval)
       }
+      |> Common.reject_nil_values()
     ]
   end
 
@@ -36,7 +40,7 @@ defmodule Jidoka.Agent.ToolSources.Browser do
     browser_name = Common.normalize_name!(browser.name, "browser name")
     mode = mode!(browser)
 
-    %Operation{
+    Operation.new!(%Operation{
       operation
       | description: browser.description || operation.description,
         idempotency: browser.idempotency || operation.idempotency,
@@ -50,7 +54,7 @@ defmodule Jidoka.Agent.ToolSources.Browser do
             "mode" => Atom.to_string(mode),
             "allow" => Common.normalize_string_list!(browser.allow || [], "browser allowlist")
           })
-    }
+    })
   end
 
   defp mode!(%Browser{} = browser) do

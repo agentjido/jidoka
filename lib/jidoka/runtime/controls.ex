@@ -26,10 +26,10 @@ defmodule Jidoka.Runtime.Controls do
   def run_output_controls(%Turn.State{} = state),
     do: run_controls(state, :output, state.spec.controls.outputs)
 
-  @spec run_operation_controls(Turn.State.t(), Effect.Intent.t()) ::
+  @spec run_operation_controls(Turn.State.t(), Effect.Intent.t(), keyword()) ::
           {:ok, Turn.State.t()} | {:interrupt, Interrupt.t(), Turn.State.t()} | {:error, term()}
-  def run_operation_controls(%Turn.State{} = state, %Effect.Intent{} = intent) do
-    Operation.run(state, intent)
+  def run_operation_controls(%Turn.State{} = state, %Effect.Intent{} = intent, opts \\ []) do
+    Operation.run(state, intent, opts)
   end
 
   defp run_controls(%Turn.State{} = state, boundary, controls)

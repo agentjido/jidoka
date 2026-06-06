@@ -84,6 +84,11 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Orchestration do
           default: :structured,
           doc: "Parent-visible result shape: :text or :structured."
         ],
+        approval: [
+          type: :any,
+          required: false,
+          doc: "Approval policy for the generated subagent operation."
+        ],
         metadata: [
           type: :map,
           required: false,
@@ -130,6 +135,11 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Orchestration do
           required: false,
           default: :public,
           doc: "Context forwarding policy: :public, :none, {:only, keys}, or {:except, keys}."
+        ],
+        approval: [
+          type: :any,
+          required: false,
+          doc: "Approval policy for the generated handoff operation."
         ],
         metadata: [
           type: :map,
@@ -200,6 +210,11 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Orchestration do
           required: false,
           default: :idempotent,
           doc: "Operation idempotency policy for the workflow operation."
+        ],
+        approval: [
+          type: :any,
+          required: false,
+          doc: "Approval policy for the workflow operation."
         ],
         metadata: [
           type: :map,

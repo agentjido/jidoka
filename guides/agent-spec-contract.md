@@ -197,7 +197,7 @@ For coverage of the DSL/import to spec contract, see
 | --- | --- | --- |
 | `ArgumentError: invalid agent spec: ...` | A required field is missing or a value failed Zoi parsing. | Inspect the inner reason; common fixes are non-empty `id`/`instructions` and a valid `model` string. |
 | `{:error, {:invalid_context_schema, _}}` | `context_schema` is not a Zoi schema. | Pass a `Zoi.*` value or `nil`. |
-| `{:error, {:unsafe_once_requires_control, name, kind}}` | An `:unsafe_once` operation has no matching operation control. | Add a control entry under `controls.operations` for that operation. See [Controls](controls.md). |
+| `{:error, {:unsafe_once_requires_control, name, kind}}` | An `:unsafe_once` operation has no approval policy or matching operation control. | Add `approval: true` or a control entry under `controls.operations`. See [Controls](controls.md). |
 | `{:error, {:invalid_result_schema, _}}` | `result` was given a non-Zoi value. | Wrap the schema with `Zoi.*` constructors before passing it. |
 | Spec inspection shows live processes or keys | You injected a runtime value into a spec field. | Move runtime values to harness options (`llm:`, `operations:`, `memory_store:`). |
 

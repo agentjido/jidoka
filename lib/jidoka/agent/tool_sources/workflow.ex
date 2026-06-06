@@ -5,6 +5,7 @@ defmodule Jidoka.Agent.ToolSources.Workflow do
   alias Jidoka.Agent.ToolSources.Common
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Workflow, as: WorkflowSource
+  alias Jidoka.Review.Approval
 
   @spec source!(term()) :: WorkflowSource.t()
   def source!(%Workflow{} = workflow) do
@@ -28,7 +29,7 @@ defmodule Jidoka.Agent.ToolSources.Workflow do
     |> source!()
     |> Source.operations()
     |> case do
-      {:ok, operations} -> operations
+      {:ok, operations} -> Approval.apply_to_operations!(operations, workflow.approval)
       {:error, reason} -> raise ArgumentError, "invalid workflow source: #{inspect(reason)}"
     end
   end
@@ -47,7 +48,8 @@ defmodule Jidoka.Agent.ToolSources.Workflow do
         "async" => source.async,
         "max_concurrency" => source.max_concurrency,
         "forward_context" => inspect(source.forward_context),
-        "result" => Atom.to_string(source.result)
+        "result" => Atom.to_string(source.result),
+        "approval" => Approval.source_policy_map(workflow.approval)
       }
       |> Common.reject_nil_values()
     ]

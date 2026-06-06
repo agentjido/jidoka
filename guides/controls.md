@@ -64,6 +64,26 @@ end
 Operation controls receive `Jidoka.Runtime.Controls.OperationContext`. This is
 the safety boundary for tool/action execution.
 
+For the common case where an operation simply needs human approval before it
+runs, prefer tool-level approval sugar:
+
+```elixir
+tools do
+  action MyApp.RefundOrder,
+    idempotency: :unsafe_once,
+    approval: [
+      reason: :refund_requires_review,
+      message: "Review the refund before it is issued.",
+      ttl_ms: 300_000
+    ]
+end
+```
+
+This compiles to Jidoka's built-in approval control and still uses durable
+hibernate/resume. Use a custom operation control when the policy needs code:
+tenant checks, amount thresholds, external risk scoring, or custom block
+decisions.
+
 ```elixir
 defmodule MyApp.RequireRefundApproval do
   use Jidoka.Control, name: "require_refund_approval"
@@ -116,9 +136,19 @@ approval = Jidoka.Review.Response.approve(review.interrupt_id)
   Jidoka.resume(snapshot, approval: approval)
 ```
 
-Operations marked `:unsafe_once` must have a matching operation control before
-the agent can compile into a plan. This makes risky work visible during
-preflight instead of after a model chooses the operation.
+Operations marked `:unsafe_once` must have either an approval policy or a
+matching operation control before the agent can compile into a plan. This makes
+risky work visible during preflight instead of after a model chooses the
+operation.
+
+Request-level approval is available when the caller wants to review operations
+for one turn without changing the agent spec:
+
+```elixir
+Jidoka.turn(MyApp.SupportAgent, "Refund A1001",
+  require_tool_approval: [only: ["refund_order"]]
+)
+```
 
 ## Output Controls
 

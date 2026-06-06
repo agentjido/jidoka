@@ -4,6 +4,7 @@ defmodule Jidoka.Agent.ToolSources.AshResource do
   alias Jidoka.Agent.Dsl.AshResource
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Agent.ToolSources.Common
+  alias Jidoka.Review.Approval
 
   @spec action_modules(term()) :: [module()]
   def action_modules(%AshResource{} = ash_resource), do: ash_jido_actions(ash_resource)
@@ -14,6 +15,7 @@ defmodule Jidoka.Agent.ToolSources.AshResource do
     |> ash_jido_actions()
     |> Enum.map(&Common.operation_from_action!/1)
     |> Enum.map(&tag_operation(&1, ash_resource))
+    |> Approval.apply_to_operations!(ash_resource.approval)
   end
 
   @spec metadata!(term()) :: [map()]
@@ -23,16 +25,19 @@ defmodule Jidoka.Agent.ToolSources.AshResource do
         "source" => "ash_resource",
         "resource" => inspect(ash_resource.resource),
         "actions" => Common.normalize_name_list!(ash_resource.actions || [], "ash_resource actions"),
-        "expanded?" => ash_jido_actions(ash_resource) != []
+        "expanded?" => ash_jido_actions(ash_resource) != [],
+        "approval" => Approval.source_policy_map(ash_resource.approval)
       }
       |> Common.reject_nil_values()
     ]
   end
 
   defp tag_operation(%Operation{metadata: metadata} = operation, %AshResource{} = ash_resource) do
-    %Operation{
+    Operation.new!(%Operation{
       operation
-      | metadata:
+      | description: ash_resource.description || operation.description,
+        idempotency: ash_resource.idempotency || operation.idempotency,
+        metadata:
           metadata
           |> Map.merge(Common.normalize_metadata!(ash_resource.metadata))
           |> Map.merge(%{
@@ -41,7 +46,7 @@ defmodule Jidoka.Agent.ToolSources.AshResource do
             "resource" => inspect(ash_resource.resource),
             "action" => operation.name
           })
-    }
+    })
   end
 
   defp ash_jido_actions(%AshResource{} = ash_resource) do

@@ -178,7 +178,8 @@ end
 Three properties matter to contributors:
 
 - **Operation policies are validated up front.** A spec with an
-  `:unsafe_once` operation without an operation control fails before any IO.
+  `:unsafe_once` operation without approval or an operation control fails
+  before any IO.
 - **Input controls run exactly once** at the start, not once per loop
   iteration.
 - **`started_at_ms` is recorded once.** `enforce_timeout/2` compares against

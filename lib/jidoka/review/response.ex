@@ -7,6 +7,7 @@ defmodule Jidoka.Review.Response do
   """
 
   alias Jidoka.Review.Interrupt
+  alias Jidoka.Review.Request
   alias Jidoka.Schema
 
   @decisions [:approved, :denied]
@@ -44,7 +45,7 @@ defmodule Jidoka.Review.Response do
   def from_input(%__MODULE__{} = response), do: new(response)
   def from_input(input), do: new(input)
 
-  @spec approve(Interrupt.t() | String.t(), keyword()) :: t()
+  @spec approve(Interrupt.t() | Request.t() | String.t(), keyword()) :: t()
   def approve(interrupt_or_id, opts \\ []) do
     new!(
       interrupt_id: interrupt_id(interrupt_or_id),
@@ -55,7 +56,7 @@ defmodule Jidoka.Review.Response do
     )
   end
 
-  @spec deny(Interrupt.t() | String.t(), keyword()) :: t()
+  @spec deny(Interrupt.t() | Request.t() | String.t(), keyword()) :: t()
   def deny(interrupt_or_id, opts \\ []) do
     new!(
       interrupt_id: interrupt_id(interrupt_or_id),
@@ -67,5 +68,6 @@ defmodule Jidoka.Review.Response do
   end
 
   defp interrupt_id(%Interrupt{id: id}), do: id
+  defp interrupt_id(%Request{interrupt_id: id}), do: id
   defp interrupt_id(id) when is_binary(id), do: id
 end

@@ -4,6 +4,7 @@ defmodule Jidoka.Agent.ToolSources.Handoff do
   alias Jidoka.Agent.Dsl.Handoff
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Handoff, as: HandoffSource
+  alias Jidoka.Review.Approval
 
   @spec source!(term()) :: HandoffSource.t()
   def source!(%Handoff{} = handoff) do
@@ -23,7 +24,7 @@ defmodule Jidoka.Agent.ToolSources.Handoff do
     |> source!()
     |> Source.operations()
     |> case do
-      {:ok, operations} -> operations
+      {:ok, operations} -> Approval.apply_to_operations!(operations, handoff.approval)
       {:error, reason} -> raise ArgumentError, "invalid handoff source: #{inspect(reason)}"
     end
   end
@@ -38,8 +39,10 @@ defmodule Jidoka.Agent.ToolSources.Handoff do
         "name" => source.name,
         "agent" => inspect(source.agent),
         "target" => inspect(source.target),
-        "forward_context" => inspect(source.forward_context)
+        "forward_context" => inspect(source.forward_context),
+        "approval" => Approval.source_policy_map(handoff.approval)
       }
+      |> Jidoka.Agent.ToolSources.Common.reject_nil_values()
     ]
   end
 end

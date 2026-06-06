@@ -71,6 +71,71 @@ defmodule Jidoka.DataStructsTest do
              Operation.new(name: "lookup", idempotency: :not_valid)
   end
 
+  test "review policies normalize approval data without creating atoms" do
+    assert {:ok,
+            %Review.Policy{
+              required: true,
+              mode: :pre_execution,
+              reason: :approval_required
+            }} = Review.Policy.from_input(true)
+
+    assert {:ok,
+            %Review.Policy{
+              reason: "refund_review",
+              message: "Review the refund.",
+              ttl_ms: 30_000,
+              metadata: %{"risk" => "high"}
+            }} =
+             Review.Policy.from_input(%{
+               "reason" => "refund_review",
+               "message" => "Review the refund.",
+               "ttl_ms" => 30_000,
+               "metadata" => %{"risk" => "high"}
+             })
+
+    assert {:ok, nil} = Review.Policy.from_input(false)
+    assert {:error, {:invalid_review_policy, :bad_policy}} = Review.Policy.from_input(:bad_policy)
+  end
+
+  test "operation specs carry approval policy data" do
+    assert {:ok,
+            %Operation{
+              approval: %Review.Policy{
+                required: true,
+                reason: "review_lookup",
+                ttl_ms: 100
+              }
+            } = operation} =
+             Operation.new(%{
+               "name" => "lookup",
+               "approval" => %{"reason" => "review_lookup", "ttl_ms" => 100}
+             })
+
+    assert Operation.approval_required?(operation)
+
+    refute Operation.approval_required?(Operation.new!(name: "lookup_without_approval"))
+  end
+
+  test "approval source filters match operations by final operation name" do
+    safe = Operation.new!(name: "safe_lookup", idempotency: :idempotent)
+    unsafe = Operation.new!(name: "delete_record", idempotency: :unsafe_once)
+
+    assert {:ok, nil} = Review.Approval.policy_for_operation(:unsafe_once, safe)
+    assert {:ok, %Review.Policy{}} = Review.Approval.policy_for_operation(:unsafe_once, unsafe)
+
+    assert {:ok, %Review.Policy{reason: "review_delete"}} =
+             Review.Approval.policy_for_operation(
+               [only: ["delete_record"], reason: "review_delete"],
+               unsafe
+             )
+
+    assert {:ok, nil} =
+             Review.Approval.policy_for_operation(
+               [except: [:delete_record], reason: "review_all"],
+               unsafe
+             )
+  end
+
   test "operation policies expose replay and control semantics" do
     assert Operation.kind(Operation.new!(name: "lookup")) == :operation
 
@@ -113,6 +178,23 @@ defmodule Jidoka.DataStructsTest do
 
     assert {:error, {:unsafe_once_requires_control, "charge_card", :operation}} =
              Turn.Plan.new(spec)
+
+    approved_spec =
+      Agent.Spec.new!(
+        id: "unsafe_with_approval_policy",
+        instructions: "Charge only when explicitly requested.",
+        operations: [
+          Operation.new!(
+            name: "charge_card",
+            description: "Charges a customer card.",
+            idempotency: :unsafe_once,
+            approval: true
+          )
+        ]
+      )
+
+    assert :ok = Agent.Spec.validate_operation_policies(approved_spec)
+    assert {:ok, %Turn.Plan{}} = Turn.Plan.new(approved_spec)
 
     controlled_spec =
       Agent.Spec.new!(

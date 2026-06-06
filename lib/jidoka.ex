@@ -21,6 +21,7 @@ defmodule Jidoka do
   * `chat_async/3`, `stream/2`, and `await/2` support UI-friendly async flows;
   * `session/2` starts durable multi-turn state;
   * `resume/2` continues from a hibernated snapshot;
+  * `pending_reviews/1`, `approve/3`, and `deny/3` cover common approval flows;
   * `export/2` writes portable JSON/YAML agent data;
   * `inspect/2`, `preflight/3`, and `project/1` expose debugging views.
   """
@@ -31,6 +32,7 @@ defmodule Jidoka do
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
   alias Jidoka.Inspection
+  alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
 
@@ -328,6 +330,62 @@ defmodule Jidoka do
   end
 
   @doc """
+  Lists pending human-review requests from a snapshot, session, or session store.
+
+  For snapshots, this reads the review request embedded in snapshot metadata.
+  For sessions and stores, it delegates to the harness session store.
+  """
+  @spec pending_reviews(AgentSnapshot.t() | Session.t() | Harness.Store.store() | keyword() | map() | String.t()) ::
+          {:ok, [Review.Request.t()]} | {:error, term()}
+  def pending_reviews(%Session{} = session), do: Harness.pending_reviews(session)
+
+  def pending_reviews(%AgentSnapshot{} = snapshot), do: pending_reviews_from_snapshot(snapshot)
+
+  def pending_reviews(snapshot_input) when is_binary(snapshot_input) or is_map(snapshot_input) do
+    case AgentSnapshot.from_input(snapshot_input) do
+      {:ok, snapshot} -> pending_reviews(snapshot)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def pending_reviews(snapshot_input) when is_list(snapshot_input) do
+    case AgentSnapshot.from_input(snapshot_input) do
+      {:ok, snapshot} -> pending_reviews(snapshot)
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def pending_reviews(store), do: Harness.pending_reviews(store)
+
+  @doc """
+  Approves a pending review and resumes the target.
+
+  The target may be a hibernated snapshot or a caller-managed session. This is a
+  convenience wrapper around `Jidoka.Review.Response.approve/2` plus
+  `resume/2`.
+  """
+  @spec approve(AgentSnapshot.t() | Session.t() | map() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
+          run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), AgentSnapshot.t()}
+  def approve(snapshot_or_session, review_or_id, opts \\ []) do
+    response = Review.Response.approve(review_or_id, review_response_opts(opts))
+    resume_review_target(snapshot_or_session, response, opts)
+  end
+
+  @doc """
+  Denies a pending review and resumes the target.
+
+  Denial returns the normal resume error shape for denied approvals. Use this
+  when the application wants a single facade call instead of manually building a
+  `Jidoka.Review.Response`.
+  """
+  @spec deny(AgentSnapshot.t() | Session.t() | map() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
+          run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), AgentSnapshot.t()}
+  def deny(snapshot_or_session, review_or_id, opts \\ []) do
+    response = Review.Response.deny(review_or_id, review_response_opts(opts))
+    resume_review_target(snapshot_or_session, response, opts)
+  end
+
+  @doc """
   Formats a Jidoka error or arbitrary error term for display.
 
   This is intended for UI/logging boundaries that need a concise message rather
@@ -370,6 +428,30 @@ defmodule Jidoka do
       {:error, reason} ->
         {:error, Error.normalize(reason, operation: :preflight)}
     end
+  end
+
+  defp pending_reviews_from_snapshot(%AgentSnapshot{metadata: metadata}) when is_map(metadata) do
+    case Map.get(metadata, "pending_review", Map.get(metadata, :pending_review)) do
+      nil ->
+        {:ok, []}
+
+      review ->
+        with {:ok, review} <- Review.Request.from_input(review) do
+          {:ok, [review]}
+        end
+    end
+  end
+
+  defp resume_review_target(%Session{} = session, %Review.Response{} = response, opts) do
+    Harness.resume_session(session, Keyword.put(opts, :approval, response))
+  end
+
+  defp resume_review_target(snapshot_input, %Review.Response{} = response, opts) do
+    resume(snapshot_input, Keyword.put(opts, :approval, response))
+  end
+
+  defp review_response_opts(opts) do
+    Keyword.take(opts, [:reason, :responded_at_ms, :metadata])
   end
 
   @doc """

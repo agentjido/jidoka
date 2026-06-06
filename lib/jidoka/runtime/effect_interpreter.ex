@@ -144,7 +144,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     if operation_controls_allowed?(metadata) do
       {:ok, state}
     else
-      case Controls.run_operation_controls(state, intent) do
+      case Controls.run_operation_controls(state, intent, opts) do
         {:ok, %Turn.State{} = state} ->
           EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
           {:ok, state}

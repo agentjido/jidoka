@@ -159,7 +159,7 @@ Workflow sources expose a `Jidoka.Workflow` module as one operation.
 | `:timeout` | positive integer | Total wall-clock timeout in milliseconds. Defaults to `30_000`. |
 | `:forward_context` | policy | `:public`, `:none`, `{:only, keys}`, or `{:except, keys}`. |
 | `:result` | `:output` or `:structured` | Raw workflow output or wrapped workflow metadata. |
-| `:idempotency` | operation idempotency | Defaults to `:idempotent`; `:unsafe_once` requires controls. |
+| `:idempotency` | operation idempotency | Defaults to `:idempotent`; `:unsafe_once` requires approval or controls. |
 | `:metadata` | map | Extra operation metadata merged into the operation. |
 
 Published workflow operation metadata includes:

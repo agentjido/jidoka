@@ -222,7 +222,7 @@ runtime handles, and other private values should stay out of it.
 | Current turn | Parent waits for child result. | Current agent records transfer and finishes. |
 | Future turns | Parent still owns them. | Target agent owns them until reset. |
 | Return shape | Child content, value, and child operation results. | Handoff payload plus owner projection. |
-| Safety | `:idempotent` by default. | `:unsafe_once`; gate with a control when needed. |
+| Safety | `:idempotent` by default. | `:unsafe_once`; gate with approval or a control when needed. |
 | Storage | No routing state is written. | Owner store records the target. |
 
 ## Testing Pattern

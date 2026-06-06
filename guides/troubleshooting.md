@@ -106,7 +106,7 @@ trace.
 | `Jidoka.Agent.Spec.new!/1` raises `ArgumentError` | Invalid spec data passed at runtime | Wrap in `Jidoka.agent/1` (returns `{:ok, _}`/`{:error, _}`); inspect the reason. |
 | `{:error, {:invalid_zoi_schema, _}}` on context/result | Schema is not a Zoi schema | Use `Zoi.object/1`, `Zoi.string/0`, etc.; do not pass a raw map. |
 | `Jidoka.preflight/3` returns `{:error, {:missing_default_model, _}}` | Neither agent nor `Jidoka.Config.default_model/0` is set | Set `model` in the DSL or configure `:jidoka, :default_model`. |
-| Operation in DSL has `idempotency: :unsafe_once` but turn errors with `{:operation_policy_violation, _}` | No operation control attached to the unsafe operation | Add a `controls` entry that matches the operation with a `Jidoka.Control` implementation. |
+| Operation in DSL has `idempotency: :unsafe_once` but plan/turn fails before execution | No approval policy or operation control attached to the unsafe operation | Add `approval: true` to the tool declaration or add a matching `controls` entry with a `Jidoka.Control` implementation. |
 | `(ArgumentError) invalid agent spec: ...` from `Jidoka.agent!/1` | Tests passing raw atoms or unsupported keys | Use `Jidoka.agent/1`, surface `{:error, reason}` instead of raising. |
 | Compile warning about `unused alias` in the agent module | DSL macro generated the alias automatically | Either remove the explicit alias or suppress with `_ = MyAction`. |
 | Memory section accepted but never used | Memory adapter not passed at runtime | Pass `memory_store:` to `Jidoka.turn/3` or configure a default. |
