@@ -88,12 +88,14 @@ defmodule Jidoka.Runtime.Controls.Operation do
          operation_match,
          %Effect.Intent{} = intent
        ) do
+    control_name = control_name(control.control)
+
     control.control.call(
       OperationContext.new!(
         type: :control,
         boundary: :operation,
         control: control.control,
-        control_name: control_name(control.control),
+        control_name: control_name,
         metadata: control.metadata,
         request_metadata: state.request.metadata,
         operation: request.name,
@@ -110,6 +112,17 @@ defmodule Jidoka.Runtime.Controls.Operation do
         request: state.request,
         input: state.request.input,
         context: state.request.context,
+        ctx:
+          Jidoka.Context.from_operation!(
+            state,
+            request,
+            operation,
+            operation_match,
+            intent,
+            control: control.control,
+            control_name: control_name,
+            metadata: control.metadata
+          ),
         agent_state: state.agent_state,
         intent: intent,
         operation_request: request,

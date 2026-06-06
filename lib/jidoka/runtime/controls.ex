@@ -77,6 +77,13 @@ defmodule Jidoka.Runtime.Controls do
       result: state.result,
       result_value: state.result_value,
       context: state.request.context,
+      ctx:
+        Jidoka.Context.from_turn_state!(state,
+          boundary: boundary,
+          control: control.control,
+          control_name: control_name(control.control),
+          metadata: control.metadata
+        ),
       agent_state: state.agent_state
     }
   end

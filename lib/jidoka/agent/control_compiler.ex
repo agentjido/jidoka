@@ -15,7 +15,8 @@ defmodule Jidoka.Agent.ControlCompiler do
             normalize_dsl_value!(agent_module, [:controls, :operation], fn ->
               Controls.Operation.new!(
                 control: control.control,
-                match: control.match
+                match: control.match,
+                metadata: control.metadata || %{}
               )
             end)
           ]

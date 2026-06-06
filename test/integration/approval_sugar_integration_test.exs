@@ -1,7 +1,26 @@
+defmodule Jidoka.ApprovalSugarIntegrationTest.AmountApprovalPredicate do
+  @moduledoc false
+
+  use Jidoka.ApprovalPredicate
+
+  @impl true
+  def call(%Jidoka.Context{} = ctx) do
+    amount = Map.get(ctx.arguments, "amount") || Map.get(ctx.arguments, :amount) || 0
+
+    case Jidoka.Context.fetch(ctx, :test_pid) do
+      {:ok, pid} -> send(pid, {:approval_predicate_called, amount})
+      :error -> :ok
+    end
+
+    amount >= 100
+  end
+end
+
 defmodule Jidoka.ApprovalSugarIntegrationTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
+  alias Jidoka.ApprovalSugarIntegrationTest.AmountApprovalPredicate
   alias Jidoka.Effect
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
@@ -135,6 +154,32 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
     assert_receive {:operation_called, "approved_lookup"}, 1_000
   end
 
+  test "dynamic approval predicates inspect operation args and context" do
+    test_pid = self()
+
+    assert {:ok, %Turn.Result{content: "Small refund done."}} =
+             Jidoka.turn(predicate_approval_spec(), request("Small refund.", %{test_pid: test_pid}),
+               llm: single_operation_llm("refund_order", %{"amount" => 25}, "Small refund done."),
+               operations: observed_operations(test_pid, ["refund_order"])
+             )
+
+    assert_receive {:approval_predicate_called, 25}
+    assert_receive {:operation_called, "refund_order"}
+
+    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+             Jidoka.turn(predicate_approval_spec(), request("Large refund.", %{test_pid: test_pid}),
+               llm: single_operation_llm("refund_order", %{"amount" => 250}, "Large refund done."),
+               operations: observed_operations(test_pid, ["refund_order"]),
+               clock: clock(5_000)
+             )
+
+    assert_receive {:approval_predicate_called, 250}
+    refute_received {:operation_called, "refund_order"}
+
+    assert {:ok, [%Review.Request{} = review]} = Jidoka.pending_reviews(snapshot)
+    assert review.reason == "large_refund_review"
+  end
+
   defp approval_spec do
     Agent.Spec.new!(
       id: "approval_sugar_agent",
@@ -149,6 +194,26 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
             reason: "manual_review",
             message: "Review the lookup.",
             ttl_ms: 30_000
+          ]
+        )
+      ],
+      runtime_defaults: %{max_model_turns: 4}
+    )
+  end
+
+  defp predicate_approval_spec do
+    Agent.Spec.new!(
+      id: "predicate_approval_agent",
+      instructions: "Use refund_order before answering refund questions.",
+      model: %{provider: :test, id: "model"},
+      operations: [
+        Agent.Spec.Operation.new!(
+          name: "refund_order",
+          description: "Refunds an order.",
+          idempotency: :unsafe_once,
+          approval: [
+            when: AmountApprovalPredicate,
+            reason: "large_refund_review"
           ]
         )
       ],
@@ -203,6 +268,8 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
 
     LocalOperations.operations(handlers)
   end
+
+  defp request(input, context), do: Turn.Request.new!(input: input, context: context)
 
   defp clock(now_ms), do: fn -> now_ms end
 end

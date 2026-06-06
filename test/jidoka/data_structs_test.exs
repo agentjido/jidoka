@@ -7,6 +7,17 @@ defmodule Jidoka.DataStructsTest.Support.AllowControl do
   def call(_context), do: :cont
 end
 
+defmodule Jidoka.DataStructsTest.Support.AmountPredicate do
+  @moduledoc false
+
+  use Jidoka.ApprovalPredicate
+
+  @impl true
+  def call(%Jidoka.Context{arguments: arguments}) do
+    (Map.get(arguments, "amount") || 0) > 100
+  end
+end
+
 defmodule Jidoka.DataStructsTest do
   use ExUnit.Case, async: true
 
@@ -17,7 +28,7 @@ defmodule Jidoka.DataStructsTest do
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
-  alias Jidoka.DataStructsTest.Support.AllowControl
+  alias Jidoka.DataStructsTest.Support.{AllowControl, AmountPredicate}
 
   test "agent state accepts nil, maps, and structs as input" do
     assert {:ok, %Agent.State{messages: [], operation_results: [], metadata: %{}}} =
@@ -95,6 +106,38 @@ defmodule Jidoka.DataStructsTest do
 
     assert {:ok, nil} = Review.Policy.from_input(false)
     assert {:error, {:invalid_review_policy, :bad_policy}} = Review.Policy.from_input(:bad_policy)
+
+    assert {:ok, %Review.Policy{predicate: AmountPredicate}} =
+             Review.Policy.from_input(%{"when" => AmountPredicate})
+
+    assert {:error, {:invalid_approval_predicate, "Elixir.Missing.Predicate"}} =
+             Review.Policy.from_input(%{"when" => "Elixir.Missing.Predicate"})
+  end
+
+  test "Jidoka.Context normalizes runtime context and fetches data keys safely" do
+    assert {:ok,
+            %Jidoka.Context{
+              agent_id: "agent",
+              request_id: "request",
+              boundary: :operation,
+              operation: "refund_order",
+              operation_kind: :action,
+              idempotency: :unsafe_once,
+              data: %{"tenant_id" => "tenant_1", reviewer: "Ada"}
+            } = context} =
+             Jidoka.Context.new(%{
+               "agent_id" => "agent",
+               "request_id" => "request",
+               "boundary" => "operation",
+               "operation" => "refund_order",
+               "operation_kind" => "action",
+               "idempotency" => "unsafe_once",
+               "context" => %{"tenant_id" => "tenant_1", reviewer: "Ada"}
+             })
+
+    assert Jidoka.Context.get(context, :tenant_id) == "tenant_1"
+    assert Jidoka.Context.get(context, "reviewer") == "Ada"
+    assert Jidoka.Context.get(context, :missing, :default) == :default
   end
 
   test "operation specs carry approval policy data" do

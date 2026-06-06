@@ -72,7 +72,11 @@ defmodule Jidoka.Agent.Verifiers.VerifyControls do
   defp boundary_name([:controls, boundary]), do: Atom.to_string(boundary)
 
   defp verify_operation(module, control_ref, seen) do
-    case Operation.new(control: control_ref.control, match: control_ref.match) do
+    case Operation.new(
+           control: control_ref.control,
+           match: control_ref.match,
+           metadata: control_ref.metadata || %{}
+         ) do
       {:ok, operation} ->
         duplicate_key = {operation.control, operation.match}
 

@@ -124,21 +124,49 @@ The data path is simple. Every stage is just data.
 - The interrupt only fires for `:operation` boundaries today; input and
   output controls cannot durably hibernate yet and must block or fail.
 - Tool-level `approval:` compiles to Jidoka's built-in
-  `Jidoka.Controls.RequireApproval` operation control. Custom operation
-  controls use the same interrupt, snapshot, and resume path.
+  `Jidoka.Controls.RequireApproval` operation control. Approval predicates and
+  custom operation controls use the same interrupt, snapshot, and resume path.
 
 ## How To
 
 ### Step 1: Add Approval Policy
 
-Use `approval:` when the policy is unconditional or can be expressed with
-`only:` / `except:` filters:
+Use `approval:` when the policy is unconditional, can be expressed with
+`only:` / `except:` filters, or can be delegated to a module predicate:
 
 ```elixir
 tools do
   action MyApp.RefundOrder,
     idempotency: :unsafe_once,
     approval: true
+end
+```
+
+When approval depends on operation arguments or caller context, use a
+module-based predicate. The predicate receives `Jidoka.Context`:
+
+```elixir
+defmodule MyApp.LargeRefundPredicate do
+  use Jidoka.ApprovalPredicate
+
+  @impl true
+  def call(%Jidoka.Context{} = ctx) do
+    amount = Map.get(ctx.arguments, "amount") || 0
+    amount >= 100 or Jidoka.Context.get(ctx, :tenant_id) == "enterprise"
+  end
+end
+```
+
+Attach it to the tool's approval policy:
+
+```elixir
+tools do
+  action MyApp.RefundOrder,
+    idempotency: :unsafe_once,
+    approval: [
+      when: MyApp.LargeRefundPredicate,
+      reason: :large_refund_review
+    ]
 end
 ```
 
@@ -151,7 +179,8 @@ Jidoka.turn(MyApp.SupportAgent, "Refund A1001",
 )
 ```
 
-Define a custom operation control when approval depends on code.
+Define a custom operation control when the policy needs to block, interrupt
+with a custom shape, or do something broader than standard approval.
 
 Operation controls receive a
 `Jidoka.Runtime.Controls.OperationContext`. Returning `{:interrupt,

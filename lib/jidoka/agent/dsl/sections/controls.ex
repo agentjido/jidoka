@@ -109,6 +109,12 @@ defmodule Jidoka.Agent.Dsl.Sections.Controls do
           required: false,
           as: :match,
           doc: "Optional operation match such as `[kind: :action, name: :lookup_account]`."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional control metadata stored in the agent spec."
         ]
       ]
     }

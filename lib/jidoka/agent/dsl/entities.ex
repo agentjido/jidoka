@@ -283,6 +283,7 @@ defmodule Jidoka.Agent.Dsl.OperationControl do
             %{
               control: Zoi.any() |> Zoi.nullish(),
               match: Zoi.any() |> Zoi.nullish(),
+              metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
             coerce: true

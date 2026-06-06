@@ -8,6 +8,7 @@ defmodule Jidoka.Review.Policy do
   """
 
   alias Jidoka.Schema
+  alias Jidoka.ApprovalPredicate
 
   @modes [:pre_execution]
 
@@ -18,6 +19,7 @@ defmodule Jidoka.Review.Policy do
               mode: Schema.atom_enum(@modes) |> Zoi.default(:pre_execution),
               reason: Zoi.any() |> Zoi.default(:approval_required),
               message: Zoi.string() |> Zoi.nullish(),
+              predicate: Zoi.any() |> Zoi.nullish(),
               ttl_ms: Zoi.integer() |> Zoi.gt(0) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
@@ -33,10 +35,28 @@ defmodule Jidoka.Review.Policy do
   def schema, do: @schema
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs), do: Schema.parse(@schema, attrs)
+  def new(attrs) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    with {:ok, predicate} <- normalize_predicate(predicate_value(attrs)) do
+      attrs =
+        attrs
+        |> Map.delete(:when)
+        |> Map.delete("when")
+        |> Map.delete("predicate")
+        |> maybe_put_predicate(predicate)
+
+      Schema.parse(@schema, attrs)
+    end
+  end
 
   @spec new!(keyword() | map()) :: t()
-  def new!(attrs), do: Schema.parse!(@schema, attrs, "review policy")
+  def new!(attrs) do
+    case new(attrs) do
+      {:ok, policy} -> policy
+      {:error, reason} -> raise ArgumentError, "invalid review policy: #{inspect(reason)}"
+    end
+  end
 
   @spec from_input(t() | keyword() | map() | true | false | nil) :: {:ok, t() | nil} | {:error, term()}
   def from_input(nil), do: {:ok, nil}
@@ -66,11 +86,29 @@ defmodule Jidoka.Review.Policy do
       "mode" => Atom.to_string(policy.mode),
       "reason" => policy.reason,
       "message" => policy.message,
+      "when" => policy.predicate,
       "ttl_ms" => policy.ttl_ms,
       "metadata" => policy.metadata
     }
     |> reject_nil_values()
   end
+
+  defp predicate_value(attrs) do
+    Schema.get_key(attrs, :predicate) || Schema.get_key(attrs, :when)
+  end
+
+  defp normalize_predicate(nil), do: {:ok, nil}
+
+  defp normalize_predicate(predicate) when is_atom(predicate) and not is_nil(predicate) do
+    with :ok <- ApprovalPredicate.validate_module(predicate) do
+      {:ok, predicate}
+    end
+  end
+
+  defp normalize_predicate(predicate), do: {:error, {:invalid_approval_predicate, predicate}}
+
+  defp maybe_put_predicate(attrs, nil), do: attrs
+  defp maybe_put_predicate(attrs, predicate), do: Map.put(attrs, :predicate, predicate)
 
   defp reject_nil_values(map) do
     map

@@ -23,6 +23,30 @@ Controls may return:
 Operation interrupts are durable today. Input/output interrupts are currently
 reported as errors until those boundaries get resumable wait semantics.
 
+## Runtime Context
+
+Controls receive their existing boundary-specific data and a `Jidoka.Context`
+under `:ctx`. `Jidoka.Context` is the stable public shape for policy code:
+
+```elixir
+defmodule MyApp.RequireTenant do
+  use Jidoka.Control, name: "require_tenant"
+
+  @impl true
+  def call(%{ctx: %Jidoka.Context{} = ctx}) do
+    case Jidoka.Context.fetch(ctx, :tenant_id) do
+      {:ok, _tenant_id} -> :cont
+      :error -> {:block, :missing_tenant}
+    end
+  end
+end
+```
+
+Use `ctx.data` for caller-supplied application context, `ctx.arguments` for
+operation arguments, `ctx.operation` for the operation name, and
+`ctx.request_metadata` for request metadata. `Jidoka.Context.fetch/2` and
+`Jidoka.Context.get/3` match atom and string keys without creating atoms.
+
 ## Input Controls
 
 Input controls receive a map with the request, context, metadata, and input
@@ -59,6 +83,18 @@ defmodule MyApp.SupportAgent do
 end
 ```
 
+Jidoka includes a few small controls for common cases:
+
+```elixir
+controls do
+  input Jidoka.Controls.RequireContext,
+    metadata: %{keys: [:tenant_id]}
+
+  input Jidoka.Controls.MaxInputLength,
+    metadata: %{max: 8_000}
+end
+```
+
 ## Operation Controls And Approvals
 
 Operation controls receive `Jidoka.Runtime.Controls.OperationContext`. This is
@@ -80,9 +116,40 @@ end
 ```
 
 This compiles to Jidoka's built-in approval control and still uses durable
-hibernate/resume. Use a custom operation control when the policy needs code:
-tenant checks, amount thresholds, external risk scoring, or custom block
-decisions.
+hibernate/resume.
+
+Use an approval predicate when approval depends on operation arguments or
+request context, but the action should still use the standard approval flow:
+
+```elixir
+defmodule MyApp.LargeRefundPredicate do
+  use Jidoka.ApprovalPredicate
+
+  @impl true
+  def call(%Jidoka.Context{} = ctx) do
+    amount = Map.get(ctx.arguments, "amount") || 0
+    tenant = Jidoka.Context.get(ctx, :tenant_id)
+
+    tenant == "enterprise" or amount >= 100
+  end
+end
+```
+
+Attach the predicate to the approval policy:
+
+```elixir
+tools do
+  action MyApp.RefundOrder,
+    idempotency: :unsafe_once,
+    approval: [
+      when: MyApp.LargeRefundPredicate,
+      reason: :large_refund_review
+    ]
+end
+```
+
+Use a custom operation control when the policy needs a different decision:
+tenant checks, external risk scoring, hard blocks, or custom interrupt reasons.
 
 ```elixir
 defmodule MyApp.RequireRefundApproval do
@@ -104,7 +171,8 @@ Attach it to a specific operation:
 ```elixir
 controls do
   operation MyApp.RequireRefundApproval,
-    when: [kind: :action, name: :refund_order]
+    when: [kind: :action, name: :refund_order],
+    metadata: %{queue: :refunds}
 end
 ```
 

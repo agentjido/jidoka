@@ -169,6 +169,56 @@ defmodule Jidoka.ControlsIntegrationTest do
             }} = InputControlledLookupAgent.run_turn("blocked lookup", llm: llm)
   end
 
+  test "built-in input controls require context and limit input length" do
+    spec =
+      Agent.Spec.new!(
+        id: "builtin_input_controls_agent",
+        instructions: "Answer directly.",
+        model: %{provider: :test, id: "model"},
+        controls: %{
+          inputs: [
+            %{control: Jidoka.Controls.RequireContext, metadata: %{keys: [:tenant_id]}},
+            %{control: Jidoka.Controls.MaxInputLength, metadata: %{max: 20}}
+          ]
+        }
+      )
+
+    llm = fn _intent, _journal -> {:ok, %{type: :final, content: "allowed"}} end
+
+    assert {:ok, %Turn.Result{content: "allowed"}} =
+             Jidoka.turn(spec, Turn.Request.new!(input: "short input", context: %{"tenant_id" => "t1"}), llm: llm)
+
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :control,
+              details: %{
+                reason: :control_blocked,
+                control: "require_context",
+                boundary: :input,
+                cause: {:missing_context_keys, ["tenant_id"]}
+              }
+            }} = Jidoka.turn(spec, "short input", llm: llm)
+
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :control,
+              details: %{
+                reason: :control_blocked,
+                control: "max_input_length",
+                boundary: :input,
+                cause: {:input_too_long, _length, 20}
+              }
+            }} =
+             Jidoka.turn(
+               spec,
+               Turn.Request.new!(
+                 input: "this input is definitely too long",
+                 context: %{"tenant_id" => "t1"}
+               ),
+               llm: llm
+             )
+  end
+
   test "operation controls block before the operation capability runs" do
     llm = operation_llm("blocked")
 
@@ -399,6 +449,76 @@ defmodule Jidoka.ControlsIntegrationTest do
     assert is_integer(control_index)
     assert is_integer(capability_index)
     assert control_index < capability_index
+  end
+
+  test "operation controls support DSL metadata for built-in controls" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "OperationContextMetadataAgent#{suffix}")
+
+    Code.compile_string("""
+    defmodule #{inspect(agent_module)} do
+      use Jidoka.Agent
+
+      agent :operation_context_metadata_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+        instructions "Use controlled_lookup before answering."
+      end
+
+      tools do
+        action Jidoka.IntegrationSupport.ControlledLookupAction
+      end
+
+      controls do
+        operation Jidoka.Controls.RequireContext,
+          when: [name: :controlled_lookup],
+          metadata: %{keys: [:tenant_id]}
+      end
+    end
+    """)
+
+    assert [
+             %Agent.Spec.Controls.Operation{
+               control: Jidoka.Controls.RequireContext,
+               metadata: %{keys: [:tenant_id]}
+             }
+           ] = agent_module.spec().controls.operations
+
+    tenant_llm = fn _intent, %Effect.Journal{} = journal ->
+      case count_results(journal, :operation) do
+        0 -> {:ok, %{type: :operation, name: "controlled_lookup", arguments: %{"id" => "tenant"}}}
+        _count -> {:ok, %{type: :final, content: "tenant lookup done"}}
+      end
+    end
+
+    assert {:ok, %Turn.Result{content: "tenant lookup done"}} =
+             agent_module.run_turn(
+               Turn.Request.new!(
+                 input: "lookup tenant",
+                 context: %{tenant_id: "tenant_1", test_pid: self()}
+               ),
+               llm: tenant_llm,
+               operation_context: %{test_pid: self()}
+             )
+
+    assert_receive {:controlled_lookup_called, "tenant"}
+
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :control,
+              details: %{
+                reason: :control_blocked,
+                control: "require_context",
+                boundary: :operation,
+                operation: "controlled_lookup",
+                cause: {:missing_context_keys, ["tenant_id"]}
+              }
+            }} =
+             agent_module.run_turn(
+               Turn.Request.new!(input: "lookup missing", context: %{test_pid: self()}),
+               llm: operation_llm("missing")
+             )
+
+    refute_received {:controlled_lookup_called, "missing"}
   end
 
   test "controls max_turns is enforced by the Runic turn runner" do

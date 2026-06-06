@@ -121,6 +121,7 @@ defmodule Jidoka.Review.Approval do
       {key, value} when key in [:mode, "mode"] -> {:mode, value}
       {key, value} when key in [:reason, "reason"] -> {:reason, value}
       {key, value} when key in [:message, "message"] -> {:message, value}
+      {key, value} when key in [:when, "when", :predicate, "predicate"] -> {:predicate, value}
       {key, value} when key in [:ttl_ms, "ttl_ms"] -> {:ttl_ms, value}
       {key, value} when key in [:metadata, "metadata"] -> {:metadata, value}
       {key, value} -> {key, value}
