@@ -6,7 +6,7 @@ defmodule JidokaExample.LuaToolsAgent.Controls.RequireLuaExecution do
   @impl true
   def call(%{boundary: :output, agent_state: %{operation_results: operation_results}})
       when is_list(operation_results) do
-    executions = Enum.filter(operation_results, &(&1.operation == "lua_tools_execute"))
+    executions = Enum.filter(operation_results, &(&1.operation == "catalog_execute"))
 
     cond do
       Enum.any?(executions, &completed?/1) ->
@@ -17,7 +17,7 @@ defmodule JidokaExample.LuaToolsAgent.Controls.RequireLuaExecution do
         {:block, {:lua_execution_not_completed, status(output), reason(output)}}
 
       true ->
-        {:block, :missing_lua_tools_execute}
+        {:block, :missing_catalog_execute}
     end
   end
 

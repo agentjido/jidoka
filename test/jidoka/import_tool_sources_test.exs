@@ -39,10 +39,33 @@ defmodule Jidoka.ImportToolSourcesTest.Support.FakeAshJidoTools do
   def actions(_resource), do: []
 end
 
+defmodule Jidoka.ImportToolSourcesTest.Support.AccountCatalog do
+  @moduledoc false
+
+  alias Jidoka.ImportToolSourcesTest.Support.ReadAccountAction
+
+  def catalog do
+    Jido.Action.Catalog.new!(id: "account-catalog", name: "Account Catalog")
+    |> Jido.Action.Catalog.register!(ReadAccountAction,
+      id: "account.read",
+      description: "Read an account through the catalog.",
+      visibility: :hidden,
+      read_only?: true
+    )
+  end
+
+  def templates do
+    %{
+      "read_account" =>
+        ~s|return jidoka.workflow({steps = {{id = "read", tool = "account.read", arguments = {id = "acct_1"}}}, output = "read"})|
+    }
+  end
+end
+
 defmodule Jidoka.ImportToolSourcesTest do
   use ExUnit.Case, async: false
 
-  alias Jidoka.ImportToolSourcesTest.Support.{AccountResource, FakeAshJidoTools}
+  alias Jidoka.ImportToolSourcesTest.Support.{AccountCatalog, AccountResource, FakeAshJidoTools}
 
   setup do
     original = Application.get_env(:jidoka, :ash_jido_tools)
@@ -57,7 +80,7 @@ defmodule Jidoka.ImportToolSourcesTest do
     end)
   end
 
-  test "YAML imports support ash_resource, browser, and MCP tool sources" do
+  test "YAML imports support ash_resource, browser, MCP, and catalog tool sources" do
     yaml = """
     agent:
       id: import_sources_agent
@@ -95,12 +118,15 @@ defmodule Jidoka.ImportToolSourcesTest do
               description: Looks up a policy.
               input_schema:
                 type: object
+      catalogs:
+        - ref: account_catalog
     """
 
     assert {:ok, spec} =
              Jidoka.import(yaml,
                format: :yaml,
-               ash_resources: %{"account_resource" => AccountResource}
+               ash_resources: %{"account_resource" => AccountResource},
+               catalogs: %{"account_catalog" => AccountCatalog}
              )
 
     operations = Map.new(spec.operations, &{&1.name, &1})
@@ -108,7 +134,10 @@ defmodule Jidoka.ImportToolSourcesTest do
     assert %{
              "read_account" => %{metadata: %{"source" => "ash_resource", "risk" => "low"}},
              "search_web" => %{metadata: %{"source" => "browser", "browser" => "docs"}},
-             "mcp_lookup_policy" => %{metadata: %{"source" => "mcp", "endpoint" => "demo_mcp"}}
+             "mcp_lookup_policy" => %{metadata: %{"source" => "mcp", "endpoint" => "demo_mcp"}},
+             "catalog_query" => %{metadata: %{"source" => "catalog", "prefix" => "catalog_"}},
+             "catalog_describe" => %{metadata: %{"source" => "catalog", "operation" => "describe"}},
+             "catalog_execute" => %{metadata: %{"source" => "catalog", "operation" => "execute"}}
            } = operations
 
     refute Map.has_key?(operations, "update_account")
@@ -122,6 +151,12 @@ defmodule Jidoka.ImportToolSourcesTest do
                "protocol_version" => "2025-06-18",
                "client_info" => %{"name" => "jidoka-import-test"},
                "timeouts" => %{"request_ms" => 777}
+             },
+             %{
+               "source" => "catalog",
+               "catalog_id" => "account-catalog",
+               "prefix" => "catalog_",
+               "tools" => ["account.read"]
              }
            ] = spec.metadata["tool_sources"]
 
@@ -139,14 +174,14 @@ defmodule Jidoka.ImportToolSourcesTest do
              })
   end
 
-  test "imports reject removed catalog tool sources" do
+  test "imports reject unknown catalog refs without atom creation" do
     assert {:error,
             %Jidoka.Error.ValidationError{
-              details: %{reason: {:unsupported_tool_source, :catalogs}}
+              details: %{reason: {:unknown_registry_ref, :catalogs, "Missing.Catalog"}}
             }} =
              Jidoka.Import.load(%{
-               agent: %{id: "removed_catalog_import", model: %{provider: :test, id: "model"}},
-               tools: %{"catalogs" => [%{"name" => "legacy"}]}
+               agent: %{id: "safe_catalog_import", model: %{provider: :test, id: "model"}},
+               tools: %{catalogs: [%{ref: "Missing.Catalog"}]}
              })
   end
 end

@@ -4,6 +4,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
   alias Jidoka.Agent.Dsl.{
     AshResource,
     Browser,
+    Catalog,
     Handoff,
     MCPTools,
     SkillPath,
@@ -196,6 +197,78 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
           required: false,
           default: :idempotent,
           doc: "Operation idempotency for generated MCP operations."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional metadata merged into generated operation specs."
+        ]
+      ]
+    }
+  end
+
+  @spec catalog_entity() :: Spark.Dsl.Entity.t()
+  def catalog_entity do
+    %Spark.Dsl.Entity{
+      name: :catalog,
+      target: Catalog,
+      args: [:catalog],
+      describe: """
+      Register a Jido Action Catalog as a governed scripted operation source.
+      """,
+      schema: [
+        catalog: [
+          type: :atom,
+          required: true,
+          doc: "A module exposing `catalog/0` that returns a `Jido.Action.Catalog`."
+        ],
+        prefix: [
+          type: :any,
+          required: false,
+          default: "catalog_",
+          doc: "Generated operation prefix. Defaults to `catalog_`."
+        ],
+        description: [
+          type: :string,
+          required: false,
+          doc: "Optional description override applied to generated operations."
+        ],
+        timeout: [
+          type: :pos_integer,
+          required: false,
+          default: 1_500,
+          doc: "Lua workflow timeout in milliseconds."
+        ],
+        max_calls: [
+          type: :pos_integer,
+          required: false,
+          default: 12,
+          doc: "Maximum hidden catalog action calls per script."
+        ],
+        max_parallel_calls: [
+          type: :pos_integer,
+          required: false,
+          default: 8,
+          doc: "Maximum parallel hidden catalog action calls per script."
+        ],
+        require_read_only?: [
+          type: :boolean,
+          required: false,
+          default: true,
+          doc: "Whether only read-only catalog entries may be executed."
+        ],
+        result: [
+          type: :any,
+          required: false,
+          default: :structured,
+          doc: "Parent-visible result shape. Currently `:structured`."
+        ],
+        idempotency: [
+          type: :any,
+          required: false,
+          default: :idempotent,
+          doc: "Operation idempotency policy for generated catalog operations."
         ],
         metadata: [
           type: :map,
@@ -427,6 +500,7 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools do
         ash_resource_entity(),
         browser_entity(),
         mcp_tools_entity(),
+        catalog_entity(),
         skill_ref_entity(),
         skill_path_entity(),
         subagent_entity(),

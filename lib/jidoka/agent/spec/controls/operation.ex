@@ -14,6 +14,7 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
     :browser,
     :skill,
     :mcp,
+    :catalog,
     :workflow,
     :subagent,
     :handoff

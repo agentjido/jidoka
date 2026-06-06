@@ -130,8 +130,6 @@ defmodule Jidoka.Workflow.Lua.Plan.Ref do
     end
   end
 
-  defp from(_value), do: nil
-
   defp var(value) when is_map(value) do
     case known_value(value, "var", nil) do
       var when is_binary(var) -> var
@@ -139,8 +137,6 @@ defmodule Jidoka.Workflow.Lua.Plan.Ref do
       _other -> nil
     end
   end
-
-  defp var(_value), do: nil
 
   defp known_value(map, key, default) do
     case Map.fetch(map, key) do

@@ -367,8 +367,8 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec do
 
     graph
     |> Map.keys()
-    |> Enum.reduce_while({:ok, MapSet.new()}, fn step_id, {:ok, visited} ->
-      case visit_step(step_id, graph, MapSet.new(), visited) do
+    |> Enum.reduce_while({:ok, %{}}, fn step_id, {:ok, visited} ->
+      case visit_step(step_id, graph, %{}, visited) do
         {:ok, visited} -> {:cont, {:ok, visited}}
         {:error, _reason} = error -> {:halt, error}
       end
@@ -379,16 +379,18 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec do
     end
   end
 
+  @spec visit_step(String.t(), %{String.t() => [String.t()]}, map(), map()) ::
+          {:ok, map()} | {:error, term()}
   defp visit_step(step_id, graph, visiting, visited) do
     cond do
-      MapSet.member?(visiting, step_id) ->
+      Map.has_key?(visiting, step_id) ->
         {:error, {:cyclic_lua_workflow_dependency, step_id}}
 
-      MapSet.member?(visited, step_id) ->
+      Map.has_key?(visited, step_id) ->
         {:ok, visited}
 
       true ->
-        visiting = MapSet.put(visiting, step_id)
+        visiting = Map.put(visiting, step_id, true)
 
         with {:ok, visited} <-
                graph
@@ -399,7 +401,7 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec do
                    {:error, _reason} = error -> {:halt, error}
                  end
                end) do
-          {:ok, MapSet.put(visited, step_id)}
+          {:ok, Map.put(visited, step_id, true)}
         end
     end
   end

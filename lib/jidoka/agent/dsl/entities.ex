@@ -68,6 +68,24 @@ defmodule Jidoka.Agent.Dsl.MCPTools do
   ]
 end
 
+defmodule Jidoka.Agent.Dsl.Catalog do
+  @moduledoc false
+
+  defstruct [
+    :catalog,
+    :prefix,
+    :description,
+    :timeout,
+    :max_calls,
+    :max_parallel_calls,
+    :require_read_only?,
+    :result,
+    :idempotency,
+    :metadata,
+    :__spark_metadata__
+  ]
+end
+
 defmodule Jidoka.Agent.Dsl.SkillRef do
   @moduledoc false
 

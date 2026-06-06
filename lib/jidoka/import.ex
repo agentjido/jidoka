@@ -14,6 +14,7 @@ defmodule Jidoka.Import do
   alias Jidoka.Import.AgentDocument
   alias Jidoka.Import.Registry
   alias Jidoka.Operation.Source
+  alias Jidoka.Operation.Source.Catalog, as: CatalogSource
   alias Jidoka.Operation.Source.MCP, as: MCPSource
   alias Jidoka.Runtime.JidoActions
   alias Jidoka.Schema
@@ -29,6 +30,8 @@ defmodule Jidoka.Import do
           | {:ash_resource_registry, registry()}
           | {:controls, registry()}
           | {:control_registry, registry()}
+          | {:catalogs, registry()}
+          | {:catalog_registry, registry()}
           | {:context_schemas, registry()}
           | {:context_schema_registry, registry()}
           | {:result_schemas, registry()}
@@ -36,7 +39,7 @@ defmodule Jidoka.Import do
 
   @agent_keys ~w(id model generation instructions context context_schema result result_schema memory runtime_defaults metadata)
   @document_keys ~w(version agent tools controls operations runtime_defaults metadata)
-  @unsupported_tool_sources [:catalog, :catalogs]
+  @unsupported_tool_sources []
 
   @doc """
   Imports a JSON or YAML agent document string.
@@ -210,11 +213,12 @@ defmodule Jidoka.Import do
          {:ok, actions} <- action_operations(tools, opts),
          {:ok, ash_resources, ash_sources} <- ash_resource_operations(tools, opts),
          {:ok, browsers, browser_sources} <- browser_operations(tools),
-         {:ok, mcps, mcp_sources} <- mcp_operations(tools) do
+         {:ok, mcps, mcp_sources} <- mcp_operations(tools),
+         {:ok, catalogs, catalog_sources} <- catalog_operations(tools, opts) do
       {:ok,
        %{
-         operations: actions ++ ash_resources ++ browsers ++ mcps,
-         sources: ash_sources ++ browser_sources ++ mcp_sources
+         operations: actions ++ ash_resources ++ browsers ++ mcps ++ catalogs,
+         sources: ash_sources ++ browser_sources ++ mcp_sources ++ catalog_sources
        }}
     end
   end
@@ -293,6 +297,32 @@ defmodule Jidoka.Import do
           "capabilities" => source.capabilities,
           "timeouts" => source.timeouts,
           "tools" => Enum.map(source.tools, & &1.name)
+        }
+
+        {:cont, {:ok, acc_operations ++ source_operations, sources ++ [reject_nil_values(source_metadata)]}}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp catalog_operations(tools, opts) when is_map(tools) do
+    tools
+    |> tool_entries(:catalogs, :catalog)
+    |> Enum.reduce_while({:ok, [], []}, fn catalog_ref, {:ok, acc_operations, sources} ->
+      with {:ok, source} <- normalize_catalog_ref(catalog_ref, opts),
+           {:ok, source_operations} <- Source.operations(source) do
+        source_metadata = %{
+          "source" => "catalog",
+          "catalog" => inspect(source.catalog),
+          "catalog_id" => source.catalog_value.id,
+          "prefix" => source.prefix,
+          "timeout" => source.timeout,
+          "max_calls" => source.max_calls,
+          "max_parallel_calls" => source.max_parallel_calls,
+          "require_read_only?" => source.require_read_only?,
+          "result" => Atom.to_string(source.result),
+          "tools" => Enum.map(Jido.Action.Catalog.list(source.catalog_value), & &1.id)
         }
 
         {:cont, {:ok, acc_operations ++ source_operations, sources ++ [reject_nil_values(source_metadata)]}}
@@ -530,6 +560,40 @@ defmodule Jidoka.Import do
   end
 
   defp normalize_mcp_ref(endpoint), do: normalize_mcp_ref(%{"endpoint" => endpoint})
+
+  defp normalize_catalog_ref(%{} = attrs, opts) do
+    attrs = stringify_keys(attrs)
+
+    with {:ok, catalog} <-
+           resolve_catalog(
+             Schema.get_key(attrs, :catalog) || Schema.get_key(attrs, :module) || Schema.get_key(attrs, :ref),
+             opts
+           ) do
+      CatalogSource.new(
+        catalog: catalog,
+        prefix: Schema.get_key(attrs, :prefix, "catalog_"),
+        description: Schema.get_key(attrs, :description),
+        timeout: Schema.get_key(attrs, :timeout, 1_500),
+        max_calls: Schema.get_key(attrs, :max_calls, 12),
+        max_parallel_calls: Schema.get_key(attrs, :max_parallel_calls, 8),
+        require_read_only?: Schema.get_key(attrs, :require_read_only?, true),
+        result: Schema.get_key(attrs, :result, :structured),
+        idempotency: Schema.get_key(attrs, :idempotency, :idempotent),
+        metadata: Schema.get_key(attrs, :metadata, %{})
+      )
+    end
+  end
+
+  defp normalize_catalog_ref(ref, opts), do: normalize_catalog_ref(%{"catalog" => ref}, opts)
+
+  defp resolve_catalog(nil, _opts), do: {:error, :missing_catalog_ref}
+
+  defp resolve_catalog(catalog, _opts) when is_atom(catalog) and not is_nil(catalog),
+    do: {:ok, catalog}
+
+  defp resolve_catalog(ref, opts) when is_binary(ref), do: Registry.fetch(:catalogs, ref, opts)
+
+  defp resolve_catalog(other, _opts), do: {:error, {:invalid_catalog_ref, other}}
 
   defp tool_entries(tools, plural_key, singular_key) do
     tools

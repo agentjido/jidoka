@@ -35,6 +35,13 @@ defmodule Jidoka.Import.Registry do
       %{}
   end
 
+  defp registry(:catalogs, opts) do
+    Keyword.get(opts, :catalogs) ||
+      Keyword.get(opts, :catalog_registry) ||
+      nested_registry(opts, :catalogs) ||
+      %{}
+  end
+
   defp registry(:context_schemas, opts) do
     Keyword.get(opts, :context_schemas) ||
       Keyword.get(opts, :context_schema_registry) ||

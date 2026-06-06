@@ -1,4 +1,5 @@
 defmodule JidokaExample.LuaToolsAgent.Agent do
+  alias JidokaExample.LuaToolsAgent.Catalog
   alias JidokaExample.LuaToolsAgent.Controls.RequireLuaExecution
 
   @guide """
@@ -6,11 +7,12 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
   layer that lets an agent author a bounded workflow plan over a constrained
   host capability catalog.
 
-  The agent only sees three Jidoka tools: query, describe, and execute. The
-  execute step runs a short sandboxed Lua script. That script can only return a
-  `jidoka.workflow({...})` plan; Jidoka validates and executes the hidden
-  read-only host actions, then returns the workflow result plus a trace of each
-  hidden action call.
+  The agent declares `tools do catalog Catalog end`. Jidoka turns that catalog
+  into three model-visible operations: `catalog_query`, `catalog_describe`, and
+  `catalog_execute`. The execute step runs a short sandboxed Lua script. That
+  script can only return a `jidoka.workflow({...})` plan; Jidoka validates and
+  executes the hidden read-only host actions, then returns the workflow result
+  plus a trace of each hidden action call.
 
   Use this when direct one-by-one tool calling is too rigid, but the host
   application still needs to control what capabilities are visible, allowed,
@@ -39,26 +41,26 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     Do not guess hidden tool ids.
 
     For tasks that need scripting:
-    1. Call lua_tools_query to find relevant hidden capabilities.
-    2. Call lua_tools_describe with the smallest useful set of ids.
-    3. Call lua_tools_execute with a short Lua script that returns jidoka.workflow({...}).
+    1. Call catalog_query to find relevant hidden capabilities.
+    2. Call catalog_describe with the smallest useful set of ids.
+    3. Call catalog_execute with a short Lua script that returns jidoka.workflow({...}).
        Pass allowed_tools with exactly the ids you described.
 
-    lua_tools_query and lua_tools_describe return catalog metadata only. They do
+    catalog_query and catalog_describe return catalog metadata only. They do
     not execute hidden tools and they do not contain business data. Never produce
     a final answer from query or describe output alone.
 
-    A valid final answer requires an observed lua_tools_execute result with
+    A valid final answer requires an observed catalog_execute result with
     status "completed". Copy hidden_call_count, hidden_tools_used, and
-    script_result from that execution result. If lua_tools_execute has not run,
-    your only valid next action is lua_tools_describe or lua_tools_execute.
+    script_result from that execution result. If catalog_execute has not run,
+    your only valid next action is catalog_describe or catalog_execute.
 
     Invoice totals ending in _cents are cents. Convert them by dividing by 100
     when writing dollar amounts.
 
     The Lua execution API is return jidoka.workflow({...}). Keep scripts short,
     deterministic, and read-only. The script must return the workflow result;
-    every script passed to lua_tools_execute must begin with return jidoka.workflow({
+    every script passed to catalog_execute must begin with return jidoka.workflow({
     or return a local variable assigned from jidoka.workflow({...}). Calling
     jidoka.workflow({...}) as a bare statement is invalid. After execution, summarize what happened and
     include the script result, hidden_call_count, hidden_tools_used, and
@@ -75,17 +77,17 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
     can use {var = "item", path = {...}} refs, or a custom variable name set by
     as = "customer".
 
-    If lua_tools_describe returns a template, copy that template unless the user
+    If catalog_describe returns a template, copy that template unless the user
     asked for a materially different workflow.
 
     Prefer map when applying the same hidden tool to a list of customers or
     invoices. Prefer reduce when combining map outputs. Use gate plus when for
     follow-up steps that should only run above a threshold.
 
-    If lua_tools_execute returns a validation or execution error, revise the Lua
-    script and call lua_tools_execute again with a simpler workflow. Do not keep
+    If catalog_execute returns a validation or execution error, revise the Lua
+    script and call catalog_execute again with a simpler workflow. Do not keep
     retrying the same failed script. Do not produce a final answer after a failed
-    lua_tools_execute result.
+    catalog_execute result.
 
     The workflow call shape is:
     return jidoka.workflow({
@@ -178,9 +180,7 @@ defmodule JidokaExample.LuaToolsAgent.Agent do
   end
 
   tools do
-    action JidokaExample.LuaToolsAgent.Actions.LuaToolsQuery
-    action JidokaExample.LuaToolsAgent.Actions.LuaToolsDescribe
-    action JidokaExample.LuaToolsAgent.Actions.LuaToolsExecute
+    catalog Catalog
   end
 
   controls do

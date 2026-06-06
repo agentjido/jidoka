@@ -388,6 +388,93 @@ defmodule Jidoka.Agent.DslTest do
            } = operations["read_page"]
   end
 
+  test "compiles catalog tool sources into generated catalog operations" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "CatalogDslAgent#{suffix}")
+
+    Code.compile_string("""
+    defmodule JidokaTest.CatalogDslAction#{suffix} do
+      use Jidoka.Action,
+        name: "catalog_dsl_echo_#{suffix}",
+        description: "Catalog DSL echo action.",
+        schema: Zoi.object(%{message: Zoi.string()})
+
+      @impl true
+      def run(params, _context), do: {:ok, %{"message" => Map.get(params, "message")}}
+    end
+
+    defmodule JidokaTest.CatalogDslCatalog#{suffix} do
+      def catalog do
+        Jido.Action.Catalog.new!(id: "catalog-dsl-#{suffix}", name: "Catalog DSL")
+        |> Jido.Action.Catalog.register!(
+          JidokaTest.CatalogDslAction#{suffix},
+          id: "demo.echo",
+          description: "Echo a message.",
+          visibility: :hidden,
+          read_only?: true
+        )
+      end
+    end
+
+    defmodule JidokaTest.CatalogDslControl#{suffix} do
+      use Jidoka.Control, name: "catalog_dsl_control_#{suffix}"
+
+      @impl true
+      def call(_operation), do: :cont
+    end
+
+    defmodule JidokaTest.CatalogDslAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :catalog_dsl_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+      end
+
+      tools do
+        catalog JidokaTest.CatalogDslCatalog#{suffix}
+      end
+
+      controls do
+        operation JidokaTest.CatalogDslControl#{suffix}, when: [kind: :catalog, name: :catalog_execute]
+      end
+    end
+    """)
+
+    operations = Map.new(agent_module.spec().operations, &{&1.name, &1})
+
+    assert %Jidoka.Agent.Spec.Operation{metadata: %{"kind" => "catalog", "operation" => "query"}} =
+             operations["catalog_query"]
+
+    assert %Jidoka.Agent.Spec.Operation{metadata: %{"kind" => "catalog", "operation" => "describe"}} =
+             operations["catalog_describe"]
+
+    assert %Jidoka.Agent.Spec.Operation{
+             metadata: %{
+               "kind" => "catalog",
+               "operation" => "execute",
+               "prefix" => "catalog_",
+               "max_parallel_calls" => 8
+             }
+           } = operations["catalog_execute"]
+
+    assert [
+             %Jidoka.Agent.Spec.Controls.Operation{
+               match: %{kind: :catalog, name: "catalog_execute"}
+             }
+           ] = agent_module.spec().controls.operations
+
+    catalog_id = "catalog-dsl-#{suffix}"
+
+    assert [
+             %{
+               "source" => "catalog",
+               "catalog_id" => ^catalog_id,
+               "prefix" => "catalog_",
+               "tools" => ["demo.echo"]
+             }
+           ] = agent_module.spec().metadata["tool_sources"]
+  end
+
   test "default runtime routes browser tool sources through the Jido action path" do
     suffix = System.unique_integer([:positive])
     agent_module = Module.concat(JidokaTest, "BrowserRuntimeMissingAgent#{suffix}")

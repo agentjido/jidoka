@@ -32,6 +32,13 @@ defmodule JidokaExample.LuaToolsAgent.Catalog do
     end)
   end
 
+  @spec templates() :: map()
+  def templates do
+    %{
+      "portfolio_followup" => portfolio_template()
+    }
+  end
+
   defp catalog_attrs do
     [
       id: "jidoka-example-lua-tools",
@@ -173,4 +180,70 @@ defmodule JidokaExample.LuaToolsAgent.Catalog do
   end
 
   defp clamp_limit(_limit), do: 5
+
+  defp portfolio_template do
+    """
+    return jidoka.workflow({
+      id = "portfolio_followup",
+      steps = {
+        {
+          id = "search",
+          tool = "crm.customer.search",
+          arguments = {tier = "enterprise", limit = 10}
+        },
+        {
+          id = "invoices",
+          map = {
+            over = {from = "search", path = {"customers"}},
+            as = "customer",
+            tool = "billing.invoice.list_unpaid",
+            arguments = {customer_id = {var = "customer", path = {"id"}}},
+            max_items = 10,
+            max_concurrency = 4
+          }
+        },
+        {
+          id = "total_due",
+          reduce = {
+            over = {from = "invoices", path = {"items"}},
+            mode = "sum",
+            path = {"total_due_cents"}
+          }
+        },
+        {
+          id = "invoice_count",
+          reduce = {
+            over = {from = "invoices", path = {"items"}},
+            mode = "sum",
+            path = {"count"}
+          }
+        },
+        {
+          id = "large_balance",
+          gate = {
+            op = "gt",
+            left = {from = "total_due", path = {"value"}},
+            right = 100000
+          }
+        },
+        {
+          id = "note",
+          tool = "support.note.draft_followup",
+          when = {from = "large_balance", path = {"passed"}},
+          arguments = {
+            customer_name = "Portfolio Team",
+            company = "ExampleCo",
+            invoice_count = {from = "invoice_count", path = {"value"}},
+            total_due_cents = {from = "total_due", path = {"value"}}
+          }
+        }
+      },
+      output = {
+        total_due_cents = {from = "total_due", path = {"value"}},
+        invoice_count = {from = "invoice_count", path = {"value"}},
+        follow_up = {from = "note"}
+      }
+    })
+    """
+  end
 end

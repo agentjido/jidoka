@@ -1,12 +1,12 @@
 defmodule JidokaExample.LuaToolsAgentTest do
   use ExUnit.Case, async: true
 
-  alias JidokaExample.LuaToolsAgent.Actions.LuaToolsDescribe
-  alias JidokaExample.LuaToolsAgent.Actions.LuaToolsExecute
-  alias JidokaExample.LuaToolsAgent.Actions.LuaToolsQuery
+  alias Jidoka.Effect
+  alias Jidoka.Operation.Source
+  alias Jidoka.Operation.Source.Catalog, as: CatalogSource
+  alias Jidoka.Workflow.Lua
   alias JidokaExample.LuaToolsAgent.Actions.SearchCustomers
   alias JidokaExample.LuaToolsAgent.Agent
-  alias JidokaExample.LuaToolsAgent.LuaRuntime
   alias JidokaExample.LuaToolsAgent.Catalog
   alias JidokaExample.LuaToolsAgent.Controls.RequireLuaExecution
 
@@ -54,62 +54,56 @@ defmodule JidokaExample.LuaToolsAgentTest do
   """
 
   test "agent exposes only the three model-visible Lua layer operations" do
-    assert ["lua_tools_query", "lua_tools_describe", "lua_tools_execute"] =
+    assert ["catalog_query", "catalog_describe", "catalog_execute"] =
              Agent.spec().operations |> Enum.map(& &1.name)
   end
 
   test "query and describe return a compact selected hidden catalog" do
-    assert {:ok, query_result} = LuaToolsQuery.run(%{"query" => "unpaid invoice"}, %{})
+    assert {:ok, query_result} = run_catalog_operation("catalog_query", %{"query" => "unpaid invoice"})
     ids = Enum.map(query_result["tools"], & &1["id"])
 
     assert "billing.invoice.list_unpaid" in ids
 
     assert {:ok, describe_result} =
-             LuaToolsDescribe.run(
-               %{
-                 "ids" => ["crm.customer.search", "billing.invoice.list_unpaid"]
-               },
-               %{}
-             )
+             run_catalog_operation("catalog_describe", %{
+               "ids" => ["crm.customer.search", "billing.invoice.list_unpaid"]
+             })
 
     assert [
-             %{"lua_path" => "crm.customer.search"},
-             %{"lua_path" => "billing.invoice.list_unpaid"}
+             %{"id" => "crm.customer.search"},
+             %{"id" => "billing.invoice.list_unpaid"}
            ] =
              describe_result["tools"]
 
     assert Enum.any?(describe_result["tools"], fn tool ->
-             tool["lua_path"] == "crm.customer.search" and
+             tool["id"] == "crm.customer.search" and
                tool["returns"] =~ ~s|{from = "search", path = {"customers"}}|
            end)
 
     assert query_result["notice"] =~ "Catalog metadata only"
     assert describe_result["notice"] =~ "Catalog metadata only"
-    assert describe_result["next"] =~ "step tool values"
-    assert describe_result["next"] =~ "Do not call hidden tools as Lua globals"
+    assert describe_result["next"] =~ "catalog_execute"
 
     assert {:ok, draft_result} =
-             LuaToolsDescribe.run(%{"ids" => ["support.note.draft_followup"]}, %{})
+             run_catalog_operation("catalog_describe", %{"ids" => ["support.note.draft_followup"]})
 
     assert [%{"description" => description}] = draft_result["tools"]
     assert description =~ "customer_name"
     assert description =~ "total_due_cents"
 
     assert {:ok, portfolio_result} =
-             LuaToolsDescribe.run(
-               %{
-                 "ids" => [
-                   "crm.customer.search",
-                   "billing.invoice.list_unpaid",
-                   "support.note.draft_followup"
-                 ]
-               },
-               %{}
-             )
+             run_catalog_operation("catalog_describe", %{
+               "ids" => [
+                 "crm.customer.search",
+                 "billing.invoice.list_unpaid",
+                 "support.note.draft_followup"
+               ]
+             })
 
-    assert portfolio_result["template"] =~ "return jidoka.workflow"
-    assert portfolio_result["template"] =~ ~s|over = {from = "search", path = {"customers"}}|
-    assert portfolio_result["template"] =~ ~s|invoice_count = {from = "invoice_count"|
+    template = portfolio_result["templates"]["portfolio_followup"]
+    assert template =~ "return jidoka.workflow"
+    assert template =~ ~s|over = {from = "search", path = {"customers"}}|
+    assert template =~ ~s|invoice_count = {from = "invoice_count"|
   end
 
   test "customer search supports tier filters used by the Lua prompt" do
@@ -125,7 +119,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
       agent_state: %Jidoka.Agent.State{operation_results: []}
     }
 
-    assert {:block, :missing_lua_tools_execute} = RequireLuaExecution.call(context)
+    assert {:block, :missing_catalog_execute} = RequireLuaExecution.call(context)
   end
 
   test "output control allows completed Lua execution results" do
@@ -134,7 +128,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
       agent_state: %Jidoka.Agent.State{
         operation_results: [
           %Jidoka.Effect.OperationResult{
-            operation: "lua_tools_execute",
+            operation: "catalog_execute",
             output: %{"status" => "completed"}
           }
         ]
@@ -150,11 +144,11 @@ defmodule JidokaExample.LuaToolsAgentTest do
       agent_state: %Jidoka.Agent.State{
         operation_results: [
           %Jidoka.Effect.OperationResult{
-            operation: "lua_tools_execute",
+            operation: "catalog_execute",
             output: %{"status" => "failed", "reason" => "missing return"}
           },
           %Jidoka.Effect.OperationResult{
-            operation: "lua_tools_execute",
+            operation: "catalog_execute",
             output: %{"status" => "completed"}
           }
         ]
@@ -170,11 +164,11 @@ defmodule JidokaExample.LuaToolsAgentTest do
       agent_state: %Jidoka.Agent.State{
         operation_results: [
           %Jidoka.Effect.OperationResult{
-            operation: "lua_tools_execute",
+            operation: "catalog_execute",
             output: %{"status" => "failed", "reason" => "old error"}
           },
           %Jidoka.Effect.OperationResult{
-            operation: "lua_tools_execute",
+            operation: "catalog_execute",
             output: %{"status" => "failed", "reason" => "new error"}
           }
         ]
@@ -187,7 +181,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
   test "execute runs a Lua-authored workflow over multiple hidden read-only actions" do
     assert {:ok, result} =
-             LuaToolsExecute.run(
+             run_catalog_execute(
                %{
                  "script" => @script,
                  "allowed_tools" => [
@@ -227,20 +221,20 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:ok, result} =
-             LuaToolsExecute.run(
+             run_catalog_execute(
                %{"script" => script, "allowed_tools" => ["crm.customer.search"]},
                %{}
              )
 
     assert result["status"] == "failed"
     assert result["reason"] == "Lua script must return jidoka.workflow({...})."
-    assert result["next"] =~ "call lua_tools_execute again"
+    assert result["next"] =~ "call catalog_execute again"
     assert result["call_count"] == 1
   end
 
   test "execute returns repair guidance for setup and policy errors" do
     assert {:ok, result} =
-             LuaToolsExecute.run(
+             run_catalog_execute(
                %{"script" => "return {}", "allowed_tools" => ["missing.tool"]},
                %{}
              )
@@ -248,7 +242,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     assert result["status"] == "failed"
     assert result["reason"] =~ "unknown_lua_tool"
     assert result["call_count"] == 0
-    assert result["next"] =~ "call lua_tools_execute again"
+    assert result["next"] =~ "call catalog_execute again"
   end
 
   test "execute preserves field-specific defaults for invalid numeric params" do
@@ -266,7 +260,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:ok, result} =
-             LuaToolsExecute.run(
+             run_catalog_execute(
                %{
                  "script" => script,
                  "allowed_tools" => ["crm.customer.search"],
@@ -315,7 +309,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:ok, result} =
-             LuaRuntime.execute(script,
+             execute_lua(script,
                allowed_tools: [
                  "crm.customer.search",
                  "billing.invoice.list_unpaid",
@@ -360,7 +354,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
     task =
       Task.async(fn ->
-        LuaRuntime.execute(script,
+        execute_lua(script,
           allowed_tools: ["billing.invoice.list_unpaid"],
           context: %{lua_test_pid: test_pid},
           max_parallel_calls: 2,
@@ -451,7 +445,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
     task =
       Task.async(fn ->
-        LuaRuntime.execute(script,
+        execute_lua(script,
           allowed_tools: ["billing.invoice.list_unpaid", "support.note.draft_followup"],
           context: %{lua_test_pid: test_pid},
           max_parallel_calls: 2,
@@ -517,7 +511,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:ok, result} =
-             LuaRuntime.execute(script,
+             execute_lua(script,
                allowed_tools: ["support.note.draft_followup"],
                timeout: 3_000
              )
@@ -552,7 +546,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:error, result} =
-             LuaRuntime.execute(script,
+             execute_lua(script,
                allowed_tools: ["billing.invoice.list_unpaid"],
                timeout: 3_000
              )
@@ -586,7 +580,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:error, result} =
-             LuaRuntime.execute(script,
+             execute_lua(script,
                allowed_tools: ["billing.invoice.list_unpaid"],
                timeout: 3_000
              )
@@ -611,7 +605,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:error, result} =
-             LuaRuntime.execute(script,
+             execute_lua(script,
                allowed_tools: ["billing.invoice.list_unpaid"],
                timeout: 3_000
              )
@@ -649,7 +643,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:error, result} =
-             LuaRuntime.execute(script,
+             execute_lua(script,
                allowed_tools: ["crm.customer.search", "billing.invoice.list_unpaid"],
                timeout: 3_000
              )
@@ -678,7 +672,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
     task =
       Task.async(fn ->
-        LuaRuntime.execute(script,
+        execute_lua(script,
           allowed_tools: ["billing.invoice.list_unpaid"],
           context: %{lua_retry_test_pid: test_pid},
           timeout: 3_000
@@ -716,7 +710,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:ok, result} =
-             LuaToolsExecute.run(
+             run_catalog_execute(
                %{
                  "script" => script,
                  "allowed_tools" => ["crm.customer.search"]
@@ -736,7 +730,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     """
 
     assert {:ok, result} =
-             LuaToolsExecute.run(
+             run_catalog_execute(
                %{
                  "script" => script,
                  "allowed_tools" => [
@@ -772,14 +766,14 @@ defmodule JidokaExample.LuaToolsAgentTest do
     })
     """
 
-    assert {:error, result} = LuaRuntime.execute(script, max_calls: 1)
+    assert {:error, result} = execute_lua(script, max_calls: 1)
     assert result["status"] == "failed"
     assert result["call_count"] == 1
     assert result["reason"] =~ "max_lua_tool_calls_exceeded"
   end
 
   test "runtime keeps Lua 1.0 sandbox defaults enabled" do
-    assert {:error, result} = LuaRuntime.execute(~s|return os.getenv("HOME")|)
+    assert {:error, result} = execute_lua(~s|return os.getenv("HOME")|)
 
     assert result["status"] == "failed"
     assert result["call_count"] == 0
@@ -796,7 +790,7 @@ defmodule JidokaExample.LuaToolsAgentTest do
     return loop(1)
     """
 
-    assert {:error, result} = LuaRuntime.execute(script, max_call_depth: 4)
+    assert {:error, result} = execute_lua(script, max_call_depth: 4)
 
     assert result["status"] == "failed"
     assert result["call_count"] == 0
@@ -806,6 +800,28 @@ defmodule JidokaExample.LuaToolsAgentTest do
 
   test "runtime rejects unknown allowed tools" do
     assert {:error, {:unknown_lua_tool, "admin.secret.dump"}} =
-             LuaRuntime.execute("return {}", allowed_tools: ["admin.secret.dump"])
+             execute_lua("return {}", allowed_tools: ["admin.secret.dump"])
+  end
+
+  defp run_catalog_execute(arguments, context) do
+    run_catalog_operation("catalog_execute", arguments, context)
+  end
+
+  defp run_catalog_operation(operation, arguments, context \\ %{}) do
+    source = CatalogSource.new!(catalog: Catalog)
+    {:ok, %{capability: capability}} = Source.compile(source, context: context)
+
+    capability.(
+      Effect.Intent.new(:operation, %{name: operation, arguments: arguments}),
+      Effect.Journal.new!()
+    )
+  end
+
+  defp execute_lua(script, opts \\ []) do
+    opts =
+      opts
+      |> Keyword.put_new(:catalog, Catalog.catalog())
+
+    Lua.execute(script, opts)
   end
 end

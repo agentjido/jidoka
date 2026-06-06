@@ -20,11 +20,12 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     %{id: "jido", label: "Jido", path: "lib/jidoka_example/jido.ex"},
     %{id: "application", label: "Application", path: "lib/jidoka_example/application.ex"},
     %{id: "agent", label: "Agent", path: "lib/jidoka_example/lua_tools_agent/agent.ex"},
-    %{id: "catalog", label: "Lua Catalog", path: "lib/jidoka_example/lua_tools_agent/catalog.ex"},
+    %{id: "catalog", label: "Action Catalog", path: "lib/jidoka_example/lua_tools_agent/catalog.ex"},
     %{
-      id: "runtime_wrapper",
-      label: "Runtime Wrapper",
-      path: "lib/jidoka_example/lua_tools_agent/lua_runtime.ex"
+      id: "catalog_source",
+      label: "Catalog Source",
+      root: :package,
+      path: "lib/jidoka/operation/source/catalog.ex"
     },
     %{
       id: "workflow_lua",
@@ -61,21 +62,6 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
       label: "Lua Call Trace",
       root: :package,
       path: "lib/jidoka/workflow/lua/call_trace.ex"
-    },
-    %{
-      id: "query",
-      label: "Query Action",
-      path: "lib/jidoka_example/lua_tools_agent/actions/lua_tools_query.ex"
-    },
-    %{
-      id: "describe",
-      label: "Describe Action",
-      path: "lib/jidoka_example/lua_tools_agent/actions/lua_tools_describe.ex"
-    },
-    %{
-      id: "execute",
-      label: "Execute Action",
-      path: "lib/jidoka_example/lua_tools_agent/actions/lua_tools_execute.ex"
     },
     %{
       id: "customer_search",
@@ -286,7 +272,7 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
         </div>
       </div>
 
-      <%= if @operation == "lua_tools_execute" do %>
+      <%= if execute_operation?(@operation) do %>
         <%= if @script do %>
           <div class="script-block">
             <span>Lua script</span>
@@ -331,16 +317,19 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     """
   end
 
-  defp operation_summary("lua_tools_query", output) do
+  defp operation_summary("catalog_query", output) do
     "Found #{length(value(output, :tools) || [])} candidate hidden tools."
   end
 
-  defp operation_summary("lua_tools_describe", output) do
+  defp operation_summary("catalog_describe", output) do
     ids = output |> value(:allowed_tools) |> List.wrap() |> Enum.join(", ")
     "Described selected hidden tools: #{ids}."
   end
 
   defp operation_summary(_operation, _output), do: "Operation completed."
+
+  defp execute_operation?("catalog_execute"), do: true
+  defp execute_operation?(_operation), do: false
 
   defp value(payload, key), do: AgentLive.payload_value(payload, key)
 
