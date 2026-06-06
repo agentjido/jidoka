@@ -3,6 +3,7 @@ defmodule Jidoka.Agent.Spec.Operation do
   Model-callable operation definition.
   """
 
+  alias Jidoka.Review.Policy
   alias Jidoka.Schema
 
   @type idempotency :: :pure | :idempotent | :dedupe | :reconcile | :unsafe_once
@@ -29,6 +30,7 @@ defmodule Jidoka.Agent.Spec.Operation do
               name: Schema.non_empty_string(),
               description: Zoi.string() |> Zoi.nullish(),
               idempotency: @idempotency_schema |> Zoi.default(:idempotent),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -62,6 +64,10 @@ defmodule Jidoka.Agent.Spec.Operation do
   def requires_control?(:unsafe_once), do: true
   def requires_control?(_idempotency), do: false
 
+  @doc "Returns true when this operation has a built-in approval policy."
+  @spec approval_required?(t()) :: boolean()
+  def approval_required?(%__MODULE__{approval: approval}), do: Policy.required?(approval)
+
   @doc "Returns true when a recorded intent may be retried without reconciliation."
   @spec replay_safe?(t() | idempotency()) :: boolean()
   def replay_safe?(%__MODULE__{idempotency: idempotency}), do: replay_safe?(idempotency)
@@ -69,10 +75,25 @@ defmodule Jidoka.Agent.Spec.Operation do
   def replay_safe?(_idempotency), do: true
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs), do: Schema.parse(@schema, attrs)
+  def new(attrs) do
+    attrs =
+      attrs
+      |> Schema.normalize_attrs()
+      |> normalize_attrs()
+
+    with {:ok, approval} <- Policy.from_input(Schema.get_key(attrs, :approval)) do
+      attrs = maybe_put_approval(attrs, approval)
+      Schema.parse(@schema, attrs)
+    end
+  end
 
   @spec new!(keyword() | map()) :: t()
-  def new!(attrs), do: Schema.parse!(@schema, attrs, "operation")
+  def new!(attrs) do
+    case new(attrs) do
+      {:ok, operation} -> operation
+      {:error, reason} -> raise ArgumentError, "invalid operation: #{inspect(reason)}"
+    end
+  end
 
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = operation), do: new(operation)
@@ -105,4 +126,25 @@ defmodule Jidoka.Agent.Spec.Operation do
   defp get_any(map, keys) do
     Enum.find_value(keys, &Map.get(map, &1))
   end
+
+  defp normalize_attrs(%{} = attrs) do
+    %{}
+    |> put_known(attrs, :name)
+    |> put_known(attrs, :description)
+    |> put_known(attrs, :idempotency)
+    |> put_known(attrs, :approval)
+    |> put_known(attrs, :metadata)
+  end
+
+  defp normalize_attrs(attrs), do: attrs
+
+  defp put_known(acc, attrs, key) do
+    case Schema.fetch_key(attrs, key) do
+      {:ok, value} -> Map.put(acc, key, value)
+      :error -> acc
+    end
+  end
+
+  defp maybe_put_approval(attrs, nil), do: Map.delete(attrs, :approval)
+  defp maybe_put_approval(attrs, approval), do: Map.put(attrs, :approval, approval)
 end

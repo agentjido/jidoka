@@ -18,6 +18,12 @@ defmodule Jidoka.Projection.Workflow do
   def ref({:jidoka_workflow_ref, :value, value}), do: %{ref: :value, value: Value.project(value)}
   def ref({:jidoka_workflow_ref, :from, step, nil}), do: %{ref: :from, step: step}
   def ref({:jidoka_workflow_ref, :from, step, path}), do: %{ref: :from, step: step, path: path}
+  def ref({:jidoka_workflow_ref, :maybe_from, step, nil}), do: %{ref: :maybe_from, step: step}
+  def ref({:jidoka_workflow_ref, :maybe_from, step, path}), do: %{ref: :maybe_from, step: step, path: path}
+  def ref({:jidoka_workflow_ref, :coalesce, values}), do: %{ref: :coalesce, values: Enum.map(values, &ref/1)}
+  def ref({:jidoka_workflow_ref, :item}), do: %{ref: :item}
+  def ref({:jidoka_workflow_ref, :index}), do: %{ref: :index}
+  def ref({:jidoka_workflow_ref, :items}), do: %{ref: :items}
   def ref(%{} = map), do: Map.new(map, fn {key, value} -> {key, ref(value)} end)
   def ref(list) when is_list(list), do: Enum.map(list, &ref/1)
   def ref(nil), do: nil

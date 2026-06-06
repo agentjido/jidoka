@@ -135,6 +135,7 @@ defmodule Jidoka.Inspection do
   defp workflow_view(%Workflow.Spec{} = workflow) do
     %{
       kind: :workflow,
+      graph: Workflow.Graph.project(workflow),
       workflow: Jidoka.project(workflow)
     }
   end

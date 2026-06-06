@@ -67,11 +67,66 @@ defmodule Jidoka.WorkflowDslTest do
       end
     end
 
+    def wait_map_item(%{index: index, value: value}, context) do
+      test_pid = Map.get(context, :test_pid, Map.get(context, "test_pid"))
+      send(test_pid, {:workflow_map_item_started, index, self()})
+
+      receive do
+        {:release_workflow_map_item, ^index} -> {:ok, %{index: index, value: value}}
+      after
+        1_000 -> {:error, {:release_timeout, index}}
+      end
+    end
+
     def collect_tags(%{left: left, right: right}, _context) do
       {:ok, %{tags: [left.tag, right.tag]}}
     end
 
     def pass_tag(%{tag: tag}, _context), do: {:ok, %{tag: tag}}
+
+    def policy(%{requires_review: requires_review}, _context), do: {:ok, %{requires_review: requires_review}}
+    def auto_refund(%{order_id: order_id}, _context), do: {:ok, %{path: :auto, order_id: order_id}}
+    def request_review(%{order_id: order_id}, _context), do: {:ok, %{path: :review, order_id: order_id}}
+
+    def score_lead(%{lead: lead, index: index}, _context) do
+      {:ok, %{name: Map.fetch!(lead, "name"), score: Map.fetch!(lead, "score"), index: index}}
+    end
+
+    def rank_leads(%{scores: scores, threshold: threshold}, _context) do
+      ranked =
+        scores
+        |> Enum.filter(&(&1.score >= threshold))
+        |> Enum.sort_by(&{-&1.score, &1.index})
+        |> Enum.map(& &1.name)
+
+      {:ok, %{ranked: ranked}}
+    end
+
+    def fail_then_succeed(%{value: value}, %{counter: counter}) do
+      attempt = Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
+
+      if attempt < 3 do
+        {:error, {:not_yet, attempt}}
+      else
+        {:ok, %{value: value, attempt: attempt}}
+      end
+    end
+
+    def always_fail(_params, _context), do: {:error, :still_failing}
+  end
+
+  defmodule ScoreLeadAction do
+    @moduledoc false
+
+    use Jidoka.Action,
+      name: "workflow_score_lead",
+      description: "Scores one lead.",
+      schema: Zoi.object(%{lead: Zoi.map(), index: Zoi.integer()})
+
+    @impl true
+    def run(%{lead: lead, index: index}, _context) do
+      {:ok, %{name: Map.fetch!(lead, "name"), score: Map.fetch!(lead, "score"), index: index}}
+    end
   end
 
   defmodule EchoAgent do
@@ -389,15 +444,231 @@ defmodule Jidoka.WorkflowDslTest do
     end
   end
 
+  defmodule GateWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:gate_workflow)
+      input Zoi.object(%{order_id: Zoi.string(), requires_review: Zoi.boolean()})
+    end
+
+    steps do
+      function :policy_check, {Fns, :policy, 2}, input: %{requires_review: input(:requires_review)}
+
+      gate(:needs_review,
+        condition: from(:policy_check, :requires_review)
+      )
+
+      function :auto_refund, {Fns, :auto_refund, 2},
+        unless: from(:needs_review),
+        input: %{order_id: input(:order_id)}
+
+      function :request_review, {Fns, :request_review, 2},
+        when: from(:needs_review),
+        input: %{order_id: input(:order_id)}
+    end
+
+    output coalesce([maybe_from(:auto_refund), maybe_from(:request_review)])
+  end
+
+  defmodule SkippedHardFromWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:skipped_hard_from_workflow)
+      input Zoi.object(%{order_id: Zoi.string()})
+    end
+
+    steps do
+      gate(:needs_review,
+        condition: value(false)
+      )
+
+      function :request_review, {Fns, :request_review, 2},
+        when: from(:needs_review),
+        input: %{order_id: input(:order_id)}
+    end
+
+    output from(:request_review)
+  end
+
+  defmodule MapReduceWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:map_reduce_workflow)
+
+      input Zoi.object(%{
+              leads: Zoi.array(Zoi.map()),
+              threshold: Zoi.integer()
+            })
+    end
+
+    steps do
+      map(:score_leads,
+        over: input(:leads),
+        function: {Fns, :score_lead, 2},
+        input: %{lead: item(), index: index()},
+        max_concurrency: 4
+      )
+
+      reduce(:rank_leads,
+        over: from(:score_leads),
+        using: {Fns, :rank_leads, 2},
+        input: %{scores: items(), threshold: input(:threshold)}
+      )
+    end
+
+    output from(:rank_leads)
+  end
+
+  defmodule MapActionWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:map_action_workflow)
+      input Zoi.object(%{leads: Zoi.array(Zoi.map())})
+    end
+
+    steps do
+      map(:score_leads,
+        over: input(:leads),
+        action: ScoreLeadAction,
+        input: %{lead: item(), index: index()},
+        max_concurrency: 4
+      )
+    end
+
+    output from(:score_leads)
+  end
+
+  defmodule WideMapWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:wide_map_workflow)
+      input Zoi.object(%{values: Zoi.array(Zoi.integer())})
+    end
+
+    steps do
+      map(:wait_items,
+        over: input(:values),
+        function: {Fns, :wait_map_item, 2},
+        input: %{index: index(), value: item()},
+        max_concurrency: 9
+      )
+    end
+
+    output from(:wait_items)
+  end
+
+  defmodule RetryWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:retry_workflow)
+      input Zoi.object(%{value: Zoi.integer()})
+    end
+
+    steps do
+      function :flaky, {Fns, :fail_then_succeed, 2},
+        input: %{value: input(:value)},
+        retry: [max_attempts: 3, backoff: [type: :fixed, min: 0, max: 0]]
+    end
+
+    output from(:flaky)
+  end
+
+  defmodule RetryExhaustWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:retry_exhaust_workflow)
+      input Zoi.object(%{})
+    end
+
+    steps do
+      function :always_fail, {Fns, :always_fail, 2},
+        input: %{},
+        retry: [max_attempts: 2, backoff: [type: :fixed, min: 0, max: 0]]
+    end
+
+    output from(:always_fail)
+  end
+
+  defmodule RetryTimeoutWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:retry_timeout_workflow)
+      input Zoi.object(%{})
+    end
+
+    steps do
+      function :always_fail, {Fns, :always_fail, 2},
+        input: %{},
+        retry: [max_attempts: 10, backoff: [type: :fixed, min: 100, max: 100]]
+    end
+
+    output from(:always_fail)
+  end
+
+  defmodule WorkflowDepthAgent do
+    @moduledoc false
+
+    use Jidoka.Agent
+
+    agent :workflow_depth_agent do
+      model %{provider: :test, id: "model"}
+      instructions "Use the lead workflow for lead ranking questions."
+    end
+
+    tools do
+      workflow MapReduceWorkflow,
+        as: :rank_leads,
+        async: true,
+        max_concurrency: 4,
+        result: :structured
+    end
+  end
+
   test "workflow refs are explicit data tuples" do
     assert Ref.input(:topic) == {:jidoka_workflow_ref, :input, :topic}
     assert Ref.from(:step) == {:jidoka_workflow_ref, :from, :step, nil}
     assert Ref.from(:step, :value) == {:jidoka_workflow_ref, :from, :step, [:value]}
     assert Ref.from(:step, [:nested, "value"]) == {:jidoka_workflow_ref, :from, :step, [:nested, "value"]}
+    assert Ref.maybe_from(:step) == {:jidoka_workflow_ref, :maybe_from, :step, nil}
+    assert Ref.maybe_from(:step, :value) == {:jidoka_workflow_ref, :maybe_from, :step, [:value]}
+
+    assert Ref.coalesce([Ref.maybe_from(:left), Ref.maybe_from(:right)]) ==
+             {:jidoka_workflow_ref, :coalesce, [Ref.maybe_from(:left), Ref.maybe_from(:right)]}
+
+    assert Ref.item() == {:jidoka_workflow_ref, :item}
+    assert Ref.index() == {:jidoka_workflow_ref, :index}
+    assert Ref.items() == {:jidoka_workflow_ref, :items}
     assert Ref.context(:tenant) == {:jidoka_workflow_ref, :context, :tenant}
     assert Ref.value(1) == {:jidoka_workflow_ref, :value, 1}
 
     assert Ref.ref?(Ref.input("topic"))
+    assert Ref.ref?(Ref.maybe_from(:step))
+    assert Ref.ref?(Ref.coalesce([]))
+    assert Ref.ref?(Ref.item())
     refute Ref.ref?(:topic)
   end
 
@@ -407,7 +678,8 @@ defmodule Jidoka.WorkflowDslTest do
 
     assert {:ok, %Step{kind: :action}} = Step.new(name: :act, kind: :action, target: AddAmount)
     assert {:ok, %Spec{mode: :callback}} = Spec.new(id: "callback_contract", module: __MODULE__)
-    assert [:function, :action, :agent] = Step.kinds()
+    assert [:function, :action, :agent, :gate, :map, :reduce] = Step.kinds()
+    assert [:function, :action] = Step.map_targets()
     assert [:callback, :dsl] = Spec.modes()
     assert %Zoi.Types.Struct{} = Step.schema()
     assert %Zoi.Types.Struct{} = Spec.schema()
@@ -452,12 +724,18 @@ defmodule Jidoka.WorkflowDslTest do
     state = %{
       input: %{"topic" => "runic"},
       context: %{tenant: "northwind"},
-      steps: %{lookup: %{"order" => %{id: "A1001"}}}
+      steps: %{lookup: %{"order" => %{id: "A1001"}}},
+      outcomes: %{skipped_step: %{status: :skipped}}
     }
 
     assert {:ok, "runic"} = Value.resolve(Ref.input(:topic), state)
     assert {:ok, "northwind"} = Value.resolve(Ref.context("tenant"), state)
     assert {:ok, "A1001"} = Value.resolve(Ref.from(:lookup, ["order", :id]), state)
+    assert {:ok, nil} = Value.resolve(Ref.maybe_from(:missing_step), state)
+    assert {:ok, nil} = Value.resolve(Ref.maybe_from(:lookup, :missing), state)
+
+    assert {:ok, "A1001"} =
+             Value.resolve(Ref.coalesce([Ref.maybe_from(:missing_step), Ref.from(:lookup, ["order", :id])]), state)
 
     assert {:ok, %{refs: ["runic", "northwind"]}} =
              Value.resolve(%{refs: [Ref.input(:topic), Ref.context(:tenant)]}, state)
@@ -466,6 +744,10 @@ defmodule Jidoka.WorkflowDslTest do
              Value.resolve({Ref.input(:topic), Ref.from(:lookup, [:order, "id"])}, state)
 
     assert {:error, {:missing_ref, :input, :missing}} = Value.resolve(Ref.input(:missing), state)
+
+    assert {:error, {:skipped_ref, :skipped_step, %{status: :skipped}}} =
+             Value.resolve(Ref.from(:skipped_step), state)
+
     assert Value.has_equivalent_key?(state.context, "tenant")
     refute Value.has_equivalent_key?(state.context, :missing)
   end
@@ -488,8 +770,35 @@ defmodule Jidoka.WorkflowDslTest do
                id: "function_workflow",
                mode: :dsl,
                steps: [%{name: :normalize, kind: :function}]
-             }
+             },
+             graph: %{nodes: [%{name: :normalize, kind: :function}], edges: []}
            } = Jidoka.inspect(FunctionWorkflow)
+  end
+
+  test "inspection projects workflow graph depth metadata" do
+    assert %{
+             kind: :workflow,
+             graph: %{
+               nodes: nodes,
+               edges: edges,
+               output: %{ref: :from, step: :rank_leads}
+             }
+           } = Jidoka.inspect(MapReduceWorkflow)
+
+    assert %{name: :score_leads, kind: :map, fanout: %{target_kind: :function, max_concurrency: 4}} =
+             Enum.find(nodes, &(&1.name == :score_leads))
+
+    assert %{name: :rank_leads, kind: :reduce, fanout: %{using: _using}} =
+             Enum.find(nodes, &(&1.name == :rank_leads))
+
+    assert %{from: :score_leads, to: :rank_leads} in edges
+
+    assert %{
+             graph: %{nodes: gate_nodes}
+           } = Jidoka.inspect(GateWorkflow)
+
+    assert %{name: :auto_refund, unless: %{ref: :from, step: :needs_review}} =
+             Enum.find(gate_nodes, &(&1.name == :auto_refund))
   end
 
   test "function workflows resolve input and context refs" do
@@ -629,6 +938,113 @@ defmodule Jidoka.WorkflowDslTest do
     assert {:ok, %{tag: :second}} = Task.await(task, 2_000)
   end
 
+  test "gate workflows run the matching branch and coalesce optional branch output" do
+    assert {:ok, %{path: :auto, order_id: "A1001"}} =
+             Workflow.run(GateWorkflow, %{order_id: "A1001", requires_review: false})
+
+    assert {:ok, %{path: :review, order_id: "A1001"}} =
+             Workflow.run(GateWorkflow, %{order_id: "A1001", requires_review: true})
+  end
+
+  test "from refs fail on skipped steps while maybe_from returns nil" do
+    assert {:error, error} = Workflow.run(SkippedHardFromWorkflow, %{order_id: "A1001"})
+
+    assert error.details.workflow_id == "skipped_hard_from_workflow"
+    assert error.details.reason == :output_ref
+
+    assert {:skipped_ref, :request_review, %{status: :skipped, reason: {:condition_not_met, :when}}} =
+             error.details.cause
+  end
+
+  test "map and reduce workflows preserve order and handle empty lists" do
+    leads = [
+      %{"name" => "Grace", "score" => 91},
+      %{"name" => "Ada", "score" => 98},
+      %{"name" => "Alan", "score" => 70}
+    ]
+
+    assert {:ok, %{ranked: ["Ada", "Grace"]}} =
+             Workflow.run(MapReduceWorkflow, %{leads: leads, threshold: 80}, async: true, max_concurrency: 4)
+
+    assert {:ok, %{ranked: []}} =
+             Workflow.run(MapReduceWorkflow, %{leads: [], threshold: 80}, async: true, max_concurrency: 4)
+  end
+
+  test "map workflows can call action targets with stable output ordering" do
+    leads = [
+      %{"name" => "First", "score" => 10},
+      %{"name" => "Second", "score" => 20}
+    ]
+
+    assert {:ok, [%{"index" => 0, "name" => "First"}, %{"index" => 1, "name" => "Second"}]} =
+             Workflow.run(MapActionWorkflow, %{leads: leads}, async: true, max_concurrency: 4)
+  end
+
+  test "map workflows honor explicit step concurrency above the default when no global cap is set" do
+    test_pid = self()
+
+    task =
+      Task.async(fn ->
+        Workflow.run(WideMapWorkflow, %{values: Enum.to_list(1..9)},
+          context: %{test_pid: test_pid},
+          timeout: 2_000
+        )
+      end)
+
+    started = receive_map_items(9)
+    release_map_items(started)
+
+    assert {:ok, results} = Task.await(task, 2_000)
+    assert Enum.map(results, & &1.index) == Enum.to_list(0..8)
+    assert Enum.map(results, & &1.value) == Enum.to_list(1..9)
+  end
+
+  test "map workflows apply workflow max_concurrency as a global cap" do
+    test_pid = self()
+
+    task =
+      Task.async(fn ->
+        Workflow.run(WideMapWorkflow, %{values: Enum.to_list(1..9)},
+          context: %{test_pid: test_pid},
+          max_concurrency: 2,
+          timeout: 3_000
+        )
+      end)
+
+    for expected <- [[0, 1], [2, 3], [4, 5], [6, 7], [8]] do
+      started = receive_map_items(length(expected))
+      assert MapSet.new(Map.keys(started)) == MapSet.new(expected)
+      refute_receive {:workflow_map_item_started, _index, _pid}, 100
+      release_map_items(started)
+    end
+
+    assert {:ok, results} = Task.await(task, 3_000)
+    assert Enum.map(results, & &1.index) == Enum.to_list(0..8)
+  end
+
+  test "retry policies retry target execution and stop after exhaustion" do
+    {:ok, counter} = Agent.start_link(fn -> 0 end)
+
+    assert {:ok, %{value: 10, attempt: 3}} =
+             Workflow.run(RetryWorkflow, %{value: 10}, context: %{counter: counter})
+
+    assert Agent.get(counter, & &1) == 3
+
+    assert {:error, error} = Workflow.run(RetryExhaustWorkflow, %{})
+    assert error.details.step == :always_fail
+    assert error.details.cause == {:retry_exhausted, 2, :still_failing}
+  end
+
+  test "workflow total timeout still wins over retry backoff" do
+    started_at = System.monotonic_time(:millisecond)
+
+    assert {:error, error} = Workflow.run(RetryTimeoutWorkflow, %{}, timeout: 30)
+
+    elapsed = System.monotonic_time(:millisecond) - started_at
+    assert elapsed < 500
+    assert error.details.reason == :timeout
+  end
+
   test "workflow step runner exposes clear failure modes" do
     state = %{input: %{}, context: %{}, steps: %{}, agent_opts: [], error: nil}
 
@@ -751,6 +1167,42 @@ defmodule Jidoka.WorkflowDslTest do
                  workflow: "action_workflow",
                  operation: "run_workflow",
                  output: %{"value" => 12}
+               }
+             }
+           ] = result.agent_state.operation_results
+  end
+
+  test "workflow depth operations execute through the agent tool path" do
+    llm = fn _intent, %Effect.Journal{} = journal ->
+      case count_results(journal, :llm) do
+        0 ->
+          {:ok,
+           %{
+             type: :operation,
+             name: "rank_leads",
+             arguments: %{
+               "threshold" => 80,
+               "leads" => [
+                 %{"name" => "Ada", "score" => 98},
+                 %{"name" => "Alan", "score" => 70}
+               ]
+             }
+           }}
+
+        1 ->
+          {:ok, %{type: :final, content: "Ada is the top lead."}}
+      end
+    end
+
+    assert {:ok, %Turn.Result{} = result} =
+             WorkflowDepthAgent.run_turn("Rank these leads.", llm: llm)
+
+    assert [
+             %Effect.OperationResult{
+               operation: "rank_leads",
+               output: %{
+                 workflow: "map_reduce_workflow",
+                 output: %{ranked: ["Ada"]}
                }
              }
            ] = result.agent_state.operation_results
@@ -991,6 +1443,80 @@ defmodule Jidoka.WorkflowDslTest do
 
     output from(:normalize)
     """)
+
+    assert_workflow_dsl_error(~r/map steps require exactly one target/s, """
+    workflow do
+      id :map_missing_target_workflow
+      input Zoi.object(%{values: Zoi.array(Zoi.integer())})
+    end
+
+    steps do
+      map :each_value, over: input(:values), input: %{value: item()}
+    end
+
+    output from(:each_value)
+    """)
+
+    assert_workflow_dsl_error(~r/cannot declare both function and action targets/s, """
+    workflow do
+      id :map_two_targets_workflow
+      input Zoi.object(%{values: Zoi.array(Zoi.integer())})
+    end
+
+    steps do
+      map :each_value,
+        over: input(:values),
+        function: {Jidoka.WorkflowDslTest.Fns, :raw, 2},
+        action: Jidoka.WorkflowDslTest.AddAmount,
+        input: %{value: item()}
+    end
+
+    output from(:each_value)
+    """)
+
+    assert_workflow_dsl_error(~r/special refs are not valid here/s, """
+    workflow do
+      id :item_outside_map_workflow
+      input Zoi.object(%{value: Zoi.integer()})
+    end
+
+    steps do
+      function :bad, {Jidoka.WorkflowDslTest.Fns, :raw, 2}, input: %{value: item()}
+    end
+
+    output from(:bad)
+    """)
+
+    assert_workflow_dsl_error(~r/special refs are not valid here/s, """
+    workflow do
+      id :items_outside_reduce_workflow
+      input Zoi.object(%{values: Zoi.array(Zoi.integer())})
+    end
+
+    steps do
+      map :each_value,
+        over: input(:values),
+        function: {Jidoka.WorkflowDslTest.Fns, :raw, 2},
+        input: %{value: items()}
+    end
+
+    output from(:each_value)
+    """)
+
+    assert_workflow_dsl_error(~r/retry policy is invalid/s, """
+    workflow do
+      id :bad_retry_workflow
+      input Zoi.object(%{value: Zoi.integer()})
+    end
+
+    steps do
+      function :bad, {Jidoka.WorkflowDslTest.Fns, :raw, 2},
+        input: %{value: input(:value)},
+        retry: [max_attempts: 0]
+    end
+
+    output from(:bad)
+    """)
   end
 
   defmodule FunctionWorkflowWithMissingField do
@@ -1076,5 +1602,18 @@ defmodule Jidoka.WorkflowDslTest do
     assert_raise Spark.Error.DslError, pattern, fn ->
       Code.compile_string(source)
     end
+  end
+
+  defp receive_map_items(count) do
+    for _ <- 1..count, into: %{} do
+      assert_receive {:workflow_map_item_started, index, pid}, 500
+      {index, pid}
+    end
+  end
+
+  defp release_map_items(started) do
+    Enum.each(started, fn {index, pid} ->
+      send(pid, {:release_workflow_map_item, index})
+    end)
   end
 end

@@ -136,14 +136,28 @@ case Jidoka.turn(MyApp.RefundAgent, "Refund order A1001") do
     result.content
 
   {:hibernate, snapshot} ->
-    review = snapshot.metadata["pending_review"]
-    approval = Jidoka.Review.Response.approve(review)
-    Jidoka.resume(snapshot, approval: approval)
+    {:ok, [review]} = Jidoka.pending_reviews(snapshot)
+    Jidoka.approve(snapshot, review)
 end
 ```
 
 `resume/2` accepts a snapshot struct, snapshot map, or serialized snapshot
 string.
+
+Use `pending_reviews/1`, `approve/3`, and `deny/3` for common approval UI
+flows:
+
+```elixir
+{:ok, [review]} = Jidoka.pending_reviews(snapshot)
+
+{:ok, result} = Jidoka.approve(snapshot, review)
+
+{:error, reason} =
+  Jidoka.deny(snapshot, review, reason: :operator_rejected)
+```
+
+Use `resume/2` directly when the application has already built a
+`Jidoka.Review.Response`.
 
 ## Host In A Process
 
@@ -231,6 +245,9 @@ owner state.
 | Await async result | `await/2` |
 | Multi-turn state | `session/2` or `session/3` |
 | Continue a paused turn | `resume/2` |
+| List pending reviews | `pending_reviews/1` |
+| Approve a review | `approve/3` |
+| Deny a review | `deny/3` |
 | Start hosted process | `start_agent/2` |
 | Stop hosted process | `stop_agent/2` |
 | Lookup hosted process | `whereis/2` |

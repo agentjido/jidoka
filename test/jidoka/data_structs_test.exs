@@ -7,6 +7,17 @@ defmodule Jidoka.DataStructsTest.Support.AllowControl do
   def call(_context), do: :cont
 end
 
+defmodule Jidoka.DataStructsTest.Support.AmountPredicate do
+  @moduledoc false
+
+  use Jidoka.ApprovalPredicate
+
+  @impl true
+  def call(%Jidoka.Context{arguments: arguments}) do
+    (Map.get(arguments, "amount") || 0) > 100
+  end
+end
+
 defmodule Jidoka.DataStructsTest do
   use ExUnit.Case, async: true
 
@@ -17,7 +28,7 @@ defmodule Jidoka.DataStructsTest do
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
-  alias Jidoka.DataStructsTest.Support.AllowControl
+  alias Jidoka.DataStructsTest.Support.{AllowControl, AmountPredicate}
 
   test "agent state accepts nil, maps, and structs as input" do
     assert {:ok, %Agent.State{messages: [], operation_results: [], metadata: %{}}} =
@@ -71,6 +82,109 @@ defmodule Jidoka.DataStructsTest do
              Operation.new(name: "lookup", idempotency: :not_valid)
   end
 
+  test "review policies normalize approval data without creating atoms" do
+    assert {:ok,
+            %Review.Policy{
+              required: true,
+              mode: :pre_execution,
+              reason: :approval_required
+            }} = Review.Policy.from_input(true)
+
+    assert {:ok,
+            %Review.Policy{
+              reason: "refund_review",
+              message: "Review the refund.",
+              ttl_ms: 30_000,
+              metadata: %{"risk" => "high"}
+            }} =
+             Review.Policy.from_input(%{
+               "reason" => "refund_review",
+               "message" => "Review the refund.",
+               "ttl_ms" => 30_000,
+               "metadata" => %{"risk" => "high"}
+             })
+
+    assert {:ok, nil} = Review.Policy.from_input(false)
+    assert {:error, {:invalid_review_policy, :bad_policy}} = Review.Policy.from_input(:bad_policy)
+
+    assert {:ok, %Review.Policy{predicate: AmountPredicate}} =
+             Review.Policy.from_input(%{"when" => AmountPredicate})
+
+    assert {:error, {:invalid_approval_predicate, "Elixir.Missing.Predicate"}} =
+             Review.Policy.from_input(%{"when" => "Elixir.Missing.Predicate"})
+  end
+
+  test "Jidoka.Context normalizes runtime context and fetches data keys safely" do
+    assert {:ok,
+            %Jidoka.Context{
+              agent_id: "agent",
+              request_id: "request",
+              boundary: :operation,
+              operation: "refund_order",
+              operation_kind: :action,
+              idempotency: :unsafe_once,
+              data: %{"tenant_id" => "tenant_1", reviewer: "Ada"}
+            } = context} =
+             Jidoka.Context.new(%{
+               "agent_id" => "agent",
+               "request_id" => "request",
+               "boundary" => "operation",
+               "operation" => "refund_order",
+               "operation_kind" => "action",
+               "idempotency" => "unsafe_once",
+               "context" => %{"tenant_id" => "tenant_1", reviewer: "Ada"}
+             })
+
+    assert Jidoka.Context.get(context, :tenant_id) == "tenant_1"
+    assert Jidoka.Context.get(context, "reviewer") == "Ada"
+    assert Jidoka.Context.get(context, :missing, :default) == :default
+  end
+
+  test "operation specs carry approval policy data" do
+    assert {:ok,
+            %Operation{
+              approval: %Review.Policy{
+                required: true,
+                reason: "review_lookup",
+                ttl_ms: 100
+              }
+            } = operation} =
+             Operation.new(%{
+               "name" => "lookup",
+               "approval" => %{"reason" => "review_lookup", "ttl_ms" => 100}
+             })
+
+    assert Operation.approval_required?(operation)
+
+    refute Operation.approval_required?(Operation.new!(name: "lookup_without_approval"))
+  end
+
+  test "approval source filters match operations by final operation name" do
+    safe = Operation.new!(name: "safe_lookup", idempotency: :idempotent)
+    unsafe = Operation.new!(name: "delete_record", idempotency: :unsafe_once)
+
+    assert {:ok, nil} = Review.Approval.policy_for_operation(:unsafe_once, safe)
+    assert {:ok, %Review.Policy{}} = Review.Approval.policy_for_operation(:unsafe_once, unsafe)
+
+    assert {:ok, %Review.Policy{reason: "review_delete"}} =
+             Review.Approval.policy_for_operation(
+               [only: ["delete_record"], reason: "review_delete"],
+               unsafe
+             )
+
+    assert {:ok, nil} =
+             Review.Approval.policy_for_operation(
+               [except: [:delete_record], reason: "review_all"],
+               unsafe
+             )
+
+    assert {:ok, %Review.Policy{}} =
+             Review.Approval.policy_for_operation(
+               :unsafe_once,
+               %{"name" => :delete_record, "idempotency" => "unsafe_once"}
+             )
+  end
+
   test "operation policies expose replay and control semantics" do
     assert Operation.kind(Operation.new!(name: "lookup")) == :operation
 
@@ -113,6 +227,23 @@ defmodule Jidoka.DataStructsTest do
 
     assert {:error, {:unsafe_once_requires_control, "charge_card", :operation}} =
              Turn.Plan.new(spec)
+
+    approved_spec =
+      Agent.Spec.new!(
+        id: "unsafe_with_approval_policy",
+        instructions: "Charge only when explicitly requested.",
+        operations: [
+          Operation.new!(
+            name: "charge_card",
+            description: "Charges a customer card.",
+            idempotency: :unsafe_once,
+            approval: true
+          )
+        ]
+      )
+
+    assert :ok = Agent.Spec.validate_operation_policies(approved_spec)
+    assert {:ok, %Turn.Plan{}} = Turn.Plan.new(approved_spec)
 
     controlled_spec =
       Agent.Spec.new!(

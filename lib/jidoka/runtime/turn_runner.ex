@@ -221,13 +221,29 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp hibernate_for_interrupt(%Turn.State{} = state, %Interrupt{} = interrupt, opts) do
     event_count = length(state.events)
 
-    with {:ok, approval_ttl_ms} <- Review.approval_ttl_ms(opts),
+    with {:ok, approval_ttl_ms} <- approval_ttl_ms(interrupt, opts),
          {:ok, state, interrupt} <-
            Review.put_pending_interrupt(state, interrupt, clock_ms(opts), approval_ttl_ms) do
       emit_events(Enum.drop(state.events, event_count), opts)
       hibernate(state, Turn.Cursor.review(interrupt), opts)
     end
   end
+
+  defp approval_ttl_ms(%Interrupt{} = interrupt, opts) do
+    case Review.approval_ttl_ms(opts) do
+      {:ok, nil} -> {:ok, approval_policy_ttl_ms(interrupt)}
+      other -> other
+    end
+  end
+
+  defp approval_policy_ttl_ms(%Interrupt{metadata: metadata}) when is_map(metadata) do
+    metadata
+    |> get_in(["control_metadata", "policy", "ttl_ms"])
+    |> normalize_policy_ttl_ms()
+  end
+
+  defp normalize_policy_ttl_ms(ttl_ms) when is_integer(ttl_ms) and ttl_ms > 0, do: ttl_ms
+  defp normalize_policy_ttl_ms(_ttl_ms), do: nil
 
   defp hibernate(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts) do
     hibernated_state = append_turn_hibernated(state, cursor)

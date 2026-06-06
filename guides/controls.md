@@ -23,6 +23,30 @@ Controls may return:
 Operation interrupts are durable today. Input/output interrupts are currently
 reported as errors until those boundaries get resumable wait semantics.
 
+## Runtime Context
+
+Controls receive their existing boundary-specific data and a `Jidoka.Context`
+under `:ctx`. `Jidoka.Context` is the stable public shape for policy code:
+
+```elixir
+defmodule MyApp.RequireTenant do
+  use Jidoka.Control, name: "require_tenant"
+
+  @impl true
+  def call(%{ctx: %Jidoka.Context{} = ctx}) do
+    case Jidoka.Context.fetch(ctx, :tenant_id) do
+      {:ok, _tenant_id} -> :cont
+      :error -> {:block, :missing_tenant}
+    end
+  end
+end
+```
+
+Use `ctx.data` for caller-supplied application context, `ctx.arguments` for
+operation arguments, `ctx.operation` for the operation name, and
+`ctx.request_metadata` for request metadata. `Jidoka.Context.fetch/2` and
+`Jidoka.Context.get/3` match atom and string keys without creating atoms.
+
 ## Input Controls
 
 Input controls receive a map with the request, context, metadata, and input
@@ -59,10 +83,73 @@ defmodule MyApp.SupportAgent do
 end
 ```
 
+Jidoka includes a few small controls for common cases:
+
+```elixir
+controls do
+  input Jidoka.Controls.RequireContext,
+    metadata: %{keys: [:tenant_id]}
+
+  input Jidoka.Controls.MaxInputLength,
+    metadata: %{max: 8_000}
+end
+```
+
 ## Operation Controls And Approvals
 
 Operation controls receive `Jidoka.Runtime.Controls.OperationContext`. This is
 the safety boundary for tool/action execution.
+
+For the common case where an operation simply needs human approval before it
+runs, prefer tool-level approval sugar:
+
+```elixir
+tools do
+  action MyApp.RefundOrder,
+    idempotency: :unsafe_once,
+    approval: [
+      reason: :refund_requires_review,
+      message: "Review the refund before it is issued.",
+      ttl_ms: 300_000
+    ]
+end
+```
+
+This compiles to Jidoka's built-in approval control and still uses durable
+hibernate/resume.
+
+Use an approval predicate when approval depends on operation arguments or
+request context, but the action should still use the standard approval flow:
+
+```elixir
+defmodule MyApp.LargeRefundPredicate do
+  use Jidoka.ApprovalPredicate
+
+  @impl true
+  def call(%Jidoka.Context{} = ctx) do
+    amount = Map.get(ctx.arguments, "amount") || 0
+    tenant = Jidoka.Context.get(ctx, :tenant_id)
+
+    tenant == "enterprise" or amount >= 100
+  end
+end
+```
+
+Attach the predicate to the approval policy:
+
+```elixir
+tools do
+  action MyApp.RefundOrder,
+    idempotency: :unsafe_once,
+    approval: [
+      when: MyApp.LargeRefundPredicate,
+      reason: :large_refund_review
+    ]
+end
+```
+
+Use a custom operation control when the policy needs a different decision:
+tenant checks, external risk scoring, hard blocks, or custom interrupt reasons.
 
 ```elixir
 defmodule MyApp.RequireRefundApproval do
@@ -84,7 +171,8 @@ Attach it to a specific operation:
 ```elixir
 controls do
   operation MyApp.RequireRefundApproval,
-    when: [kind: :action, name: :refund_order]
+    when: [kind: :action, name: :refund_order],
+    metadata: %{queue: :refunds}
 end
 ```
 
@@ -116,9 +204,19 @@ approval = Jidoka.Review.Response.approve(review.interrupt_id)
   Jidoka.resume(snapshot, approval: approval)
 ```
 
-Operations marked `:unsafe_once` must have a matching operation control before
-the agent can compile into a plan. This makes risky work visible during
-preflight instead of after a model chooses the operation.
+Operations marked `:unsafe_once` must have either an approval policy or a
+matching operation control before the agent can compile into a plan. This makes
+risky work visible during preflight instead of after a model chooses the
+operation.
+
+Request-level approval is available when the caller wants to review operations
+for one turn without changing the agent spec:
+
+```elixir
+Jidoka.turn(MyApp.SupportAgent, "Refund A1001",
+  require_tool_approval: [only: ["refund_order"]]
+)
+```
 
 ## Output Controls
 

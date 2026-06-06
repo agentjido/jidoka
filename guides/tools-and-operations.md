@@ -136,8 +136,8 @@ Every operation declares one of:
 - `:reconcile` - the runtime should re-derive the result from authoritative
   state on replay.
 - `:unsafe_once` - the operation must run at most once; replay requires a
-  recorded result. `Operation.requires_control?/1` is true for this kind, so
-  declaring an explicit operation control is recommended.
+  recorded result. Add `approval: true` or a matching operation control before
+  compiling the plan.
 
 This guide covers the authoring path. Full idempotency, pause/resume, and replay
 behavior live in [Runtime And Harness](runtime-and-harness.md).
@@ -180,6 +180,22 @@ The compiled spec now includes:
   metadata: %{"source" => "jido_action", "kind" => "action", ...}
 }
 ```
+
+For risky actions, attach approval at the same declaration:
+
+```elixir
+tools do
+  action MyApp.Tools.DeleteRecord,
+    idempotency: :unsafe_once,
+    approval: [
+      reason: :delete_requires_review,
+      message: "Review the delete before execution."
+    ]
+end
+```
+
+When the model calls the operation, Jidoka hibernates before execution and
+exposes a `Jidoka.Review.Request`. See [Human In The Loop](human-in-the-loop.md).
 
 ### Step 2: Match Operations With Controls
 

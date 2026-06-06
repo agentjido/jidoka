@@ -16,8 +16,10 @@ defmodule Jidoka.Workflow.Runtime do
         input: input,
         context: runtime_opts.context,
         steps: %{},
+        outcomes: %{},
         workflow_id: spec.id,
         agent_opts: runtime_opts.agent_opts,
+        max_concurrency: runtime_opts.max_concurrency,
         error: nil
       }
 
@@ -60,7 +62,17 @@ defmodule Jidoka.Workflow.Runtime do
         {:error, error}
 
       {:ok, state} ->
-        Value.resolve(spec.output, state)
+        case Value.resolve(spec.output, state) do
+          {:ok, output} ->
+            {:ok, output}
+
+          {:error, reason} ->
+            {:error,
+             Jidoka.Error.execution_error("Workflow #{spec.id} output failed.",
+               phase: :workflow_output,
+               details: %{workflow_id: spec.id, reason: :output_ref, cause: reason}
+             )}
+        end
     end
   end
 
@@ -94,8 +106,10 @@ defmodule Jidoka.Workflow.Runtime do
           input: %{},
           context: %{},
           steps: %{},
+          outcomes: %{},
           workflow_id: nil,
           agent_opts: [],
+          max_concurrency: nil,
           error: {:invalid_workflow_state_join, states}
         }
 
@@ -109,8 +123,10 @@ defmodule Jidoka.Workflow.Runtime do
       input: %{},
       context: %{},
       steps: %{},
+      outcomes: %{},
       workflow_id: nil,
       agent_opts: [],
+      max_concurrency: nil,
       error: {:invalid_workflow_state_join, state}
     }
   end
@@ -119,6 +135,7 @@ defmodule Jidoka.Workflow.Runtime do
     %{
       acc
       | steps: Map.merge(acc.steps, state.steps),
+        outcomes: Map.merge(Map.get(acc, :outcomes, %{}), Map.get(state, :outcomes, %{})),
         error: acc.error || state.error
     }
   end

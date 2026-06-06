@@ -12,8 +12,13 @@ defmodule Jidoka.Workflow.Ref do
   @type t ::
           {:jidoka_workflow_ref, :input, atom() | String.t()}
           | {:jidoka_workflow_ref, :from, atom(), nil | [atom() | String.t()]}
+          | {:jidoka_workflow_ref, :maybe_from, atom(), nil | [atom() | String.t()]}
           | {:jidoka_workflow_ref, :context, atom() | String.t()}
           | {:jidoka_workflow_ref, :value, term()}
+          | {:jidoka_workflow_ref, :coalesce, [term()]}
+          | {:jidoka_workflow_ref, :item}
+          | {:jidoka_workflow_ref, :index}
+          | {:jidoka_workflow_ref, :items}
 
   @doc "References a top-level workflow input field."
   @spec input(atom() | String.t()) :: t()
@@ -31,6 +36,34 @@ defmodule Jidoka.Workflow.Ref do
   def from(step, path) when is_atom(step) and is_list(path),
     do: {:jidoka_workflow_ref, :from, step, path}
 
+  @doc "References a prior step output, returning nil when the step output is missing or skipped."
+  @spec maybe_from(atom()) :: t()
+  def maybe_from(step) when is_atom(step), do: {:jidoka_workflow_ref, :maybe_from, step, nil}
+
+  @doc "References a field or path inside a prior step output, returning nil when missing or skipped."
+  @spec maybe_from(atom(), path()) :: t()
+  def maybe_from(step, field) when is_atom(step) and (is_atom(field) or is_binary(field)),
+    do: {:jidoka_workflow_ref, :maybe_from, step, [field]}
+
+  def maybe_from(step, path) when is_atom(step) and is_list(path),
+    do: {:jidoka_workflow_ref, :maybe_from, step, path}
+
+  @doc "Returns the first resolved value that is not nil."
+  @spec coalesce([term()]) :: t()
+  def coalesce(values) when is_list(values), do: {:jidoka_workflow_ref, :coalesce, values}
+
+  @doc "References the current map item. Only valid inside a map step input."
+  @spec item() :: t()
+  def item, do: {:jidoka_workflow_ref, :item}
+
+  @doc "References the current map item index. Only valid inside a map step input."
+  @spec index() :: t()
+  def index, do: {:jidoka_workflow_ref, :index}
+
+  @doc "References the current reduce item list. Only valid inside a reduce step input."
+  @spec items() :: t()
+  def items, do: {:jidoka_workflow_ref, :items}
+
   @doc "References runtime side-band workflow context."
   @spec context(atom() | String.t()) :: t()
   def context(key) when is_atom(key) or is_binary(key), do: {:jidoka_workflow_ref, :context, key}
@@ -47,5 +80,11 @@ defmodule Jidoka.Workflow.Ref do
       when is_atom(step) and (is_nil(path) or is_list(path)),
       do: true
 
+  def ref?({:jidoka_workflow_ref, :maybe_from, step, path})
+      when is_atom(step) and (is_nil(path) or is_list(path)),
+      do: true
+
+  def ref?({:jidoka_workflow_ref, :coalesce, values}) when is_list(values), do: true
+  def ref?({:jidoka_workflow_ref, kind}) when kind in [:item, :index, :items], do: true
   def ref?(_other), do: false
 end

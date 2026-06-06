@@ -195,6 +195,59 @@ defmodule Jidoka.Agent.DslTest do
     assert {:ok, "hello"} = agent_module.chat("Say hello", llm: llm)
   end
 
+  test "compiles action approval sugar into operation policy data" do
+    suffix = System.unique_integer([:positive])
+    agent_module = Module.concat(JidokaTest, "ApprovalSugarDslAgent#{suffix}")
+    tool_name = "approval_sugar_tool_#{suffix}"
+
+    Code.compile_string("""
+    defmodule JidokaTest.ApprovalSugarAction#{suffix} do
+      use Jidoka.Action,
+        name: "#{tool_name}",
+        description: "Approval sugar action.",
+        schema: Zoi.object(%{})
+
+      @impl true
+      def run(_params, _context), do: {:ok, %{ok: true}}
+    end
+
+    defmodule JidokaTest.ApprovalSugarDslAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :approval_sugar_agent_#{suffix} do
+        model %{provider: :test, id: "model"}
+        instructions "Use the approval tool."
+      end
+
+      tools do
+        action JidokaTest.ApprovalSugarAction#{suffix},
+          idempotency: :unsafe_once,
+          approval: [
+            reason: "approval_sugar_review",
+            message: "Review this operation before execution.",
+            ttl_ms: 15_000,
+            metadata: %{"risk" => "high"}
+          ]
+      end
+    end
+    """)
+
+    assert [
+             %Jidoka.Agent.Spec.Operation{
+               name: ^tool_name,
+               idempotency: :unsafe_once,
+               approval: %Jidoka.Review.Policy{
+                 reason: "approval_sugar_review",
+                 message: "Review this operation before execution.",
+                 ttl_ms: 15_000,
+                 metadata: %{"risk" => "high"}
+               }
+             }
+           ] = agent_module.spec().operations
+
+    assert {:ok, %Jidoka.Turn.Plan{}} = Jidoka.plan(agent_module.spec())
+  end
+
   test "compiles ash_resource and browser tool sources into operation data" do
     suffix = System.unique_integer([:positive])
     agent_module = Module.concat(JidokaTest, "SourceDslAgent#{suffix}")

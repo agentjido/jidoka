@@ -39,6 +39,7 @@ defmodule Jidoka.Projection do
       steps: Enum.map(workflow.steps, &project/1),
       dependencies: Value.project(workflow.dependencies),
       output: WorkflowProjection.ref(workflow.output),
+      graph: Workflow.Graph.project(workflow),
       input_refs: Enum.map(workflow.input_refs, &Value.project/1),
       context_refs: Enum.map(workflow.context_refs, &Value.project/1),
       metadata: Value.project(workflow.metadata)
@@ -50,12 +51,22 @@ defmodule Jidoka.Projection do
       name: step.name,
       kind: step.kind,
       target: WorkflowProjection.target(step.target),
+      target_kind: step.target_kind,
       input: WorkflowProjection.ref(step.input),
       prompt: WorkflowProjection.ref(step.prompt),
       context: WorkflowProjection.ref(step.context),
+      condition: WorkflowProjection.ref(step.condition),
+      when: WorkflowProjection.ref(step.condition_when),
+      unless: WorkflowProjection.ref(step.condition_unless),
+      over: WorkflowProjection.ref(step.over),
+      using: WorkflowProjection.target(step.using),
+      max_concurrency: step.max_concurrency,
       after: step.after,
+      retry: Value.project(step.retry),
       metadata: Value.project(step.metadata)
     }
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
   end
 
   def project(%Handoff{} = handoff) do

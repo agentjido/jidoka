@@ -31,6 +31,10 @@ defmodule Jidoka.Agent.Dsl.Tool do
             __MODULE__,
             %{
               module: Zoi.any() |> Zoi.nullish(),
+              description: Zoi.any() |> Zoi.nullish(),
+              idempotency: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
+              metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
             coerce: true
@@ -53,6 +57,7 @@ defmodule Jidoka.Agent.Dsl.AshResource do
               actions: Zoi.any() |> Zoi.nullish(),
               description: Zoi.any() |> Zoi.nullish(),
               idempotency: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
@@ -77,6 +82,7 @@ defmodule Jidoka.Agent.Dsl.Browser do
               allow: Zoi.any() |> Zoi.nullish(),
               description: Zoi.any() |> Zoi.nullish(),
               idempotency: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
@@ -108,6 +114,7 @@ defmodule Jidoka.Agent.Dsl.MCPTools do
               timeout: Zoi.any() |> Zoi.nullish(),
               description: Zoi.any() |> Zoi.nullish(),
               idempotency: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
@@ -136,6 +143,7 @@ defmodule Jidoka.Agent.Dsl.Catalog do
               require_read_only?: Zoi.any() |> Zoi.nullish(),
               result: Zoi.any() |> Zoi.nullish(),
               idempotency: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
@@ -199,6 +207,7 @@ defmodule Jidoka.Agent.Dsl.Subagent do
               timeout: Zoi.any() |> Zoi.nullish(),
               forward_context: Zoi.any() |> Zoi.nullish(),
               result: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
@@ -223,6 +232,7 @@ defmodule Jidoka.Agent.Dsl.Handoff do
               description: Zoi.any() |> Zoi.nullish(),
               target: Zoi.any() |> Zoi.nullish(),
               forward_context: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
@@ -251,6 +261,7 @@ defmodule Jidoka.Agent.Dsl.Workflow do
               forward_context: Zoi.any() |> Zoi.nullish(),
               result: Zoi.any() |> Zoi.nullish(),
               idempotency: Zoi.any() |> Zoi.nullish(),
+              approval: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
@@ -272,6 +283,7 @@ defmodule Jidoka.Agent.Dsl.OperationControl do
             %{
               control: Zoi.any() |> Zoi.nullish(),
               match: Zoi.any() |> Zoi.nullish(),
+              metadata: Zoi.any() |> Zoi.nullish(),
               __spark_metadata__: Zoi.any() |> Zoi.nullish()
             },
             coerce: true

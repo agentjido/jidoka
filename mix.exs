@@ -213,6 +213,8 @@ defmodule Jidoka.MixProject do
         Jidoka.Agent,
         Jidoka.Action,
         Jidoka.Control,
+        Jidoka.ApprovalPredicate,
+        Jidoka.Context,
         Jidoka.Session,
         Jidoka.Stream,
         Jidoka.AgentView
@@ -221,6 +223,9 @@ defmodule Jidoka.MixProject do
         Jidoka.Agent.Message,
         Jidoka.Agent.State,
         ~r/^Jidoka\.Agent\.Spec(\.|$)/
+      ],
+      Controls: [
+        ~r/^Jidoka\.Controls\./
       ],
       "Turns And Effects": [
         ~r/^Jidoka\.Chat\./,
@@ -285,6 +290,7 @@ defmodule Jidoka.MixProject do
       Jidoka.Agent.Spec,
       Jidoka.Browser.Tools,
       Jidoka.Chat,
+      Jidoka.Controls,
       Jidoka.Effect,
       Jidoka.Eval,
       Jidoka.Handoff,

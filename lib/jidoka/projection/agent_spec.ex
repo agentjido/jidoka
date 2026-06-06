@@ -10,6 +10,7 @@ defmodule Jidoka.Projection.AgentSpec do
           | Agent.Spec.Result.t()
           | Agent.Spec.Memory.t()
           | Agent.Spec.Operation.t()
+          | Jidoka.Review.Policy.t()
           | Agent.Spec.Controls.t()
           | Agent.Spec.Controls.Input.t()
           | Agent.Spec.Controls.Output.t()
@@ -67,7 +68,20 @@ defmodule Jidoka.Projection.AgentSpec do
       name: operation.name,
       description: operation.description,
       idempotency: operation.idempotency,
+      approval: project(operation.approval),
       metadata: Metadata.operation(operation.metadata)
+    }
+    |> reject_nil_values()
+  end
+
+  def project(%Jidoka.Review.Policy{} = policy) do
+    %{
+      required: policy.required,
+      mode: policy.mode,
+      reason: Value.project(policy.reason),
+      message: policy.message,
+      ttl_ms: policy.ttl_ms,
+      metadata: Value.project(policy.metadata)
     }
   end
 
@@ -105,5 +119,11 @@ defmodule Jidoka.Projection.AgentSpec do
       match: Value.project(operation_control.match),
       metadata: Value.project(operation_control.metadata)
     }
+  end
+
+  defp reject_nil_values(map) do
+    map
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+    |> Map.new()
   end
 end

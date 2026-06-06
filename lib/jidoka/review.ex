@@ -9,6 +9,7 @@ defmodule Jidoka.Review do
   """
 
   @type interrupt :: Jidoka.Review.Interrupt.t()
+  @type policy :: Jidoka.Review.Policy.t()
   @type request :: Jidoka.Review.Request.t()
   @type response :: Jidoka.Review.Response.t()
 end

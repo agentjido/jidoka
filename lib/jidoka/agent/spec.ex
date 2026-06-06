@@ -40,6 +40,7 @@ defmodule Jidoka.Agent.Spec do
          {:ok, attrs} <- normalize_generation_input(attrs),
          {:ok, attrs} <- normalize_result_input(attrs),
          {:ok, attrs} <- normalize_memory_input(attrs),
+         {:ok, attrs} <- normalize_operations_input(attrs),
          {:ok, attrs} <- normalize_controls_input(attrs) do
       Schema.parse(@schema, attrs)
     end
@@ -91,7 +92,8 @@ defmodule Jidoka.Agent.Spec do
 
   @spec validate_operation_policy(t(), Operation.t()) :: :ok | {:error, term()}
   def validate_operation_policy(%__MODULE__{} = spec, %Operation{} = operation) do
-    if Operation.requires_control?(operation) and not operation_controlled?(spec, operation) do
+    if Operation.requires_control?(operation) and not operation_controlled?(spec, operation) and
+         not Operation.approval_required?(operation) do
       {:error, {:unsafe_once_requires_control, operation.name, Operation.kind(operation)}}
     else
       :ok
@@ -160,6 +162,30 @@ defmodule Jidoka.Agent.Spec do
     end
   end
 
+  defp normalize_operations_input(attrs) do
+    case raw_operations(attrs) do
+      nil ->
+        {:ok, attrs}
+
+      operations when is_list(operations) ->
+        operations
+        |> Enum.with_index()
+        |> Enum.reduce_while({:ok, []}, fn {operation, index}, {:ok, acc} ->
+          case Operation.from_input(operation) do
+            {:ok, operation} -> {:cont, {:ok, [operation | acc]}}
+            {:error, reason} -> {:halt, {:error, normalize_operation_error(reason, operation, index)}}
+          end
+        end)
+        |> case do
+          {:ok, operations} -> {:ok, put_operations(attrs, Enum.reverse(operations))}
+          {:error, reason} -> {:error, reason}
+        end
+
+      operations ->
+        {:error, {:invalid_operations, operations}}
+    end
+  end
+
   defp raw_model(attrs) when is_map(attrs) do
     Map.get(attrs, :model, Map.get(attrs, "model"))
   end
@@ -178,6 +204,10 @@ defmodule Jidoka.Agent.Spec do
 
   defp raw_memory(attrs) when is_map(attrs) do
     Map.get(attrs, :memory, Map.get(attrs, "memory"))
+  end
+
+  defp raw_operations(attrs) when is_map(attrs) do
+    Map.get(attrs, :operations, Map.get(attrs, "operations"))
   end
 
   defp put_model(attrs, model) when is_map(attrs) do
@@ -209,6 +239,21 @@ defmodule Jidoka.Agent.Spec do
     |> Map.delete("memory")
     |> Map.put(:memory, memory)
   end
+
+  defp put_operations(attrs, operations) when is_map(attrs) do
+    attrs
+    |> Map.delete("operations")
+    |> Map.put(:operations, operations)
+  end
+
+  defp normalize_operation_error([%Zoi.Error{} | _rest] = errors, _operation, index) do
+    Enum.map(errors, fn %Zoi.Error{path: path} = error ->
+      %Zoi.Error{error | path: [:operations, index | path]}
+    end)
+  end
+
+  defp normalize_operation_error(reason, operation, _index),
+    do: {:invalid_operation, operation, reason}
 
   defp operation_controlled?(
          %__MODULE__{controls: %Controls{} = controls},

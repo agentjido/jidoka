@@ -17,6 +17,28 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Core do
           type: :atom,
           required: true,
           doc: "A module defined with `use Jidoka.Action` or a compatible Jido action module."
+        ],
+        description: [
+          type: :string,
+          required: false,
+          doc: "Optional operation description override."
+        ],
+        idempotency: [
+          type: :any,
+          required: false,
+          doc: "Optional operation idempotency override."
+        ],
+        approval: [
+          type: :any,
+          required: false,
+          doc:
+            "Approval policy: true, :unsafe_once, or keyword options such as only:, except:, reason:, message:, ttl_ms:."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional metadata merged into the operation spec."
         ]
       ]
     }
@@ -53,6 +75,11 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Core do
           required: false,
           default: :idempotent,
           doc: "Operation idempotency override for generated AshJido operation specs."
+        ],
+        approval: [
+          type: :any,
+          required: false,
+          doc: "Approval policy applied to generated operations."
         ],
         metadata: [
           type: :map,
@@ -101,6 +128,11 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Core do
           required: false,
           default: :idempotent,
           doc: "Operation idempotency for the browser operation."
+        ],
+        approval: [
+          type: :any,
+          required: false,
+          doc: "Approval policy applied to generated browser operations."
         ],
         metadata: [
           type: :map,
@@ -187,6 +219,11 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Core do
           default: :idempotent,
           doc: "Operation idempotency for generated MCP operations."
         ],
+        approval: [
+          type: :any,
+          required: false,
+          doc: "Approval policy applied to generated MCP operations."
+        ],
         metadata: [
           type: :map,
           required: false,
@@ -258,6 +295,11 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Core do
           required: false,
           default: :idempotent,
           doc: "Operation idempotency policy for generated catalog operations."
+        ],
+        approval: [
+          type: :any,
+          required: false,
+          doc: "Approval policy applied to generated catalog operations."
         ],
         metadata: [
           type: :map,

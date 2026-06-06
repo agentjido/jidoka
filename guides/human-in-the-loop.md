@@ -30,22 +30,11 @@ mix test
 
 ## Quick Example
 
-A refund operation, an approval control, and an end-to-end approve path.
+Mark the operation as requiring approval. Jidoka pauses before the operation
+executes, returns a snapshot, and resumes after the application approves or
+denies the review request.
 
 ```elixir
-defmodule MyApp.RequireRefundApproval do
-  use Jidoka.Control, name: "require_refund_approval"
-
-  @impl true
-  def call(%Jidoka.Runtime.Controls.OperationContext{} = operation) do
-    if operation.operation == "refund_order" do
-      {:interrupt, :approval_required}
-    else
-      :cont
-    end
-  end
-end
-
 defmodule MyApp.SupportAgent do
   use Jidoka.Agent
 
@@ -54,11 +43,13 @@ defmodule MyApp.SupportAgent do
   end
 
   tools do
-    action MyApp.RefundOrder
-  end
-
-  controls do
-    operation MyApp.RequireRefundApproval, when: [name: :refund_order]
+    action MyApp.RefundOrder,
+      idempotency: :unsafe_once,
+      approval: [
+        reason: :refund_requires_review,
+        message: "Review the refund before it is issued.",
+        ttl_ms: 300_000
+      ]
   end
 end
 
@@ -78,12 +69,10 @@ operations = fn _intent, _journal -> {:ok, %{refunded: true}} end
     operations: operations
   )
 
-review = snapshot.metadata["pending_review"]
-approval = Jidoka.Review.Response.approve(review.interrupt_id)
+{:ok, [review]} = Jidoka.pending_reviews(snapshot)
 
 {:ok, %Jidoka.Turn.Result{content: "Refunded A1001."}} =
-  Jidoka.resume(snapshot,
-    approval: approval,
+  Jidoka.approve(snapshot, review,
     llm: llm,
     operations: operations
   )
@@ -134,10 +123,64 @@ The data path is simple. Every stage is just data.
   always targeting one interrupt id.
 - The interrupt only fires for `:operation` boundaries today; input and
   output controls cannot durably hibernate yet and must block or fail.
+- Tool-level `approval:` compiles to Jidoka's built-in
+  `Jidoka.Controls.RequireApproval` operation control. Approval predicates and
+  custom operation controls use the same interrupt, snapshot, and resume path.
 
 ## How To
 
-### Step 1: Define The Operation Control
+### Step 1: Add Approval Policy
+
+Use `approval:` when the policy is unconditional, can be expressed with
+`only:` / `except:` filters, or can be delegated to a module predicate:
+
+```elixir
+tools do
+  action MyApp.RefundOrder,
+    idempotency: :unsafe_once,
+    approval: true
+end
+```
+
+When approval depends on operation arguments or caller context, use a
+module-based predicate. The predicate receives `Jidoka.Context`:
+
+```elixir
+defmodule MyApp.LargeRefundPredicate do
+  use Jidoka.ApprovalPredicate
+
+  @impl true
+  def call(%Jidoka.Context{} = ctx) do
+    amount = Map.get(ctx.arguments, "amount") || 0
+    amount >= 100 or Jidoka.Context.get(ctx, :tenant_id) == "enterprise"
+  end
+end
+```
+
+Attach it to the tool's approval policy:
+
+```elixir
+tools do
+  action MyApp.RefundOrder,
+    idempotency: :unsafe_once,
+    approval: [
+      when: MyApp.LargeRefundPredicate,
+      reason: :large_refund_review
+    ]
+end
+```
+
+Request-level approval is useful when the caller wants one reviewed run without
+changing the agent spec:
+
+```elixir
+Jidoka.turn(MyApp.SupportAgent, "Refund A1001",
+  require_tool_approval: [only: ["refund_order"]]
+)
+```
+
+Define a custom operation control when the policy needs to block, interrupt
+with a custom shape, or do something broader than standard approval.
 
 Operation controls receive a
 `Jidoka.Runtime.Controls.OperationContext`. Returning `{:interrupt,
@@ -160,8 +203,8 @@ end
 
 Match the control as narrowly as possible. Common keys are `kind`, `name`,
 `source`, `idempotency`, and any `metadata`. Risky operations declared with
-`idempotency: :unsafe_once` must have an operation control before the spec
-can compile. See [Idempotency And Safety](idempotency-and-safety.md).
+`idempotency: :unsafe_once` must have approval or an operation control before
+the spec can compile. See [Idempotency And Safety](idempotency-and-safety.md).
 
 ### Step 2: Observe The Hibernation
 
@@ -194,8 +237,22 @@ session struct:
 
 ### Step 3: Approve And Resume
 
-`Jidoka.Review.Response.approve/2` builds the response targeted at the
-pending interrupt.
+`Jidoka.approve/3` approves a pending review and resumes the snapshot:
+
+```elixir
+{:ok, [review]} = Jidoka.pending_reviews(snapshot)
+
+{:ok, %Jidoka.Turn.Result{}} =
+  Jidoka.approve(snapshot,
+    review,
+    llm: llm,
+    operations: operations
+  )
+```
+
+Use the lower-level response API when you want to persist or transform the
+approval response explicitly. `Jidoka.Review.Response.approve/2` builds the
+response targeted at the pending interrupt.
 
 ```elixir
 approval = Jidoka.Review.Response.approve(review.interrupt_id)
@@ -219,24 +276,25 @@ A denial resumes the same snapshot but never calls the operation
 capability.
 
 ```elixir
-denial = Jidoka.Review.Response.deny(review.interrupt_id, reason: :policy_denied)
-
-{:error, {:approval_denied, ^denial}} =
-  Jidoka.resume(snapshot,
-    approval: denial,
+{:error, reason} =
+  Jidoka.deny(snapshot,
+    review,
+    reason: :policy_denied,
     llm: llm,
     operations: operations
   )
 ```
 
-`{:error, {:approval_denied, response}}` is the contractual outcome of a
-denial. Surface the response struct to the caller; it carries the
-`reason`, `responded_at_ms`, and `metadata` the reviewer attached.
+`Jidoka.deny/3` still returns the normal resume error shape for denied
+approvals. Surface the response details to the caller; they carry the `reason`,
+`responded_at_ms`, and `metadata` the reviewer attached.
 
 ### Step 5: Honor Expiration Windows
 
-Pass `:approval_ttl_ms` when you want approvals to expire. The runtime
-stamps `expires_at_ms` on the interrupt at hibernation time.
+Set `ttl_ms:` on the approval policy when a tool has its own review window.
+Pass `:approval_ttl_ms` at runtime when the caller should override that window
+for one turn. The runtime stamps `expires_at_ms` on the interrupt at
+hibernation time.
 
 ```elixir
 {:hibernate, snapshot} =
@@ -284,9 +342,11 @@ reason, and the expiration timestamp.
 
 ## Common Patterns
 
-- **One control per risk class.** Keep the control logic to a simple
-  match on `operation` and `kind`. Push richer policy into the
-  application-side approval workflow.
+- **Use approval sugar first.** Reach for `approval: true` or
+  `approval: [only: ...]` before writing a custom control.
+- **One control per risk class.** When approval needs code, keep the
+  control logic to a simple match on `operation` and `kind`. Push richer
+  policy into the application-side approval workflow.
 - **Persist before showing to a reviewer.** Always save the snapshot
   (or its session) before exposing the pending review. The reviewer's
   decision must be able to find the same snapshot later.
@@ -346,7 +406,7 @@ capability was never invoked.
 | `{:error, {:approval_expired, _, _, _}}` | Response came in after `expires_at_ms`. | Build a fresh review request, or extend `:approval_ttl_ms`. |
 | `{:error, {:approval_denied, response}}` | Reviewer denied the action. | Surface the response to the caller; do not retry. |
 | Operation is called twice after approval | Snapshot was resumed twice without checking the result. | Resume each snapshot once; persist `Turn.Result` after success. |
-| `{:error, {:unsafe_once_requires_control, name, kind}}` at compile | An `:unsafe_once` operation has no operation control. | Add a matching operation control before compiling the plan. |
+| `{:error, {:unsafe_once_requires_control, name, kind}}` at compile | An `:unsafe_once` operation has no approval policy or operation control. | Add `approval: true` or a matching operation control before compiling the plan. |
 | `snapshot.metadata["pending_review"]` is `nil` | The hibernation came from `:after_prompt`/`:before_each_effect`, not a review. | Inspect `snapshot.cursor.phase`; only `:review` produces a pending request. |
 
 ## Reference
@@ -358,8 +418,12 @@ Key modules touched in this guide:
   data with `with_review_window/3` and `expired?/2`.
 - [`Jidoka.Review.Request`](`Jidoka.Review.Request`) - application-facing
   request built from an interrupt.
+- [`Jidoka.Review.Policy`](`Jidoka.Review.Policy`) - operation approval
+  policy data.
 - [`Jidoka.Review.Response`](`Jidoka.Review.Response`) - `approve/2`,
   `deny/2`, decision enum `[:approved, :denied]`.
+- [`Jidoka`](`Jidoka`) - facade helpers `pending_reviews/1`, `approve/3`,
+  and `deny/3`.
 - [`Jidoka.Runtime.Controls.OperationContext`](`Jidoka.Runtime.Controls.OperationContext`) -
   what the operation control receives.
 - [`Jidoka.Harness`](`Jidoka.Harness`) - resume and approval normalization
@@ -374,4 +438,4 @@ Key modules touched in this guide:
 - [Snapshots And Resume](snapshots-and-resume.md) - the snapshot lifecycle
   beneath the approval flow.
 - [Idempotency And Safety](idempotency-and-safety.md) - why
-  `:unsafe_once` operations must have an approval control.
+  `:unsafe_once` operations must have approval or an operation control.

@@ -27,18 +27,22 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert entities.action.target == Jidoka.Agent.Dsl.Tool
     assert entities.action.args == [:module]
     assert get_in(entities.action.schema, [:module, :type]) == :atom
+    assert Keyword.has_key?(entities.action.schema, :approval)
 
     assert entities.ash_resource.target == Jidoka.Agent.Dsl.AshResource
     assert entities.ash_resource.args == [:resource]
     assert get_in(entities.ash_resource.schema, [:actions, :default]) == []
+    assert Keyword.has_key?(entities.ash_resource.schema, :approval)
 
     assert entities.browser.target == Jidoka.Agent.Dsl.Browser
     assert entities.browser.args == [:name]
     assert get_in(entities.browser.schema, [:mode, :default]) == :read_only
+    assert Keyword.has_key?(entities.browser.schema, :approval)
 
     assert entities.mcp_tools.target == Jidoka.Agent.Dsl.MCPTools
     assert entities.mcp_tools.args == []
     assert get_in(entities.mcp_tools.schema, [:endpoint, :required])
+    assert Keyword.has_key?(entities.mcp_tools.schema, :approval)
 
     assert entities.skill.target == Jidoka.Agent.Dsl.SkillRef
     assert entities.skill.args == [:skill]
@@ -49,15 +53,18 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert entities.subagent.target == Jidoka.Agent.Dsl.Subagent
     assert entities.subagent.args == [:agent]
     assert get_in(entities.subagent.schema, [:timeout, :default]) == 30_000
+    assert Keyword.has_key?(entities.subagent.schema, :approval)
 
     assert entities.handoff.target == Jidoka.Agent.Dsl.Handoff
     assert entities.handoff.args == [:agent]
     assert get_in(entities.handoff.schema, [:target, :default]) == :auto
+    assert Keyword.has_key?(entities.handoff.schema, :approval)
 
     assert entities.workflow.target == Jidoka.Agent.Dsl.Workflow
     assert entities.workflow.args == [:workflow]
     assert get_in(entities.workflow.schema, [:async, :default]) == false
     assert get_in(entities.workflow.schema, [:result, :default]) == :output
+    assert Keyword.has_key?(entities.workflow.schema, :approval)
   end
 
   test "controls section declares runtime and operation control entities" do

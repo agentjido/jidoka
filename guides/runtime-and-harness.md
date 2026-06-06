@@ -316,10 +316,9 @@ Every operation declares one idempotency policy:
   reconciliation;
 - `:unsafe_once` means Jidoka must not retry automatically.
 
-`:unsafe_once` operations require an explicit operation control. The control
-can allow, block, or interrupt for human review, but it must be present before
-the spec can be compiled into a `Turn.Plan`. This makes risky work visible at
-preflight time instead of discovering it after a model chooses the operation.
+`:unsafe_once` operations require either an approval policy or an explicit
+operation control. This makes risky work visible at preflight time instead of
+discovering it after a model chooses the operation.
 
 If a journal already has a result for an operation effect, resume replays that
 result and does not call the operation capability again. If an `:unsafe_once`

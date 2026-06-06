@@ -2,7 +2,7 @@
 
 Every Jidoka operation declares one idempotency policy. That single field
 drives whether the runtime can retry, whether resume can replay, whether
-the spec compiles without an operation control, and whether incomplete
+the spec compiles without approval or an operation control, and whether incomplete
 work surfaces to application reconciliation. This guide documents each
 policy in detail, the `Jidoka.Effect.Journal` semantics on resume, and the
 production guardrails that depend on getting this right.
@@ -32,8 +32,9 @@ mix test
 
 ## Quick Example
 
-Declare a single risky operation. The spec refuses to compile until a
-matching operation control is attached.
+Declare a single risky operation and attach approval. The spec refuses to
+compile until `:unsafe_once` work has either approval or a matching operation
+control.
 
 ```elixir
 defmodule MyApp.SupportAgent do
@@ -44,12 +45,9 @@ defmodule MyApp.SupportAgent do
   end
 
   tools do
-    action MyApp.RefundOrder, idempotency: :unsafe_once
-  end
-
-  controls do
-    operation MyApp.RequireRefundApproval,
-      when: [name: :refund_order, idempotency: :unsafe_once]
+    action MyApp.RefundOrder,
+      idempotency: :unsafe_once,
+      approval: [reason: :refund_requires_review]
   end
 end
 ```
@@ -60,7 +58,7 @@ Compiling the plan now succeeds:
 {:ok, _plan} = Jidoka.plan(MyApp.SupportAgent)
 ```
 
-Remove the control and the plan refuses to compile with
+Remove the approval policy and the plan refuses to compile with
 `{:error, {:unsafe_once_requires_control, "refund_order", :action}}`.
 
 ## Concepts
@@ -130,11 +128,21 @@ tools do
 end
 ```
 
-### Step 2: Add Controls For `:unsafe_once`
+### Step 2: Add Approval Or Controls For `:unsafe_once`
 
 `Jidoka.Agent.Spec.Operation.requires_control?/1` returns `true` for
-`:unsafe_once`. The plan compiler refuses to produce a plan without a
-matching operation control.
+`:unsafe_once`. The plan compiler refuses to produce a plan unless the
+operation has an approval policy or a matching operation control.
+
+```elixir
+tools do
+  action MyApp.ChargeCard,
+    idempotency: :unsafe_once,
+    approval: true
+end
+```
+
+Use a control when the policy needs code:
 
 ```elixir
 controls do
@@ -240,9 +248,9 @@ capability again when the intent has no result.
   sends, deletes, and deploys deserve the strongest guard.
 - **Use `:reconcile` when truth lives elsewhere.** Async work queued to
   an external system is the canonical case.
-- **Pair `:unsafe_once` with an approval workflow.** A blocking control
-  is fine for "never allow"; an interrupting control is needed for
-  "allow once a reviewer says so."
+- **Pair `:unsafe_once` with approval.** `approval: true` is the simplest
+  route. A blocking control is fine for "never allow"; a custom interrupting
+  control is useful when approval depends on code.
 - **Treat the journal as the contract.** Tests should make assertions
   against `Effect.Journal.intent_recorded?/2` and
   `Effect.Journal.result_for/2`, not on capability call counts alone.
@@ -253,7 +261,7 @@ A simple test exercises both the compile-time gate and the resume-time
 guard.
 
 ```elixir
-test "unsafe_once requires an operation control before plan compiles" do
+test "unsafe_once requires approval or an operation control before plan compiles" do
   spec =
     Jidoka.agent!(
       id: "risky",
@@ -293,7 +301,7 @@ has the desired shape and assert that resume routes correctly.
 
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
-| `{:error, {:unsafe_once_requires_control, name, kind}}` | An `:unsafe_once` operation has no matching operation control. | Add a `controls do ... operation ... when: [name: name] end` clause. |
+| `{:error, {:unsafe_once_requires_control, name, kind}}` | An `:unsafe_once` operation has no approval policy or matching operation control. | Add `approval: true` or a `controls do ... operation ... when: [name: name] end` clause. |
 | `{:error, %Jidoka.Error{reason: :unsafe_once_incomplete_effect}}` | Resume saw a recorded intent without a result. | Route the snapshot to reconciliation; do not auto-retry. |
 | Capability called twice on resume | Operation is `:idempotent` and the journal lost the result. | Persist the full snapshot including its journal; ensure your store preserves all fields. |
 | Reconciliation never fires | The journal had no incomplete intents because the runtime did call the capability. | Confirm the policy is `:reconcile`, not `:idempotent`, and inspect `result.journal`. |

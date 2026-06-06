@@ -1,41 +1,48 @@
 defmodule Jidoka.Workflow.Runtime.StepRunner do
   @moduledoc false
 
-  alias Jidoka.Workflow.Runtime.Value
+  alias Jidoka.Workflow.Runtime.{Retry, Value}
   alias Jidoka.Workflow.Step
+
+  @default_map_max_concurrency 8
 
   @spec run_step(Jidoka.Workflow.Spec.t(), Step.t(), map()) :: map()
   def run_step(_spec, %Step{}, %{error: error} = state) when not is_nil(error), do: state
 
   def run_step(spec, %Step{} = step, state) do
-    case execute_step(step, state) do
-      {:ok, result} ->
-        put_in(state, [:steps, step.name], result)
+    state = ensure_runtime_state(state)
+
+    with {:cont, state} <- maybe_run_step(step, state),
+         {:ok, result} <- execute_step(step, state) do
+      state
+      |> put_in([:steps, step.name], result)
+      |> put_in([:outcomes, step.name], %{status: :ok})
+    else
+      {:skip, state, reason} ->
+        put_in(state, [:outcomes, step.name], %{status: :skipped, reason: reason})
 
       {:error, reason} ->
-        Map.put(state, :error, step_error(spec, step, reason))
+        state
+        |> put_in([:outcomes, step.name], %{status: :error, reason: reason})
+        |> Map.put(:error, step_error(spec, step, reason))
     end
   end
 
   @spec execute_step(Step.t(), map()) :: {:ok, term()} | {:error, term()}
   def execute_step(%Step{kind: :function, target: {module, function, 2}} = step, state) do
     with {:ok, params} <- resolve_map(step.input, state, :function_input) do
-      try do
+      Retry.call(step, fn ->
         module
         |> apply(function, [params, state.context])
         |> normalize_function_result()
-      rescue
-        exception -> {:error, exception}
-      catch
-        kind, reason -> {:error, {kind, reason}}
-      end
+      end)
     end
   end
 
   def execute_step(%Step{kind: :action} = step, state) do
     with {:ok, params} <- resolve_map(step.input, state, :action_input),
          {:ok, tool} <- action_tool(step.target) do
-      call_tool(tool, params, state.context)
+      Retry.call(step, fn -> call_tool(tool, params, state.context) end)
     end
   end
 
@@ -43,8 +50,34 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
     with {:ok, prompt} <- Value.resolve(step.prompt, state),
          {:ok, prompt} <- ensure_prompt(prompt),
          {:ok, context} <- resolve_map(step.context, state, :agent_context),
-         {:ok, result} <- call_agent(step.target, prompt, context, state.agent_opts) do
+         {:ok, result} <-
+           Retry.call(step, fn -> call_agent(step.target, prompt, context, state.agent_opts) end) do
       {:ok, result.content}
+    end
+  end
+
+  def execute_step(%Step{kind: :gate} = step, state) do
+    with {:ok, condition} <- Value.resolve(step.condition, state) do
+      ensure_boolean(condition, :gate_condition)
+    end
+  end
+
+  def execute_step(%Step{kind: :map} = step, state) do
+    with {:ok, items} <- Value.resolve(step.over, state),
+         {:ok, items} <- ensure_list(items, :map_over) do
+      run_map_items(step, items, state)
+    end
+  end
+
+  def execute_step(%Step{kind: :reduce, target: {module, function, 2}} = step, state) do
+    with {:ok, items} <- Value.resolve(step.over, state),
+         {:ok, items} <- ensure_list(items, :reduce_over),
+         {:ok, params} <- resolve_map(step.input, Map.put(state, :items, items), :reduce_input) do
+      Retry.call(step, fn ->
+        module
+        |> apply(function, [params, state.context])
+        |> normalize_function_result()
+      end)
     end
   end
 
@@ -71,6 +104,101 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
         %{} = map -> {:ok, map}
         other -> {:error, {:expected_map, field, other}}
       end
+    end
+  end
+
+  defp maybe_run_step(%Step{} = step, state) do
+    with {:ok, when_value} <- condition_allows?(step.condition_when, state, :when),
+         :ok <- require_condition_value(when_value, true, :when),
+         {:ok, unless_value} <- condition_allows?(step.condition_unless, state, :unless),
+         :ok <- require_condition_value(unless_value, false, :unless) do
+      {:cont, state}
+    else
+      {:skip, reason} -> {:skip, state, reason}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp condition_allows?(nil, _state, :when), do: {:ok, true}
+  defp condition_allows?(nil, _state, :unless), do: {:ok, false}
+
+  defp condition_allows?(condition, state, kind) do
+    with {:ok, value} <- Value.resolve(condition, state),
+         {:ok, value} <- ensure_boolean(value, {:condition, kind}) do
+      {:ok, value}
+    else
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp require_condition_value(value, value, _kind), do: :ok
+  defp require_condition_value(_value, _expected, kind), do: {:skip, {:condition_not_met, kind}}
+
+  defp ensure_boolean(value, _field) when is_boolean(value), do: {:ok, value}
+  defp ensure_boolean(value, field), do: {:error, {:expected_boolean, field, value}}
+
+  defp ensure_list(value, _field) when is_list(value), do: {:ok, value}
+  defp ensure_list(value, field), do: {:error, {:expected_list, field, value}}
+
+  defp run_map_items(%Step{} = step, items, state) do
+    items
+    |> Enum.with_index()
+    |> Task.async_stream(
+      fn {item, index} -> run_map_item(step, item, index, state) end,
+      max_concurrency: map_max_concurrency(step, state),
+      ordered: true,
+      timeout: :infinity
+    )
+    |> Enum.reduce_while({:ok, []}, fn
+      {:ok, {:ok, result}}, {:ok, acc} ->
+        {:cont, {:ok, [result | acc]}}
+
+      {:ok, {:error, {index, reason}}}, {:ok, _acc} ->
+        {:halt, {:error, {:map_item_failed, index, reason}}}
+
+      {:exit, reason}, {:ok, _acc} ->
+        {:halt, {:error, {:map_item_failed, :exit, reason}}}
+    end)
+    |> case do
+      {:ok, results} -> {:ok, Enum.reverse(results)}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp run_map_item(%Step{} = step, item, index, state) do
+    item_state =
+      state
+      |> Map.put(:item, item)
+      |> Map.put(:index, index)
+
+    with {:ok, params} <- resolve_map(step.input, item_state, :map_input),
+         {:ok, result} <- execute_map_target(step, params, state.context) do
+      {:ok, result}
+    else
+      {:error, reason} -> {:error, {index, reason}}
+    end
+  end
+
+  defp execute_map_target(%Step{target_kind: :function, target: {module, function, 2}} = step, params, context) do
+    Retry.call(step, fn ->
+      module
+      |> apply(function, [params, context])
+      |> normalize_function_result()
+    end)
+  end
+
+  defp execute_map_target(%Step{target_kind: :action} = step, params, context) do
+    with {:ok, tool} <- action_tool(step.target) do
+      Retry.call(step, fn -> call_tool(tool, params, context) end)
+    end
+  end
+
+  defp execute_map_target(%Step{} = step, _params, _context), do: {:error, {:unsupported_map_target, step.target_kind}}
+
+  defp map_max_concurrency(%Step{max_concurrency: step_max}, state) do
+    case Enum.reject([step_max, Map.get(state, :max_concurrency)], &is_nil/1) do
+      [] -> @default_map_max_concurrency
+      caps -> Enum.min(caps)
     end
   end
 
@@ -131,4 +259,10 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
 
   defp visible_reason(%{message: message}) when is_binary(message), do: message
   defp visible_reason(reason), do: reason
+
+  defp ensure_runtime_state(state) do
+    state
+    |> Map.put_new(:outcomes, %{})
+    |> Map.put_new(:max_concurrency, nil)
+  end
 end

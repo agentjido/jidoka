@@ -37,6 +37,7 @@ defmodule Jidoka.Runtime.Controls.OperationContext do
               request: Zoi.any(),
               input: Zoi.string(),
               context: Zoi.map() |> Zoi.default(%{}),
+              ctx: Zoi.lazy({Jidoka.Context, :schema, []}) |> Zoi.nullish(),
               agent_state: Zoi.any(),
               intent: Zoi.any(),
               operation_request: Zoi.any(),
