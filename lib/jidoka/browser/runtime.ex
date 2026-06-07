@@ -139,26 +139,58 @@ defmodule Jidoka.Browser.Runtime do
 
   defp allowed_url?(url, allowlist) when is_binary(url) do
     uri = URI.parse(String.trim(url))
-    host = normalize_host(uri.host)
 
     Enum.any?(allowlist, fn allowed ->
-      allowed = to_string(allowed) |> String.trim()
-      allowed_uri = URI.parse(allowed)
-
-      cond do
-        allowed_uri.scheme in ["http", "https"] and is_binary(allowed_uri.host) ->
-          String.starts_with?(url, allowed) or normalize_host(allowed_uri.host) == host
-
-        allowed != "" ->
-          normalize_host(allowed) == host
-
-        true ->
-          false
-      end
+      allowed_scope?(uri, allowed)
     end)
   end
 
   defp allowed_url?(_url, _allowlist), do: false
+
+  defp allowed_scope?(%URI{} = uri, allowed) do
+    allowed = to_string(allowed) |> String.trim()
+    allowed_uri = URI.parse(allowed)
+
+    cond do
+      allowed == "" ->
+        false
+
+      allowed_uri.scheme in ["http", "https"] and is_binary(allowed_uri.host) ->
+        same_url_scope?(uri, allowed_uri)
+
+      is_nil(allowed_uri.scheme) and is_nil(allowed_uri.host) ->
+        normalize_host(allowed) == normalize_host(uri.host)
+
+      true ->
+        false
+    end
+  end
+
+  defp same_url_scope?(%URI{} = uri, %URI{} = allowed_uri) do
+    uri.scheme == allowed_uri.scheme and
+      normalize_host(uri.host) == normalize_host(allowed_uri.host) and
+      normalized_port(uri) == normalized_port(allowed_uri) and
+      path_allowed?(uri.path, allowed_uri.path)
+  end
+
+  defp normalized_port(%URI{port: nil, scheme: "http"}), do: 80
+  defp normalized_port(%URI{port: nil, scheme: "https"}), do: 443
+  defp normalized_port(%URI{port: port}), do: port
+
+  defp path_allowed?(_path, nil), do: true
+  defp path_allowed?(_path, ""), do: true
+  defp path_allowed?(_path, "/"), do: true
+
+  defp path_allowed?(path, allowed_path) when is_binary(allowed_path) do
+    path = normalize_path(path)
+    allowed_path = normalize_path(allowed_path)
+
+    path == allowed_path or String.starts_with?(path, allowed_path <> "/")
+  end
+
+  defp normalize_path(nil), do: "/"
+  defp normalize_path(""), do: "/"
+  defp normalize_path(path) when is_binary(path), do: URI.decode(path)
 
   defp truncate_text(content, max_chars) when is_binary(content) do
     if String.length(content) > max_chars do

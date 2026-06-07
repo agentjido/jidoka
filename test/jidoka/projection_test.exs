@@ -131,6 +131,22 @@ defmodule Jidoka.ProjectionTest do
              Jidoka.project(spec)
   end
 
+  test "redacts sensitive keys in generic projections" do
+    assert %{
+             api_key: "[REDACTED]",
+             nested: %{
+               "Authorization" => "[REDACTED]",
+               "safe" => "visible"
+             },
+             values: [%{password: "[REDACTED]"}]
+           } =
+             Jidoka.project(%{
+               api_key: "secret-key",
+               nested: %{"Authorization" => "Bearer secret-token", "safe" => "visible"},
+               values: [%{password: "p4ssw0rd"}]
+             })
+  end
+
   test "summarizes raw LLMDB models and Zoi schemas in nested projection data" do
     {:ok, model} = Jidoka.Config.normalize_model_spec(%{provider: :test, id: "nested-model"})
 

@@ -170,6 +170,12 @@ defmodule Jidoka.Agent.Dsl.Sections.Tools.Core do
           default: [],
           doc: "Optional static MCP tool metadata when discovery is not available at compile time."
         ],
+        discover: [
+          type: :boolean,
+          required: false,
+          default: false,
+          doc: "Whether spec compilation may dynamically discover tools from the MCP endpoint."
+        ],
         required: [
           type: :boolean,
           required: false,

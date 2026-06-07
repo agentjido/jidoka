@@ -163,6 +163,25 @@ defmodule Jidoka.ImportToolSourcesTest do
     assert resource == inspect(AccountResource)
   end
 
+  test "imports do not dynamically discover MCP tools unless explicitly opted in" do
+    yaml = """
+    agent:
+      id: import_mcp_discovery_agent
+      model:
+        provider: test
+        id: import-mcp-model
+    tools:
+      mcp_tools:
+        - endpoint: remote_mcp
+          required: true
+    """
+
+    assert {:error,
+            %Jidoka.Error.ValidationError{
+              details: %{reason: {:mcp_tool_discovery_disabled, "remote_mcp"}}
+            }} = Jidoka.import(yaml, format: :yaml)
+  end
+
   test "imports reject unknown ash resource refs without atom creation" do
     assert {:error,
             %Jidoka.Error.ValidationError{

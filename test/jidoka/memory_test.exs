@@ -137,6 +137,29 @@ defmodule Jidoka.MemoryTest do
     assert Enum.map(all_entries, & &1.id) == ["mem_agent", "mem_session", "mem_other"]
   end
 
+  test "memory writes require context namespace values when configured" do
+    {:ok, pid} = InMemory.start_link()
+
+    spec =
+      Agent.Spec.new!(
+        id: "context_namespace_memory_agent",
+        instructions: "Remember tenant-scoped details.",
+        model: %{provider: :test, id: "model"},
+        memory: %{enabled: true, scope: :agent, namespace: {:context, :tenant_id}}
+      )
+
+    store = {InMemory, pid: pid}
+
+    assert {:error, {:missing_memory_namespace_context, :tenant_id}} =
+             Memory.write(spec, "Do not write without a tenant.", memory_store: store)
+
+    assert {:ok, %Memory.WriteResult{entry: %{content: "Tenant-scoped memory."}}} =
+             Memory.write(spec, "Tenant-scoped memory.",
+               memory_store: store,
+               context: %{tenant_id: "tenant_a"}
+             )
+  end
+
   test "jido_memory store writes and recalls entries through the Jido memory runtime" do
     table = :"jidoka_memory_test_#{System.unique_integer([:positive])}"
     :ok = Jido.Memory.Store.ETS.ensure_ready(table: table)

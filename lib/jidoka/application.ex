@@ -9,6 +9,7 @@ defmodule Jidoka.Application do
   def start(_type, _args) do
     children = [
       {Task.Supervisor, name: Jidoka.Chat.TaskSupervisor},
+      {Task.Supervisor, name: Jidoka.Runtime.TaskSupervisor},
       Jidoka.Jido
     ]
 

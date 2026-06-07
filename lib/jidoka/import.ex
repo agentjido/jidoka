@@ -22,6 +22,11 @@ defmodule Jidoka.Import do
   @type registry :: keyword() | map()
   @type option ::
           {:format, format()}
+          | {:max_import_bytes, pos_integer()}
+          | {:max_import_depth, pos_integer()}
+          | {:max_import_nodes, pos_integer()}
+          | {:yaml_merge_anchors, boolean()}
+          | {:discover_mcp?, boolean()}
           | {:registries, registry()}
           | {:actions, registry()}
           | {:action_registry, registry()}

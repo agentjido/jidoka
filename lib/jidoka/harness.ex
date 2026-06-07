@@ -49,7 +49,7 @@ defmodule Jidoka.Harness do
   @doc """
   Resumes a hibernated agent snapshot.
   """
-  @spec resume(AgentSnapshot.t() | keyword() | map() | String.t(), runtime_opts()) :: run_result()
+  @spec resume(AgentSnapshot.t() | String.t(), runtime_opts()) :: run_result()
   def resume(snapshot_input, opts \\ []) do
     with {:ok, snapshot} <- AgentSnapshot.from_input(snapshot_input),
          {:ok, capabilities} <- normalize_capabilities(opts) do

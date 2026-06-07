@@ -6,6 +6,7 @@ defmodule Jidoka.Runtime.OperationBatch do
   alias Jidoka.Config
   alias Jidoka.Effect
   alias Jidoka.Error
+  alias Jidoka.Runtime.CapabilityInvoker
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Turn
@@ -36,7 +37,8 @@ defmodule Jidoka.Runtime.OperationBatch do
       Workflow.react_until_satisfied(workflow, %{},
         async: true,
         max_concurrency: max_parallel_operations(opts),
-        timeout: :infinity
+        deadline_ms: batch_timeout(state, opts),
+        timeout: batch_timeout(state, opts)
       )
 
     intents
@@ -83,7 +85,7 @@ defmodule Jidoka.Runtime.OperationBatch do
          opts
        ) do
     with {:ok, ctx} <- RuntimeContext.operation(state, intent, opts) do
-      case invoke_capability(operations, intent, journal, ctx) do
+      case invoke_capability(operations, intent, journal, ctx, state, opts) do
         {:ok, output} ->
           {:ok, Effect.Result.ok(intent, output)}
 
@@ -103,13 +105,8 @@ defmodule Jidoka.Runtime.OperationBatch do
     end
   end
 
-  defp invoke_capability(capability, intent, journal, ctx) do
-    capability.(intent, journal, ctx)
-  rescue
-    exception -> {:error, exception}
-  catch
-    kind, reason -> {:error, {kind, reason}}
-  end
+  defp invoke_capability(capability, intent, journal, ctx, state, opts),
+    do: CapabilityInvoker.invoke(capability, intent, journal, ctx, state, opts)
 
   defp normalize_capability_error(reason, %Effect.Intent{} = intent) do
     Error.normalize(reason,
@@ -131,6 +128,8 @@ defmodule Jidoka.Runtime.OperationBatch do
     |> Keyword.get(:max_parallel_operations, Config.default_max_parallel_operations())
     |> Config.normalize_positive_integer!(:max_parallel_operations)
   end
+
+  defp batch_timeout(state, opts), do: CapabilityInvoker.capability_timeout(state, opts)
 
   defp effect_operation(%Effect.Intent{kind: :operation, payload: payload}) do
     Map.get(payload, :name) || Map.get(payload, "name")

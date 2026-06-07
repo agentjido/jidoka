@@ -24,7 +24,7 @@ defmodule Jidoka.Import.Tools do
          {:ok, actions} <- action_operations(tools, opts),
          {:ok, ash_resources, ash_sources} <- ash_resource_operations(tools, opts),
          {:ok, browsers, browser_sources} <- browser_operations(tools),
-         {:ok, mcps, mcp_sources} <- mcp_operations(tools),
+         {:ok, mcps, mcp_sources} <- mcp_operations(tools, opts),
          {:ok, catalogs, catalog_sources} <- catalog_operations(tools, opts) do
       {:ok,
        %{
@@ -93,12 +93,12 @@ defmodule Jidoka.Import.Tools do
     end)
   end
 
-  defp mcp_operations(tools) when is_map(tools) do
+  defp mcp_operations(tools, opts) when is_map(tools) do
     tools
     |> Normalize.tool_entries(:mcp_tools, :mcp_tool)
     |> Enum.reduce_while({:ok, [], []}, fn mcp_ref, {:ok, acc_operations, sources} ->
       with {:ok, source} <- normalize_mcp_ref(mcp_ref),
-           {:ok, source_operations} <- Source.operations(source) do
+           {:ok, source_operations} <- Source.operations(source, Keyword.take(opts, [:discover_mcp?])) do
         approval = approval_from_ref(mcp_ref)
         source_operations = Approval.apply_to_operations!(source_operations, approval)
 

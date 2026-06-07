@@ -85,7 +85,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp resume_with_approval_response(state, interrupt, response, capabilities, opts) do
-    response = Review.ensure_responded_at(response, clock_ms(opts))
+    response = Review.stamp_responded_at(response, clock_ms(opts))
 
     with :ok <- Review.validate_response(interrupt, response),
          {:ok, state} <- run_and_emit(state, opts, &Review.apply_response(&1, interrupt, response)) do

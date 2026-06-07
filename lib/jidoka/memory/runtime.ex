@@ -16,19 +16,20 @@ defmodule Jidoka.Memory.Runtime do
     case Keyword.fetch(opts, :memory_store) do
       {:ok, store} ->
         memory = spec.memory
-        store = store_with_policy(store, memory, request.context, opts)
 
-        recall_request =
-          Memory.RecallRequest.new!(
-            agent_id: spec.id,
-            session_id: memory_session_id(memory, opts),
-            scope: memory.scope,
-            query: request.input,
-            limit: memory.max_entries,
-            metadata: memory.metadata
-          )
+        with {:ok, store} <- store_with_policy(store, memory, request.context, opts) do
+          recall_request =
+            Memory.RecallRequest.new!(
+              agent_id: spec.id,
+              session_id: memory_session_id(memory, opts),
+              scope: memory.scope,
+              query: request.input,
+              limit: memory.max_entries,
+              metadata: memory.metadata
+            )
 
-        Memory.Store.recall(store, recall_request)
+          Memory.Store.recall(store, recall_request)
+        end
 
       :error ->
         {:ok, nil}
@@ -40,21 +41,22 @@ defmodule Jidoka.Memory.Runtime do
   def write(%Agent.Spec{} = spec, content, opts) when is_binary(content) do
     with {:ok, store} <- fetch_memory_store(opts) do
       context = normalize_context(Keyword.get(opts, :context, %{}))
-      store = store_with_policy(store, spec.memory, context, opts)
 
-      entry =
-        Memory.Entry.new!(
-          [
-            agent_id: spec.id,
-            session_id: write_session_id(spec.memory, opts),
-            content: content,
-            metadata: Keyword.get(opts, :metadata, %{})
-          ],
-          Keyword.take(opts, [:id_generator])
-        )
+      with {:ok, store} <- store_with_policy(store, spec.memory, context, opts) do
+        entry =
+          Memory.Entry.new!(
+            [
+              agent_id: spec.id,
+              session_id: write_session_id(spec.memory, opts),
+              content: content,
+              metadata: Keyword.get(opts, :metadata, %{})
+            ],
+            Keyword.take(opts, [:id_generator])
+          )
 
-      request = Memory.WriteRequest.new!(entry: entry)
-      Memory.Store.write(store, request)
+        request = Memory.WriteRequest.new!(entry: entry)
+        Memory.Store.write(store, request)
+      end
     end
   end
 
@@ -82,16 +84,19 @@ defmodule Jidoka.Memory.Runtime do
     end
   end
 
-  defp store_with_policy(store, nil, _context, _opts), do: store
+  defp store_with_policy(store, nil, _context, _opts), do: {:ok, store}
 
   defp store_with_policy(store, %Agent.Spec.Memory{} = memory, context, opts) do
-    memory_opts =
-      []
-      |> maybe_put(:namespace, resolve_namespace(memory.namespace, context))
-      |> maybe_put(:scope, memory.scope)
-      |> maybe_put(:session_id, Keyword.get(opts, :session_id))
+    with {:ok, namespace} <- resolve_namespace(memory.namespace, context),
+         {:ok, session_id} <- resolve_session_id(memory, opts) do
+      memory_opts =
+        []
+        |> maybe_put(:namespace, namespace)
+        |> maybe_put(:scope, memory.scope)
+        |> maybe_put(:session_id, session_id)
 
-    merge_store_opts(store, memory_opts)
+      {:ok, merge_store_opts(store, memory_opts)}
+    end
   end
 
   defp merge_store_opts({module, opts}, memory_opts),
@@ -99,10 +104,27 @@ defmodule Jidoka.Memory.Runtime do
 
   defp merge_store_opts(module, memory_opts) when is_atom(module), do: {module, memory_opts}
 
-  defp resolve_namespace(nil, _context), do: nil
-  defp resolve_namespace(namespace, _context) when is_binary(namespace), do: namespace
-  defp resolve_namespace({:context, key}, %Context{} = context), do: Context.get(context, key)
-  defp resolve_namespace(namespace, _context), do: to_string(namespace)
+  defp resolve_namespace(nil, _context), do: {:ok, nil}
+  defp resolve_namespace(namespace, _context) when is_binary(namespace), do: {:ok, namespace}
+
+  defp resolve_namespace({:context, key}, %Context{} = context) do
+    case Context.fetch(context, key) do
+      {:ok, value} when is_binary(value) and value != "" -> {:ok, value}
+      {:ok, value} when not is_nil(value) -> {:ok, to_string(value)}
+      _missing -> {:error, {:missing_memory_namespace_context, key}}
+    end
+  end
+
+  defp resolve_namespace(namespace, _context), do: {:ok, to_string(namespace)}
+
+  defp resolve_session_id(%Agent.Spec.Memory{scope: :session}, opts) do
+    case Keyword.get(opts, :session_id) do
+      session_id when is_binary(session_id) and session_id != "" -> {:ok, session_id}
+      _session_id -> {:error, :missing_memory_session_id}
+    end
+  end
+
+  defp resolve_session_id(%Agent.Spec.Memory{}, opts), do: {:ok, Keyword.get(opts, :session_id)}
 
   defp maybe_put(opts, _key, nil), do: opts
   defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)

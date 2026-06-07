@@ -106,7 +106,7 @@ defmodule Jidoka.MCPTest do
       )
 
     assert {:ok, [%Operation{name: "mcp_lookup_policy"} = operation]} =
-             Source.operations(source)
+             Source.operations(source, discover_mcp?: true)
 
     assert Operation.kind(operation) == :mcp
     assert operation.metadata["source"] == "mcp"
@@ -114,7 +114,7 @@ defmodule Jidoka.MCPTest do
     assert operation.metadata["parameters_schema"]["type"] == "object"
 
     assert {:ok, %{capability: capability}} =
-             Source.compile(source, context: %{mcp_client: FakeMCPClient})
+             Source.compile(source, context: %{mcp_client: FakeMCPClient}, discover_mcp?: true)
 
     intent =
       Effect.Intent.new(:operation, %{
@@ -143,14 +143,14 @@ defmodule Jidoka.MCPTest do
       )
 
     assert {:ok, [%Operation{name: "mcp_list_response_remote__tool"} = operation]} =
-             Source.operations(source, context: %{mcp_client: FakeMCPClient})
+             Source.operations(source, context: %{mcp_client: FakeMCPClient}, discover_mcp?: true)
 
     assert operation.idempotency == :pure
     assert operation.metadata["owner"] == "tests"
     assert operation.metadata["endpoint"] == "list_response"
 
     assert {:ok, %{capability: capability}} =
-             Source.compile(source, context: %{mcp_client: FakeMCPClient})
+             Source.compile(source, context: %{mcp_client: FakeMCPClient}, discover_mcp?: true)
 
     intent =
       Effect.Intent.new(:operation, %{
@@ -166,7 +166,7 @@ defmodule Jidoka.MCPTest do
     bad_list = MCP.new!(endpoint: :bad_list_response, client: FakeMCPClient, required: true)
 
     assert {:error, {:mcp_tool_discovery_failed, :bad_list_response, {:invalid_mcp_tools_response, :bad_response}}} =
-             Source.operations(bad_list)
+             Source.operations(bad_list, discover_mcp?: true)
 
     bad_call =
       MCP.new!(
@@ -198,7 +198,7 @@ defmodule Jidoka.MCPTest do
       )
 
     assert {:ok, [%Operation{name: "inline_inline_lookup"} = operation]} =
-             Source.operations(source)
+             Source.operations(source, discover_mcp?: true)
 
     assert operation.metadata["transport"] == ~s({:stdio, [command: "echo"]})
     assert operation.metadata["client_info"] == %{"name" => "jidoka-test", "version" => "1.0"}
@@ -210,7 +210,7 @@ defmodule Jidoka.MCPTest do
     assert opts[:timeout] == 123
     assert opts[:timeouts] == %{"request_ms" => 777}
 
-    assert {:ok, %{capability: capability}} = Source.compile(source)
+    assert {:ok, %{capability: capability}} = Source.compile(source, discover_mcp?: true)
 
     intent =
       Effect.Intent.new(:operation, %{
@@ -266,8 +266,11 @@ defmodule Jidoka.MCPTest do
 
     required = MCP.new!(endpoint: :missing, client: String, required: true)
 
-    assert {:error, {:mcp_tool_discovery_failed, :missing, {:invalid_mcp_client, String}}} =
+    assert {:error, {:mcp_tool_discovery_disabled, :missing}} =
              Source.operations(required)
+
+    assert {:error, {:mcp_tool_discovery_failed, :missing, {:invalid_mcp_client, String}}} =
+             Source.operations(required, discover_mcp?: true)
   end
 
   test "MCP source validates malformed configuration" do

@@ -310,12 +310,12 @@ defmodule Jidoka do
   @doc """
   Resumes from a durable agent snapshot.
 
-  The snapshot may be an `AgentSnapshot` struct, map-shaped snapshot data, or
-  the opaque string returned by `Jidoka.Runtime.AgentSnapshot.serialize/1`.
+  The snapshot may be an `AgentSnapshot` struct or the authenticated opaque
+  string returned by `Jidoka.Runtime.AgentSnapshot.serialize/1`.
   Resume continues through the same harness boundary as `turn/3`, so callers
   provide the same runtime capabilities plus any required approval response.
   """
-  @spec resume(AgentSnapshot.t() | keyword() | map() | String.t(), runtime_opts()) :: run_result()
+  @spec resume(AgentSnapshot.t() | String.t(), runtime_opts()) :: run_result()
   def resume(snapshot_input, opts \\ []) do
     case Harness.resume(snapshot_input, opts) do
       {:ok, _result} = ok ->
@@ -335,20 +335,13 @@ defmodule Jidoka do
   For snapshots, this reads the review request embedded in snapshot metadata.
   For sessions and stores, it delegates to the harness session store.
   """
-  @spec pending_reviews(AgentSnapshot.t() | Session.t() | Harness.Store.store() | keyword() | map() | String.t()) ::
+  @spec pending_reviews(AgentSnapshot.t() | Session.t() | Harness.Store.store() | String.t()) ::
           {:ok, [Review.Request.t()]} | {:error, term()}
   def pending_reviews(%Session{} = session), do: Harness.pending_reviews(session)
 
   def pending_reviews(%AgentSnapshot{} = snapshot), do: pending_reviews_from_snapshot(snapshot)
 
-  def pending_reviews(snapshot_input) when is_binary(snapshot_input) or is_map(snapshot_input) do
-    case AgentSnapshot.from_input(snapshot_input) do
-      {:ok, snapshot} -> pending_reviews(snapshot)
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  def pending_reviews(snapshot_input) when is_list(snapshot_input) do
+  def pending_reviews(snapshot_input) when is_binary(snapshot_input) do
     case AgentSnapshot.from_input(snapshot_input) do
       {:ok, snapshot} -> pending_reviews(snapshot)
       {:error, reason} -> {:error, reason}
@@ -364,7 +357,7 @@ defmodule Jidoka do
   convenience wrapper around `Jidoka.Review.Response.approve/2` plus
   `resume/2`.
   """
-  @spec approve(AgentSnapshot.t() | Session.t() | map() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
+  @spec approve(AgentSnapshot.t() | Session.t() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
           run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), AgentSnapshot.t()}
   def approve(snapshot_or_session, review_or_id, opts \\ []) do
     response = Review.Response.approve(review_or_id, review_response_opts(opts))
@@ -378,7 +371,7 @@ defmodule Jidoka do
   when the application wants a single facade call instead of manually building a
   `Jidoka.Review.Response`.
   """
-  @spec deny(AgentSnapshot.t() | Session.t() | map() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
+  @spec deny(AgentSnapshot.t() | Session.t() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
           run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), AgentSnapshot.t()}
   def deny(snapshot_or_session, review_or_id, opts \\ []) do
     response = Review.Response.deny(review_or_id, review_response_opts(opts))

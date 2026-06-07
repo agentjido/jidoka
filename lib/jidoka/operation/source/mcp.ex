@@ -169,6 +169,14 @@ defmodule Jidoka.Operation.Source.MCP do
   defp tools(%__MODULE__{tools: [_ | _] = tools}, _opts), do: {:ok, tools}
 
   defp tools(%__MODULE__{} = source, opts) do
+    if discover_tools?(opts) do
+      discover_tools(source, opts)
+    else
+      discovery_disabled(source)
+    end
+  end
+
+  defp discover_tools(%__MODULE__{} = source, opts) do
     client = client(source, opts)
 
     result =
@@ -186,6 +194,21 @@ defmodule Jidoka.Operation.Source.MCP do
         else
           {:ok, []}
         end
+    end
+  end
+
+  defp discover_tools?(opts) when is_list(opts) do
+    Keyword.get(opts, :discover_mcp?, false) == true or
+      Application.get_env(:jidoka, :mcp_discovery_enabled, false) == true
+  end
+
+  defp discover_tools?(_opts), do: Application.get_env(:jidoka, :mcp_discovery_enabled, false) == true
+
+  defp discovery_disabled(%__MODULE__{} = source) do
+    if source.required do
+      {:error, {:mcp_tool_discovery_disabled, source.endpoint}}
+    else
+      {:ok, []}
     end
   end
 

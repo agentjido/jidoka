@@ -85,8 +85,16 @@ defmodule Jidoka.Chat.Request do
     case Task.yield(task, timeout) do
       {:ok, result} -> result
       {:exit, reason} -> {:error, {:chat_request_failed, reason}}
-      nil -> {:error, :timeout}
+      nil -> timeout_result(task, opts)
     end
+  end
+
+  defp timeout_result(%Task{} = task, opts) do
+    if Keyword.get(opts, :cancel_on_timeout, true) do
+      Task.shutdown(task, :brutal_kill)
+    end
+
+    {:error, :timeout}
   end
 
   defp request_id(opts) do

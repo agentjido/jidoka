@@ -296,18 +296,46 @@ defmodule Jidoka.StabilizationContractTest do
 
     assert {:error, :invalid_snapshot_serialization} = AgentSnapshot.deserialize("not-a-snapshot")
 
-    assert {:error, {:invalid_snapshot_serialization, _error}} =
+    assert {:error, :invalid_snapshot_signature} =
              AgentSnapshot.deserialize("jidoka:snapshot:v1:not-valid-base64")
 
     future = %{snapshot | schema_version: AgentSnapshot.schema_version() + 1}
 
-    encoded =
-      future
-      |> :erlang.term_to_binary()
-      |> Base.url_encode64(padding: false)
-
     assert {:error, {:unsupported_snapshot_schema_version, 2, 1}} =
-             AgentSnapshot.deserialize("jidoka:snapshot:v1:" <> encoded)
+             AgentSnapshot.deserialize(signed_snapshot(future))
+
+    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
+    assert {:ok, %AgentSnapshot{snapshot_id: snapshot_id}} = AgentSnapshot.deserialize(serialized)
+    assert snapshot_id == snapshot.snapshot_id
+
+    assert {:error, :invalid_snapshot_signature} =
+             serialized
+             |> tamper_serialized_snapshot()
+             |> AgentSnapshot.deserialize()
+
+    assert {:error, :unsafe_snapshot_input} = AgentSnapshot.from_input(Map.from_struct(snapshot))
+  end
+
+  test "snapshots strip runtime context before durable serialization" do
+    spec = agent_spec()
+
+    request =
+      Turn.Request.new!(
+        input: "Hello",
+        context:
+          Jidoka.Context.from_data!(%{"tenant_id" => "tenant_1"},
+            runtime: %{api_key: "secret-token", trusted_client: "client"}
+          )
+      )
+
+    snapshot = AgentSnapshot.from_turn_state!(base_state(spec, request), Turn.Cursor.after_prompt())
+
+    assert snapshot.turn_state.request.context.data == %{"tenant_id" => "tenant_1"}
+    assert snapshot.turn_state.request.context.runtime == %{}
+
+    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
+    assert {:ok, restored} = AgentSnapshot.deserialize(serialized)
+    assert restored.turn_state.request.context.runtime == %{}
   end
 
   test "inspection views cover the locked runtime data contracts" do
@@ -486,5 +514,32 @@ defmodule Jidoka.StabilizationContractTest do
       idempotency: :unsafe_once,
       idempotency_key: "key"
     )
+  end
+
+  defp signed_snapshot(snapshot) do
+    encoded =
+      snapshot
+      |> :erlang.term_to_binary()
+      |> Base.url_encode64(padding: false)
+
+    secret = Application.fetch_env!(:jidoka, :snapshot_signing_secret)
+
+    signature =
+      :crypto.mac(:hmac, :sha256, secret, encoded)
+      |> Base.url_encode64(padding: false)
+
+    "jidoka:snapshot:v1:" <> encoded <> "." <> signature
+  end
+
+  defp tamper_serialized_snapshot(serialized) do
+    replacement =
+      case String.last(serialized) do
+        "x" -> "y"
+        _other -> "x"
+      end
+
+    serialized
+    |> String.slice(0, String.length(serialized) - 1)
+    |> Kernel.<>(replacement)
   end
 end

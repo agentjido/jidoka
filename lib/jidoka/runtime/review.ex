@@ -58,12 +58,10 @@ defmodule Jidoka.Runtime.Review do
     {:ok, state, interrupt}
   end
 
-  @spec ensure_responded_at(Review.Response.t(), non_neg_integer()) :: Review.Response.t()
-  def ensure_responded_at(%Review.Response{responded_at_ms: nil} = response, now_ms) do
+  @spec stamp_responded_at(Review.Response.t(), non_neg_integer()) :: Review.Response.t()
+  def stamp_responded_at(%Review.Response{} = response, now_ms) do
     %Review.Response{response | responded_at_ms: now_ms}
   end
-
-  def ensure_responded_at(%Review.Response{} = response, _now_ms), do: response
 
   @spec validate_response(Review.Interrupt.t(), Review.Response.t()) :: :ok | {:error, term()}
   def validate_response(

@@ -30,7 +30,7 @@ defmodule Jidoka.Agent.ToolSources.MCP do
   def operations!(%MCPTools{} = mcp_tools) do
     mcp_tools
     |> source!()
-    |> Source.operations()
+    |> Source.operations(discover_mcp?: mcp_tools.discover == true)
     |> case do
       {:ok, operations} -> Approval.apply_to_operations!(operations, mcp_tools.approval)
       {:error, reason} -> raise ArgumentError, "invalid MCP source: #{inspect(reason)}"

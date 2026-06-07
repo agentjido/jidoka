@@ -12,6 +12,7 @@ defmodule Jidoka.InspectionTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Inspection.Preflight
+  alias Jidoka.Effect
   alias Jidoka.InspectionTest.Support.Agent
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
@@ -61,7 +62,7 @@ defmodule Jidoka.InspectionTest do
              status: :finished,
              content: "inspection ok",
              timeline: timeline,
-             journal: %{intents: [%{kind: :llm}], results: [%{kind: :llm, status: :ok}]}
+             journal: %{intents: [%{effect_kind: :llm}], results: [%{effect_kind: :llm, status: :ok}]}
            } = Jidoka.inspect(result)
 
     assert Enum.map(timeline, & &1.event) == [
@@ -128,5 +129,35 @@ defmodule Jidoka.InspectionTest do
              operation: "lookup",
              reason: :approval_required
            } = Jidoka.inspect(request)
+  end
+
+  test "Jidoka.inspect suppresses effect payloads and outputs unless full output is requested" do
+    intent =
+      Effect.Intent.new(:operation, %{
+        name: "sensitive_lookup",
+        arguments: %{"api_key" => "secret-key", "tenant" => "tenant_1"}
+      })
+
+    result = Effect.Result.ok(intent, %{"token" => "secret-token", "answer" => "ok"})
+
+    assert %{
+             kind: :effect_intent,
+             payload_keys: ["arguments", "loop_index", "name"]
+           } = intent_view = Jidoka.inspect(intent)
+
+    refute Map.has_key?(intent_view, :payload)
+
+    assert %{
+             kind: :effect_result,
+             status: :ok
+           } = result_view = Jidoka.inspect(result)
+
+    refute Map.has_key?(result_view, :output)
+
+    assert %{payload: %{arguments: %{"api_key" => "[REDACTED]", "tenant" => "tenant_1"}}} =
+             Jidoka.inspect(intent, full?: true)
+
+    assert %{output: %{"token" => "[REDACTED]", "answer" => "ok"}} =
+             Jidoka.inspect(result, full?: true)
   end
 end

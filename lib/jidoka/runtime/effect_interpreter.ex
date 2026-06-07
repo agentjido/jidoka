@@ -8,6 +8,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   """
 
   alias Jidoka.Error
+  alias Jidoka.Runtime.CapabilityInvoker
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Runtime.Controls
@@ -136,43 +137,34 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
   defp run_effect_controls(
          %Turn.State{} = state,
-         %Effect.Intent{kind: :operation, metadata: metadata} = intent,
+         %Effect.Intent{kind: :operation} = intent,
          opts
-       )
-       when is_map(metadata) do
+       ) do
     event_count = length(state.events)
 
-    if operation_controls_allowed?(metadata) do
-      {:ok, state}
-    else
-      case Controls.run_operation_controls(state, intent, opts) do
-        {:ok, %Turn.State{} = state} ->
-          EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
-          {:ok, state}
+    case Controls.run_operation_controls(state, intent, opts) do
+      {:ok, %Turn.State{} = state} ->
+        EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
+        {:ok, state}
 
-        {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
-          EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
-          {:interrupt, interrupt, state}
+      {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
+        EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
+        {:interrupt, interrupt, state}
 
-        {:error, reason} ->
-          {:error,
-           Error.normalize(reason,
-             operation: EffectTrace.operation(intent),
-             phase: :control,
-             agent_id: state.spec.id,
-             request_id: EffectTrace.request_id(state, intent),
-             intent_id: intent.id,
-             effect_kind: intent.kind
-           )}
-      end
+      {:error, reason} ->
+        {:error,
+         Error.normalize(reason,
+           operation: EffectTrace.operation(intent),
+           phase: :control,
+           agent_id: state.spec.id,
+           request_id: EffectTrace.request_id(state, intent),
+           intent_id: intent.id,
+           effect_kind: intent.kind
+         )}
     end
   end
 
   defp run_effect_controls(%Turn.State{} = state, %Effect.Intent{}, _opts), do: {:ok, state}
-
-  defp operation_controls_allowed?(metadata) when is_map(metadata) do
-    metadata["operation_controls_allowed"] == true or metadata[:operation_controls_allowed] == true
-  end
 
   defp call_capability(
          %Turn.State{} = state,
@@ -183,7 +175,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     ctx = RuntimeContext.llm!(state, runtime: Keyword.get(opts, :operation_context, %{}))
 
-    case invoke_capability(llm, intent, journal, ctx) do
+    case invoke_capability(llm, intent, journal, ctx, state, opts) do
       {:ok, output} ->
         {:ok, Effect.Result.ok(intent, output, metadata: output_metadata(output))}
 
@@ -207,7 +199,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          opts
        ) do
     with {:ok, ctx} <- RuntimeContext.operation(state, intent, opts) do
-      case invoke_capability(operations, intent, journal, ctx) do
+      case invoke_capability(operations, intent, journal, ctx, state, opts) do
         {:ok, output} ->
           {:ok, Effect.Result.ok(intent, output)}
 
@@ -227,13 +219,8 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp invoke_capability(capability, intent, journal, ctx) do
-    capability.(intent, journal, ctx)
-  rescue
-    exception -> {:error, exception}
-  catch
-    kind, reason -> {:error, {kind, reason}}
-  end
+  defp invoke_capability(capability, intent, journal, ctx, state, opts),
+    do: CapabilityInvoker.invoke(capability, intent, journal, ctx, state, opts)
 
   defp normalize_capability_error(reason, %Effect.Intent{} = intent) do
     Error.normalize(reason,
@@ -316,8 +303,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
       case run_effect_controls(state, intent, opts) do
         {:ok, %Turn.State{} = state} ->
-          intent = mark_operation_controls_allowed(intent)
-          {:ok, replace_pending_effect(state, intent), intent}
+          {:ok, state, intent}
 
         {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
           {:interrupt, interrupt, state}
@@ -365,20 +351,5 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       {:error, reason} ->
         {:error, reason}
     end
-  end
-
-  defp mark_operation_controls_allowed(%Effect.Intent{} = intent) do
-    metadata = Map.put(intent.metadata, "operation_controls_allowed", true)
-    %Effect.Intent{intent | metadata: metadata}
-  end
-
-  defp replace_pending_effect(%Turn.State{} = state, %Effect.Intent{id: id} = intent) do
-    pending_effects =
-      Enum.map(state.pending_effects, fn
-        %Effect.Intent{id: ^id} -> intent
-        other -> other
-      end)
-
-    %Turn.State{state | pending_effects: pending_effects}
   end
 end

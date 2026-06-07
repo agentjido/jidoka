@@ -105,6 +105,7 @@ defmodule Jidoka.Agent.Dsl.MCPTools do
               endpoint: Zoi.any() |> Zoi.nullish(),
               prefix: Zoi.any() |> Zoi.nullish(),
               tools: Zoi.any() |> Zoi.nullish(),
+              discover: Zoi.any() |> Zoi.nullish(),
               required: Zoi.any() |> Zoi.nullish(),
               transport: Zoi.any() |> Zoi.nullish(),
               client_info: Zoi.any() |> Zoi.nullish(),

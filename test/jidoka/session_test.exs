@@ -15,6 +15,7 @@ defmodule Jidoka.SessionTest do
   alias Jidoka.Harness
   alias Jidoka.Harness.Session, as: HarnessSession
   alias Jidoka.Harness.Store.InMemory
+  alias Jidoka.Chat.Request
   alias Jidoka.Session
   alias Jidoka.SessionTest.Support.DslAgent
   alias Jidoka.Turn
@@ -89,6 +90,32 @@ defmodule Jidoka.SessionTest do
 
     assert {:ok, %HarnessSession{session_id: "async-stored-123"}, "async stored ok"} =
              Session.await(request, timeout: 1_000)
+  end
+
+  test "await cancels timed out async chat requests by default" do
+    parent = self()
+
+    task =
+      Task.async(fn ->
+        send(parent, {:chat_task_started, self()})
+        Process.sleep(5_000)
+        {:ok, :late}
+      end)
+
+    request =
+      Request.new(
+        request_id: "chat_cancel_test",
+        task: task,
+        target: :test,
+        session_id: nil,
+        stream_to: nil,
+        started_at_ms: System.system_time(:millisecond),
+        metadata: %{}
+      )
+
+    assert_receive {:chat_task_started, task_pid}
+    assert {:error, :timeout} = Request.await(request, timeout: 5)
+    refute Process.alive?(task_pid)
   end
 
   test "session run can resolve persisted sessions by id" do

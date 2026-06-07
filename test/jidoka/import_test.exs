@@ -67,6 +67,56 @@ defmodule Jidoka.ImportTest do
     assert spec.metadata["source_ref"]["format"] == "yaml"
   end
 
+  test "rejects import documents that exceed parser limits" do
+    json =
+      Jason.encode!(%{
+        agent: %{
+          id: "limited_import_agent",
+          model: %{provider: :test, id: "limited-model"}
+        }
+      })
+
+    assert {:error,
+            %Jidoka.Error.ValidationError{
+              details: %{reason: {:import_too_large, :bytes, actual_bytes, 10}}
+            }} = Jidoka.import(json, format: :json, max_import_bytes: 10)
+
+    assert actual_bytes > 10
+
+    nested = Jason.encode!(%{"a" => %{"b" => %{"c" => "d"}}})
+
+    assert {:error,
+            %Jidoka.Error.ValidationError{
+              details: %{reason: {:import_too_deep, depth, 1}}
+            }} = Jidoka.import(nested, format: :json, max_import_depth: 1)
+
+    assert depth > 1
+
+    assert {:error,
+            %Jidoka.Error.ValidationError{
+              details: %{reason: {:import_too_large, :nodes, node_count, 2}}
+            }} = Jidoka.import(json, format: :json, max_import_nodes: 2)
+
+    assert node_count >= 2
+  end
+
+  test "YAML merge anchors are disabled unless explicitly enabled" do
+    yaml = """
+    agent:
+      <<: &agent_defaults
+        id: import_anchor_agent
+        model:
+          provider: test
+          id: anchor-model
+      instructions: Loaded through anchors.
+    """
+
+    assert {:error, %Jidoka.Error.ValidationError{}} = Jidoka.import(yaml, format: :yaml)
+
+    assert {:ok, %Agent.Spec{id: "import_anchor_agent"}} =
+             Jidoka.import(yaml, format: :yaml, yaml_merge_anchors: true)
+  end
+
   test "approval policies export and import as portable operation data" do
     spec =
       Agent.Spec.new!(

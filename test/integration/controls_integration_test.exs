@@ -133,10 +133,7 @@ defmodule Jidoka.ControlsIntegrationTest do
              %Agent.Spec.Controls.Input{control: BlockInputControl}
            ] = spec.controls.inputs
 
-    llm = fn _intent, _journal, _ctx ->
-      assert_received {:input_control_called, "allowed lookup"}
-      {:ok, %{type: :final, content: "allowed"}}
-    end
+    llm = fn _intent, _journal, _ctx -> {:ok, %{type: :final, content: "allowed"}} end
 
     request =
       Turn.Request.new!(
@@ -146,6 +143,8 @@ defmodule Jidoka.ControlsIntegrationTest do
 
     assert {:ok, %Turn.Result{content: "allowed"} = result} =
              InputControlledLookupAgent.run_turn(request, llm: llm)
+
+    assert_received {:input_control_called, "allowed lookup"}
 
     assert [
              %{event: :control_allowed, data: %{control: "audit_input_control"}},

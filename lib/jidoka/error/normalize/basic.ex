@@ -135,6 +135,33 @@ defmodule Jidoka.Error.Normalize.Basic do
      )}
   end
 
+  defp normalize_effect_reason({:capability_timeout, kind, timeout_ms} = reason, context) do
+    {:ok,
+     execution_error("Runtime capability timed out.",
+       phase: :effect,
+       details:
+         details(context, %{
+           reason: :capability_timeout,
+           effect_kind: kind,
+           timeout_ms: timeout_ms,
+           cause: reason
+         })
+     )}
+  end
+
+  defp normalize_effect_reason({:capability_exit, exit_reason} = reason, context) do
+    {:ok,
+     execution_error("Runtime capability exited.",
+       phase: :effect,
+       details:
+         details(context, %{
+           reason: :capability_exit,
+           exit_reason: exit_reason,
+           cause: reason
+         })
+     )}
+  end
+
   defp normalize_effect_reason(
          {:unsafe_once_incomplete_effect, %Effect.Intent{} = intent} = reason,
          context

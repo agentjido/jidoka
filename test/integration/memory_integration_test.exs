@@ -60,8 +60,8 @@ defmodule Jidoka.MemoryIntegrationTest do
                id_generator: fn "mem" -> "mem_invoice" end
              )
 
-    assert {:ok, %Memory.WriteResult{}} =
-             Harness.write_memory(spec, "Global memory should not appear for session scope.",
+    assert {:error, :missing_memory_session_id} =
+             Harness.write_memory(spec, "Global memory should not be written for session scope.",
                memory_store: memory_store,
                id_generator: fn "mem" -> "mem_global" end
              )

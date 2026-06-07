@@ -502,21 +502,18 @@ defmodule Jidoka.DataStructsTest do
              Review.Response.deny(interrupt.id, reason: :rejected)
   end
 
-  test "agent snapshots round-trip from serializable maps" do
+  test "agent snapshots reject unsigned serializable maps" do
     state = base_state()
     snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
 
     assert snapshot.schema_version == AgentSnapshot.schema_version()
 
-    assert {:ok, %AgentSnapshot{} = restored} =
+    assert {:ok, ^snapshot} = AgentSnapshot.from_input(snapshot)
+
+    assert {:error, :unsafe_snapshot_input} =
              snapshot
              |> portable_map()
              |> AgentSnapshot.from_input()
-
-    assert restored.schema_version == AgentSnapshot.schema_version()
-    assert restored.agent_id == "snapshot_agent"
-    assert restored.cursor.phase == :after_prompt
-    assert restored.turn_state.spec.id == "snapshot_agent"
   end
 
   test "agent snapshot id generation can be explicit or injected" do

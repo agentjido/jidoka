@@ -1,6 +1,12 @@
 defmodule Jidoka.Runtime.AgentSnapshot do
-  @moduledoc "Serializable semantic snapshot for hibernate/resume."
+  @moduledoc """
+  Serializable semantic snapshot for hibernate/resume.
 
+  Durable snapshot strings are authenticated with an HMAC signing secret from
+  `:jidoka, :snapshot_signing_secret` or `JIDOKA_SNAPSHOT_SIGNING_SECRET`.
+  """
+
+  alias Jidoka.Context
   alias Jidoka.Id
   alias Jidoka.Runtime.Review
   alias Jidoka.Schema
@@ -8,6 +14,8 @@ defmodule Jidoka.Runtime.AgentSnapshot do
 
   @schema_version 1
   @serialized_prefix "jidoka:snapshot:v1:"
+  @signature_algorithm :sha256
+  @minimum_signing_secret_bytes 32
 
   @schema Zoi.struct(
             __MODULE__,
@@ -48,10 +56,10 @@ defmodule Jidoka.Runtime.AgentSnapshot do
     end
   end
 
-  @spec from_input(t() | keyword() | map() | String.t()) :: {:ok, t()} | {:error, term()}
+  @spec from_input(t() | String.t()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = snapshot), do: new(snapshot)
   def from_input(input) when is_binary(input), do: deserialize(input)
-  def from_input(input), do: new(input)
+  def from_input(_input), do: {:error, :unsafe_snapshot_input}
 
   @doc """
   Serializes a snapshot into an opaque durable string.
@@ -60,20 +68,23 @@ defmodule Jidoka.Runtime.AgentSnapshot do
   fidelity across hibernate/resume while the schema version remains the public
   compatibility boundary.
   """
-  @spec serialize(t() | keyword() | map()) :: {:ok, String.t()} | {:error, term()}
+  @spec serialize(t()) :: {:ok, String.t()} | {:error, term()}
   def serialize(snapshot_input) do
     with {:ok, %__MODULE__{} = snapshot} <- from_input(snapshot_input),
-         :ok <- validate_portable(snapshot) do
-      data =
+         :ok <- validate_portable(snapshot),
+         {:ok, secret} <- signing_secret() do
+      encoded =
         snapshot
         |> :erlang.term_to_binary()
         |> Base.url_encode64(padding: false)
 
-      {:ok, @serialized_prefix <> data}
+      signature = signature(encoded, secret)
+
+      {:ok, @serialized_prefix <> encoded <> "." <> signature}
     end
   end
 
-  @spec serialize!(t() | keyword() | map()) :: String.t()
+  @spec serialize!(t()) :: String.t()
   def serialize!(snapshot_input) do
     case serialize(snapshot_input) do
       {:ok, serialized} -> serialized
@@ -85,8 +96,11 @@ defmodule Jidoka.Runtime.AgentSnapshot do
   Restores a snapshot produced by `serialize/1`.
   """
   @spec deserialize(String.t()) :: {:ok, t()} | {:error, term()}
-  def deserialize(@serialized_prefix <> encoded) do
-    with {:ok, binary} <- Base.url_decode64(encoded, padding: false),
+  def deserialize(@serialized_prefix <> signed_payload) do
+    with {:ok, encoded, given_signature} <- split_signed_payload(signed_payload),
+         {:ok, secret} <- signing_secret(),
+         :ok <- verify_signature(encoded, given_signature, secret),
+         {:ok, binary} <- Base.url_decode64(encoded, padding: false),
          {:ok, term} <- safe_binary_to_term(binary),
          {:ok, %__MODULE__{} = snapshot} <- new(term) do
       {:ok, snapshot}
@@ -99,6 +113,8 @@ defmodule Jidoka.Runtime.AgentSnapshot do
           {:ok, t()} | {:error, term()}
   def from_turn_state(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts \\ []) do
     with {:ok, snapshot_id} <- snapshot_id(opts) do
+      state = sanitize_state(state)
+
       new(
         schema_version: @schema_version,
         snapshot_id: snapshot_id,
@@ -150,6 +166,63 @@ defmodule Jidoka.Runtime.AgentSnapshot do
     {:ok, :erlang.binary_to_term(binary, [:safe])}
   rescue
     error -> {:error, {:invalid_snapshot_serialization, error}}
+  end
+
+  defp split_signed_payload(payload) do
+    case String.split(payload, ".", parts: 2) do
+      [encoded, signature] when encoded != "" and signature != "" ->
+        {:ok, encoded, signature}
+
+      _other ->
+        {:error, :invalid_snapshot_signature}
+    end
+  end
+
+  defp signing_secret do
+    secret =
+      Application.get_env(:jidoka, :snapshot_signing_secret) ||
+        System.get_env("JIDOKA_SNAPSHOT_SIGNING_SECRET")
+
+    cond do
+      is_binary(secret) and byte_size(secret) >= @minimum_signing_secret_bytes ->
+        {:ok, secret}
+
+      is_binary(secret) ->
+        {:error, {:invalid_snapshot_signing_secret, @minimum_signing_secret_bytes}}
+
+      true ->
+        {:error, :missing_snapshot_signing_secret}
+    end
+  end
+
+  defp signature(encoded, secret) when is_binary(encoded) and is_binary(secret) do
+    :crypto.mac(:hmac, @signature_algorithm, secret, encoded)
+    |> Base.url_encode64(padding: false)
+  end
+
+  defp verify_signature(encoded, given_signature, secret) do
+    expected_signature = signature(encoded, secret)
+
+    if secure_compare(given_signature, expected_signature) do
+      :ok
+    else
+      {:error, :invalid_snapshot_signature}
+    end
+  end
+
+  defp secure_compare(left, right) when byte_size(left) == byte_size(right) do
+    left
+    |> :binary.bin_to_list()
+    |> Enum.zip(:binary.bin_to_list(right))
+    |> Enum.reduce(0, fn {a, b}, acc -> Bitwise.bor(acc, Bitwise.bxor(a, b)) end)
+    |> Kernel.==(0)
+  end
+
+  defp secure_compare(_left, _right), do: false
+
+  defp sanitize_state(%Turn.State{request: %Turn.Request{} = request} = state) do
+    request = %Turn.Request{request | context: Context.sanitize(request.context)}
+    %Turn.State{state | request: request}
   end
 
   defp validate_portable(value), do: validate_portable(value, [])

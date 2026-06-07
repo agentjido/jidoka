@@ -122,6 +122,25 @@ defmodule Jidoka.BrowserTest do
              Runtime.validate_allowlist("https://example.com", context, "read_page")
   end
 
+  test "browser allowlists reject prefix-confused hosts and enforce URL paths" do
+    operation =
+      Operation.new!(
+        name: "read_page",
+        metadata: %{"allow" => ["https://docs.example.com/guides"]}
+      )
+
+    context = Jidoka.Context.from_data!(%{}, runtime: %{jidoka_spec: %{operations: [operation]}})
+
+    assert :ok =
+             Runtime.validate_allowlist("https://docs.example.com/guides/setup", context, "read_page")
+
+    assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :browser_url_not_allowed}}} =
+             Runtime.validate_allowlist("https://docs.example.com.evil.test/guides", context, "read_page")
+
+    assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :browser_url_not_allowed}}} =
+             Runtime.validate_allowlist("https://docs.example.com/admin", context, "read_page")
+  end
+
   test "browser tools fail predictably when a target action is unavailable" do
     assert {:error, %Jidoka.Error.ExecutionError{phase: :browser}} =
              Runtime.delegate(Jido.Browser.Actions.MissingAction, %{}, %{})

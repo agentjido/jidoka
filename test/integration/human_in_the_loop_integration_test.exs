@@ -128,7 +128,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
              run_interrupted_turn(:approval_required, approval_ttl_ms: 10, clock: clock(5_000))
 
     interrupt = snapshot.turn_state.pending_interrupt
-    approval = Review.Response.approve(interrupt, responded_at_ms: 5_011)
+    approval = Review.Response.approve(interrupt, responded_at_ms: 5_000)
 
     assert {:error,
             %Jidoka.Error.ExecutionError{
@@ -139,7 +139,13 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
                 responded_at_ms: 5_011,
                 expires_at_ms: 5_010
               }
-            }} = Jidoka.resume(snapshot, approval: approval, llm: llm(), operations: operations())
+            }} =
+             Jidoka.resume(snapshot,
+               approval: approval,
+               llm: llm(),
+               operations: operations(),
+               clock: clock(5_011)
+             )
 
     assert interrupt_id == interrupt.id
     refute_received {:review_lookup_called, _id}

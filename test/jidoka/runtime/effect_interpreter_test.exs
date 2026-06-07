@@ -6,6 +6,15 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
   alias Jidoka.Runtime.{Capabilities, EffectInterpreter}
   alias Jidoka.Turn
 
+  defmodule BlockOperationControl do
+    @moduledoc false
+
+    use Jidoka.Control, name: "block_operation_control"
+
+    @impl true
+    def call(%Jidoka.Runtime.Controls.OperationContext{}), do: {:block, :blocked_by_control}
+  end
+
   test "records llm intents before calling capabilities and journals successful results" do
     intent = Effect.Intent.new(:llm, %{prompt: %{messages: []}})
     state = state_with_pending_effect(intent)
@@ -65,6 +74,96 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
              %{effect_kind: :operation, operation: "weather", error: %{category: :execution}},
              %{effect_kind: :operation, operation: "weather", error: %{category: :execution}}
            ] = timeline
+  end
+
+  test "times out and cancels hung capabilities" do
+    parent = self()
+    intent = Effect.Intent.new(:operation, %{name: "hung_tool", arguments: %{}})
+    state = state_with_pending_effect(intent)
+
+    operations = fn _intent, _journal, _ctx ->
+      send(parent, {:capability_started, self()})
+      Process.sleep(5_000)
+      {:ok, %{late: true}}
+    end
+
+    {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+    assert {:ok,
+            %Effect.Result{
+              status: :error,
+              output: %Jidoka.Error.ExecutionError{
+                details: %{
+                  reason: :capability_timeout,
+                  effect_kind: :operation,
+                  timeout_ms: 5
+                }
+              }
+            }, next_state} =
+             EffectInterpreter.interpret_pending(state, capabilities, capability_timeout_ms: 5)
+
+    assert_receive {:capability_started, capability_pid}
+    refute Process.alive?(capability_pid)
+    assert %Effect.Result{status: :error} = next_state.journal.results[intent.id]
+  end
+
+  test "capability process exits are isolated from the interpreter" do
+    intent = Effect.Intent.new(:operation, %{name: "crashing_tool", arguments: %{}})
+    state = state_with_pending_effect(intent)
+
+    operations = fn _intent, _journal, _ctx ->
+      Process.exit(self(), :kill)
+    end
+
+    {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+    assert {:ok,
+            %Effect.Result{
+              status: :error,
+              output: %Jidoka.Error.ExecutionError{
+                details: %{
+                  reason: :capability_exit,
+                  exit_reason: :killed
+                }
+              }
+            }, next_state} =
+             EffectInterpreter.interpret_pending(state, capabilities, capability_timeout_ms: 50)
+
+    assert %Effect.Result{status: :error} = next_state.journal.results[intent.id]
+  end
+
+  test "untrusted intent metadata cannot bypass operation controls" do
+    intent =
+      Effect.Intent.new(
+        :operation,
+        %{name: "dangerous_tool", arguments: %{}},
+        metadata: %{operation_controls_allowed: true}
+      )
+
+    state =
+      state_with_pending_effect(intent,
+        spec:
+          spec(
+            controls: %{
+              operation: %{
+                control: BlockOperationControl,
+                match: %{name: "dangerous_tool"}
+              }
+            }
+          )
+      )
+
+    operations = fn _intent, _journal, _ctx ->
+      flunk("operation capability must not be called when a control blocks")
+    end
+
+    {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              phase: :control,
+              details: %{reason: :control_blocked, boundary: :operation}
+            }} = EffectInterpreter.interpret_pending(state, capabilities)
   end
 
   test "reuses journaled results without calling capabilities again" do
@@ -152,18 +251,14 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
   end
 
   defp state_with_pending_effect(%Effect.Intent{} = intent, opts \\ []) do
-    base_state()
+    opts
+    |> base_state()
     |> Turn.State.set_pending_effects([intent])
     |> Map.put(:journal, Keyword.get(opts, :journal, Effect.Journal.new!()))
   end
 
-  defp base_state do
-    spec =
-      Agent.Spec.new!(
-        id: "effect_test_agent",
-        instructions: "Test effect interpreter.",
-        model: %{provider: :test, id: "model"}
-      )
+  defp base_state(opts \\ []) do
+    spec = Keyword.get_lazy(opts, :spec, &spec/0)
 
     plan = Turn.Plan.new!(spec)
     request = Turn.Request.new!(input: "Hello")
@@ -174,6 +269,16 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
       request: request,
       agent_state: request.agent_state
     )
+  end
+
+  defp spec(overrides \\ []) do
+    [
+      id: "effect_test_agent",
+      instructions: "Test effect interpreter.",
+      model: %{provider: :test, id: "model"}
+    ]
+    |> Keyword.merge(overrides)
+    |> Agent.Spec.new!()
   end
 
   defp missing_llm, do: fn _intent, _journal, _ctx -> {:error, :missing_llm} end

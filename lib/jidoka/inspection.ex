@@ -68,16 +68,16 @@ defmodule Jidoka.Inspection do
     |> Map.put(:kind, :plan)
   end
 
-  def inspect(%Turn.Result{} = result, _opts), do: turn_result_view(result)
-  def inspect(%Turn.State{} = state, _opts), do: turn_state_view(state)
-  def inspect(%AgentSnapshot{} = snapshot, _opts), do: snapshot_view(snapshot)
+  def inspect(%Turn.Result{} = result, opts), do: turn_result_view(result, opts)
+  def inspect(%Turn.State{} = state, opts), do: turn_state_view(state, opts)
+  def inspect(%AgentSnapshot{} = snapshot, opts), do: snapshot_view(snapshot, opts)
   def inspect(%Harness.Session{} = session, _opts), do: session_view(session)
   def inspect(%Harness.Replay{} = replay, _opts), do: replay_view(replay)
   def inspect(%Debug.RequestSummary{} = summary, _opts), do: request_summary_view(summary)
   def inspect(%Debug.ReplayDiagnostics{} = diagnostics, _opts), do: replay_diagnostics_view(diagnostics)
-  def inspect(%Effect.Journal{} = journal, _opts), do: journal_view(journal)
-  def inspect(%Effect.Intent{} = intent, _opts), do: intent_view(intent)
-  def inspect(%Effect.Result{} = result, _opts), do: effect_result_view(result)
+  def inspect(%Effect.Journal{} = journal, opts), do: journal_view(journal, opts)
+  def inspect(%Effect.Intent{} = intent, opts), do: intent_view(intent, opts)
+  def inspect(%Effect.Result{} = result, opts), do: effect_result_view(result, opts)
 
   def inspect(%Review.Interrupt{} = interrupt, _opts),
     do: review_view(:review_interrupt, interrupt)
@@ -140,36 +140,46 @@ defmodule Jidoka.Inspection do
     }
   end
 
-  defp turn_result_view(%Turn.Result{} = result) do
+  defp turn_result_view(%Turn.Result{} = result, opts) do
     %{
       kind: :turn,
       status: :finished,
       content: result.content,
       timeline: timeline(result.events),
-      journal: Jidoka.project(result.journal),
-      result: Jidoka.project(result)
+      journal: journal_view(result.journal, opts)
     }
+    |> maybe_put_full(:result, result, opts)
   end
 
-  defp turn_state_view(%Turn.State{} = state) do
+  defp turn_state_view(%Turn.State{} = state, opts) do
     %{
       kind: :turn_state,
       status: state.status,
       loop_index: state.loop_index,
       timeline: timeline(state.events),
-      journal: Jidoka.project(state.journal),
-      state: Jidoka.project(state)
+      journal: journal_view(state.journal, opts),
+      pending_effects: Enum.map(state.pending_effects, &intent_view(&1, opts)),
+      pending_interrupt: Jidoka.project(state.pending_interrupt)
     }
+    |> maybe_put_full(:state, state, opts)
   end
 
-  defp snapshot_view(%AgentSnapshot{} = snapshot) do
+  defp snapshot_view(%AgentSnapshot{} = snapshot, opts) do
     %{
       kind: :snapshot,
+      snapshot_id: snapshot.snapshot_id,
+      agent_id: snapshot.agent_id,
       cursor: Jidoka.project(snapshot.cursor),
+      status: snapshot.turn_state.status,
+      loop_index: snapshot.turn_state.loop_index,
       timeline: timeline(snapshot.turn_state.events),
-      journal: Jidoka.project(snapshot.turn_state.journal),
-      snapshot: Jidoka.project(snapshot)
+      journal: journal_view(snapshot.turn_state.journal, opts),
+      pending_effects: Enum.map(snapshot.turn_state.pending_effects, &intent_view(&1, opts)),
+      pending_review:
+        Jidoka.project(Map.get(snapshot.metadata, "pending_review", Map.get(snapshot.metadata, :pending_review))),
+      metadata: Jidoka.project(snapshot.metadata)
     }
+    |> maybe_put_full(:snapshot, snapshot, opts)
   end
 
   defp session_view(%Harness.Session{} = session) do
@@ -228,7 +238,7 @@ defmodule Jidoka.Inspection do
     |> Map.put(:kind, :replay_diagnostics)
   end
 
-  defp journal_view(%Effect.Journal{} = journal) do
+  defp journal_view(%Effect.Journal{} = journal, opts) do
     intents = journal.intents |> Map.values() |> Enum.sort_by(& &1.id)
     results = journal.results |> Map.values() |> Enum.sort_by(& &1.intent_id)
     result_ids = results |> Enum.map(& &1.intent_id) |> MapSet.new()
@@ -240,33 +250,34 @@ defmodule Jidoka.Inspection do
       incomplete_intents:
         intents
         |> Enum.reject(&MapSet.member?(result_ids, &1.id))
-        |> Enum.map(&Jidoka.project/1),
-      intents: Enum.map(intents, &Jidoka.project/1),
-      results: Enum.map(results, &Jidoka.project/1)
+        |> Enum.map(&intent_view(&1, opts)),
+      intents: Enum.map(intents, &intent_view(&1, opts)),
+      results: Enum.map(results, &effect_result_view(&1, opts))
     }
   end
 
-  defp intent_view(%Effect.Intent{} = intent) do
+  defp intent_view(%Effect.Intent{} = intent, opts) do
     %{
       kind: :effect_intent,
       effect_id: intent.id,
       effect_kind: intent.kind,
       idempotency: intent.idempotency,
       idempotency_key: intent.idempotency_key,
-      payload: Jidoka.project(intent.payload),
+      payload_keys: payload_keys(intent.payload),
       metadata: Jidoka.project(intent.metadata)
     }
+    |> maybe_put_full(:payload, intent.payload, opts)
   end
 
-  defp effect_result_view(%Effect.Result{} = result) do
+  defp effect_result_view(%Effect.Result{} = result, opts) do
     %{
       kind: :effect_result,
       intent_id: result.intent_id,
       effect_kind: result.kind,
       status: result.status,
-      output: Jidoka.project(result.output),
       metadata: Jidoka.project(result.metadata)
     }
+    |> maybe_put_full(:output, result.output, opts)
   end
 
   defp review_view(kind, review), do: Map.put(Jidoka.project(review), :kind, kind)
@@ -287,6 +298,17 @@ defmodule Jidoka.Inspection do
   end
 
   defp timeline(events), do: Jidoka.Trace.timeline(events)
+
+  defp maybe_put_full(map, key, value, opts) do
+    if Keyword.get(opts, :full?, false) do
+      Map.put(map, key, Jidoka.project(value))
+    else
+      map
+    end
+  end
+
+  defp payload_keys(%{} = payload), do: payload |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
+  defp payload_keys(_payload), do: []
 
   defp latest_cursor(%Harness.Session{} = session) do
     case Harness.Session.latest_snapshot(session) do
