@@ -249,6 +249,8 @@ defmodule Jidoka.Agent do
     Map.merge(base, normalize_operation_context(Keyword.get(opts, :operation_context, %{})))
   end
 
+  defp normalize_operation_context(%Jidoka.Context{} = context), do: Jidoka.Context.runtime(context)
+
   defp normalize_operation_context(context) when is_list(context) do
     if Keyword.keyword?(context), do: Map.new(context), else: %{}
   end

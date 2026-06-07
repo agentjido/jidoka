@@ -118,8 +118,8 @@ defmodule Jidoka.SubagentTest do
   test "subagent operations execute a child Jidoka turn" do
     test_pid = self()
 
-    llm = fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _ctx ->
-      send(test_pid, {:llm_called, payload.agent_id, payload.prompt.context})
+    llm = fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, ctx ->
+      send(test_pid, {:llm_called, payload.agent_id, payload.prompt.context, Jidoka.Context.runtime(ctx)})
 
       case {payload.agent_id, count_results(journal, :llm)} do
         {"parent_agent", 0} ->
@@ -165,11 +165,11 @@ defmodule Jidoka.SubagentTest do
              }
            ] = result.agent_state.operation_results
 
-    assert_receive {:llm_called, "parent_agent", %{}}
+    assert_receive {:llm_called, "parent_agent", %{}, %{}}
 
-    assert_receive {:llm_called, "evidence_agent", %{:tenant => "acme", "task_scope" => "runtime"}}
+    assert_receive {:llm_called, "evidence_agent", %{:tenant => "acme", "task_scope" => "runtime"}, %{}}
 
-    refute_received {:llm_called, "evidence_agent", %{secret: "hidden"}}
+    refute_received {:llm_called, "evidence_agent", %{secret: "hidden"}, _runtime}
   end
 
   test "subagents delegate a bounded child loop and return results to the parent" do

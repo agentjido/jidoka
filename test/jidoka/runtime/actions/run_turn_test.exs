@@ -79,9 +79,9 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest do
     assert opts[:operation_context].jido_agent == context.agent
     assert opts[:operation_context].jido_agent_server_pid == self()
     assert opts[:operation_context].test_pid == self()
-    assert opts[:operation_context].domain == Jidoka.Runtime.Actions.RunTurnTest
     assert opts[:session_id] == "session-1"
-    assert opts[:operation_context].user_id == "user-1"
+    refute Map.has_key?(opts[:operation_context], :domain)
+    refute Map.has_key?(opts[:operation_context], :user_id)
   end
 
   test "writes hibernation snapshots into Jido agent state" do

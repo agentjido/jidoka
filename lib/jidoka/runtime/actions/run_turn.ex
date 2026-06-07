@@ -69,8 +69,8 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
     |> get(:runtime_opts, [])
     |> normalize_runtime_opts()
     |> maybe_put_session_id(params)
-    |> Keyword.update(:operation_context, operation_context(params, context), fn existing ->
-      Map.merge(operation_context(params, context), normalize_context(existing))
+    |> Keyword.update(:operation_context, operation_context(context), fn existing ->
+      Map.merge(operation_context(context), normalize_operation_context(existing))
     end)
   end
 
@@ -92,6 +92,11 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
   defp normalize_context(context) when is_map(context), do: context
   defp normalize_context(_context), do: %{}
 
+  defp normalize_operation_context(%Jidoka.Context{} = context), do: Jidoka.Context.runtime(context)
+  defp normalize_operation_context(context) when is_list(context), do: Map.new(context)
+  defp normalize_operation_context(context) when is_map(context), do: context
+  defp normalize_operation_context(_context), do: %{}
+
   defp run_agent_turn(agent_module, request, opts) do
     agent_module.run_turn(request, opts)
   rescue
@@ -100,11 +105,10 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
     kind, reason -> {:error, {kind, reason}}
   end
 
-  defp operation_context(params, context) do
+  defp operation_context(context) do
     %{}
     |> maybe_put(:jido_agent, Map.get(context, :agent))
     |> maybe_put(:jido_agent_server_pid, Map.get(context, :agent_server_pid))
-    |> Map.merge(normalize_context(get(params, :context, %{})))
   end
 
   defp state_from_run_result({:ok, %Turn.Result{} = result}, %Turn.Request{} = request) do

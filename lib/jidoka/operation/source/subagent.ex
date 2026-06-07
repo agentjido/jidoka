@@ -184,7 +184,7 @@ defmodule Jidoka.Operation.Source.Subagent do
   end
 
   defp child_context(%__MODULE__{} = source, parent_context, arguments) do
-    runtime = runtime_context(parent_context)
+    runtime = runtime_context(source, parent_context)
 
     forwarded_data =
       parent_context
@@ -204,8 +204,10 @@ defmodule Jidoka.Operation.Source.Subagent do
   defp public_context_data(context) when is_map(context), do: context
   defp public_context_data(_context), do: %{}
 
-  defp runtime_context(%Context{} = context), do: Context.runtime(context)
-  defp runtime_context(_context), do: %{}
+  defp runtime_context(%__MODULE__{forward_context: :public}, %Context{} = context),
+    do: Context.runtime(context)
+
+  defp runtime_context(%__MODULE__{}, _context), do: %{}
 
   defp forward_context(context, :public) when is_map(context), do: context
   defp forward_context(_context, :none), do: %{}

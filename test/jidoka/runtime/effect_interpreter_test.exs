@@ -19,16 +19,21 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     intent = Effect.Intent.new(:llm, %{prompt: %{messages: []}})
     state = state_with_pending_effect(intent)
 
-    llm = fn received_intent, %Effect.Journal{} = journal, _ctx ->
+    llm = fn received_intent, %Effect.Journal{} = journal, ctx ->
       assert received_intent.id == intent.id
       assert Map.has_key?(journal.intents, intent.id)
+      assert Jidoka.Context.get_runtime(ctx, :llm_only) == true
+      assert Jidoka.Context.get_runtime(ctx, :operation_only) == nil
       {:ok, %{type: :final, content: "ok"}}
     end
 
     {:ok, capabilities} = Capabilities.new(llm: llm)
 
     assert {:ok, %Effect.Result{} = result, %Turn.State{} = next_state} =
-             EffectInterpreter.interpret_pending(state, capabilities)
+             EffectInterpreter.interpret_pending(state, capabilities,
+               llm_context: %{llm_only: true},
+               operation_context: %{operation_only: true}
+             )
 
     assert result.intent_id == intent.id
     assert result.kind == :llm

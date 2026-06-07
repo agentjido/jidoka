@@ -75,17 +75,19 @@ defmodule Jidoka.Context do
   def from_input(%__MODULE__{} = context), do: new(context)
   def from_input(input), do: new(input)
 
-  @doc "Builds a request context from caller-provided application data."
+  @doc """
+  Builds a request context from caller-provided application data.
+
+  Passing an existing `Jidoka.Context` uses only its public data. Use
+  `from_input/1` when trusted code needs to preserve runtime fields.
+  """
   @spec from_data(t() | keyword() | map() | nil, keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_data(data, attrs \\ [])
 
   def from_data(%__MODULE__{} = context, attrs) do
-    attrs = Schema.normalize_attrs(attrs)
-
     context
-    |> Map.from_struct()
-    |> Map.merge(attrs)
-    |> new()
+    |> data()
+    |> from_data(attrs)
   end
 
   def from_data(nil, attrs), do: from_data(%{}, attrs)

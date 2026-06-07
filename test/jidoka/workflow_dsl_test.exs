@@ -46,6 +46,7 @@ defmodule Jidoka.WorkflowDslTest do
     @moduledoc false
 
     def normalize(%{topic: topic, suffix: suffix}, _context), do: {:ok, %{prompt: "#{topic}:#{suffix}"}}
+    def runtime_flag(_params, context), do: {:ok, %{trusted: Jidoka.Context.get_runtime(context, :trusted, :missing)}}
     def raw(%{value: value}, _context), do: %{value: value}
     def error(%{reason: reason}, _context), do: {:error, reason}
     def raises(_params, _context), do: raise("workflow function raised")
@@ -256,6 +257,27 @@ defmodule Jidoka.WorkflowDslTest do
     end
 
     output from(:normalize, :prompt)
+  end
+
+  defmodule RuntimeWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:runtime_workflow)
+      description "Reports whether trusted runtime context reached the workflow."
+      input Zoi.object(%{topic: Zoi.string()})
+    end
+
+    steps do
+      function :inspect_runtime, {Fns, :runtime_flag, 2},
+        input: %{
+          topic: input(:topic)
+        }
+    end
+
+    output from(:inspect_runtime, :trusted)
   end
 
   defmodule ActionWorkflow do
@@ -1298,6 +1320,28 @@ defmodule Jidoka.WorkflowDslTest do
                }),
                journal,
                ctx
+             )
+
+    assert {:ok, runtime_source} =
+             WorkflowSource.new(
+               workflow: RuntimeWorkflow,
+               as: :runtime_workflow,
+               forward_context: {:only, [:suffix]},
+               result: :output
+             )
+
+    assert {:ok, runtime_capability} = WorkflowSource.capability(runtime_source, [])
+
+    runtime_ctx =
+      Jidoka.Context.from_data!(%{suffix: "parent"},
+        runtime: %{trusted: true}
+      )
+
+    assert {:ok, :missing} =
+             runtime_capability.(
+               Effect.Intent.new(:operation, %{name: "runtime_workflow", arguments: %{"topic" => "runic"}}),
+               journal,
+               runtime_ctx
              )
 
     assert {:ok, source} = WorkflowSource.new(workflow: ActionWorkflow, as: :math_workflow)

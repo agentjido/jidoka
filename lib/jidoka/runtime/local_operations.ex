@@ -18,7 +18,7 @@ defmodule Jidoka.Runtime.LocalOperations do
 
       operations =
         Jidoka.Runtime.LocalOperations.operations(%{
-          "local_time" => fn %{"city" => city} -> {:ok, %{city: city, time: "09:30"}} end
+          "local_time" => fn %{"city" => city}, _ctx -> {:ok, %{city: city, time: "09:30"}} end
         })
   """
   @spec operations(%{required(String.t() | atom()) => handler()}) ::

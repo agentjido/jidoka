@@ -142,6 +142,23 @@ defmodule Jidoka.DataStructsTest do
     assert %Jidoka.Context{data: %{tenant: "northwind"}, runtime: %{client: :trusted}} =
              Jidoka.Context.from_data!(%{tenant: "northwind"}, runtime: %{client: :trusted})
 
+    trusted_context =
+      Jidoka.Context.from_data!(%{tenant: "northwind"},
+        runtime: %{client: :trusted},
+        boundary: :operation,
+        operation: "refund_order"
+      )
+
+    assert %Jidoka.Context{
+             data: %{tenant: "northwind"},
+             runtime: %{},
+             boundary: nil,
+             operation: nil
+           } = Jidoka.Context.from_data!(trusted_context)
+
+    assert %Jidoka.Context{runtime: %{client: :trusted}} =
+             Jidoka.Context.from_data!(trusted_context, runtime: %{client: :trusted})
+
     assert %{tenant: "northwind"} =
              Jidoka.Context.from_data!(%{tenant: "northwind"}, runtime: %{client: :trusted})
              |> Jidoka.Context.sanitize()
@@ -445,6 +462,21 @@ defmodule Jidoka.DataStructsTest do
              )
 
     assert Jidoka.Context.data(context) == %{tenant: "t1"}
+
+    trusted_context =
+      Jidoka.Context.from_data!(%{tenant: "t1"},
+        runtime: %{client: :trusted},
+        boundary: :operation,
+        operation: "refund_order"
+      )
+
+    assert {:ok, %Turn.Request{context: %Jidoka.Context{} = context}} =
+             Turn.Request.from_input(input: "Hello", context: trusted_context)
+
+    assert Jidoka.Context.data(context) == %{tenant: "t1"}
+    assert Jidoka.Context.runtime(context) == %{}
+    assert context.boundary == nil
+    assert context.operation == nil
   end
 
   test "turn request id generation can be injected" do

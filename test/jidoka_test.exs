@@ -197,6 +197,31 @@ defmodule JidokaTest do
     refute_received {:local_time_called, _city}
   end
 
+  test "agent operation context accepts trusted context runtime" do
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
+      case count_results(journal, :llm) do
+        0 ->
+          {:ok, %{type: :operation, name: "local_time", arguments: %{"city" => "Chicago"}}}
+
+        1 ->
+          {:ok, %{type: :final, content: "Chicago time is 09:30."}}
+      end
+    end
+
+    operation_context =
+      Jidoka.Context.from_data!(%{test_pid: :public_data},
+        runtime: %{test_pid: self()}
+      )
+
+    assert {:ok, "Chicago time is 09:30."} =
+             TimeAgent.chat("What time is it in Chicago?",
+               llm: llm,
+               operation_context: operation_context
+             )
+
+    assert_received {:local_time_called, "Chicago"}
+  end
+
   test "hibernates at a phase boundary and resumes from the snapshot" do
     default_model = Jidoka.Config.default_model()
 

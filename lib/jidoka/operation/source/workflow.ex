@@ -181,7 +181,7 @@ defmodule Jidoka.Operation.Source.Workflow do
 
   defp child_context(%__MODULE__{} = source, parent_context, arguments) do
     arguments = normalize_context(arguments)
-    runtime = runtime_context(parent_context)
+    runtime = runtime_context(source, parent_context)
 
     forwarded_data =
       parent_context
@@ -204,8 +204,10 @@ defmodule Jidoka.Operation.Source.Workflow do
   defp public_context_data(%Context{} = context), do: Context.data(context)
   defp public_context_data(context), do: normalize_context(context)
 
-  defp runtime_context(%Context{} = context), do: Context.runtime(context)
-  defp runtime_context(_context), do: %{}
+  defp runtime_context(%__MODULE__{forward_context: :public}, %Context{} = context),
+    do: Context.runtime(context)
+
+  defp runtime_context(%__MODULE__{}, _context), do: %{}
 
   defp ensure_operation_name(%__MODULE__{name: expected}, name) do
     if name == expected, do: :ok, else: {:error, {:missing_operation_handler, name}}

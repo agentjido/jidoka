@@ -173,7 +173,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          journal,
          opts
        ) do
-    ctx = RuntimeContext.llm!(state, runtime: Keyword.get(opts, :operation_context, %{}))
+    ctx = RuntimeContext.llm!(state, runtime: Keyword.get(opts, :llm_context, %{}))
 
     case invoke_capability(llm, intent, journal, ctx, state, opts) do
       {:ok, output} ->
