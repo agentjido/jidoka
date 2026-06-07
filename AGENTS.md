@@ -23,3 +23,7 @@ V1 reference.
 - `mix deps.get`
 - `mix format`
 - `mix test`
+
+## Release Hygiene
+
+- Do not modify `CHANGELOG.md`; release notes are generated from Git history during release, so keep changes focused on proper Conventional Commits.
