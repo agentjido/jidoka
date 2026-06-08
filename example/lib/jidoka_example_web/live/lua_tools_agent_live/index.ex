@@ -20,7 +20,11 @@ defmodule JidokaExampleWeb.LuaToolsAgentLive.Index do
     %{id: "jido", label: "Jido", path: "lib/jidoka_example/jido.ex"},
     %{id: "application", label: "Application", path: "lib/jidoka_example/application.ex"},
     %{id: "agent", label: "Agent", path: "lib/jidoka_example/lua_tools_agent/agent.ex"},
-    %{id: "catalog", label: "Action Catalog", path: "lib/jidoka_example/lua_tools_agent/catalog.ex"},
+    %{
+      id: "catalog",
+      label: "Action Catalog",
+      path: "lib/jidoka_example/lua_tools_agent/catalog.ex"
+    },
     %{
       id: "catalog_source",
       label: "Catalog Source",

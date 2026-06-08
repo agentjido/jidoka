@@ -22,13 +22,7 @@ defmodule Jidoka.Workflow.Lua.Plan.Ref do
         resolve_var(var_name, known_value(value, "path", []), vars)
 
       true ->
-        value
-        |> Enum.reduce_while({:ok, %{}}, fn {key, nested}, {:ok, acc} ->
-          case resolve(nested, state, vars) do
-            {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
-            {:error, reason} -> {:halt, {:error, reason}}
-          end
-        end)
+        resolve_map(value, state, vars)
     end
   end
 
@@ -43,6 +37,15 @@ defmodule Jidoka.Workflow.Lua.Plan.Ref do
   end
 
   def resolve(value, _state, _vars), do: {:ok, value}
+
+  defp resolve_map(value, state, vars) do
+    Enum.reduce_while(value, {:ok, %{}}, fn {key, nested}, {:ok, acc} ->
+      case resolve(nested, state, vars) do
+        {:ok, resolved} -> {:cont, {:ok, Map.put(acc, key, resolved)}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
 
   defp do_collect(%{} = value, refs) do
     case from(value) do

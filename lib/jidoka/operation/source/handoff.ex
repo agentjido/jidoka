@@ -182,9 +182,6 @@ defmodule Jidoka.Operation.Source.Handoff do
 
   defp public_context_data(%Context{} = context), do: Context.data(context)
 
-  defp public_context_data(context) when is_map(context), do: context
-  defp public_context_data(_context), do: %{}
-
   defp target_agent_id(%__MODULE__{target: :auto, name: name}, nil, _context), do: {:ok, name}
 
   defp target_agent_id(%__MODULE__{target: :auto, name: name}, conversation_id, _context) do
@@ -250,7 +247,6 @@ defmodule Jidoka.Operation.Source.Handoff do
   end
 
   defp runtime_value(%Context{} = context, key), do: Context.get_runtime(context, key)
-  defp runtime_value(context, key), do: context_value(context, key)
 
   defp maybe_inspect(nil), do: nil
   defp maybe_inspect(value) when is_binary(value), do: value

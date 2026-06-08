@@ -19,7 +19,7 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
     :subagent,
     :handoff
   ]
-  @valid_idempotencies OperationSpec.valid_idempotencies()
+  @valid_idempotencies [:pure, :idempotent, :dedupe, :reconcile, :unsafe_once]
 
   @schema Zoi.struct(
             __MODULE__,

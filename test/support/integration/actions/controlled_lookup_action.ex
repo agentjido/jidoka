@@ -13,8 +13,9 @@ defmodule Jidoka.IntegrationSupport.ControlledLookupAction do
   def run(params, context) do
     id = Map.get(params, :id) || Map.get(params, "id")
 
-    if pid = Jidoka.Context.get(context, :test_pid) || Jidoka.Context.get_runtime(context, :test_pid) do
-      send(pid, {:controlled_lookup_called, id})
+    case Jidoka.Context.get(context, :test_pid) || Jidoka.Context.get_runtime(context, :test_pid) do
+      nil -> :ok
+      pid -> send(pid, {:controlled_lookup_called, id})
     end
 
     {:ok, %{id: id, value: "controlled-value", canary: "jidoka_controls_live_canary_123"}}

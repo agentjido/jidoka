@@ -198,25 +198,29 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          journal,
          opts
        ) do
-    with {:ok, ctx} <- RuntimeContext.operation(state, intent, opts) do
-      case invoke_capability(operations, intent, journal, ctx, state, opts) do
-        {:ok, output} ->
-          {:ok, Effect.Result.ok(intent, output)}
+    case RuntimeContext.operation(state, intent, opts) do
+      {:ok, ctx} ->
+        operations
+        |> invoke_capability(intent, journal, ctx, state, opts)
+        |> operation_capability_result(intent)
 
-        {:error, reason} ->
-          {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
-
-        other ->
-          {:ok,
-           Effect.Result.error(
-             intent,
-             normalize_capability_error({:invalid_capability_result, other}, intent)
-           )}
-      end
-    else
       {:error, reason} ->
         {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
     end
+  end
+
+  defp operation_capability_result({:ok, output}, %Effect.Intent{} = intent),
+    do: {:ok, Effect.Result.ok(intent, output)}
+
+  defp operation_capability_result({:error, reason}, %Effect.Intent{} = intent),
+    do: {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
+
+  defp operation_capability_result(other, %Effect.Intent{} = intent) do
+    {:ok,
+     Effect.Result.error(
+       intent,
+       normalize_capability_error({:invalid_capability_result, other}, intent)
+     )}
   end
 
   defp invoke_capability(capability, intent, journal, ctx, state, opts),

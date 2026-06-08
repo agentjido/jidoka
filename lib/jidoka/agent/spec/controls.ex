@@ -3,19 +3,20 @@ defmodule Jidoka.Agent.Spec.Controls do
   Policy controls attached to a Jidoka agent definition.
   """
 
-  alias Jidoka.Agent.Spec.Controls.Input
-  alias Jidoka.Agent.Spec.Controls.Operation
-  alias Jidoka.Agent.Spec.Controls.Output
   alias Jidoka.Schema
+
+  @input_module :"Elixir.Jidoka.Agent.Spec.Controls.Input"
+  @operation_module :"Elixir.Jidoka.Agent.Spec.Controls.Operation"
+  @output_module :"Elixir.Jidoka.Agent.Spec.Controls.Output"
 
   @schema Zoi.struct(
             __MODULE__,
             %{
               max_turns: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
               timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
-              inputs: Zoi.array(Zoi.lazy({Input, :schema, []})) |> Zoi.default([]),
-              operations: Zoi.array(Zoi.lazy({Operation, :schema, []})) |> Zoi.default([]),
-              outputs: Zoi.array(Zoi.lazy({Output, :schema, []})) |> Zoi.default([]),
+              inputs: Zoi.array(Zoi.lazy({@input_module, :schema, []})) |> Zoi.default([]),
+              operations: Zoi.array(Zoi.lazy({@operation_module, :schema, []})) |> Zoi.default([]),
+              outputs: Zoi.array(Zoi.lazy({@output_module, :schema, []})) |> Zoi.default([]),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -38,9 +39,9 @@ defmodule Jidoka.Agent.Spec.Controls do
          {:ok, operations} <-
            normalize_operations(control_entries(attrs, :operations, :operation)),
          {:ok, outputs} <- normalize_outputs(control_entries(attrs, :outputs, :output)),
-         :ok <- validate_unique_boundary_controls(inputs, Input, :duplicate_input_control),
+         :ok <- validate_unique_boundary_controls(inputs, @input_module, :duplicate_input_control),
          :ok <- validate_unique_operations(operations),
-         :ok <- validate_unique_boundary_controls(outputs, Output, :duplicate_output_control) do
+         :ok <- validate_unique_boundary_controls(outputs, @output_module, :duplicate_output_control) do
       attrs =
         attrs
         |> drop_input_aliases()
@@ -91,15 +92,15 @@ defmodule Jidoka.Agent.Spec.Controls do
   defp normalize_positive_integer(value), do: {:error, {:invalid_control_positive_integer, value}}
 
   defp normalize_inputs(inputs),
-    do: normalize_boundary_controls(inputs, Input, :invalid_input_controls)
+    do: normalize_boundary_controls(inputs, @input_module, :invalid_input_controls)
 
   defp normalize_outputs(outputs),
-    do: normalize_boundary_controls(outputs, Output, :invalid_output_controls)
+    do: normalize_boundary_controls(outputs, @output_module, :invalid_output_controls)
 
   defp normalize_boundary_controls(controls, module, _error_reason) when is_list(controls) do
     controls
     |> Enum.reduce_while({:ok, []}, fn control, {:ok, controls} ->
-      case module.from_input(control) do
+      case apply(module, :from_input, [control]) do
         {:ok, control} -> {:cont, {:ok, [control | controls]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
@@ -119,7 +120,7 @@ defmodule Jidoka.Agent.Spec.Controls do
   defp normalize_operations(operations) when is_list(operations) do
     operations
     |> Enum.reduce_while({:ok, []}, fn operation, {:ok, operations} ->
-      case Operation.from_input(operation) do
+      case apply(@operation_module, :from_input, [operation]) do
         {:ok, operation} -> {:cont, {:ok, [operation | operations]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
@@ -153,7 +154,7 @@ defmodule Jidoka.Agent.Spec.Controls do
 
   defp validate_unique_operations(operations) do
     operations
-    |> Enum.reduce_while(MapSet.new(), fn %Operation{} = operation, seen ->
+    |> Enum.reduce_while(MapSet.new(), fn operation, seen ->
       key = {operation.control, operation.match}
 
       if MapSet.member?(seen, key) do

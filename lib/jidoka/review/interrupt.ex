@@ -6,12 +6,24 @@ defmodule Jidoka.Review.Interrupt do
   may continue after an application supplies a review response.
   """
 
-  alias Jidoka.Agent.Spec.Controls.Operation, as: OperationControl
-  alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Schema
 
   @boundaries [:operation]
   @effect_kinds [:operation]
+  @operation_kinds [
+    :action,
+    :operation,
+    :tool,
+    :ash_resource,
+    :browser,
+    :skill,
+    :mcp,
+    :catalog,
+    :workflow,
+    :subagent,
+    :handoff
+  ]
+  @idempotencies [:pure, :idempotent, :dedupe, :reconcile, :unsafe_once]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -27,9 +39,9 @@ defmodule Jidoka.Review.Interrupt do
               effect_id: Schema.non_empty_string(),
               effect_kind: Schema.atom_enum(@effect_kinds),
               operation: Schema.non_empty_string(),
-              operation_kind: Schema.atom_enum(OperationControl.valid_kinds()) |> Zoi.default(:operation),
+              operation_kind: Schema.atom_enum(@operation_kinds) |> Zoi.default(:operation),
               arguments: Zoi.map() |> Zoi.default(%{}),
-              idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.nullish(),
+              idempotency: Schema.atom_enum(@idempotencies) |> Zoi.nullish(),
               idempotency_key: Zoi.string() |> Zoi.nullish(),
               created_at_ms: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),
               expires_at_ms: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),

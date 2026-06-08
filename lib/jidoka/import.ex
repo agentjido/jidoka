@@ -53,17 +53,21 @@ defmodule Jidoka.Import do
   """
   @spec import(String.t(), [option()]) :: {:ok, Spec.t()} | {:error, term()}
   def import(contents, opts \\ []) when is_binary(contents) and is_list(opts) do
-    with {:ok, decoded, format} <- Decoder.decode(contents, opts) do
-      opts =
-        Keyword.put(opts, :source, %{
-          "kind" => "string",
-          "format" => Atom.to_string(format)
-        })
+    case Decoder.decode(contents, opts) do
+      {:ok, decoded, format} ->
+        opts =
+          Keyword.put(opts, :source, %{
+            "kind" => "string",
+            "format" => Atom.to_string(format)
+          })
 
-      load(decoded, opts)
-    else
-      {:error, %_{} = error} -> {:error, error}
-      {:error, reason} -> {:error, import_error(reason, field: :format)}
+        load(decoded, opts)
+
+      {:error, %_{} = error} ->
+        {:error, error}
+
+      {:error, reason} ->
+        {:error, import_error(reason, field: :format)}
     end
   end
 

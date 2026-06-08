@@ -162,15 +162,13 @@ defmodule Jidoka.Workflow.Lua do
   defp decode_lua_args(arg, state), do: [Lua.decode!(state, arg)]
 
   defp normalize_lua_value(value) when is_list(value) do
-    cond do
-      keyword_pairs?(value) ->
-        value
-        |> Enum.map(fn {key, nested} -> {to_string(key), normalize_lua_value(nested)} end)
-        |> Map.new()
-        |> maybe_array_from_numeric_keys()
-
-      true ->
-        Enum.map(value, &normalize_lua_value/1)
+    if keyword_pairs?(value) do
+      value
+      |> Enum.map(fn {key, nested} -> {to_string(key), normalize_lua_value(nested)} end)
+      |> Map.new()
+      |> maybe_array_from_numeric_keys()
+    else
+      Enum.map(value, &normalize_lua_value/1)
     end
   end
 

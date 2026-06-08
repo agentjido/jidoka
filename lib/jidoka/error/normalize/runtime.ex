@@ -8,9 +8,8 @@ defmodule Jidoka.Error.Normalize.Runtime do
     with :error <- normalize_approval_reason(reason, context),
          :error <- normalize_result_reason(reason, context),
          :error <- normalize_llm_reason(reason, context),
-         :error <- normalize_operation_reason(reason, context),
-         :error <- normalize_agent_server_reason(reason, context) do
-      :error
+         :error <- normalize_operation_reason(reason, context) do
+      normalize_agent_server_reason(reason, context)
     end
   end
 

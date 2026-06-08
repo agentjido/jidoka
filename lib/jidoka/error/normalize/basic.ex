@@ -10,9 +10,8 @@ defmodule Jidoka.Error.Normalize.Basic do
     with :error <- normalize_agent_reason(reason, context),
          :error <- normalize_context_reason(reason, context),
          :error <- normalize_turn_reason(reason, context),
-         :error <- normalize_effect_reason(reason, context),
-         :error <- normalize_control_reason(reason, context) do
-      :error
+         :error <- normalize_effect_reason(reason, context) do
+      normalize_control_reason(reason, context)
     end
   end
 

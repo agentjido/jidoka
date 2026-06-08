@@ -14,6 +14,20 @@ defmodule Jidoka.Context do
   alias Jidoka.Turn
 
   @boundaries [:input, :operation, :output]
+  @operation_kinds [
+    :action,
+    :operation,
+    :tool,
+    :ash_resource,
+    :browser,
+    :skill,
+    :mcp,
+    :catalog,
+    :workflow,
+    :subagent,
+    :handoff
+  ]
+  @operation_idempotencies [:pure, :idempotent, :dedupe, :reconcile, :unsafe_once]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -31,13 +45,13 @@ defmodule Jidoka.Context do
               request_metadata: Zoi.map() |> Zoi.default(%{}),
               operation: Zoi.string() |> Zoi.nullish(),
               operation_kind:
-                Schema.atom_enum(Jidoka.Agent.Spec.Controls.Operation.valid_kinds())
+                Schema.atom_enum(@operation_kinds)
                 |> Zoi.nullish(),
               operation_source: Zoi.string() |> Zoi.nullish(),
               arguments: Zoi.map() |> Zoi.default(%{}),
               operation_metadata: Zoi.map() |> Zoi.default(%{}),
               idempotency:
-                Schema.atom_enum(Jidoka.Agent.Spec.Operation.valid_idempotencies())
+                Schema.atom_enum(@operation_idempotencies)
                 |> Zoi.nullish(),
               idempotency_key: Zoi.string() |> Zoi.nullish(),
               spec: Zoi.any() |> Zoi.nullish(),

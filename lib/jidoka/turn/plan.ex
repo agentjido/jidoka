@@ -1,7 +1,6 @@
 defmodule Jidoka.Turn.Plan do
   @moduledoc "Executable data compiled from `Jidoka.Agent.Spec`."
 
-  alias Jidoka.Agent
   alias Jidoka.Config
   alias Jidoka.Schema
 
@@ -17,7 +16,7 @@ defmodule Jidoka.Turn.Plan do
   @schema Zoi.struct(
             __MODULE__,
             %{
-              spec: Zoi.lazy({Agent.Spec, :schema, []}),
+              spec: Zoi.lazy({:"Elixir.Jidoka.Agent.Spec", :schema, []}),
               workflow_profile: Schema.atom_enum(@workflow_profiles) |> Zoi.default(:tool_loop),
               max_model_turns: Zoi.integer() |> Zoi.positive() |> Zoi.default(8),
               timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.default(30_000),
@@ -34,22 +33,22 @@ defmodule Jidoka.Turn.Plan do
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
-  @spec new(Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
-  def new(%Agent.Spec{} = spec) do
-    with :ok <- Agent.Spec.validate_operation_policies(spec) do
+  @spec new(Jidoka.Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
+  def new(%Jidoka.Agent.Spec{} = spec) do
+    with :ok <- Jidoka.Agent.Spec.validate_operation_policies(spec) do
       Schema.parse(@schema, new_attrs(spec))
     end
   end
 
-  @spec new!(Agent.Spec.t()) :: t()
-  def new!(%Agent.Spec{} = spec) do
+  @spec new!(Jidoka.Agent.Spec.t()) :: t()
+  def new!(%Jidoka.Agent.Spec{} = spec) do
     case new(spec) do
       {:ok, plan} -> plan
       {:error, reason} -> raise ArgumentError, "invalid turn plan: #{inspect(reason)}"
     end
   end
 
-  defp new_attrs(%Agent.Spec{} = spec) do
+  defp new_attrs(%Jidoka.Agent.Spec{} = spec) do
     defaults = spec.runtime_defaults
 
     %{

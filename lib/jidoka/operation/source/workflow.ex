@@ -202,7 +202,6 @@ defmodule Jidoka.Operation.Source.Workflow do
   end
 
   defp public_context_data(%Context{} = context), do: Context.data(context)
-  defp public_context_data(context), do: normalize_context(context)
 
   defp runtime_context(%__MODULE__{forward_context: :public}, %Context{} = context),
     do: Context.runtime(context)

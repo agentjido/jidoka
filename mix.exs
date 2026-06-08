@@ -26,6 +26,7 @@ defmodule Jidoka.MixProject do
           ~r/^Jidoka\.Agent\.Dsl(\.|$)/,
           ~r/^Jidoka\.Agent\.Verifiers\./,
           ~r/^Jidoka\.Kino(\.|$)/,
+          ~r/^Jidoka\.Workflow\.Dsl(\.|$)/,
           ~r/^Jidoka\.IntegrationSupport\./,
           ~r/^Jidoka\.TestSupport(\.|$)/
         ],

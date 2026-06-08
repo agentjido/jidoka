@@ -201,8 +201,6 @@ defmodule Jidoka.Operation.Source.Subagent do
   end
 
   defp public_context_data(%Context{} = context), do: Context.data(context)
-  defp public_context_data(context) when is_map(context), do: context
-  defp public_context_data(_context), do: %{}
 
   defp runtime_context(%__MODULE__{forward_context: :public}, %Context{} = context),
     do: Context.runtime(context)

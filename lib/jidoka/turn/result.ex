@@ -88,6 +88,4 @@ defmodule Jidoka.Turn.Result do
     |> Enum.map(&to_string/1)
     |> Enum.sort()
   end
-
-  defp context_keys(_context), do: []
 end

@@ -103,19 +103,28 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec.Graph do
         {:ok, visited}
 
       true ->
-        visiting = Map.put(visiting, step_id, true)
-
-        with {:ok, visited} <-
-               graph
-               |> Map.get(step_id, [])
-               |> Enum.reduce_while({:ok, visited}, fn dependency, {:ok, visited} ->
-                 case visit_step(dependency, graph, visiting, visited) do
-                   {:ok, visited} -> {:cont, {:ok, visited}}
-                   {:error, _reason} = error -> {:halt, error}
-                 end
-               end) do
-          {:ok, Map.put(visited, step_id, true)}
-        end
+        visit_new_step(step_id, graph, visiting, visited)
     end
   end
+
+  defp visit_new_step(step_id, graph, visiting, visited) do
+    visiting = Map.put(visiting, step_id, true)
+
+    graph
+    |> Map.get(step_id, [])
+    |> visit_dependencies(graph, visiting, visited)
+    |> mark_visited(step_id)
+  end
+
+  defp visit_dependencies(dependencies, graph, visiting, visited) do
+    Enum.reduce_while(dependencies, {:ok, visited}, fn dependency, {:ok, visited} ->
+      case visit_step(dependency, graph, visiting, visited) do
+        {:ok, visited} -> {:cont, {:ok, visited}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  defp mark_visited({:ok, visited}, step_id), do: {:ok, Map.put(visited, step_id, true)}
+  defp mark_visited({:error, _reason} = error, _step_id), do: error
 end

@@ -11,8 +11,9 @@ defmodule Jidoka.JidoAgentServerTest.Support.LocalTimeAction do
   def run(params, context) do
     city = Map.get(params, :city) || Map.get(params, "city") || "Chicago"
 
-    if pid = Jidoka.Context.get(context, :test_pid) || Jidoka.Context.get_runtime(context, :test_pid) do
-      send(pid, {:server_local_time_called, city})
+    case Jidoka.Context.get(context, :test_pid) || Jidoka.Context.get_runtime(context, :test_pid) do
+      nil -> :ok
+      pid -> send(pid, {:server_local_time_called, city})
     end
 
     {:ok, %{city: city, time: "09:30"}}
