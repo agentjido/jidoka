@@ -72,7 +72,7 @@ defmodule Jidoka.Workflow.Lua.Policy do
   end
 
   @spec lua_options(t()) :: keyword()
-  def lua_options(%__MODULE__{} = policy), do: [max_call_depth: policy.max_call_depth]
+  def lua_options(%__MODULE__{}), do: []
 
   @spec public(t()) :: map()
   def public(%__MODULE__{} = policy) do
