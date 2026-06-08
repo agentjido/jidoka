@@ -47,29 +47,34 @@ defmodule Jidoka.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      # Jido ecosystem
       {:ash_jido, "~> 1.0"},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
-      {:ex_doc, "~> 0.38", only: :dev, runtime: false},
-      {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
-      {:git_ops, "~> 2.9", only: :dev, runtime: false},
-      {:jason, "~> 1.4"},
       {:jido, "~> 2.3"},
       {:jido_action, "~> 2.3"},
       {:jido_ai, "~> 2.2"},
       {:jido_browser, "~> 2.1"},
       {:jido_memory, "~> 1.0"},
       {:jido_mcp, "~> 1.0"},
+
+      # Runtime support
+      {:jason, "~> 1.4"},
       {:lua, "~> 0.3"},
       {:req_llm, "~> 1.12"},
       {:runic, "~> 0.1.0-alpha.7"},
       {:splode, "~> 0.3.0"},
-      {:sourceror, "~> 1.7", only: [:dev, :test], runtime: false},
       {:spark, "~> 2.6"},
       {:yaml_elixir, "~> 2.12"},
       {:ymlr, "~> 5.0"},
-      {:zoi, "~> 0.18"}
+      {:zoi, "~> 0.18"},
+
+      # Development, test, and release tooling
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
+      {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
+      {:ex_doc, "~> 0.38", only: :dev, runtime: false},
+      {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
+      {:git_ops, "~> 2.9", only: :dev, runtime: false},
+      {:sourceror, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
