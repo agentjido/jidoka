@@ -19,15 +19,11 @@ defmodule Jidoka.Trace do
   def timeline(events, opts) when is_list(events) do
     policy = policy!(opts)
 
-    if policy.enabled do
-      events
-      |> Enum.with_index()
-      |> Enum.map(fn {event, index} -> timeline_event(event, index) end)
-      |> Enum.filter(&sampled?(&1, policy))
-      |> Enum.map(&redact(&1, policy))
-    else
-      []
-    end
+    events
+    |> Enum.with_index()
+    |> Enum.map(fn {event, index} -> timeline_event(event, index) end)
+    |> Enum.filter(&sampled?(&1, policy))
+    |> Enum.map(&redact(&1, policy))
   end
 
   def timeline(_events, _opts), do: []

@@ -188,15 +188,15 @@ defmodule Jidoka.Operation.Source.Handoff do
     {:ok, "#{conversation_id}:#{name}"}
   end
 
-  defp target_agent_id(%__MODULE__{target: {:peer, peer_id}}, _conversation_id, context) do
-    resolve_peer_id(peer_id, context)
-  end
-
   defp target_agent_id(%__MODULE__{target: {:peer, {:context, key}}}, _conversation_id, context) do
     case context_value(context, key) do
       value when is_binary(value) and value != "" -> {:ok, value}
       _other -> {:error, {:missing_handoff_peer_context, key}}
     end
+  end
+
+  defp target_agent_id(%__MODULE__{target: {:peer, peer_id}}, _conversation_id, context) do
+    resolve_peer_id(peer_id, context)
   end
 
   defp resolve_peer_id(peer_id, _context) when is_binary(peer_id) and peer_id != "",

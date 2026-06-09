@@ -58,7 +58,7 @@ defmodule Jidoka.BrowserTest do
     assert {:error, _reason} = Browser.normalize_mode("interactive")
 
     assert_raise ArgumentError, ~r/browser mode must be :search or :read_only/, fn ->
-      Browser.tool_modules(:interactive)
+      apply(Browser, :tool_modules, [:interactive])
     end
   end
 
