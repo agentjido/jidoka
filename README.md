@@ -1,35 +1,100 @@
 # Jidoka
 
-Jidoka is a headless coding-session runtime with a small public facade.
+Jidoka is a local-first, OTP-native runtime for durable coding sessions on top
+of Jido.
 
-`Jidoka.Agent` is the primary public API.
-`Jidoka` only exposes session lifecycle helpers.
+It owns the session loop around a coding task:
 
-## Example
+1. open a workspace session
+2. submit a run
+3. execute one or more attempts
+4. verify the result
+5. let an operator approve, retry, reject, or cancel
+6. keep typed snapshots, events, artifacts, and outcomes
+
+The core runtime is headless. The CLI and IEx helpers are thin entrypoints over
+the public `Jidoka` and `Jidoka.Agent` APIs.
+
+## Installation
 
 ```elixir
-{:ok, session_ref} = Jidoka.start_session(id: "repo-main", cwd: "/path/to/repo")
-
-{:ok, request} = Jidoka.Agent.ask(session_ref, "inspect the failing tests")
-{:ok, _result} = Jidoka.Agent.await(session_ref, request.id)
-
-{:ok, branch_id} = Jidoka.Agent.branch(session_ref, label: "before-refactor")
-{:ok, snapshot} = Jidoka.Agent.navigate(session_ref, branch_id)
-
-{:ok, latest} = Jidoka.Agent.snapshot(session_ref)
-:ok = Jidoka.close_session(session_ref)
+def deps do
+  [
+    {:jidoka, "~> 0.1"}
+  ]
+end
 ```
 
-## IEx
+## CLI
 
-For the first interactive shell, use `iex -S mix` and the thin helper module:
+Build the escript:
+
+```sh
+mix escript.build
+```
+
+Run the deterministic MVP fixture corpus:
+
+```sh
+./jidoka eval-mvp
+```
+
+Send a prompt through the Jido AI coding adapter:
+
+```sh
+export OPENAI_API_KEY="..."
+./jidoka prompt "summarize the current repo state"
+```
+
+Or choose a model explicitly:
+
+```sh
+export JIDOKA_MODEL="openai:gpt-4.1-mini"
+./jidoka prompt "explain the last failing test"
+```
+
+By default, prompt execution runs with read-only workspace tools:
+`list_files`, `read_file`, `grep`, `git_status`, and `git_diff`.
+
+Set `JIDOKA_PERMISSION_MODE=workspace_write` to enable controlled mutation and
+project-check tools: `write_file`, `edit_file`, `mix_test`, and `mix_check`.
+Jidoka does not expose an arbitrary shell tool in this mode.
+
+```sh
+JIDOKA_PERMISSION_MODE=workspace_write ./jidoka prompt "fix the focused test"
+```
+
+## Runtime API
+
+```elixir
+{:ok, session} = Jidoka.start_session(id: "repo-main", cwd: File.cwd!())
+
+{:ok, %{run: run}} =
+  Jidoka.submit(session, "inspect the failing tests",
+    verification_adapter: Jidoka.Verifier.NoopAdapter
+  )
+
+{:ok, snapshot} = Jidoka.run_snapshot(session, run.id)
+
+case snapshot.run.status do
+  :awaiting_approval -> :ok = Jidoka.approve(session, run.id)
+  :failed -> :ok = Jidoka.retry(session, run.id)
+  _status -> :ok
+end
+
+{:ok, latest} = Jidoka.snapshot_session(session)
+:ok = Jidoka.close_session(session)
+```
+
+For interactive IEx use:
 
 ```elixir
 iex -S mix
 
 {:ok, ref} = Jidoka.IEx.open(id: "repo-main", cwd: File.cwd!())
 {:ok, sub} = Jidoka.IEx.watch(ref)
-{:ok, req} = Jidoka.IEx.ask(ref, "inspect the failing tests")
+{:ok, %{run: run}} = Jidoka.IEx.submit(ref, "inspect the failing tests")
+{:ok, run_snap} = Jidoka.IEx.run_snapshot(ref, run.id)
 {:ok, snap} = Jidoka.IEx.snapshot(ref)
 flush()
 :ok = Jidoka.IEx.unwatch(sub)
@@ -37,45 +102,14 @@ flush()
 
 ## MVP Evaluation Harness
 
-Run the fixture corpus for ST-MVP-012 with:
+Run the fixture corpus with:
 
 ```sh
 mix eval_mvp
 ```
 
-Or build the escript and run the same command through `jidoka`:
-
-```sh
-mix escript.build
-./jidoka eval-mvp
-```
-
-You can also send a direct prompt through the CLI:
-
-```sh
-export OPENAI_API_KEY="..."
-./jidoka prompt "summarize the current repo state"
-```
-
-If you want to pick the exact model explicitly, set `JIDOKA_MODEL` instead:
-
-```sh
-export JIDOKA_MODEL="openai:gpt-4.1-mini"
-./jidoka prompt "explain the last failing test"
-```
-
-The prompt command boots a minimal `Jido.AI.Agent`, streams runtime activity to
-the terminal, auto-approves the passed verification step, and prints the final
-response. Prompt reports are written into the temporary CLI workspace under
-`$TMPDIR/jidoka-cli`.
-
-By default, `jidoka prompt` runs with read-only workspace tools enabled:
-`list_files`, `read_file`, `grep`, and `git_status`. The active workspace is the
-directory where you invoke the command. Permission mode defaults to `read_only`
-and can be set with `JIDOKA_PERMISSION_MODE`.
-
-The command loads `priv/fixtures/mvp_012_fixtures.exs`, runs each scenario through
-the public `Jidoka` facade, and prints a compact outcome line per scenario.
+The command loads `priv/fixtures/mvp_012_fixtures.exs`, drives each scenario
+through the public facade, and prints one compact outcome line per scenario.
 
 Each line includes:
 
@@ -88,14 +122,10 @@ Each line includes:
 - `artifacts`: number of artifact records in the snapshot
 - `steps`: operator actions the fixture executed, in order
 
-Output example:
+## Scope
 
-```text
-scenario=passing_task | status=completed | outcome=:approved | attempts=1 | verification=:passed | artifact_refs=[] | artifacts=0 | steps=  :approve
-```
+Jidoka 0.1 is intentionally focused on the durable single-operator coding loop.
+It is not a generic multi-agent orchestration platform, merge engine, policy
+marketplace, or Phoenix UI framework.
 
-## Design Notes
-
-- external commands are normalized into canonical signals
-- the runtime emits signals and keeps a stable snapshot API for adapters
-- `Jido.Thread` is the audit log conceptually, while authoritative state is runtime metadata plus durable history
+See `guides/concepts.md` for the core runtime model.

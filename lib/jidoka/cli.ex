@@ -2,6 +2,7 @@ defmodule Jidoka.CLI do
   @moduledoc false
 
   alias Jidoka.Hardening.EvaluationCommand
+  alias Jidoka.ChatCommand
   alias Jidoka.PromptCommand
   alias Jidoka.RuntimeBootstrap
 
@@ -30,6 +31,9 @@ defmodule Jidoka.CLI do
 
       ["eval_mvp"] ->
         run_eval_mvp()
+
+      ["chat"] ->
+        ChatCommand.run()
 
       ["prompt" | prompt_parts] ->
         run_prompt(prompt_parts)
@@ -95,9 +99,11 @@ defmodule Jidoka.CLI do
         jidoka help
         jidoka version
         jidoka eval-mvp
+        jidoka chat
         jidoka prompt "summarize the current repo state"
 
       Commands:
+        chat      Start an interactive jidoka prompt loop.
         eval-mvp  Run the MVP evaluation fixture corpus.
         prompt    Execute a prompt with the Jido AI coding agent.
         version   Print the jidoka version.

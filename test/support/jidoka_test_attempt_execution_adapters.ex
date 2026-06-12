@@ -149,3 +149,75 @@ defmodule Jidoka.TestAttemptExecutionAdapters.ToolProgress do
     end
   end
 end
+
+defmodule Jidoka.TestAttemptExecutionAdapters.MutationProgress do
+  @moduledoc "Stub adapter that executes mutation and check tools for progress coverage."
+
+  @behaviour Jidoka.AttemptExecution
+
+  alias Jidoka.AttemptExecution.{AttemptOutput, AttemptSpec}
+
+  @impl true
+  def execute(%AttemptSpec{} = spec) do
+    File.mkdir_p!(Path.join(spec.environment_lease.workspace_path, "test"))
+
+    File.write!(
+      Path.join(spec.environment_lease.workspace_path, "mix.exs"),
+      """
+      defmodule ToolProgress.MixProject do
+        use Mix.Project
+
+        def project do
+          [app: :tool_progress, version: "0.1.0", elixir: "~> 1.19", deps: []]
+        end
+      end
+      """
+    )
+
+    File.write!(
+      Path.join(spec.environment_lease.workspace_path, "test/test_helper.exs"),
+      "ExUnit.start()\n"
+    )
+
+    File.write!(
+      Path.join(spec.environment_lease.workspace_path, "test/tool_progress_test.exs"),
+      """
+      defmodule ToolProgressTest do
+        use ExUnit.Case
+
+        test "works" do
+          assert true
+        end
+      end
+      """
+    )
+
+    context = %{
+      jidoka_attempt_spec: spec,
+      workspace_path: spec.environment_lease.workspace_path,
+      permission_mode: :workspace_write
+    }
+
+    with {:ok, _write_result} <-
+           Jidoka.Tools.WriteFile.run(
+             %{path: "lib/generated.txt", contents: "generated\n"},
+             context
+           ),
+         {:ok, _check_result} <-
+           Jidoka.Tools.MixCheck.run(%{checks: ["test"], timeout_ms: 120_000}, context) do
+      {:ok,
+       %AttemptOutput{
+         status: :succeeded,
+         metadata: %{adapter: :mutation_progress}
+       }}
+    else
+      {:error, reason} ->
+        {:ok,
+         %AttemptOutput{
+           status: :terminal_failed,
+           metadata: %{adapter: :mutation_progress},
+           error: reason
+         }}
+    end
+  end
+end

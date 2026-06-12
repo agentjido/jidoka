@@ -696,6 +696,8 @@ defmodule Jidoka.TuiServerTest do
     if Process.alive?(pid) do
       TuiServer.stop(pid)
     end
+  catch
+    :exit, {:noproc, _} -> :ok
   end
 
   defp unique_id(prefix) do

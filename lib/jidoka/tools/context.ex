@@ -3,6 +3,7 @@ defmodule Jidoka.Tools.Context do
 
   alias Jidoka.AttemptExecution
   alias Jidoka.AttemptExecution.AttemptSpec
+  alias Jidoka.SessionServer
 
   @spec workspace_path(map()) :: String.t()
   def workspace_path(context) when is_map(context) do
@@ -26,6 +27,25 @@ defmodule Jidoka.Tools.Context do
     case fetch_any(context, [:jidoka_attempt_spec, "jidoka_attempt_spec"]) do
       %AttemptSpec{} = spec -> spec
       _ -> nil
+    end
+  end
+
+  @spec attempt_workspace_path(map()) :: String.t() | nil
+  def attempt_workspace_path(context) when is_map(context) do
+    case attempt_spec(context) do
+      %AttemptSpec{environment_lease: %{workspace_path: workspace_path}} -> workspace_path
+      nil -> nil
+    end
+  end
+
+  @spec persist_artifact(map(), map()) :: :ok | {:error, term()}
+  def persist_artifact(context, artifact) when is_map(context) and is_map(artifact) do
+    case attempt_spec(context) do
+      %AttemptSpec{attempt_id: attempt_id} ->
+        SessionServer.persist_attempt_artifacts(attempt_id, [artifact])
+
+      nil ->
+        :ok
     end
   end
 

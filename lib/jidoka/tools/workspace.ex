@@ -7,8 +7,22 @@ defmodule Jidoka.Tools.Workspace do
          {:ok, expanded_path} <- expand_user_path(workspace_realpath, path),
          {:ok, target_realpath} <- realpath(expanded_path, :path),
          :ok <- ensure_within_workspace(workspace_realpath, target_realpath),
+         :ok <- ensure_no_blocked_segments(workspace_realpath, target_realpath),
          :ok <- ensure_no_symlinks(workspace_realpath, target_realpath) do
       {:ok, target_realpath}
+    end
+  end
+
+  @spec resolve_write_path(String.t(), String.t()) :: {:ok, String.t()} | {:error, map()}
+  def resolve_write_path(workspace_path, path)
+      when is_binary(workspace_path) and is_binary(path) do
+    with {:ok, workspace_realpath} <- realpath(workspace_path, :workspace),
+         {:ok, expanded_path} <- expand_user_path(workspace_realpath, path),
+         :ok <- ensure_file_target(workspace_realpath, expanded_path),
+         :ok <- ensure_within_workspace(workspace_realpath, expanded_path),
+         :ok <- ensure_no_blocked_segments(workspace_realpath, expanded_path),
+         :ok <- ensure_no_symlinks_for_write(workspace_realpath, expanded_path) do
+      {:ok, expanded_path}
     end
   end
 
@@ -139,6 +153,32 @@ defmodule Jidoka.Tools.Workspace do
     end
   end
 
+  defp ensure_file_target(workspace_realpath, target_path) do
+    relative = Path.relative_to(target_path, workspace_realpath)
+
+    cond do
+      relative in ["", "."] ->
+        {:error, %{type: :invalid_file_path, path: target_path}}
+
+      String.ends_with?(target_path, "/") ->
+        {:error, %{type: :invalid_file_path, path: target_path}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp ensure_no_blocked_segments(workspace_realpath, target_realpath) do
+    target_realpath
+    |> Path.relative_to(workspace_realpath)
+    |> Path.split()
+    |> Enum.find(&ignored_path?/1)
+    |> case do
+      nil -> :ok
+      segment -> {:error, %{type: :blocked_path, segment: segment, path: target_realpath}}
+    end
+  end
+
   defp ensure_no_symlinks(workspace_realpath, target_realpath) do
     target_realpath
     |> Path.relative_to(workspace_realpath)
@@ -155,6 +195,43 @@ defmodule Jidoka.Tools.Workspace do
 
         {:error, reason} ->
           {:halt, {:error, %{type: :path_not_found, path: next_path, reason: reason}}}
+      end
+    end)
+    |> case do
+      path when is_binary(path) -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp ensure_no_symlinks_for_write(workspace_realpath, target_path) do
+    target_path
+    |> Path.relative_to(workspace_realpath)
+    |> Path.split()
+    |> Enum.reduce_while(workspace_realpath, fn part, current_path ->
+      next_path = Path.join(current_path, part)
+
+      case file_type(next_path) do
+        {:ok, :symlink} ->
+          {:halt, {:error, %{type: :symlink_path, path: next_path}}}
+
+        {:ok, :directory} ->
+          {:cont, next_path}
+
+        {:ok, :regular} ->
+          if next_path == target_path do
+            {:cont, next_path}
+          else
+            {:halt, {:error, %{type: :path_parent_not_directory, path: next_path}}}
+          end
+
+        {:ok, type} ->
+          {:halt, {:error, %{type: :unsupported_file_type, path: next_path, file_type: type}}}
+
+        {:error, :enoent} ->
+          {:halt, next_path}
+
+        {:error, reason} ->
+          {:halt, {:error, %{type: :path_stat_failed, path: next_path, reason: reason}}}
       end
     end)
     |> case do

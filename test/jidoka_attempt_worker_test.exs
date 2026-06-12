@@ -3,7 +3,7 @@ defmodule JidokaAttemptWorkerTest do
 
   alias Jidoka.Bus
   alias Jidoka.SessionServer
-  alias Jidoka.TestAttemptExecutionAdapters.{Failure, Success, ToolProgress}
+  alias Jidoka.TestAttemptExecutionAdapters.{Failure, MutationProgress, Success, ToolProgress}
   alias Jidoka.TestVerificationAdapters.{RetryableFailed, TerminalFailed}
 
   test "attempt worker streams progress, completion, and verifier pass updates run state" do
@@ -104,6 +104,43 @@ defmodule JidokaAttemptWorkerTest do
              :tool_started,
              :tool_completed
            ]
+  end
+
+  test "attempt worker records mutation and verification tool progress durably" do
+    session_id = unique_id("attempt-worker-mutation-progress")
+    on_exit(fn -> SessionServer.close(session_id) end)
+
+    assert {:ok, ^session_id} =
+             SessionServer.open(id: session_id, cwd: "/tmp/attempt-worker-mutation-progress")
+
+    assert {:ok, %{run: run}} =
+             SessionServer.submit(
+               session_id,
+               "write a fixture file and run checks",
+               execution_adapter: MutationProgress
+             )
+
+    assert :ok = await_attempt_status(session_id, run.id, :succeeded, 500)
+
+    {:ok, run_snapshot} = SessionServer.run_snapshot(session_id, run.id)
+    latest_attempt = latest_attempt(run_snapshot)
+
+    {:ok, log} = Bus.get_log(path: event_path(session_id))
+
+    progress =
+      Enum.filter(log, fn entry ->
+        entry.signal.type == :attempt_progress &&
+          entry.signal.payload[:attempt_id] == latest_attempt.id
+      end)
+
+    assert Enum.any?(progress, &(&1.signal.payload[:metadata][:tool] == "write_file"))
+    assert Enum.any?(progress, &(&1.signal.payload[:metadata][:tool] == "mix_check"))
+    assert Enum.any?(progress, &(&1.signal.payload[:label] == :verification_step_completed))
+
+    assert Enum.any?(
+             run_snapshot.artifacts,
+             &(&1.type == :verifier_report and &1.status == :ready)
+           )
   end
 
   test "attempt worker emits failure event when adapter returns error" do

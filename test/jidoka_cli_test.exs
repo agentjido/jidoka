@@ -12,6 +12,7 @@ defmodule JidokaCLITest do
       end)
 
     assert output =~ "jidoka eval-mvp"
+    assert output =~ "jidoka chat"
     assert output =~ "jidoka prompt"
     assert output =~ "jidoka version"
   end
@@ -79,5 +80,17 @@ defmodule JidokaCLITest do
     assert output =~ "unknown command: wat"
     assert output =~ "jidoka eval-mvp"
     assert output =~ "jidoka prompt"
+  end
+
+  test "chat handles slash commands without requiring model configuration" do
+    output =
+      capture_io("/help\n/status\n/model\n/quit\n", fn ->
+        assert Jidoka.CLI.run(["chat"]) == 0
+      end)
+
+    assert output =~ "jidoka chat"
+    assert output =~ "/status"
+    assert output =~ "turns=0"
+    assert output =~ "model="
   end
 end

@@ -11,14 +11,16 @@ defmodule Jidoka.Application do
 
   @impl true
   def start(_type, _args) do
-    children = [
-      {Registry, keys: :unique, name: Jidoka.Registry},
-      Jidoka.SessionSupervisor,
-      Jidoka.AttemptSupervisor,
-      Jidoka.Bus,
-      Jidoka.SessionServer
-    ]
+    with :ok <- Jidoka.RuntimeBootstrap.prepare_tzdata() do
+      children = [
+        {Registry, keys: :unique, name: Jidoka.Registry},
+        Jidoka.SessionSupervisor,
+        Jidoka.AttemptSupervisor,
+        Jidoka.Bus,
+        Jidoka.SessionServer
+      ]
 
-    Supervisor.start_link(children, strategy: :one_for_one, name: Jidoka.Supervisor)
+      Supervisor.start_link(children, strategy: :one_for_one, name: Jidoka.Supervisor)
+    end
   end
 end

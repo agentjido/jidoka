@@ -14,17 +14,25 @@ defmodule Jidoka.RuntimeBootstrap do
 
   @spec prepare_tzdata() :: :ok | {:error, term()}
   def prepare_tzdata do
-    :ok = load_application(:tzdata)
+    case load_application(:tzdata) do
+      :ok ->
+        data_dir = Path.join(System.tmp_dir!(), @tzdata_dir_name)
+        release_dir = Path.join(data_dir, "release_ets")
 
-    data_dir = Path.join(System.tmp_dir!(), @tzdata_dir_name)
-    release_dir = Path.join(data_dir, "release_ets")
+        File.mkdir_p!(release_dir)
 
-    File.mkdir_p!(release_dir)
+        with :ok <- seed_tzdata_release_dir(release_dir) do
+          Application.put_env(:tzdata, :autoupdate, :disabled)
+          Application.put_env(:tzdata, :data_dir, data_dir)
+          :ok
+        end
 
-    with :ok <- seed_tzdata_release_dir(release_dir) do
-      Application.put_env(:tzdata, :autoupdate, :disabled)
-      Application.put_env(:tzdata, :data_dir, data_dir)
-      :ok
+      {:error, reason}
+      when reason in [{:not_loaded, :tzdata}, {~c"no such file or directory", ~c"tzdata.app"}] ->
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -139,6 +147,7 @@ defmodule Jidoka.RuntimeBootstrap do
     case Application.load(app) do
       :ok -> :ok
       {:error, {:already_loaded, ^app}} -> :ok
+      {:error, reason} -> {:error, reason}
     end
   end
 end

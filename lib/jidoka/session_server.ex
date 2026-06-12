@@ -763,7 +763,7 @@ defmodule Jidoka.SessionServer do
         attempt_number: attempt.attempt_number,
         task_pack: run.task_pack,
         environment_lease: lease,
-        metadata: Map.put(attempt.metadata || %{}, :source, :attempt_worker),
+        metadata: Map.put(attempt.metadata, :source, :attempt_worker),
         adapter: attempt_adapter,
         verification_adapter: verifier_adapter
       }

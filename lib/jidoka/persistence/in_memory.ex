@@ -324,9 +324,26 @@ defmodule Jidoka.Persistence.InMemory do
     end
   end
 
-  defp put_record(%__MODULE__{} = state, table, id, record) do
-    Map.update!(state, table, &Map.put(&1, id, record))
-  end
+  defp put_record(%__MODULE__{} = state, :sessions, id, record),
+    do: %{state | sessions: Map.put(state.sessions, id, record)}
+
+  defp put_record(%__MODULE__{} = state, :runs, id, record),
+    do: %{state | runs: Map.put(state.runs, id, record)}
+
+  defp put_record(%__MODULE__{} = state, :attempts, id, record),
+    do: %{state | attempts: Map.put(state.attempts, id, record)}
+
+  defp put_record(%__MODULE__{} = state, :environment_leases, id, record),
+    do: %{state | environment_leases: Map.put(state.environment_leases, id, record)}
+
+  defp put_record(%__MODULE__{} = state, :artifacts, id, record),
+    do: %{state | artifacts: Map.put(state.artifacts, id, record)}
+
+  defp put_record(%__MODULE__{} = state, :verification_results, id, record),
+    do: %{state | verification_results: Map.put(state.verification_results, id, record)}
+
+  defp put_record(%__MODULE__{} = state, :outcomes, id, record),
+    do: %{state | outcomes: Map.put(state.outcomes, id, record)}
 
   defp fetch_by_id(records, id) do
     case Map.fetch(records, id) do

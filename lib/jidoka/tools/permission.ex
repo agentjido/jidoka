@@ -43,19 +43,7 @@ defmodule Jidoka.Tools.Permission do
     mode = normalize_mode(mode)
     requirement = normalize_requirement(requirement)
 
-    cond do
-      mode == :allow ->
-        true
-
-      mode == :prompt and requirement == :read ->
-        true
-
-      mode == :prompt ->
-        false
-
-      true ->
-        mode_rank(mode) >= requirement_rank(requirement)
-    end
+    mode_rank(mode) >= requirement_rank(requirement)
   end
 
   @spec check(term(), term()) :: :ok | {:error, map()}
@@ -76,10 +64,10 @@ defmodule Jidoka.Tools.Permission do
   end
 
   defp mode_rank(:read_only), do: 0
+  defp mode_rank(:prompt), do: 0
   defp mode_rank(:workspace_write), do: 1
   defp mode_rank(:danger_full_access), do: 2
   defp mode_rank(:allow), do: 3
-  defp mode_rank(:prompt), do: -1
 
   defp requirement_rank(:read), do: 0
   defp requirement_rank(:write), do: 1
