@@ -4,4 +4,6 @@ Application.put_env(
   "test snapshot signing secret must be at least thirty-two bytes"
 )
 
+Application.put_env(:tzdata, :autoupdate, :disabled)
+
 ExUnit.start(exclude: [:live])

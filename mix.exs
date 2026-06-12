@@ -58,7 +58,7 @@ defmodule Jidoka.MixProject do
 
       # Runtime support
       {:jason, "~> 1.4"},
-      {:lua, "~> 0.3"},
+      {:lua, "~> 1.0.0-rc.0"},
       {:req_llm, "~> 1.12"},
       {:runic, "~> 0.1.0-alpha.7"},
       {:splode, "~> 0.3.0"},
