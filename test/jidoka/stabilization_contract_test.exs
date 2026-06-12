@@ -55,6 +55,8 @@ end
 defmodule Jidoka.StabilizationContractTest do
   use ExUnit.Case, async: true
 
+  @uuid7_regex ~r/\A[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Handoff
@@ -160,7 +162,10 @@ defmodule Jidoka.StabilizationContractTest do
 
   test "id generation keeps entropy and injected generator failures at the boundary" do
     assert {:ok, "turn_" <> random} = Id.generate("turn")
-    assert byte_size(random) > 0
+    assert random =~ @uuid7_regex
+    assert Id.uuid7(0x018DF6F01234, <<0xABC::12, 0x0123456789ABCDEF::62, 0::6>>) ==
+             "018df6f0-1234-7abc-8123-456789abcdef"
+    assert Id.uuid7(1, <<0::80>>) < Id.uuid7(2, <<0::80>>)
 
     assert {:ok, "turn_static"} = Id.generate("turn", fn "turn" -> "turn_static" end)
 

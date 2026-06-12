@@ -75,7 +75,7 @@ Durable memory entry available to prompt assembly.
 
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `id` | non-empty string | generated `"mem_…"` | Stable id for upsert/dedupe. |
+| `id` | non-empty string | generated prefixed UUIDv7 (`"mem_…"`) | Stable id for upsert/dedupe. |
 | `agent_id` | non-empty string | required | Owning agent (matches `Spec.id`). |
 | `session_id` | non-empty string or `nil` | `nil` | Session scope when applicable. |
 | `content` | non-empty string | required | Content injected into the prompt or context. |
@@ -141,7 +141,7 @@ dispatching.
 
 ## Common Patterns
 
-- **Reuse `Entry.new!/1` to generate ids.** The default `"mem_…"` id is enough
+- **Reuse `Entry.new!/1` to generate ids.** The default prefixed UUIDv7 `"mem_…"` id is enough
   for most stores; supply your own only when integrating with an external
   primary key.
 - **Carry routing data in `metadata`.** Stores should ignore unknown keys, so

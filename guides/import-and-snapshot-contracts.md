@@ -120,7 +120,7 @@ Serializable semantic snapshot used for hibernate/resume.
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `schema_version` | positive integer | `1` (current) | Compatibility boundary. `AgentSnapshot.schema_version/0` returns the supported value. |
-| `snapshot_id` | non-empty string | generated `"snap_…"` | Stable id for storage and traces. |
+| `snapshot_id` | non-empty string | generated prefixed UUIDv7 (`"snap_…"`) | Stable id for storage and traces. |
 | `agent_id` | non-empty string | required | Mirrors `Spec.id`. |
 | `cursor` | `Turn.Cursor.t()` | required | Next safe resume boundary. |
 | `turn_state` | `Turn.State.t()` | required | Full turn state at snapshot time. |
@@ -142,7 +142,7 @@ Serializable envelope for running an agent across requests.
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `schema_version` | positive integer | `1` (current) | Compatibility boundary. `Harness.Session.schema_version/0` returns the supported value. |
-| `session_id` | non-empty string | generated `"sess_…"` | Stable session id. |
+| `session_id` | non-empty string | generated prefixed UUIDv7 (`"sess_…"`) | Stable session id. |
 | `agent_id` | non-empty string | required | Mirrors `Spec.id`. |
 | `spec` | `Agent.Spec.t()` | required | The compiled spec the session runs. |
 | `status` | `:new \| :running \| :hibernated \| :waiting \| :finished \| :error` | `:new` | Lifecycle marker. |

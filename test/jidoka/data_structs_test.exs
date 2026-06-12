@@ -21,6 +21,8 @@ end
 defmodule Jidoka.DataStructsTest do
   use ExUnit.Case, async: true
 
+  @turn_uuid7_regex ~r/\Aturn_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Agent.Spec.Operation
@@ -449,7 +451,7 @@ defmodule Jidoka.DataStructsTest do
   test "turn requests normalize string input and preserve supplied state" do
     assert {:ok, %Turn.Request{} = request} = Turn.Request.from_input("Hello")
     assert request.input == "Hello"
-    assert request.request_id =~ "turn_"
+    assert request.request_id =~ @turn_uuid7_regex
     assert %Agent.State{} = request.agent_state
 
     agent_state = Agent.State.new!(messages: [%{role: :user, content: "prior"}])

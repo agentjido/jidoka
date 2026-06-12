@@ -1,6 +1,8 @@
 defmodule Jidoka.AgentViewTest do
   use ExUnit.Case, async: true
 
+  @agent_view_uuid7_regex ~r/\Aagent_view_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+
   alias Jidoka.Agent
   alias Jidoka.AgentView
   alias Jidoka.Event
@@ -105,7 +107,7 @@ defmodule Jidoka.AgentViewTest do
 
     assert AgentView.default_conversation_id(%{conversation_id: "!!!"}) == "default"
     assert AgentView.normalize_id(nil, "fallback") == "fallback"
-    assert AgentView.request_id() =~ "agent_view_"
+    assert AgentView.request_id() =~ @agent_view_uuid7_regex
     assert AgentView.lifecycle_hooks() == [:before_turn, :after_turn, :snapshot]
   end
 

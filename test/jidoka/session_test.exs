@@ -12,6 +12,8 @@ end
 defmodule Jidoka.SessionTest do
   use ExUnit.Case, async: true
 
+  @chat_uuid7_regex ~r/\Achat_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
+
   alias Jidoka.Harness
   alias Jidoka.Harness.Session, as: HarnessSession
   alias Jidoka.Harness.Store.InMemory
@@ -61,7 +63,7 @@ defmodule Jidoka.SessionTest do
     end
 
     assert {:ok, request} = Session.chat_async(session, "Hello", llm: llm, stream: true)
-    assert request.request_id =~ "chat_"
+    assert request.request_id =~ @chat_uuid7_regex
     assert request.session_id == "async-chat-123"
 
     stream = Jidoka.stream(request, stream_event_timeout_ms: 100)

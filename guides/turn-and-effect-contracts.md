@@ -102,7 +102,7 @@ Input envelope for one turn.
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `input` | non-empty string | required | User-facing input passed to prompt assembly. |
-| `request_id` | non-empty string | generated `"turn_…"` | Stable id used by snapshots and logs. |
+| `request_id` | non-empty string | generated prefixed UUIDv7 (`"turn_…"`) | Stable id used by snapshots and logs. |
 | `agent_state` | `Agent.State.t()` | empty agent state | Carries history across turns. |
 | `context` | map | `%{}` | Per-turn context map (validated against `spec.context_schema`). |
 | `metadata` | map | `%{}` | Caller metadata. |
