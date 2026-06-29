@@ -96,7 +96,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
               arguments: arguments,
               request_id: state.request.request_id,
               loop_index: state.loop_index,
-              metadata: %{"batch_index" => index, "batch_size" => batch_size}
+              metadata: %{batch_index: index, batch_size: batch_size}
             )
 
           {:ok, operation_effect(state, operation, operation_request, index, batch_size)}
@@ -146,7 +146,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
         arguments
       ])
 
-    {idempotency_key, %{"batch_index" => index, "batch_size" => batch_size}}
+    {idempotency_key, %{batch_index: index, batch_size: batch_size}}
   end
 
   defp effect_operation_name(%Effect.Intent{payload: payload}) do

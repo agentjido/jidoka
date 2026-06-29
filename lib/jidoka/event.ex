@@ -89,6 +89,7 @@ defmodule Jidoka.Event do
             coerce: true
           )
 
+  @type data :: %{optional(atom()) => term()}
   @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
@@ -101,10 +102,20 @@ defmodule Jidoka.Event do
   def events, do: Map.keys(@event_defaults)
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs), do: Schema.parse(@schema, attrs)
+  def new(attrs) do
+    with {:ok, %__MODULE__{} = event} <- Schema.parse(@schema, attrs),
+         :ok <- validate_data_keys(event) do
+      {:ok, event}
+    end
+  end
 
   @spec new!(keyword() | map()) :: t()
-  def new!(attrs), do: Schema.parse!(@schema, attrs, "event")
+  def new!(attrs) do
+    case new(attrs) do
+      {:ok, event} -> event
+      {:error, reason} -> raise ArgumentError, "invalid event: #{inspect(reason)}"
+    end
+  end
 
   @doc "Builds a core event with defaults for known Jidoka event names."
   @spec build(atom(), list(), keyword() | map()) :: t()
@@ -146,5 +157,12 @@ defmodule Jidoka.Event do
       {_key, _value} -> false
     end)
     |> Map.new()
+  end
+
+  defp validate_data_keys(%__MODULE__{data: data}) when is_map(data) do
+    case Enum.find(Map.keys(data), &(not is_atom(&1))) do
+      nil -> :ok
+      key -> {:error, {:invalid_event_data_key, key}}
+    end
   end
 end

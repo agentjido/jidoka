@@ -32,4 +32,20 @@ defmodule Jidoka.EventTest do
     assert_receive {:jidoka_turn_event, %Event{event: :turn_failed, data: %{reason: :cancelled}} = event}
     assert Event.cancelled?(event)
   end
+
+  test "accepts atom-keyed event data" do
+    assert {:ok, %Event{data: %{reason: :cancelled}}} =
+             Event.new(event: :turn_failed, data: %{reason: :cancelled})
+  end
+
+  test "rejects string-keyed event data" do
+    assert {:error, {:invalid_event_data_key, "reason"}} =
+             Event.new(event: :turn_failed, data: %{"reason" => :cancelled})
+  end
+
+  test "raises with an invalid event label for string-keyed event data" do
+    assert_raise ArgumentError, ~r/invalid event: \{:invalid_event_data_key, "reason"\}/, fn ->
+      Event.new!(event: :turn_failed, data: %{"reason" => :cancelled})
+    end
+  end
 end
