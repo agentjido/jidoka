@@ -6,6 +6,14 @@ defmodule Jidoka.StreamTest do
   alias Jidoka.Stream
   alias Jidoka.Turn
 
+  test "delta helpers read atom-keyed event data" do
+    content = Event.new!(event: :llm_delta, data: %{chunk_type: :content, delta: "hello"})
+    thinking = Event.new!(event: :llm_delta, data: %{chunk_type: :thinking, delta: "checking"})
+
+    assert Stream.text_delta(content) == "hello"
+    assert Stream.thinking_delta(thinking) == "checking"
+  end
+
   test "mailbox stream filters by request id and stops on terminal events" do
     request_id = "req_stream_events"
 

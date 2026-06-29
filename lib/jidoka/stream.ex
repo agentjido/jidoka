@@ -57,7 +57,7 @@ defmodule Jidoka.Stream do
   @doc "Extracts a content delta from an `:llm_delta` event."
   @spec text_delta(Event.t()) :: String.t() | nil
   def text_delta(%Event{event: :llm_delta, data: data}) when is_map(data) do
-    if delta_kind(data) in [:content, "content", nil], do: string_value(data, :delta)
+    if Map.get(data, :chunk_type) in [:content, nil], do: string_value(data, :delta)
   end
 
   def text_delta(_event), do: nil
@@ -65,8 +65,7 @@ defmodule Jidoka.Stream do
   @doc "Extracts a thinking/reasoning delta from an `:llm_delta` event."
   @spec thinking_delta(Event.t()) :: String.t() | nil
   def thinking_delta(%Event{event: :llm_delta, data: data}) when is_map(data) do
-    if delta_kind(data) in [:thinking, :reasoning, "thinking", "reasoning"],
-      do: string_value(data, :delta)
+    if Map.get(data, :chunk_type) in [:thinking, :reasoning], do: string_value(data, :delta)
   end
 
   def thinking_delta(_event), do: nil
@@ -141,10 +140,8 @@ defmodule Jidoka.Stream do
 
   defp emit_to_callback(_event, _callback), do: :ok
 
-  defp delta_kind(data), do: Map.get(data, :chunk_type, Map.get(data, "chunk_type"))
-
   defp string_value(data, key) do
-    case Map.get(data, key, Map.get(data, Atom.to_string(key))) do
+    case Map.get(data, key) do
       value when is_binary(value) -> value
       _other -> nil
     end

@@ -38,6 +38,11 @@ defmodule Jidoka.EventTest do
              Event.new(event: :turn_failed, data: %{reason: :cancelled})
   end
 
+  test "accepts string-keyed maps nested inside event data values" do
+    assert {:ok, %Event{data: %{payload: %{"external" => true}}}} =
+             Event.new(event: :turn_failed, data: %{payload: %{"external" => true}})
+  end
+
   test "rejects string-keyed event data" do
     assert {:error, {:invalid_event_data_key, "reason"}} =
              Event.new(event: :turn_failed, data: %{"reason" => :cancelled})
