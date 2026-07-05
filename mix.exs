@@ -53,7 +53,6 @@ defmodule Jidoka.MixProject do
       {:jido_action, "~> 2.3"},
       {:jido_ai, "~> 2.2"},
       {:jido_browser, "~> 2.1"},
-      {:jido_memory, "~> 1.0"},
       {:jido_mcp, "~> 1.0"},
 
       # Runtime support
@@ -73,7 +72,8 @@ defmodule Jidoka.MixProject do
       {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
       {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
-      {:git_ops, "~> 2.9", only: :dev, runtime: false}
+      {:git_ops, "~> 2.9", only: :dev, runtime: false},
+      {:sourceror, "~> 1.7", only: [:dev, :test], runtime: false}
     ]
   end
 
