@@ -38,6 +38,14 @@ defmodule Jidoka.EventTest do
              Event.new(event: :turn_failed, data: %{reason: :cancelled})
   end
 
+  test "accepts string-keyed event attrs while enforcing atom-keyed data" do
+    assert {:ok, %Event{event: :turn_failed, data: %{reason: :cancelled}}} =
+             Event.new(%{"event" => "turn_failed", "data" => %{reason: :cancelled}})
+
+    assert {:error, {:invalid_event_data_key, "reason"}} =
+             Event.new(%{"event" => "turn_failed", "data" => %{"reason" => :cancelled}})
+  end
+
   test "accepts string-keyed maps nested inside event data values" do
     assert {:ok, %Event{data: %{payload: %{"external" => true}}}} =
              Event.new(event: :turn_failed, data: %{payload: %{"external" => true}})
@@ -51,6 +59,12 @@ defmodule Jidoka.EventTest do
   test "raises with an invalid event label for string-keyed event data" do
     assert_raise ArgumentError, ~r/invalid event: \{:invalid_event_data_key, "reason"\}/, fn ->
       Event.new!(event: :turn_failed, data: %{"reason" => :cancelled})
+    end
+  end
+
+  test "build enforces atom-keyed event data" do
+    assert_raise ArgumentError, ~r/invalid event: \{:invalid_event_data_key, "reason"\}/, fn ->
+      Event.build(:turn_failed, [], data: %{"reason" => :cancelled})
     end
   end
 end
