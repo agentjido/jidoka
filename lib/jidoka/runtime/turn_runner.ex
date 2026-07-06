@@ -289,7 +289,7 @@ defmodule Jidoka.Runtime.TurnRunner do
     Event.build(:turn_failed, [],
       agent_id: plan.spec.id,
       request_id: request.request_id,
-      data: %{reason: inspect(reason)}
+      data: failure_data(reason)
     )
     |> EventStream.emit(opts)
 
@@ -297,6 +297,10 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp maybe_emit_turn_failed(result, _plan, _request, _opts), do: result
+
+  defp failure_data(:cancelled), do: %{reason: :cancelled}
+  defp failure_data(%{details: %{cause: :cancelled}}), do: %{reason: :cancelled}
+  defp failure_data(reason), do: %{reason: inspect(reason)}
 
   defp run_and_emit(%Turn.State{} = state, opts, fun) when is_function(fun, 1) do
     event_count = length(state.events)

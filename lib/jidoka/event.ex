@@ -121,6 +121,20 @@ defmodule Jidoka.Event do
     |> new!()
   end
 
+  @doc "Returns true when an event represents a cancelled turn."
+  @spec cancelled?(t()) :: boolean()
+  def cancelled?(%__MODULE__{event: :turn_failed} = event) do
+    failure_reason(event) == :cancelled
+  end
+
+  def cancelled?(%__MODULE__{}), do: false
+
+  @doc "Returns the failure reason carried by a turn-failed event."
+  @spec failure_reason(t()) :: term()
+  def failure_reason(%__MODULE__{event: :turn_failed, data: %{reason: reason}}), do: reason
+  def failure_reason(%__MODULE__{event: :turn_failed, error: error}), do: error
+  def failure_reason(%__MODULE__{}), do: nil
+
   @doc "Projects an event into a compact map."
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = event) do

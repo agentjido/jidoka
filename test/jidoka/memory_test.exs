@@ -160,12 +160,8 @@ defmodule Jidoka.MemoryTest do
              )
   end
 
-  test "jido_memory store writes and recalls entries through the Jido memory runtime" do
-    table = :"jidoka_memory_test_#{System.unique_integer([:positive])}"
-    :ok = Jido.Memory.Store.ETS.ensure_ready(table: table)
-
-    store =
-      {JidoMemory, namespace: "jidoka:test", provider_opts: [store: {Jido.Memory.Store.ETS, [table: table]}]}
+  test "jido_memory store reports the missing optional dependency" do
+    store = {JidoMemory, namespace: "jidoka:test"}
 
     entry =
       Memory.Entry.new!(
@@ -177,8 +173,9 @@ defmodule Jidoka.MemoryTest do
       )
 
     request = Memory.WriteRequest.new!(entry: entry)
-    assert {:ok, %Memory.WriteResult{entry: written}} = Memory.Store.write(store, request)
-    assert written.id == "mem_jido"
+    missing = {:missing_optional_dependency, :jido_memory, :"Elixir.Jido.Memory.Runtime"}
+
+    assert {:error, ^missing} = Memory.Store.write(store, request)
 
     recall =
       Memory.RecallRequest.new!(
@@ -189,22 +186,7 @@ defmodule Jidoka.MemoryTest do
         limit: 5
       )
 
-    assert {:ok, %Memory.RecallResult{entries: [recalled], metadata: metadata}} =
-             Memory.Store.recall(store, recall)
-
-    assert recalled.id == "mem_jido"
-    assert recalled.content == "Ada prefers short answers."
-    assert metadata["namespace"] == "jidoka:test:session:sess_1"
-
-    assert {:ok, [listed]} =
-             Memory.Store.list_entries(
-               {JidoMemory,
-                namespace: "jidoka:test",
-                scope: :session,
-                session_id: "sess_1",
-                provider_opts: [store: {Jido.Memory.Store.ETS, [table: table]}]}
-             )
-
-    assert listed.id == "mem_jido"
+    assert {:error, ^missing} = Memory.Store.recall(store, recall)
+    assert {:error, ^missing} = Memory.Store.list_entries(store)
   end
 end

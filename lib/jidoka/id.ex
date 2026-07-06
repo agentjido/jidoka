@@ -78,10 +78,7 @@ defmodule Jidoka.Id do
   defp normalize_generated_id({:error, reason}, prefix),
     do: {:error, {:id_generator_failed, prefix, reason}}
 
-  defp format_uuid(
-         <<a::binary-size(8), b::binary-size(4), c::binary-size(4), d::binary-size(4),
-           e::binary-size(12)>>
-       ) do
+  defp format_uuid(<<a::binary-size(8), b::binary-size(4), c::binary-size(4), d::binary-size(4), e::binary-size(12)>>) do
     a <> "-" <> b <> "-" <> c <> "-" <> d <> "-" <> e
   end
 end
