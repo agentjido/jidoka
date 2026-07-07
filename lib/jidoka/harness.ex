@@ -17,6 +17,7 @@ defmodule Jidoka.Harness do
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.ReqLLM
   alias Jidoka.Runtime.TurnRunner
+  alias Jidoka.Schema
   alias Jidoka.Turn
 
   @type agent_input :: module() | Agent.Spec.t() | keyword() | map()
@@ -336,11 +337,23 @@ defmodule Jidoka.Harness do
         {:ok, capabilities}
 
       capability_attrs when is_list(capability_attrs) or is_map(capability_attrs) ->
-        Capabilities.new(capability_attrs)
+        capability_attrs
+        |> capability_attrs_with_defaults(opts)
+        |> Capabilities.new()
 
       nil ->
         Capabilities.new(opts)
     end
+  end
+
+  defp capability_attrs_with_defaults(capability_attrs, opts) do
+    [:llm, :operations]
+    |> Enum.reduce(Schema.normalize_attrs(capability_attrs), fn capability, attrs ->
+      case Keyword.fetch(opts, capability) do
+        {:ok, value} -> Schema.put_default(attrs, capability, value)
+        :error -> attrs
+      end
+    end)
   end
 
   defp request_opts(opts) do

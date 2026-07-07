@@ -114,6 +114,45 @@ defmodule JidokaTest do
     refute missing_llm_capability_error?(error)
   end
 
+  test "partial capability attrs keep default DSL operation capabilities" do
+    plan = Jidoka.plan!(TimeAgent)
+
+    assert {:ok, %Turn.Result{content: "Chicago is 09:30."}} =
+             Jidoka.turn(
+               plan,
+               Turn.Request.new!(input: "What time is it in Chicago?", context: %{test_pid: self()}),
+               capabilities: [llm: time_agent_llm()]
+             )
+
+    assert_receive {:local_time_called, "Chicago"}
+  end
+
+  test "partial capability attrs keep default ReqLLM capabilities" do
+    spec =
+      Agent.Spec.new!(
+        id: "partial_capability_agent",
+        instructions: "Use tools when useful.",
+        model: %{provider: :test, id: "model"},
+        operations: [
+          Operation.new!(
+            name: "weather",
+            description: "Looks up weather by city.",
+            idempotency: :idempotent
+          )
+        ]
+      )
+
+    operations =
+      LocalOperations.operations(%{
+        weather: fn _intent, _journal, _ctx -> {:ok, %{condition: "sunny"}} end
+      })
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             Jidoka.turn(spec, "Weather in Paris?", capabilities: [operations: operations])
+
+    refute missing_llm_capability_error?(error)
+  end
+
   test "agent specs are normalized through Zoi schemas" do
     assert {:ok, %Agent.Spec{} = spec} =
              Agent.Spec.new(%{
