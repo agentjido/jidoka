@@ -69,8 +69,8 @@ defmodule Jidoka.Turn.StateTest do
     assert [first, second] = next_state.pending_effects
     assert first.id != second.id
     assert first.idempotency_key != second.idempotency_key
-    assert first.metadata == %{"batch_index" => 0, "batch_size" => 2}
-    assert second.metadata == %{"batch_index" => 1, "batch_size" => 2}
+    assert first.metadata == %{batch_index: 0, batch_size: 2}
+    assert second.metadata == %{batch_index: 1, batch_size: 2}
   end
 
   test "keeps duplicate operation calls distinct inside a batch" do

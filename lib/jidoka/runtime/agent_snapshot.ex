@@ -7,6 +7,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
   """
 
   alias Jidoka.Context
+  alias Jidoka.Event
   alias Jidoka.Id
   alias Jidoka.Runtime.Review
   alias Jidoka.Schema
@@ -42,6 +43,11 @@ defmodule Jidoka.Runtime.AgentSnapshot do
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
+    attrs =
+      attrs
+      |> Schema.normalize_attrs()
+      |> normalize_portable_events()
+
     with {:ok, %__MODULE__{} = snapshot} <- Schema.parse(@schema, attrs),
          :ok <- validate_schema_version(snapshot) do
       {:ok, snapshot}
@@ -155,6 +161,67 @@ defmodule Jidoka.Runtime.AgentSnapshot do
   defp validate_schema_version(%__MODULE__{schema_version: version}) do
     {:error, {:unsupported_snapshot_schema_version, version, @schema_version}}
   end
+
+  defp normalize_portable_events(%{turn_state: turn_state} = attrs) do
+    %{attrs | turn_state: normalize_turn_state_events(turn_state)}
+  end
+
+  defp normalize_portable_events(%{"turn_state" => turn_state} = attrs) do
+    %{attrs | "turn_state" => normalize_turn_state_events(turn_state)}
+  end
+
+  defp normalize_portable_events(attrs), do: attrs
+
+  defp normalize_turn_state_events(%Turn.State{} = state), do: state
+
+  defp normalize_turn_state_events(%{} = turn_state) do
+    turn_state
+    |> normalize_event_list(:events)
+    |> normalize_event_list("events")
+  end
+
+  defp normalize_turn_state_events(turn_state), do: turn_state
+
+  defp normalize_event_list(%{} = turn_state, key) do
+    case Map.fetch(turn_state, key) do
+      {:ok, events} when is_list(events) ->
+        Map.put(turn_state, key, Enum.map(events, &normalize_event/1))
+
+      _other ->
+        turn_state
+    end
+  end
+
+  defp normalize_event(%Event{} = event), do: event
+
+  defp normalize_event(%{} = event) do
+    event
+    |> normalize_event_data(:data)
+    |> normalize_event_data("data")
+  end
+
+  defp normalize_event(event), do: event
+
+  defp normalize_event_data(%{} = event, key) do
+    case Map.fetch(event, key) do
+      {:ok, data} when is_map(data) -> Map.put(event, key, normalize_existing_atom_keys(data))
+      _other -> event
+    end
+  end
+
+  defp normalize_existing_atom_keys(data) do
+    Map.new(data, fn {key, value} -> {existing_atom_key(key), value} end)
+  end
+
+  defp existing_atom_key(key) when is_atom(key), do: key
+
+  defp existing_atom_key(key) when is_binary(key) do
+    String.to_existing_atom(key)
+  rescue
+    ArgumentError -> key
+  end
+
+  defp existing_atom_key(key), do: key
 
   defp snapshot_metadata(%Turn.State{} = state, opts) do
     opts
