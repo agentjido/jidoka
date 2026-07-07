@@ -36,8 +36,8 @@ defmodule Jidoka do
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
 
-  @type agent_input :: Agent.Spec.t() | keyword() | map()
-  @type plan_input :: Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
+  @type agent_input :: module() | Agent.Spec.t() | keyword() | map()
+  @type plan_input :: module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
   @type request_input :: Turn.Request.t() | String.t() | keyword() | map()
   @type runtime_opts :: keyword()
   @type server_ref :: Jido.AgentServer.server()
@@ -266,10 +266,10 @@ defmodule Jidoka do
   @doc """
   Runs one agent turn through the Jidoka Runic spine.
 
-  This is the stable core runtime entrypoint. It accepts an `Agent.Spec` or
-  `Turn.Plan`, normalizes the request, runs pure workflow planning, interprets
-  external effects through explicit runtime capabilities, and returns a typed
-  result or snapshot.
+  This is the stable core runtime entrypoint. It accepts a DSL agent module,
+  `Agent.Spec`, or `Turn.Plan`, normalizes the request, runs pure workflow
+  planning, interprets external effects through explicit runtime capabilities,
+  and returns a typed result or snapshot.
 
   Use `turn/3` for deterministic tests with injected capabilities, live ReqLLM
   calls, process-hosted agents, controls, tools, hibernation, streaming, and

@@ -58,8 +58,21 @@ defmodule Jidoka.Agent.Spec do
     end
   end
 
-  @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
+  @spec from_input(t() | module() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = spec), do: new(spec)
+
+  def from_input(agent_module) when is_atom(agent_module) do
+    cond do
+      Code.ensure_loaded?(agent_module) and function_exported?(agent_module, :spec, 0) ->
+        agent_module
+        |> apply(:spec, [])
+        |> new()
+
+      true ->
+        {:error, {:invalid_agent_spec_input, agent_module}}
+    end
+  end
+
   def from_input(input), do: new(input)
 
   @spec validate_context(t(), Jidoka.Context.t()) :: :ok | {:error, term()}
