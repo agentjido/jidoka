@@ -88,6 +88,7 @@ defmodule Jidoka.Event do
             },
             coerce: true
           )
+          |> Zoi.refine({__MODULE__, :validate_data_keys, []})
 
   @type data :: %{optional(atom()) => term()}
   @type t :: unquote(Zoi.type_spec(@schema))
@@ -102,12 +103,7 @@ defmodule Jidoka.Event do
   def events, do: Map.keys(@event_defaults)
 
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs) do
-    with {:ok, %__MODULE__{} = event} <- Schema.parse(@schema, attrs),
-         :ok <- validate_data_keys(event) do
-      {:ok, event}
-    end
-  end
+  def new(attrs), do: Schema.parse(@schema, attrs)
 
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
@@ -159,10 +155,12 @@ defmodule Jidoka.Event do
     |> Map.new()
   end
 
-  defp validate_data_keys(%__MODULE__{data: data}) when is_map(data) do
+  @doc false
+  @spec validate_data_keys(t(), keyword()) :: :ok | {:error, String.t()}
+  def validate_data_keys(%__MODULE__{data: data}, _opts \\ []) when is_map(data) do
     case Enum.find(Map.keys(data), &(not is_atom(&1))) do
       nil -> :ok
-      key -> {:error, {:invalid_event_data_key, key}}
+      key -> {:error, "event data keys must be atoms, got: #{inspect(key)}"}
     end
   end
 end
