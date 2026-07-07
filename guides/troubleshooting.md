@@ -163,7 +163,7 @@ trace.
 
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
-| `{:error, :missing_operations_capability}` | Agent has operations but call omitted `operations:` | Pass `operations: Jidoka.Runtime.JidoActions.operations(actions)` or `Jidoka.Runtime.LocalOperations.operations(handlers)`. |
+| `{:error, :missing_operations_capability}` | Data-built agent has operations but call omitted `operations:` | Pass `operations: Jidoka.Runtime.JidoActions.operations(actions)` or `Jidoka.Runtime.LocalOperations.operations(handlers)`. DSL agents install their declared tool capability by default. |
 | `{:error, {:missing_jido_action, name}}` | Decision asked for an action not registered in `Jido.Action` list | Add the action to the operations capability or rename in the prompt. |
 | `{:error, {:missing_operation_handler, name}}` | Decision asked for a local operation not in the handler map | Add the handler or update the prompt. |
 | `{:error, {:unsupported_effect_kind, kind}}` | Adapter was called with an intent kind it does not handle | Route only `:operation` intents to the operation adapter; route `:llm` intents to the LLM adapter. |

@@ -15,11 +15,13 @@ defmodule Jidoka.Harness do
   alias Jidoka.Memory
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Runtime.ReqLLM
   alias Jidoka.Runtime.TurnRunner
+  alias Jidoka.Schema
   alias Jidoka.Turn
 
-  @type agent_input :: Agent.Spec.t() | keyword() | map()
-  @type plan_input :: Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
+  @type agent_input :: module() | Agent.Spec.t() | keyword() | map()
+  @type plan_input :: module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
   @type request_input :: Turn.Request.t() | String.t() | keyword() | map()
   @type runtime_opts :: keyword()
   @type session_input :: Session.t() | String.t()
@@ -36,6 +38,7 @@ defmodule Jidoka.Harness do
   @spec run_turn(plan_input(), request_input(), runtime_opts()) :: run_result()
   def run_turn(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- plan(spec_or_plan),
+         opts = runtime_opts(plan, opts),
          {:ok, request} <- Turn.Request.from_input(request_input, request_opts(opts)),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
          {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts),
@@ -52,6 +55,7 @@ defmodule Jidoka.Harness do
   @spec resume(AgentSnapshot.t() | String.t(), runtime_opts()) :: run_result()
   def resume(snapshot_input, opts \\ []) do
     with {:ok, snapshot} <- AgentSnapshot.from_input(snapshot_input),
+         opts = runtime_opts(snapshot, opts),
          {:ok, capabilities} <- normalize_capabilities(opts) do
       TurnRunner.resume(snapshot, capabilities, opts)
     end
@@ -79,6 +83,7 @@ defmodule Jidoka.Harness do
     with {:ok, session} <- resolve_session(session_input, opts),
          :ok <- ensure_runnable_session(session),
          {:ok, plan} <- plan(session.spec),
+         opts = runtime_opts(plan, opts),
          {:ok, request} <- Turn.Request.from_input(request_input, request_opts(opts)),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
          {:ok, memory} <-
@@ -108,6 +113,7 @@ defmodule Jidoka.Harness do
   def resume_session(session_input, opts \\ []) do
     with {:ok, session} <- resolve_session(session_input, opts),
          {:ok, snapshot} <- latest_snapshot(session),
+         opts = runtime_opts(snapshot, opts),
          {:ok, capabilities} <- normalize_capabilities(opts) do
       session
       |> resume_session_snapshot(snapshot, capabilities, opts)
@@ -275,17 +281,79 @@ defmodule Jidoka.Harness do
 
   defp session_opts(opts), do: Keyword.take(opts, [:session_id, :id_generator, :metadata])
 
+  defp runtime_opts(%Turn.Plan{spec: %Agent.Spec{} = spec}, opts) do
+    runtime_opts(spec, opts)
+  end
+
+  defp runtime_opts(%AgentSnapshot{turn_state: %{spec: %Agent.Spec{} = spec}}, opts) do
+    runtime_opts(spec, opts)
+  end
+
+  defp runtime_opts(%Agent.Spec{} = spec, opts) do
+    case dsl_agent_module(spec) do
+      nil ->
+        Keyword.put_new(opts, :llm, ReqLLM.llm(default_llm_opts(spec, opts)))
+
+      agent_module ->
+        Agent.runtime_opts(agent_module, spec, opts)
+    end
+  end
+
+  defp dsl_agent_module(%Agent.Spec{metadata: metadata}) when is_map(metadata) do
+    metadata
+    |> Map.get("dsl_module", Map.get(metadata, :dsl_module))
+    |> existing_dsl_agent_module()
+  end
+
+  defp existing_dsl_agent_module(module_name) when is_binary(module_name) do
+    module =
+      module_name
+      |> String.trim()
+      |> module_atom()
+
+    if Code.ensure_loaded?(module) and function_exported?(module, :__jidoka_agent__, 0) do
+      module
+    end
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp existing_dsl_agent_module(_module_name), do: nil
+
+  defp module_atom("Elixir." <> _rest = module_name), do: String.to_existing_atom(module_name)
+  defp module_atom(module_name), do: String.to_existing_atom("Elixir." <> module_name)
+
+  defp default_llm_opts(%Agent.Spec{} = spec, opts) do
+    spec.generation
+    |> Agent.Spec.Generation.to_req_llm_opts()
+    |> Keyword.merge(Keyword.get(opts, :llm_opts, []))
+    |> Keyword.merge(Keyword.take(opts, [:stream, :stream_to, :on_event]))
+    |> Keyword.put_new(:model, spec.model)
+  end
+
   defp normalize_capabilities(opts) do
     case Keyword.get(opts, :capabilities) do
       %Capabilities{} = capabilities ->
         {:ok, capabilities}
 
       capability_attrs when is_list(capability_attrs) or is_map(capability_attrs) ->
-        Capabilities.new(capability_attrs)
+        capability_attrs
+        |> capability_attrs_with_defaults(opts)
+        |> Capabilities.new()
 
       nil ->
         Capabilities.new(opts)
     end
+  end
+
+  defp capability_attrs_with_defaults(capability_attrs, opts) do
+    [:llm, :operations]
+    |> Enum.reduce(Schema.normalize_attrs(capability_attrs), fn capability, attrs ->
+      case Keyword.fetch(opts, capability) do
+        {:ok, value} -> Schema.put_default(attrs, capability, value)
+        :error -> attrs
+      end
+    end)
   end
 
   defp request_opts(opts) do

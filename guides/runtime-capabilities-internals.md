@@ -141,9 +141,10 @@ defp missing_operations_capability(_intent, _journal, _ctx),
 
 Two properties are load-bearing:
 
-- **`llm` has no default.** A turn that interprets an `:llm` intent without a
-  user-supplied LLM capability fails closed at `Capabilities.new/1`, not
-  inside the interpreter.
+- **`llm` is required at the capability layer.** Facade and harness calls install
+  a ReqLLM-backed default from the agent spec when no `llm:` is supplied, but a
+  raw `Capabilities.new/1` call still fails closed without an explicit LLM
+  capability.
 - **`operations` defaults to a closed adapter.** An agent without operations
   still gets a function in the struct; calling it returns
   `{:error, :missing_operations_capability}` which the interpreter normalizes

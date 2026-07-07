@@ -225,7 +225,9 @@ defmodule Jidoka.Agent do
     end
   end
 
-  defp runtime_opts(agent_module, %Spec{} = spec, opts) do
+  @doc false
+  @spec runtime_opts(module(), Spec.t(), keyword()) :: keyword()
+  def runtime_opts(agent_module, %Spec{} = spec, opts) do
     opts
     |> Keyword.put(:operation_context, operation_context(agent_module, spec, opts))
     |> Keyword.put_new(

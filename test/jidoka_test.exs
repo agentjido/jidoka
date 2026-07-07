@@ -77,6 +77,82 @@ defmodule JidokaTest do
     assert {:ok, "echo"} = Jidoka.chat(spec, "Echo", capabilities: [llm: llm])
   end
 
+  test "top-level turn accepts DSL agent modules with their default operation capability" do
+    llm = time_agent_llm()
+
+    assert {:ok, %Turn.Result{content: "Chicago is 09:30."} = result} =
+             Jidoka.turn(
+               TimeAgent,
+               Turn.Request.new!(input: "What time is it in Chicago?", context: %{test_pid: self()}),
+               llm: llm
+             )
+
+    assert_receive {:local_time_called, "Chicago"}
+
+    assert [%{operation: "local_time", output: %{"canary" => "jidoka_dsl_tool_canary"}}] =
+             result.agent_state.operation_results
+  end
+
+  test "compiled DSL plans keep default runtime capabilities" do
+    plan = Jidoka.plan!(TimeAgent)
+    llm = time_agent_llm()
+
+    assert {:ok, %Turn.Result{content: "Chicago is 09:30."}} =
+             Jidoka.turn(
+               plan,
+               Turn.Request.new!(input: "What time is it in Chicago?", context: %{test_pid: self()}),
+               llm: llm
+             )
+
+    assert_receive {:local_time_called, "Chicago"}
+  end
+
+  test "compiled DSL plans install a default ReqLLM capability when llm is omitted" do
+    plan = Jidoka.plan!(TimeAgent)
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} = Jidoka.turn(plan, "Hello")
+    refute missing_llm_capability_error?(error)
+  end
+
+  test "partial capability attrs keep default DSL operation capabilities" do
+    plan = Jidoka.plan!(TimeAgent)
+
+    assert {:ok, %Turn.Result{content: "Chicago is 09:30."}} =
+             Jidoka.turn(
+               plan,
+               Turn.Request.new!(input: "What time is it in Chicago?", context: %{test_pid: self()}),
+               capabilities: [llm: time_agent_llm()]
+             )
+
+    assert_receive {:local_time_called, "Chicago"}
+  end
+
+  test "partial capability attrs keep default ReqLLM capabilities" do
+    spec =
+      Agent.Spec.new!(
+        id: "partial_capability_agent",
+        instructions: "Use tools when useful.",
+        model: %{provider: :test, id: "model"},
+        operations: [
+          Operation.new!(
+            name: "weather",
+            description: "Looks up weather by city.",
+            idempotency: :idempotent
+          )
+        ]
+      )
+
+    operations =
+      LocalOperations.operations(%{
+        weather: fn _intent, _journal, _ctx -> {:ok, %{condition: "sunny"}} end
+      })
+
+    assert {:error, %Jidoka.Error.ExecutionError{} = error} =
+             Jidoka.turn(spec, "Weather in Paris?", capabilities: [operations: operations])
+
+    refute missing_llm_capability_error?(error)
+  end
+
   test "agent specs are normalized through Zoi schemas" do
     assert {:ok, %Agent.Spec{} = spec} =
              Agent.Spec.new(%{
@@ -350,6 +426,28 @@ defmodule JidokaTest do
   defp count_results(%Effect.Journal{results: results}, kind) do
     Enum.count(results, fn {_id, %Effect.Result{kind: result_kind}} -> result_kind == kind end)
   end
+
+  defp time_agent_llm do
+    fn _intent, %Effect.Journal{} = journal, _ctx ->
+      case count_results(journal, :llm) do
+        0 -> {:ok, %{type: :operation, name: "local_time", arguments: %{"city" => "Chicago"}}}
+        1 -> {:ok, %{type: :final, content: "Chicago is 09:30."}}
+      end
+    end
+  end
+
+  defp missing_llm_capability_error?(%Jidoka.Error.ExecutionError{details: %{cause: cause}}) do
+    missing_llm_capability_cause?(cause)
+  end
+
+  defp missing_llm_capability_error?(_error), do: false
+
+  defp missing_llm_capability_cause?(errors) when is_list(errors) do
+    Enum.any?(errors, &missing_llm_capability_cause?/1)
+  end
+
+  defp missing_llm_capability_cause?(%Zoi.Error{path: [:llm]}), do: true
+  defp missing_llm_capability_cause?(_cause), do: false
 
   defp portable_map(%_{} = value), do: value |> Map.from_struct() |> portable_map()
 
