@@ -5,6 +5,7 @@ defmodule Jidoka.HandoffTest do
   alias Jidoka.Effect
   alias Jidoka.Handoff
   alias Jidoka.Handoff.OwnerStore
+  alias Jidoka.Handoff.OwnerStore.InMemory
   alias Jidoka.Turn
 
   import Jidoka.TestSupport, only: [count_results: 2]
@@ -165,5 +166,51 @@ defmodule Jidoka.HandoffTest do
              agent_id: "conv-handoff-test:billing_specialist",
              handoff: %Handoff{name: "billing_specialist"}
            } = Jidoka.handoff("conv-handoff-test")
+  end
+
+  test "default owner store survives the writer process" do
+    conversation_id = "conv-handoff-writer-#{System.unique_integer([:positive, :monotonic])}"
+    owner_agent_id = "#{conversation_id}:billing_specialist"
+    owner_process = Process.whereis(InMemory)
+
+    assert is_pid(owner_process)
+
+    assert {InMemory, ^owner_process, :worker, [InMemory]} =
+             Enum.find(Supervisor.which_children(Jidoka.Supervisor), fn
+               {InMemory, _pid, :worker, [InMemory]} -> true
+               _child -> false
+             end)
+
+    assert :ets.info(:jidoka_handoff_owners, :owner) == owner_process
+
+    on_exit(fn -> Jidoka.reset_handoff(conversation_id) end)
+
+    handoff =
+      Handoff.new!(
+        id: "handoff-writer-process",
+        conversation_id: conversation_id,
+        from_agent: RouterAgent,
+        to_agent: BillingAgent,
+        to_agent_id: owner_agent_id,
+        name: "billing_specialist",
+        message: "Continue with billing."
+      )
+
+    test_pid = self()
+
+    {writer_pid, writer_ref} =
+      spawn_monitor(fn ->
+        :ok = OwnerStore.put_owner(conversation_id, handoff)
+        send(test_pid, {:handoff_owner_written, self()})
+      end)
+
+    assert_receive {:handoff_owner_written, ^writer_pid}
+    assert_receive {:DOWN, ^writer_ref, :process, ^writer_pid, :normal}
+
+    assert %{
+             agent: BillingAgent,
+             agent_id: ^owner_agent_id,
+             handoff: %Handoff{conversation_id: ^conversation_id}
+           } = Jidoka.handoff(conversation_id)
   end
 end
