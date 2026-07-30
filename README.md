@@ -60,7 +60,7 @@ export ANTHROPIC_API_KEY=...
 ```
 
 Jidoka does not load `.env` files for applications. Put that policy in your
-app, release config, example app, or shell.
+host app, release config, showcase app, or shell.
 
 Jidoka is beta software. The `0.8.x` beta line is intended for early adopters
 while the public API is still allowed to change before a stable release.
@@ -226,16 +226,29 @@ resolved through explicit registries during import.
 
 ## Examples And Livebooks
 
-The Phoenix showcase app lives in `example/`.
+The Phoenix showcase app lives in `showcase/`.
 
 ```bash
-cd example
+cd showcase
 mix deps.get
 mix phx.server
 ```
 
-Livebooks live in `livebook/` and focus on contracts, controls, sessions,
-imports, evals, and trace output.
+Package-level agent examples live in `examples/`. They use separate files for
+agents, actions, controls, workflows, and deterministic Mock LLMs. Example
+modules are loaded on demand and are not part of production compilation.
+
+```bash
+mix jidoka.example --list
+mix jidoka.example support_agent
+```
+
+Standalone Livebook guides live in `examples/guides/`. A dedicated agent keeps
+its Livebook beside its code and test, as the Support Agent does in
+`examples/support_agent/`.
+
+The current deterministic proof matrix is in
+[`examples/PROVEN_FEATURES.md`](examples/PROVEN_FEATURES.md).
 
 ## Test
 

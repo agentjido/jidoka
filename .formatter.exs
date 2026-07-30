@@ -55,7 +55,7 @@ locals_without_parens = spark_locals_without_parens
 
 [
   import_deps: [:spark],
-  inputs: ["{mix,.formatter,.credo,.doctor}.exs", "{config,lib,test}/**/*.{ex,exs}"],
+  inputs: ["{mix,.formatter,.credo,.doctor}.exs", "{config,examples,lib,scripts,test}/**/*.{ex,exs}"],
   plugins: [Spark.Formatter],
   locals_without_parens: locals_without_parens,
   line_length: 120,

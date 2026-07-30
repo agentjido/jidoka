@@ -310,7 +310,7 @@ flowchart TB
   evidence artifact until its selected proofs pass. Add a focused route only
   when an existing surface cannot teach the capability clearly.
 - **Patterns to follow:** The one-capability-at-a-time teaching rules and parity
-  map in `example/AGENT_LADDER.md`.
+  map in `showcase/AGENT_LADDER.md`.
 - **Test expectation:** None -- this unit maps researched priorities to planned
   proof and documentation.
 - **Verification:** Every high-priority feature has a recorded disposition;
@@ -326,12 +326,12 @@ flowchart TB
 - **Requirements:** R11-R14
 - **Dependencies:** U3
 - **Files:**
-  - `example/lib/jidoka_example/approval_agent/agent.ex`
-  - `example/lib/jidoka_example/approval_agent/actions/issue_refund.ex`
-  - `example/lib/jidoka_example_web/live/approval_agent_live/index.ex`
-  - `example/test/approval_agent_test.exs` (new)
-  - `example/test/support/kitchen_sink_support.ex`
-  - `example/test/kitchen_sink_agent_flow_test.exs`
+  - `showcase/lib/jidoka_showcase/approval_agent/agent.ex`
+  - `showcase/lib/jidoka_showcase/approval_agent/actions/issue_refund.ex`
+  - `showcase/lib/jidoka_showcase_web/live/approval_agent_live/index.ex`
+  - `showcase/test/approval_agent_test.exs` (new)
+  - `showcase/test/support/kitchen_sink_support.ex`
+  - `showcase/test/kitchen_sink_agent_flow_test.exs`
 - **Approach:** Extend the existing example and deterministic support rather
   than adding a store. Prove behavior only through public review APIs, snapshot
   codecs, results, journals, events, cursors, and stable inspection projections.
@@ -341,7 +341,7 @@ flowchart TB
   before approval, after denial, or more than once after resume.
 - **Patterns to follow:** `test/integration/human_in_the_loop_integration_test.exs`,
   `test/integration/operation_idempotency_integration_test.exs`, and
-  `example/test/kitchen_sink_agent_flow_test.exs`.
+  `showcase/test/kitchen_sink_agent_flow_test.exs`.
 - **Test scenarios:**
   - A refund request hibernates with one projected review request, one pending
     journaled intent, and no operation result or action call.
@@ -363,10 +363,10 @@ flowchart TB
 - **Requirements:** R2, R11-R14
 - **Dependencies:** U3
 - **Files:**
-  - `example/lib/jidoka_example/kitchen_sink_agent/workflows/feature_summary_workflow.ex`
-  - `example/test/workflow_showcase_test.exs` (new)
-  - `example/test/kitchen_sink_agent_flow_test.exs`
-  - `livebook/04_workflows.livemd`
+  - `showcase/lib/jidoka_showcase/kitchen_sink_agent/workflows/feature_summary_workflow.ex`
+  - `showcase/test/workflow_showcase_test.exs` (new)
+  - `showcase/test/kitchen_sink_agent_flow_test.exs`
+  - `examples/guides/workflows.livemd`
 - **Approach:** Deepen the existing workflow example rather than claim graph
   parity from a one-step workflow. Keep direct execution and workflow-as-tool
   output equivalent, and let the focused test prove individual semantics while
@@ -374,7 +374,7 @@ flowchart TB
 - **Execution note:** Write the branch, empty-input, ordering, and retry-bound
   scenarios before changing the workflow or notebook.
 - **Patterns to follow:** `test/jidoka/workflow_dsl_test.exs`,
-  `test/jidoka/workflow_test.exs`, and `livebook/04_workflows.livemd`.
+  `test/jidoka/workflow_test.exs`, and `examples/guides/workflows.livemd`.
 - **Test scenarios:**
   - Both gate outcomes select only their eligible branch, and an empty fan-out
     produces the declared empty reduction rather than hanging or inventing data.
@@ -396,8 +396,8 @@ flowchart TB
 - **Requirements:** R11-R14
 - **Dependencies:** U3
 - **Files:**
-  - `example/lib/jidoka_example/lead_quality_agent/agent.ex`
-  - `example/test/lead_quality_agent_test.exs` (new)
+  - `showcase/lib/jidoka_showcase/lead_quality_agent/agent.ex`
+  - `showcase/test/lead_quality_agent_test.exs` (new)
 - **Approach:** Keep the Lead Quality use case and inject a scripted model that
   first returns an invalid app-facing value. Assert repair through public result
   events and the final typed value rather than raw provider payload fields.
@@ -421,10 +421,10 @@ flowchart TB
 - **Requirements:** R2, R11-R14
 - **Dependencies:** U3
 - **Files:**
-  - `example/lib/jidoka_example/memory_agent/agent.ex`
-  - `example/lib/jidoka_example/memory_agent/memory.ex`
-  - `example/lib/jidoka_example_web/live/memory_agent_live/index.ex`
-  - `example/test/memory_agent_test.exs` (new)
+  - `showcase/lib/jidoka_showcase/memory_agent/agent.ex`
+  - `showcase/lib/jidoka_showcase/memory_agent/memory.ex`
+  - `showcase/lib/jidoka_showcase_web/live/memory_agent_live/index.ex`
+  - `showcase/test/memory_agent_test.exs` (new)
 - **Approach:** Reuse the public session and memory-store boundaries, reset the
   ETS-backed example state between cases, and label the example's in-memory
   backend without implying semantic retrieval or production persistence.
@@ -451,10 +451,10 @@ flowchart TB
 - **Requirements:** R2, R11-R14
 - **Dependencies:** U3
 - **Files:**
-  - `example/lib/jidoka_example/knowledge_agent/agent.ex`
-  - `example/lib/jidoka_example/kitchen_sink_agent/agent.ex`
-  - `example/test/knowledge_agent_test.exs`
-  - `example/test/kitchen_sink_agent_flow_test.exs`
+  - `showcase/lib/jidoka_showcase/knowledge_agent/agent.ex`
+  - `showcase/lib/jidoka_showcase/kitchen_sink_agent/agent.ex`
+  - `showcase/test/knowledge_agent_test.exs`
+  - `showcase/test/kitchen_sink_agent_flow_test.exs`
 - **Approach:** Keep Knowledge focused on MCP consumption through the ordinary
   operation path. Use Kitchen Sink to prove the difference between a child
   result and a handoff record, including the application's responsibility to
@@ -463,7 +463,7 @@ flowchart TB
   structured showcase output.
 - **Patterns to follow:** `test/integration/operation_source_integration_test.exs`,
   `test/jidoka/subagent_test.exs`, `test/jidoka/handoff_test.exs`, and
-  `example/test/kitchen_sink_agent_flow_test.exs`.
+  `showcase/test/kitchen_sink_agent_flow_test.exs`.
 - **Test scenarios:**
   - A subagent returns one bounded specialist result and leaves the handoff owner
     store unchanged.
@@ -484,7 +484,7 @@ flowchart TB
 - **Requirements:** R7-R9, R13-R14
 - **Dependencies:** U3
 - **Files:**
-  - `livebook/03_import_eval_and_trace.livemd`
+  - `examples/guides/import_eval_and_trace.livemd`
   - `test/integration/showcase_trace_eval_integration_test.exs` (new)
 - **Approach:** Back the notebook's semantic flow with one focused integration
   scenario that uses the same public projections and fake capabilities. Do not
@@ -494,7 +494,7 @@ flowchart TB
 - **Execution note:** Establish the event, replay, and false-success assertions
   before revising the notebook narrative.
 - **Patterns to follow:** `test/integration/observability_integration_test.exs`,
-  `test/jidoka/eval_test.exs`, and `livebook/03_import_eval_and_trace.livemd`.
+  `test/jidoka/eval_test.exs`, and `examples/guides/import_eval_and_trace.livemd`.
 - **Test scenarios:**
   - A fixed run emits model, operation, and completion evidence through stable
     event and trace projections.
@@ -516,8 +516,8 @@ flowchart TB
 - **Files:**
   - `docs/research/agent-framework-feature-map.md`
   - `README.md`
-  - `example/README.md`
-  - `example/AGENT_LADDER.md`
+  - `showcase/README.md`
+  - `showcase/AGENT_LADDER.md`
   - `JIDOKA_V2.md`
 - **Approach:** Set readiness to Proven only for passing features. For failed
   proof, update capability and readiness independently: capability becomes
@@ -529,7 +529,7 @@ flowchart TB
   the independently maintained detailed matrix from the architecture record in
   favor of a concise linked summary.
 - **Patterns to follow:** The explicit guide lists in `mix.exs` and the parity
-  rules in `example/AGENT_LADDER.md`.
+  rules in `showcase/AGENT_LADDER.md`.
 - **Test expectation:** None -- this unit publishes already tested evidence and
   documentation; it does not introduce runtime behavior.
 - **Verification:** Every published claim uses the same feature ID, semantics,
@@ -635,9 +635,9 @@ follow-up work. Example code must not emulate a missing capability.
 ### Local sources
 
 - `JIDOKA_V2.md` -- current architecture summary, matrix v0.1, and gap backlog.
-- `example/AGENT_LADDER.md` and `example/AGENTS.md` -- showcase ordering,
+- `showcase/AGENT_LADDER.md` and `showcase/AGENTS.md` -- showcase ordering,
   example honesty rules, and route conventions.
-- `example/test/kitchen_sink_agent_flow_test.exs` -- strongest current
+- `showcase/test/kitchen_sink_agent_flow_test.exs` -- strongest current
   deterministic proof pattern.
 - `guides/glossary.md`, `guides/workflows.md`,
   `guides/human-in-the-loop.md`, `guides/idempotency-and-safety.md`,

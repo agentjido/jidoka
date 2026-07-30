@@ -293,6 +293,20 @@ defmodule Jidoka.Workflow.LuaTest do
              Lua.execute("return {}", catalog: catalog(), allowed_tools: ["admin.mutate"])
   end
 
+  test "stops recursive scripts at the configured call depth" do
+    script = """
+    local function loop(n)
+      return loop(n + 1)
+    end
+
+    return loop(1)
+    """
+
+    assert {:error, result} = Lua.execute(script, catalog: catalog(), max_call_depth: 4)
+    assert result["policy"]["max_call_depth"] == 4
+    assert result["reason"] =~ "stack overflow"
+  end
+
   defp catalog do
     Catalog.new!(id: "workflow-lua-test", name: "Workflow Lua Test")
     |> Catalog.register!(SearchCustomers,

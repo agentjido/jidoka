@@ -1,0 +1,168 @@
+# Approval Agent Walkthrough
+
+## Section
+
+This notebook walks through the real Approval Agent from `showcase/`. A live
+model proposes a refund, Jidoka pauses before the action runs, and an explicit
+approval resumes the serialized snapshot.
+
+You need one Livebook secret:
+
+* Create `OPENAI_API_KEY` under **Hub > Secrets**. Livebook exposes it to the
+  notebook as `LB_OPENAI_API_KEY`, and `Jidoka.Kino` mirrors it to the provider
+  environment.
+
+The signed snapshot also needs a signing secret. This notebook creates an
+in-memory secret for the local demo, so you do not need to provide another key.
+Production applications should configure `JIDOKA_SNAPSHOT_SIGNING_SECRET`
+explicitly and keep it stable.
+
+```elixir
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: Path.expand("..", __DIR__)}
+  ],
+  consolidate_protocols: false
+)
+```
+
+```elixir
+package_root = Path.expand("..", __DIR__)
+showcase_root = Path.join(package_root, "showcase")
+
+for path <- [
+      "lib/jidoka_showcase/approval_agent/actions/issue_refund.ex",
+      "lib/jidoka_showcase/approval_agent/controls/require_refund_approval.ex",
+      "lib/jidoka_showcase/approval_agent/agent.ex"
+    ] do
+  Code.require_file(Path.join(showcase_root, path))
+end
+
+alias JidokaShowcase.ApprovalAgent.Agent, as: ApprovalAgent
+```
+
+```elixir
+unless Application.get_env(:jidoka, :snapshot_signing_secret) do
+  Application.put_env(:jidoka, :snapshot_signing_secret, :crypto.strong_rand_bytes(32))
+end
+
+setup =
+  Jidoka.Kino.setup_notebook(
+    model: Jidoka.Config.model_ref(Jidoka.Config.default_model()),
+    provider: :openai
+  )
+
+if setup.live_provider? do
+  :ok
+else
+  raise "Add OPENAI_API_KEY to this Livebook's Hub secrets before running the live turn."
+end
+```
+
+## Inspect The Agent
+
+The notebook loads the example module directly, so this inspection stays in
+sync with the agent used by the Phoenix showcase.
+
+```elixir
+ApprovalAgent.guide()
+```
+
+```elixir
+{:ok, _inspection} = Jidoka.Kino.debug_agent(ApprovalAgent)
+{:ok, _diagram} = Jidoka.Kino.agent_diagram(ApprovalAgent)
+```
+
+## Preflight The Refund Request
+
+Preflight assembles the exact prompt and tool definitions without calling the
+model or executing the refund action.
+
+```elixir
+prompt = "Please refund order B2002 for $25 because the shipment is delayed."
+
+{:ok, preflight} = Jidoka.Kino.preflight(ApprovalAgent, prompt)
+
+%{
+  model: preflight.prompt.model,
+  messages: preflight.prompt.messages,
+  tools: Enum.map(preflight.prompt.operations, & &1.name),
+  diagnostics: preflight.diagnostics
+}
+```
+
+## Run Until Human Review
+
+This cell makes the first live model call. The expected result is
+`{:hibernate, snapshot}`: the model has proposed `issue_refund`, but the action
+has not run. The walkthrough freezes its clock so you can inspect the pending
+review before resuming without consuming the example agent's 30-second turn
+timeout. Production should use a timeout and review policy that accommodates
+its operators rather than freezing time.
+
+```elixir
+demo_now_ms = System.system_time(:millisecond)
+demo_clock = fn -> demo_now_ms end
+
+{:hibernate, snapshot} =
+  Jidoka.Kino.trace("request refund", fn ->
+    ApprovalAgent.run_turn(prompt, clock: demo_clock)
+  end)
+
+{:ok, _timeline} = Jidoka.Kino.timeline(snapshot)
+snapshot.cursor.phase
+```
+
+## Inspect And Serialize The Pending Review
+
+The pending operation is ordinary review data. Serializing the signed snapshot
+demonstrates that approval can cross a process or request boundary.
+
+Signed snapshots provide integrity, not encryption, reviewer authorization, or
+single-use semantics. In production, keep snapshots server-side; authorize
+reviewers; atomically consume snapshot or interrupt IDs (or use persisted
+sessions); persist the result; and make downstream actions idempotent.
+
+```elixir
+{:ok, [review]} = Jidoka.pending_reviews(snapshot)
+{:ok, serialized_snapshot} = Jidoka.Runtime.AgentSnapshot.serialize(snapshot)
+
+%{
+  operation: review.operation,
+  arguments: review.arguments,
+  reason: review.reason,
+  interrupt_id: review.interrupt_id,
+  serialized_bytes: byte_size(serialized_snapshot)
+}
+```
+
+## Approve And Resume
+
+Approval targets the pending interrupt. For this resume, Jidoka restores the
+snapshot, runs the refund action once, gives its result back to the model, and
+returns the final answer.
+
+```elixir
+{:ok, result} =
+  Jidoka.Kino.trace("approve refund", fn ->
+    Jidoka.approve(serialized_snapshot, review,
+      reason: :operator_approved,
+      clock: demo_clock
+    )
+  end)
+
+%{
+  answer: result.content,
+  operation_results: Enum.map(result.agent_state.operation_results, &Jidoka.project/1)
+}
+```
+
+## Inspect The Completed Trace
+
+```elixir
+{:ok, _timeline} = Jidoka.Kino.timeline(result)
+{:ok, _graph} = Jidoka.Kino.call_graph(result)
+```
+
+<!-- livebook:{"offset":4754,"stamp":{"token":"XCP.dC1H_ADe2urF9xLscq-Uk4uv8eJG40u4NGaCvQ43aywH4TM6p8HgUzTrQjxwGdIydYD9jfm--ccFo6_o7fbJIBubQU3kTTqQQaUufd308j_uxtz9xJ01tmQ","version":2}} -->

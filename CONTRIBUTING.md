@@ -3,7 +3,7 @@
 Jidoka follows the Jido ecosystem package quality standards:
 
 - keep library code in `lib/`;
-- keep example-only app wiring in `example/`;
+- keep example-only app wiring in `showcase/`;
 - validate public data with Zoi structs;
 - normalize package errors through `Jidoka.Error`;
 - keep the Runic turn spine deterministic and runtime effects explicit.
@@ -53,7 +53,6 @@ Jidoka intentionally keeps the public package root as `Jidoka`, not
 `Jido.Jidoka`, because this package is a named harness built on top of the Jido
 ecosystem rather than a Jido core subpackage.
 
-The Phoenix companion app currently lives in `example/` rather than
-`examples/`. That singular folder name is an explicit local convention for the
-single showcase app; example-only dependencies remain isolated there and do not
-enter the primary package runtime graph.
+The Phoenix companion app lives in `showcase/`. This name separates UI and
+system integration from package-level examples in `examples/`. Showcase-only
+dependencies stay isolated and do not enter the primary package runtime graph.

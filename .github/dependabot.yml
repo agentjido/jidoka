@@ -11,3 +11,15 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
+
+  - package-ecosystem: "mix"
+    directory: "/showcase"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "elixir"
+    commit-message:
+      prefix: "deps"
+      include: "scope"

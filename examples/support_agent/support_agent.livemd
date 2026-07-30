@@ -1,0 +1,217 @@
+# Support Agent
+
+This Livebook runs the package-level support-agent example from `examples/`.
+The agent, action, operation control, and Mock LLM each have a separate source
+file. None of those modules are part of production compilation.
+
+The example is deterministic. It does not use credentials, network access, or
+recorded model responses.
+
+## Setup
+
+```elixir
+package_root = Path.expand("../..", __DIR__)
+examples_root = Path.expand("..", __DIR__)
+
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: package_root}
+  ],
+  consolidate_protocols: false
+)
+
+Code.require_file(Path.join(examples_root, "registry.exs"))
+
+{:ok, support_example} = JidokaExamples.fetch(:support_agent)
+{:ok, _modules} = JidokaExamples.load(support_example)
+
+alias Jidoka.Runtime.JidoActions
+alias JidokaExamples.SupportAgent.Actions.LookupOrder
+alias JidokaExamples.SupportAgent.Agent, as: SupportAgent
+alias JidokaExamples.SupportAgent.Example
+alias JidokaExamples.SupportAgent.LLMs.MockLLM
+```
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:support-example-model", check_provider?: false)
+```
+
+## Inspect The Example Files
+
+```elixir
+support_example.files
+```
+
+The registry gives the files an explicit load order:
+
+1. Action
+2. Operation control
+3. Mock LLM
+4. Agent
+5. Example runner
+
+## Inspect The Agent
+
+```elixir
+{:ok, _inspection} = Jidoka.Kino.debug_agent(SupportAgent)
+{:ok, _diagram} = Jidoka.Kino.agent_diagram(SupportAgent)
+```
+
+## Inspect The First Prompt
+
+Preflight creates the prompt and tool definition. It does not call the Mock LLM
+or run the action.
+
+```elixir
+request =
+  Jidoka.Turn.Request.new!(
+    input: "Check order A1001 and tell me what to do next.",
+    context: %{account_id: "acct_123", actor_id: "user_123"}
+  )
+
+{:ok, preflight} = Jidoka.Kino.preflight(SupportAgent, request)
+
+%{
+  messages: preflight.prompt.messages,
+  tools: Enum.map(preflight.prompt.operations, & &1.name),
+  diagnostics: preflight.diagnostics
+}
+```
+
+## Run The Deterministic Tool Path
+
+The Mock LLM requests `lookup_order`. The control allows normal order access.
+The action returns the order, and Jidoka puts that result in the next model
+prompt.
+
+```elixir
+observer = self()
+{:ok, result} = Example.execute(observer: observer)
+
+control_call =
+  receive do
+    {:order_control_called, operation, arguments, approval_required?} ->
+      %{
+        operation: operation,
+        arguments: arguments,
+        approval_required?: approval_required?
+      }
+  after
+    0 -> :missing
+  end
+
+action_call =
+  receive do
+    {:lookup_order_called, order_id} ->
+      %{order_id: order_id}
+  after
+    0 -> :missing
+  end
+
+model_observation =
+  receive do
+    {:order_observation_seen, order} -> order
+  after
+    0 -> :missing
+  end
+```
+
+```elixir
+operation_result = List.first(result.agent_state.operation_results)
+
+checks = %{
+  control_allowed_access: control_call.approval_required? == false,
+  action_loaded_order: action_call == %{order_id: "A1001"},
+  model_received_action_result: model_observation == operation_result.output,
+  final_answer_used_order:
+    result.content ==
+      "Order A1001 is in transit with UPS. ETA: 2026-06-03. " <>
+        "Tell the customer the package is on schedule and ask them to watch for delivery updates."
+}
+
+unless Enum.all?(checks, fn {_name, passed?} -> passed? end) do
+  raise "support-agent example failed: #{inspect(checks)}"
+end
+
+%{
+  checks: checks,
+  answer: result.content,
+  operation: Jidoka.project(operation_result)
+}
+```
+
+## Inspect The Runtime
+
+```elixir
+{:ok, _timeline} = Jidoka.Kino.timeline(result)
+{:ok, _graph} = Jidoka.Kino.call_graph(result)
+```
+
+## Require Human Review
+
+A credential reference marks the order access as authenticated. The operation
+control pauses the turn before the action runs.
+
+```elixir
+review_observer = self()
+
+{:hibernate, snapshot} =
+  Example.execute(
+    observer: review_observer,
+    credential_ref: "credential:support-demo"
+  )
+
+review_control_call =
+  receive do
+    {:order_control_called, operation, arguments, approval_required?} ->
+      %{
+        operation: operation,
+        arguments: arguments,
+        approval_required?: approval_required?
+      }
+  after
+    0 -> :missing
+  end
+
+{:ok, [review]} = Jidoka.pending_reviews(snapshot)
+
+%{
+  control: review_control_call,
+  operation: review.operation,
+  arguments: review.arguments,
+  reason: review.reason
+}
+```
+
+## Approve And Resume
+
+Approval resumes the same snapshot. Jidoka runs `lookup_order` once and returns
+its result to the Mock LLM.
+
+```elixir
+{:ok, approved_result} =
+  Jidoka.approve(snapshot, review,
+    reason: :operator_approved,
+    llm: MockLLM.new("A1001", review_observer),
+    operations: JidoActions.operations([LookupOrder]),
+    operation_context: %{example_observer: review_observer}
+  )
+
+receive do
+  {:lookup_order_called, "A1001"} -> :action_ran_once
+after
+  0 -> raise "approved action did not run"
+end
+
+receive do
+  {:order_observation_seen, %{"order_id" => "A1001", "status" => "in_transit"}} ->
+    approved_result.content
+after
+  0 -> raise "approved action result did not reach the Mock LLM"
+end
+```
+
+```elixir
+{:ok, _approved_timeline} = Jidoka.Kino.timeline(approved_result)
+```

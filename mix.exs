@@ -11,6 +11,8 @@ defmodule Jidoka.MixProject do
       version: @version,
       elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
+      test_pattern: "*_test.exs",
+      test_paths: test_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
       dialyzer: dialyzer(),
       aliases: aliases(),
@@ -28,7 +30,8 @@ defmodule Jidoka.MixProject do
           ~r/^Jidoka\.Kino(\.|$)/,
           ~r/^Jidoka\.Workflow\.Dsl(\.|$)/,
           ~r/^Jidoka\.IntegrationSupport\./,
-          ~r/^Jidoka\.TestSupport(\.|$)/
+          ~r/^Jidoka\.TestSupport(\.|$)/,
+          ~r/^JidokaExamples(\.|$)/
         ],
         summary: [threshold: 80]
       ],
@@ -92,6 +95,8 @@ defmodule Jidoka.MixProject do
         "lib",
         "guides",
         "livebook",
+        "examples",
+        "scripts",
         ".formatter.exs",
         "mix.exs",
         "README.md",
@@ -124,7 +129,7 @@ defmodule Jidoka.MixProject do
           "CONTRIBUTING.md",
           "usage-rules.md",
           "LICENSE"
-        ] ++ guide_extras() ++ Path.wildcard("livebook/*.livemd"),
+        ] ++ guide_extras() ++ example_extras(),
       groups_for_extras: groups_for_extras(),
       groups_for_modules: groups_for_modules(),
       nest_modules_by_prefix: nested_module_prefixes()
@@ -207,7 +212,8 @@ defmodule Jidoka.MixProject do
       Internals:
         ~r{guides/(runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
       Appendix: ~r{guides/(glossary|troubleshooting)\.md},
-      Livebooks: ~r{livebook/.*\.livemd}
+      Examples: ~r{examples/(README|PROVEN_FEATURES)\.md},
+      Livebooks: ~r{(?:examples|livebook)/.*\.livemd}
     ]
   end
 
@@ -328,4 +334,12 @@ defmodule Jidoka.MixProject do
       ]
     ]
   end
+
+  defp example_extras do
+    ["examples/README.md", "examples/PROVEN_FEATURES.md"] ++
+      Path.wildcard("examples/**/*.livemd") ++ Path.wildcard("livebook/*.livemd")
+  end
+
+  defp test_paths(:test), do: ["test", "examples"]
+  defp test_paths(_env), do: ["test"]
 end
