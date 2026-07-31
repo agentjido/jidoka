@@ -4,10 +4,11 @@ defmodule Jidoka.Workflow.Lua.Plan do
   require Runic
   import Runic, only: [context: 1]
 
+  alias Jidoka.Context
+  alias Jidoka.Runtime.JidoActions
   alias Jidoka.Workflow.Lua.CallTrace
   alias Jidoka.Workflow.Lua.Plan.{Ref, Spec}
   alias Jidoka.Workflow.Lua.Policy
-  alias Jidoka.Context
   alias Runic.Workflow
 
   @type t :: Spec.t()
@@ -369,23 +370,9 @@ defmodule Jidoka.Workflow.Lua.Plan do
   end
 
   defp run_action(action, arguments, context) do
-    tool = action.to_tool()
-
-    case tool.function.(arguments, context) do
-      {:ok, encoded} -> {:ok, decode_tool_payload(encoded)}
-      {:error, encoded} -> {:error, decode_tool_payload(encoded)}
-      other -> {:error, {:invalid_action_result, other}}
-    end
+    action.to_tool()
+    |> JidoActions.invoke_tool(arguments, context)
   end
-
-  defp decode_tool_payload(encoded) when is_binary(encoded) do
-    case Jason.decode(encoded) do
-      {:ok, decoded} -> decoded
-      {:error, _reason} -> encoded
-    end
-  end
-
-  defp decode_tool_payload(value), do: value
 
   defp format_reason(reason) when is_binary(reason), do: reason
   defp format_reason(reason), do: inspect(reason)

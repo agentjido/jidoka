@@ -103,6 +103,25 @@ defmodule Jidoka.Workflow.LuaTest do
     def run(_params, _context), do: {:ok, %{"mutated" => true}}
   end
 
+  defmodule ReadActionContext do
+    @moduledoc false
+
+    use Jidoka.Action,
+      name: "workflow_lua_read_action_context",
+      description: "Reads caller data from the Jido action context.",
+      schema: Zoi.object(%{})
+
+    @impl true
+    def run(_params, context) do
+      {:ok,
+       %{
+         actor: Map.get(context, :actor),
+         access_actor: context[:actor],
+         helper_actor: Jidoka.Context.get(context, :actor)
+       }}
+    end
+  end
+
   test "requires a catalog or entries" do
     assert {:error, :missing_lua_workflow_catalog} = Lua.execute("return {}")
   end
@@ -203,6 +222,26 @@ defmodule Jidoka.Workflow.LuaTest do
     assert result["call_count"] == 3
     assert result["result"]["workflow_id"] == "invoice_followup"
     assert result["result"]["output"]["note"] =~ "Ada Lovelace"
+  end
+
+  test "Lua workflow actions receive the projected Jido action context" do
+    script = """
+    return jidoka.workflow({
+      id = "context_projection",
+      steps = {
+        {id = "context", tool = "context.read", arguments = {}}
+      },
+      output = "context"
+    })
+    """
+
+    assert {:ok, result} = Lua.execute(script, catalog: catalog(), context: %{actor: "actor-1"})
+
+    assert result["result"]["output"] == %{
+             "actor" => "actor-1",
+             "access_actor" => "actor-1",
+             "helper_actor" => "actor-1"
+           }
   end
 
   test "requires the script to return the workflow result" do
@@ -332,6 +371,12 @@ defmodule Jidoka.Workflow.LuaTest do
       description: "Mutate",
       visibility: :hidden,
       read_only?: false
+    )
+    |> Catalog.register!(ReadActionContext,
+      id: "context.read",
+      description: "Read action context",
+      visibility: :hidden,
+      read_only?: true
     )
   end
 end

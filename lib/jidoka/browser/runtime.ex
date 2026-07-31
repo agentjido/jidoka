@@ -126,6 +126,12 @@ defmodule Jidoka.Browser.Runtime do
     |> allowlist_for(operation_name)
   end
 
+  defp allowlist_for(%{__jidoka__: _namespace} = context, operation_name) do
+    context
+    |> Jidoka.Context.get_runtime(:jidoka_spec)
+    |> allowlist_for(operation_name)
+  end
+
   defp allowlist_for(%{operations: operations}, operation_name) do
     operations
     |> Enum.find(&(&1.name == operation_name))

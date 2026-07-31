@@ -65,28 +65,32 @@ defmodule JidokaShowcase.KitchenSinkAgentTest do
            end)
 
     assert Enum.any?(spec.controls.operations, fn control ->
-             control.control == AllowSpecialistHandoff and control.match[:name] == "refund_specialist"
+             control.control == AllowSpecialistHandoff and
+               control.match[:name] == "refund_specialist"
            end)
   end
 
   test "show context action returns public context keys only" do
+    context =
+      Jidoka.Context.from_data!(
+        %{
+          actor: %{id: "dev-1", role: "developer"},
+          channel: "kitchen_sink",
+          example: "kitchen_sink_agent",
+          session_id: "session_123",
+          surface: "test",
+          tenant: "demo"
+        },
+        runtime: %{
+          agent_module: Agent,
+          memory_store: :private
+        }
+      )
+
     assert {:ok, result} =
              ShowContext.run(
                %{},
-               Jidoka.Context.from_data!(
-                 %{
-                   actor: %{id: "dev-1", role: "developer"},
-                   channel: "kitchen_sink",
-                   example: "kitchen_sink_agent",
-                   session_id: "session_123",
-                   surface: "test",
-                   tenant: "demo"
-                 },
-                 runtime: %{
-                   agent_module: Agent,
-                   memory_store: :private
-                 }
-               )
+               Jidoka.Context.to_action_context(context)
              )
 
     assert result["actor"] == %{id: "dev-1", role: "developer"}
@@ -95,6 +99,7 @@ defmodule JidokaShowcase.KitchenSinkAgentTest do
     assert result["session_id"] == "session_123"
     assert result["surface"] == "test"
     assert result["tenant"] == "demo"
+    refute "__jidoka__" in result["keys"]
     assert "agent_module" not in result["keys"]
     assert "memory_store" not in result["keys"]
   end

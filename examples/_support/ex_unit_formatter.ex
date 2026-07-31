@@ -24,7 +24,7 @@ defmodule JidokaExamples.ExUnitFormatter do
         test: %{
           file: relative_file(test.tags[:file]),
           line: test.tags[:line],
-          name: test.description || to_string(test.name)
+          name: Map.get(test, :description) || to_string(test.name)
         },
         duration_ms: duration_ms(test.time),
         failure: failure(test.state)

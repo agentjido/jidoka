@@ -8,7 +8,7 @@ defmodule JidokaShowcase.KitchenSinkAgent.Actions.ShowContext do
 
   @impl true
   def run(_params, context) do
-    public_context = Jidoka.Context.data(context)
+    public_context = Map.drop(context, [:__jidoka__, "__jidoka__", :__struct__])
 
     {:ok,
      %{

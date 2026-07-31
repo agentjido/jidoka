@@ -42,6 +42,26 @@ defmodule Jidoka.WorkflowDslTest do
     def run(%{value: value}, _context), do: {:ok, %{value: value * 2}}
   end
 
+  defmodule InspectActionContext do
+    @moduledoc false
+
+    use Jidoka.Action,
+      name: "workflow_inspect_action_context",
+      description: "Inspects the Jido action context projection.",
+      schema: Zoi.object(%{})
+
+    @impl true
+    def run(_params, context) do
+      {:ok,
+       %{
+         actor: Map.get(context, :actor),
+         access_actor: context[:actor],
+         helper_actor: Jidoka.Context.get(context, :actor),
+         runtime_value: Jidoka.Context.get_runtime(context, :trusted)
+       }}
+    end
+  end
+
   defmodule Fns do
     @moduledoc false
 
@@ -302,6 +322,23 @@ defmodule Jidoka.WorkflowDslTest do
     end
 
     output from(:double)
+  end
+
+  defmodule ActionContextWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:action_context_workflow)
+      input Zoi.object(%{})
+    end
+
+    steps do
+      action(:inspect_context, InspectActionContext, input: %{})
+    end
+
+    output from(:inspect_context)
   end
 
   defmodule SlowWorkflow do
@@ -1058,6 +1095,19 @@ defmodule Jidoka.WorkflowDslTest do
     assert error.details.cause == {:retry_exhausted, 2, :still_failing}
   end
 
+  test "workflow actions receive the projected Jido action context" do
+    context =
+      Jidoka.Context.from_data!(%{actor: "actor-1"}, runtime: %{trusted: "runtime-value"})
+
+    assert {:ok,
+            %{
+              "actor" => "actor-1",
+              "access_actor" => "actor-1",
+              "helper_actor" => "actor-1",
+              "runtime_value" => "runtime-value"
+            }} = Workflow.run(ActionContextWorkflow, %{}, context: context)
+  end
+
   test "workflow total timeout still wins over retry backoff" do
     started_at = System.monotonic_time(:millisecond)
 
@@ -1069,7 +1119,13 @@ defmodule Jidoka.WorkflowDslTest do
   end
 
   test "workflow step runner exposes clear failure modes" do
-    state = %{input: %{}, context: %{}, steps: %{}, agent_opts: [], error: nil}
+    state = %{
+      input: %{},
+      context: Jidoka.Context.from_data!(%{}),
+      steps: %{},
+      agent_opts: [],
+      error: nil
+    }
 
     spec = Spec.new!(id: "step_runner_workflow", module: __MODULE__)
 

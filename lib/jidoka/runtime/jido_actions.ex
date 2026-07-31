@@ -55,7 +55,7 @@ defmodule Jidoka.Runtime.JidoActions do
       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Jidoka.Context{} = context ->
         with {:ok, request} <- Effect.OperationRequest.from_input(payload),
              {:ok, tool} <- fetch_tool(tools, request.name) do
-          call_tool(tool, request.arguments, context)
+          invoke_tool(tool, request.arguments, context)
         end
 
       %Effect.Intent{kind: kind}, _journal, %Jidoka.Context{} ->
@@ -70,12 +70,18 @@ defmodule Jidoka.Runtime.JidoActions do
     end
   end
 
-  defp call_tool(%{function: function}, arguments, context) when is_function(function, 2) do
-    case function.(arguments, context) do
+  @doc false
+  @spec invoke_tool(map(), map(), Jidoka.Context.t()) :: {:ok, term()} | {:error, term()}
+  def invoke_tool(%{function: function}, arguments, %Jidoka.Context{} = context)
+      when is_function(function, 2) and is_map(arguments) do
+    case function.(arguments, Jidoka.Context.to_action_context(context)) do
       {:ok, encoded} -> {:ok, decode_tool_payload(encoded)}
       {:error, encoded} -> {:error, decode_tool_payload(encoded)}
+      other -> {:error, {:invalid_action_result, other}}
     end
   end
+
+  def invoke_tool(_tool, _arguments, _context), do: {:error, :invalid_action_tool}
 
   defp decode_tool_payload(encoded) when is_binary(encoded) do
     case Jason.decode(encoded) do

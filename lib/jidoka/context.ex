@@ -28,6 +28,7 @@ defmodule Jidoka.Context do
     :handoff
   ]
   @operation_idempotencies [:pure, :idempotent, :dedupe, :reconcile, :unsafe_once]
+  @action_context_namespace :__jidoka__
 
   @schema Zoi.struct(
             __MODULE__,
@@ -226,13 +227,23 @@ defmodule Jidoka.Context do
     end
   end
 
+  @doc "Projects caller data into the context map expected by Jido actions."
+  @spec to_action_context(t()) :: map()
+  def to_action_context(%__MODULE__{} = context) do
+    context
+    |> data()
+    |> Map.drop([:__struct__, @action_context_namespace, Atom.to_string(@action_context_namespace)])
+    |> Map.put(@action_context_namespace, %{context: context})
+  end
+
   @doc "Fetches an application context value by atom or string key without creating atoms."
-  @spec fetch(t(), atom() | String.t()) :: {:ok, term()} | :error
+  @spec fetch(t() | map(), atom() | String.t()) :: {:ok, term()} | :error
   def fetch(%__MODULE__{data: data}, key), do: fetch_any(data, key)
+  def fetch(context, key) when is_map(context), do: fetch_any(context, key)
 
   @doc "Returns an application context value by atom or string key without creating atoms."
-  @spec get(t(), atom() | String.t(), term()) :: term()
-  def get(%__MODULE__{} = context, key, default \\ nil) do
+  @spec get(t() | map(), atom() | String.t(), term()) :: term()
+  def get(context, key, default \\ nil) when is_map(context) do
     case fetch(context, key) do
       {:ok, value} -> value
       :error -> default
@@ -248,12 +259,17 @@ defmodule Jidoka.Context do
   def runtime(%__MODULE__{runtime: runtime}), do: runtime
 
   @doc "Fetches a runtime-only value by atom or string key without creating atoms."
-  @spec fetch_runtime(t(), atom() | String.t()) :: {:ok, term()} | :error
+  @spec fetch_runtime(t() | map(), atom() | String.t()) :: {:ok, term()} | :error
   def fetch_runtime(%__MODULE__{runtime: runtime}, key), do: fetch_any(runtime, key)
 
+  def fetch_runtime(%{@action_context_namespace => %{context: %__MODULE__{} = context}}, key),
+    do: fetch_runtime(context, key)
+
+  def fetch_runtime(context, _key) when is_map(context), do: :error
+
   @doc "Returns a runtime-only value by atom or string key without creating atoms."
-  @spec get_runtime(t(), atom() | String.t(), term()) :: term()
-  def get_runtime(%__MODULE__{} = context, key, default \\ nil) do
+  @spec get_runtime(t() | map(), atom() | String.t(), term()) :: term()
+  def get_runtime(context, key, default \\ nil) when is_map(context) do
     case fetch_runtime(context, key) do
       {:ok, value} -> value
       :error -> default
