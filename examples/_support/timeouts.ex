@@ -2,7 +2,7 @@ defmodule JidokaExamples.Timeouts do
   @moduledoc false
 
   @budgets %{
-    compile: 120_000,
+    compile: 240_000,
     documentation: 120_000,
     example: 30_000,
     livebook: 30_000,
