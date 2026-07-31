@@ -15,6 +15,7 @@ defmodule Jidoka.Handoff.OwnerStore.InMemory do
 
   @table :jidoka_handoff_owners
 
+  @doc "Starts the process-local handoff owner store."
   @spec start_link(keyword()) :: GenServer.on_start()
   def start_link(opts \\ []) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)

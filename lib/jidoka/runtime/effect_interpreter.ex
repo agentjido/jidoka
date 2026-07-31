@@ -18,6 +18,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Review.Interrupt
   alias Jidoka.Turn
 
+  @doc "Interprets the next pending effect or reuses its journaled result."
   @spec interpret_pending(Turn.State.t(), Capabilities.t(), keyword()) ::
           {:ok, Effect.Result.t(), Turn.State.t()}
           | {:interrupt, Interrupt.t(), Turn.State.t()}
@@ -38,6 +39,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     {:error, Error.normalize(:missing_pending_effect, operation: :interpret_effect, phase: :effect)}
   end
 
+  @doc "Interprets the pending operation effects as a bounded batch."
   @spec interpret_operation_batch(Turn.State.t(), Capabilities.t(), keyword()) ::
           {:ok, [Effect.Result.t()], Turn.State.t()}
           | {:interrupt, Interrupt.t(), Turn.State.t()}

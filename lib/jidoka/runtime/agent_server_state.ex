@@ -35,12 +35,15 @@ defmodule Jidoka.Runtime.AgentServerState do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for Jidoka state stored in a Jido agent."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the key used to store Jidoka state in a Jido agent state map."
   @spec state_key() :: atom()
   def state_key, do: @state_key
 
+  @doc "Builds agent-server state from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs \\ []) do
     attrs
@@ -49,14 +52,17 @@ defmodule Jidoka.Runtime.AgentServerState do
     |> then(&Schema.parse(@schema, &1))
   end
 
+  @doc "Builds agent-server state and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs \\ []), do: Schema.parse!(@schema, prepare_attrs(attrs), "agent server state")
 
+  @doc "Normalizes optional agent-server state input."
   @spec from_input(t() | keyword() | map() | nil) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = state), do: new(state)
   def from_input(nil), do: new()
   def from_input(input), do: new(input)
 
+  @doc "Loads Jidoka state from a Jido agent state map."
   @spec from_jido_state(map()) :: {:ok, t()} | {:error, term()}
   def from_jido_state(jido_state) when is_map(jido_state) do
     jido_state
@@ -64,6 +70,7 @@ defmodule Jidoka.Runtime.AgentServerState do
     |> from_input()
   end
 
+  @doc "Loads Jidoka state from a Jido state map and raises on invalid data."
   @spec from_jido_state!(map()) :: t()
   def from_jido_state!(jido_state) when is_map(jido_state) do
     case from_jido_state(jido_state) do
@@ -72,6 +79,7 @@ defmodule Jidoka.Runtime.AgentServerState do
     end
   end
 
+  @doc "Returns semantic agent state from a Jido state map."
   @spec current_agent_state(map()) :: Agent.State.t()
   def current_agent_state(jido_state) when is_map(jido_state) do
     jido_state
@@ -79,6 +87,7 @@ defmodule Jidoka.Runtime.AgentServerState do
     |> Map.fetch!(:agent_state)
   end
 
+  @doc "Builds completed agent-server state from a turn result."
   @spec completed(Turn.Result.t(), Turn.Request.t()) :: t()
   def completed(%Turn.Result{} = result, %Turn.Request{} = request) do
     new!(
@@ -91,6 +100,7 @@ defmodule Jidoka.Runtime.AgentServerState do
     )
   end
 
+  @doc "Builds hibernated agent-server state from a snapshot."
   @spec hibernated(AgentSnapshot.t(), Turn.Request.t()) :: t()
   def hibernated(%AgentSnapshot{} = snapshot, %Turn.Request{} = request) do
     new!(
@@ -103,6 +113,7 @@ defmodule Jidoka.Runtime.AgentServerState do
     )
   end
 
+  @doc "Builds failed agent-server state while preserving semantic state."
   @spec failed(term(), Agent.State.t(), keyword() | map()) :: t()
   def failed(reason, %Agent.State{} = agent_state \\ Agent.State.new!(), context \\ %{}) do
     new!(
@@ -114,6 +125,7 @@ defmodule Jidoka.Runtime.AgentServerState do
     )
   end
 
+  @doc "Projects Jidoka agent-server state into a Jido state map."
   @spec to_jido_state(t()) :: map()
   def to_jido_state(%__MODULE__{} = state) do
     Map.put(
@@ -128,6 +140,7 @@ defmodule Jidoka.Runtime.AgentServerState do
     )
   end
 
+  @doc "Converts terminal agent-server state to the public turn result shape."
   @spec to_run_result(t()) ::
           {:ok, Turn.Result.t()} | {:hibernate, AgentSnapshot.t()} | {:error, term()}
   def to_run_result(%__MODULE__{status: :completed, result: %Turn.Result{} = result}),

@@ -13,6 +13,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
   alias Jidoka.Runtime.Controls.OperationContext
   alias Jidoka.Turn
 
+  @doc "Applies matching operation controls to an operation intent."
   @spec run(Turn.State.t(), Effect.Intent.t(), keyword()) ::
           {:ok, Turn.State.t()} | {:interrupt, Interrupt.t(), Turn.State.t()} | {:error, term()}
   def run(state, intent, opts \\ [])

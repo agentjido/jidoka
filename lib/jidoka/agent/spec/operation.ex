@@ -40,9 +40,11 @@ defmodule Jidoka.Agent.Spec.Operation do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an agent operation."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the supported operation idempotency policies."
   @spec valid_idempotencies() :: [idempotency()]
   def valid_idempotencies, do: @valid_idempotency
 
@@ -74,6 +76,7 @@ defmodule Jidoka.Agent.Spec.Operation do
   def replay_safe?(:unsafe_once), do: false
   def replay_safe?(_idempotency), do: true
 
+  @doc "Builds an operation specification from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs =
@@ -87,6 +90,7 @@ defmodule Jidoka.Agent.Spec.Operation do
     end
   end
 
+  @doc "Builds an operation specification and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do
@@ -95,6 +99,7 @@ defmodule Jidoka.Agent.Spec.Operation do
     end
   end
 
+  @doc "Normalizes an existing operation specification, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = operation), do: new(operation)
   def from_input(input), do: new(input)

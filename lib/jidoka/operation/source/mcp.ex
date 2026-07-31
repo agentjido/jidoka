@@ -67,6 +67,7 @@ defmodule Jidoka.Operation.Source.MCP do
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an MCP operation source from endpoint and tool settings."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -108,6 +109,7 @@ defmodule Jidoka.Operation.Source.MCP do
     end
   end
 
+  @doc "Builds an MCP operation source and raises if the settings are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do

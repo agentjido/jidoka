@@ -43,6 +43,7 @@ defmodule Jidoka.Schema do
   end
 
   @doc false
+  @spec parse_atom_enum(String.t(), [atom()], keyword()) :: {:ok, atom()} | {:error, String.t()}
   def parse_atom_enum(value, values, _opts) when is_binary(value) and is_list(values) do
     case Enum.find(values, &(Atom.to_string(&1) == value)) do
       nil -> {:error, "invalid enum value: #{value}"}

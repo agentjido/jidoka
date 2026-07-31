@@ -32,9 +32,11 @@ defmodule Jidoka.Effect.LLMDecision do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a normalized model decision."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a model decision from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -47,6 +49,7 @@ defmodule Jidoka.Effect.LLMDecision do
     end
   end
 
+  @doc "Builds a model decision and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do
@@ -55,10 +58,12 @@ defmodule Jidoka.Effect.LLMDecision do
     end
   end
 
+  @doc "Normalizes an existing decision, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = decision), do: new(decision)
   def from_input(input), do: new(input)
 
+  @doc "Builds a final-answer model decision."
   @spec final(String.t(), keyword()) :: t()
   def final(content, opts \\ []) when is_binary(content) do
     new!(
@@ -69,6 +74,7 @@ defmodule Jidoka.Effect.LLMDecision do
     )
   end
 
+  @doc "Builds a decision that requests one operation."
   @spec operation(String.t(), map(), keyword()) :: t()
   def operation(name, arguments \\ %{}, opts \\ []) when is_binary(name) and is_map(arguments) do
     new!(
@@ -79,6 +85,7 @@ defmodule Jidoka.Effect.LLMDecision do
     )
   end
 
+  @doc "Builds a decision that requests one or more operations."
   @spec operations([OperationRequest.t() | keyword() | map()], keyword()) :: t()
   def operations(operations, opts \\ []) when is_list(operations) do
     new!(
@@ -88,6 +95,7 @@ defmodule Jidoka.Effect.LLMDecision do
     )
   end
 
+  @doc "Projects a model decision into its effect payload."
   @spec to_payload(t()) :: map()
   def to_payload(%__MODULE__{type: :final, content: content, result: result}) do
     %{type: :final, content: content, result: result}

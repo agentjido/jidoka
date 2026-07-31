@@ -30,9 +30,11 @@ defmodule Jidoka.Turn.Plan do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an executable turn plan."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Compiles an agent specification into executable turn data."
   @spec new(Jidoka.Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
   def new(%Jidoka.Agent.Spec{} = spec) do
     with :ok <- Jidoka.Agent.Spec.validate_operation_policies(spec) do
@@ -40,6 +42,7 @@ defmodule Jidoka.Turn.Plan do
     end
   end
 
+  @doc "Compiles an agent specification and raises if it is invalid."
   @spec new!(Jidoka.Agent.Spec.t()) :: t()
   def new!(%Jidoka.Agent.Spec{} = spec) do
     case new(spec) do

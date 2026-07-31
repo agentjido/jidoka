@@ -39,6 +39,7 @@ defmodule Jidoka.Operation.Source.Local do
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a local operation source from handler definitions."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -48,6 +49,7 @@ defmodule Jidoka.Operation.Source.Local do
     end
   end
 
+  @doc "Builds a local operation source and raises if the definitions are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do

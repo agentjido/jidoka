@@ -11,6 +11,7 @@ defmodule Jidoka.Memory.Store.InMemory do
   alias Jidoka.Memory.WriteRequest
   alias Jidoka.Memory.WriteResult
 
+  @doc "Starts a process-local memory store."
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
     Agent.start_link(fn -> [] end, opts)

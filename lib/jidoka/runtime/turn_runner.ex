@@ -26,6 +26,7 @@ defmodule Jidoka.Runtime.TurnRunner do
           | {:hibernate, AgentSnapshot.t()}
           | {:error, term()}
 
+  @doc "Runs a new turn through the pure spine and effect interpreter."
   @spec run(Turn.Plan.t(), Turn.Request.t(), Capabilities.t(), keyword()) :: run_result()
   def run(
         %Turn.Plan{} = plan,
@@ -53,6 +54,7 @@ defmodule Jidoka.Runtime.TurnRunner do
     maybe_emit_turn_failed(result, plan, request, opts)
   end
 
+  @doc "Resumes a hibernated turn from its safe phase boundary."
   @spec resume(AgentSnapshot.t(), Capabilities.t(), keyword()) :: run_result()
   def resume(%AgentSnapshot{} = snapshot, %Capabilities{} = capabilities, opts \\ []) do
     with {:ok, state} <- Turn.State.from_snapshot(snapshot) do

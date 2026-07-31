@@ -20,15 +20,19 @@ defmodule Jidoka.Effect.Result do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an interpreted effect result."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an effect result from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds an effect result and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "effect result")
 
+  @doc "Builds a successful result for an effect intent."
   @spec ok(Effect.Intent.t(), term(), keyword()) :: t()
   def ok(intent, output, opts \\ []),
     do:
@@ -40,6 +44,7 @@ defmodule Jidoka.Effect.Result do
         metadata: Keyword.get(opts, :metadata, %{})
       )
 
+  @doc "Builds a failed result for an effect intent."
   @spec error(Effect.Intent.t(), term(), keyword()) :: t()
   def error(intent, output, opts \\ []),
     do:

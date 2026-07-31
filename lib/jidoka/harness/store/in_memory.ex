@@ -11,6 +11,7 @@ defmodule Jidoka.Harness.Store.InMemory do
   alias Jidoka.Harness.Session
   alias Jidoka.Turn
 
+  @doc "Starts a process-local harness session store."
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
     Agent.start_link(fn -> %{} end, opts)

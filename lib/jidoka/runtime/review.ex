@@ -11,6 +11,7 @@ defmodule Jidoka.Runtime.Review do
   alias Jidoka.Review
   alias Jidoka.Turn
 
+  @doc "Reads and normalizes an optional approval response from runtime options."
   @spec approval_response(keyword()) ::
           :missing | {:ok, Review.Response.t()} | {:error, {:invalid_approval_response, term()}}
   def approval_response(opts) do
@@ -26,6 +27,7 @@ defmodule Jidoka.Runtime.Review do
     end
   end
 
+  @doc "Reads and validates the optional approval time-to-live value."
   @spec approval_ttl_ms(keyword()) ::
           {:ok, pos_integer() | nil} | {:error, {:invalid_approval_ttl_ms, term()}}
   def approval_ttl_ms(opts) do
@@ -36,6 +38,7 @@ defmodule Jidoka.Runtime.Review do
     end
   end
 
+  @doc "Stores a pending interrupt and its public review metadata on turn state."
   @spec put_pending_interrupt(
           Turn.State.t(),
           Review.Interrupt.t(),
@@ -58,11 +61,13 @@ defmodule Jidoka.Runtime.Review do
     {:ok, state, interrupt}
   end
 
+  @doc "Adds a response time when the response does not already have one."
   @spec stamp_responded_at(Review.Response.t(), non_neg_integer()) :: Review.Response.t()
   def stamp_responded_at(%Review.Response{} = response, now_ms) do
     %Review.Response{response | responded_at_ms: now_ms}
   end
 
+  @doc "Validates response identity, expiry, and permitted decisions."
   @spec validate_response(Review.Interrupt.t(), Review.Response.t()) :: :ok | {:error, term()}
   def validate_response(
         %Review.Interrupt{id: interrupt_id, expires_at_ms: expires_at_ms},
@@ -89,6 +94,7 @@ defmodule Jidoka.Runtime.Review do
     {:error, {:approval_interrupt_mismatch, expected_interrupt_id, actual_interrupt_id}}
   end
 
+  @doc "Applies a valid approval or denial response to turn state."
   @spec apply_response(Turn.State.t(), Review.Interrupt.t(), Review.Response.t()) ::
           {:ok, Turn.State.t()} | {:error, term()}
   def apply_response(
@@ -106,6 +112,7 @@ defmodule Jidoka.Runtime.Review do
     end
   end
 
+  @doc "Adds or removes pending-review metadata in a durable metadata map."
   @spec put_pending_metadata(map(), Review.Interrupt.t() | nil) :: map()
   def put_pending_metadata(metadata, nil), do: metadata
 

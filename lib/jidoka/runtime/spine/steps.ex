@@ -7,6 +7,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
   alias Jidoka.Effect
   alias Jidoka.Turn
 
+  @doc "Assembles prompt data and plans memory effects without external calls."
   @spec assemble_prompt(Turn.State.t()) :: Turn.State.t()
   def assemble_prompt(%Turn.State{} = state) do
     %Turn.State{} = state = append_memory_recalled(state)
@@ -59,6 +60,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
     |> Turn.Transition.commit()
   end
 
+  @doc "Plans the next model effect from assembled turn state."
   @spec plan_model_effect(Turn.State.t()) :: Turn.State.t()
   def plan_model_effect(%Turn.State{} = state) do
     payload = %{

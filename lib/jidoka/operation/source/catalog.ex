@@ -71,6 +71,7 @@ defmodule Jidoka.Operation.Source.Catalog do
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a catalog operation source from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -110,6 +111,7 @@ defmodule Jidoka.Operation.Source.Catalog do
     end
   end
 
+  @doc "Builds a catalog operation source and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do

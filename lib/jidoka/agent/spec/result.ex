@@ -23,9 +23,11 @@ defmodule Jidoka.Agent.Spec.Result do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a structured-result contract."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a structured-result contract from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     with {:ok, %__MODULE__{} = result} <- Schema.parse(@schema, attrs),
@@ -34,6 +36,7 @@ defmodule Jidoka.Agent.Spec.Result do
     end
   end
 
+  @doc "Builds a structured-result contract and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do
@@ -42,6 +45,7 @@ defmodule Jidoka.Agent.Spec.Result do
     end
   end
 
+  @doc "Normalizes a result contract or treats a schema value as the contract schema."
   @spec from_input(t() | keyword() | map() | term()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = result), do: new(result)
 
@@ -57,6 +61,7 @@ defmodule Jidoka.Agent.Spec.Result do
 
   def from_input(schema), do: new(schema: schema)
 
+  @doc "Validates and normalizes a value through the result schema."
   @spec validate(t(), term()) :: {:ok, term()} | {:error, term()}
   def validate(%__MODULE__{schema: schema}, value) do
     case Zoi.parse(schema, normalize_value_for_schema(schema, value)) do

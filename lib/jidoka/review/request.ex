@@ -28,19 +28,24 @@ defmodule Jidoka.Review.Request do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a public review request."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a review request from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds a review request and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "review request")
 
+  @doc "Normalizes an existing request, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = request), do: new(request)
   def from_input(input), do: new(input)
 
+  @doc "Projects a runtime interrupt into a public review request."
   @spec from_interrupt(Interrupt.t()) :: {:ok, t()} | {:error, term()}
   def from_interrupt(%Interrupt{} = interrupt) do
     new(
@@ -58,6 +63,7 @@ defmodule Jidoka.Review.Request do
     )
   end
 
+  @doc "Projects a runtime interrupt and raises if its data is invalid."
   @spec from_interrupt!(Interrupt.t()) :: t()
   def from_interrupt!(%Interrupt{} = interrupt) do
     case from_interrupt(interrupt) do

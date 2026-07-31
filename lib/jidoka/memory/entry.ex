@@ -20,9 +20,11 @@ defmodule Jidoka.Memory.Entry do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a memory entry."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a memory entry and applies optional identifier defaults."
   @spec new(keyword() | map(), keyword()) :: {:ok, t()} | {:error, term()}
   def new(attrs, opts \\ []) do
     attrs = Schema.normalize_attrs(attrs)
@@ -32,6 +34,7 @@ defmodule Jidoka.Memory.Entry do
     end
   end
 
+  @doc "Builds a memory entry and raises if the attributes are invalid."
   @spec new!(keyword() | map(), keyword()) :: t()
   def new!(attrs, opts \\ []) do
     case new(attrs, opts) do
@@ -40,6 +43,7 @@ defmodule Jidoka.Memory.Entry do
     end
   end
 
+  @doc "Normalizes an existing memory entry, keyword list, or map."
   @spec from_input(t() | keyword() | map(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_input(input, opts \\ [])
   def from_input(%__MODULE__{} = entry, opts), do: new(entry, opts)

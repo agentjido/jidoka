@@ -16,21 +16,27 @@ defmodule Jidoka.Operation.Source do
           capability: Jidoka.Runtime.Capabilities.operation_capability()
         }
 
+  @doc "Returns the model-visible operations exposed by a source."
   @callback operations(source(), keyword()) :: {:ok, [Operation.t()]} | {:error, term()}
+
+  @doc "Returns the runtime capability that executes operations from a source."
   @callback capability(source(), keyword()) ::
               {:ok, Jidoka.Runtime.Capabilities.operation_capability()} | {:error, term()}
 
+  @doc "Loads model-visible operations from one operation source."
   @spec operations(source(), keyword()) :: {:ok, [Operation.t()]} | {:error, term()}
   def operations(%module{} = source, opts \\ []) do
     module.operations(source, opts)
   end
 
+  @doc "Loads the runtime capability from one operation source."
   @spec capability(source(), keyword()) ::
           {:ok, Jidoka.Runtime.Capabilities.operation_capability()} | {:error, term()}
   def capability(%module{} = source, opts \\ []) do
     module.capability(source, opts)
   end
 
+  @doc "Compiles one or more sources into operation data and one routed capability."
   @spec compile([source()] | source(), keyword()) :: {:ok, compiled()} | {:error, term()}
   def compile(sources, opts \\ []) do
     sources = List.wrap(sources)

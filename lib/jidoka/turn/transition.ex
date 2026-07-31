@@ -25,9 +25,11 @@ defmodule Jidoka.Turn.Transition do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a pure turn transition."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Starts a pure transition for a state map."
   @spec new(state(), keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(state, attrs \\ []) when is_map(state) do
     attrs
@@ -36,6 +38,7 @@ defmodule Jidoka.Turn.Transition do
     |> then(&Schema.parse(@schema, &1))
   end
 
+  @doc "Starts a pure transition and raises if its attributes are invalid."
   @spec new!(state(), keyword() | map()) :: t()
   def new!(state, attrs \\ []) when is_map(state) do
     Schema.parse!(
@@ -45,6 +48,7 @@ defmodule Jidoka.Turn.Transition do
     )
   end
 
+  @doc "Adds one neutral event to a transition."
   @spec event(t(), atom(), keyword() | map()) :: t()
   def event(%__MODULE__{} = transition, event, attrs \\ []) do
     existing_events = Map.get(transition.state, :events, []) ++ transition.events
@@ -52,11 +56,13 @@ defmodule Jidoka.Turn.Transition do
     %__MODULE__{transition | events: transition.events ++ [event]}
   end
 
+  @doc "Adds one diagnostic value to a transition."
   @spec diagnostic(t(), term()) :: t()
   def diagnostic(%__MODULE__{} = transition, diagnostic) do
     %__MODULE__{transition | diagnostics: transition.diagnostics ++ [diagnostic]}
   end
 
+  @doc "Commits transition events and diagnostics to the state map."
   @spec commit(t()) :: state()
   def commit(%__MODULE__{state: state, events: events, diagnostics: diagnostics}) do
     state

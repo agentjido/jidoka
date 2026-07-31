@@ -11,9 +11,16 @@ defmodule Jidoka.Workflow do
   alias Jidoka.Schema
   alias Jidoka.Workflow.Spec
 
+  @doc "Runs a callback workflow with normalized input and runtime context."
   @callback run(input :: map(), context :: map()) :: {:ok, term()} | {:error, term()} | term()
+
+  @doc "Returns the stable workflow identifier."
   @callback id() :: String.t()
+
+  @doc "Returns the optional description shown to the model."
   @callback description() :: String.t() | nil
+
+  @doc "Returns the optional JSON-compatible input schema."
   @callback parameters_schema() :: map() | nil
 
   @optional_callbacks description: 0, parameters_schema: 0
@@ -44,6 +51,7 @@ defmodule Jidoka.Workflow do
 
       output from(:double)
   """
+  @spec __using__(keyword()) :: Macro.t()
   defmacro __using__(opts \\ []) do
     if opts == [] do
       quote location: :keep do
@@ -65,6 +73,7 @@ defmodule Jidoka.Workflow do
   end
 
   @doc false
+  @spec __before_compile__(Macro.Env.t()) :: Macro.t()
   defmacro __before_compile__(env) do
     case Module.get_attribute(env.module, :jidoka_workflow_mode) do
       :dsl ->
@@ -98,6 +107,7 @@ defmodule Jidoka.Workflow do
   defp callback_codegen(opts) do
     quote location: :keep do
       @impl Jidoka.Workflow
+      @spec id() :: String.t()
       def id do
         Jidoka.Workflow.normalize_id!(
           Keyword.get(unquote(Macro.escape(opts)), :id) ||
@@ -107,17 +117,20 @@ defmodule Jidoka.Workflow do
       end
 
       @impl Jidoka.Workflow
+      @spec description() :: String.t() | nil
       def description do
         Keyword.get(unquote(Macro.escape(opts)), :description)
       end
 
       @impl Jidoka.Workflow
+      @spec parameters_schema() :: map() | nil
       def parameters_schema do
         Keyword.get(unquote(Macro.escape(opts)), :parameters_schema) ||
           Keyword.get(unquote(Macro.escape(opts)), :input_schema)
       end
 
       @doc false
+      @spec __jidoka_workflow__() :: Jidoka.Workflow.Spec.t()
       def __jidoka_workflow__ do
         Jidoka.Workflow.callback_spec!(
           __MODULE__,

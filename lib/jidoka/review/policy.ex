@@ -31,9 +31,11 @@ defmodule Jidoka.Review.Policy do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a review policy."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a review policy from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -50,6 +52,7 @@ defmodule Jidoka.Review.Policy do
     end
   end
 
+  @doc "Builds a review policy and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do
@@ -58,6 +61,7 @@ defmodule Jidoka.Review.Policy do
     end
   end
 
+  @doc "Normalizes an optional review policy, including boolean shorthand."
   @spec from_input(t() | keyword() | map() | true | false | nil) :: {:ok, t() | nil} | {:error, term()}
   def from_input(nil), do: {:ok, nil}
   def from_input(false), do: {:ok, nil}
@@ -75,10 +79,12 @@ defmodule Jidoka.Review.Policy do
   def from_input(%{} = input), do: new(input)
   def from_input(other), do: {:error, {:invalid_review_policy, other}}
 
+  @doc "Returns true when a policy requires human review."
   @spec required?(t() | nil) :: boolean()
   def required?(%__MODULE__{required: true}), do: true
   def required?(_policy), do: false
 
+  @doc "Projects a review policy into a stable map."
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = policy) do
     %{

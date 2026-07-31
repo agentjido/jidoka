@@ -18,14 +18,17 @@ defmodule Jidoka.Runtime.Controls do
   @type boundary_control :: Input.t() | Output.t()
   @type operation_control :: OperationControl.t()
 
+  @doc "Runs the configured input controls for a turn."
   @spec run_input_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
   def run_input_controls(%Turn.State{} = state),
     do: run_controls(state, :input, state.spec.controls.inputs)
 
+  @doc "Runs the configured output controls for a turn."
   @spec run_output_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
   def run_output_controls(%Turn.State{} = state),
     do: run_controls(state, :output, state.spec.controls.outputs)
 
+  @doc "Runs controls and review policy for one operation intent."
   @spec run_operation_controls(Turn.State.t(), Effect.Intent.t(), keyword()) ::
           {:ok, Turn.State.t()} | {:interrupt, Interrupt.t(), Turn.State.t()} | {:error, term()}
   def run_operation_controls(%Turn.State{} = state, %Effect.Intent{} = intent, opts \\ []) do

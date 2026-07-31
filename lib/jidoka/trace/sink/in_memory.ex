@@ -10,6 +10,7 @@ defmodule Jidoka.Trace.Sink.InMemory do
 
   alias Jidoka.Trace.Policy
 
+  @doc "Starts a process-local trace sink."
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []), do: Agent.start_link(fn -> [] end, opts)
 
@@ -20,9 +21,11 @@ defmodule Jidoka.Trace.Sink.InMemory do
     end
   end
 
+  @doc "Returns all entries recorded by the sink."
   @spec list(pid()) :: [map()]
   def list(pid) when is_pid(pid), do: Agent.get(pid, & &1)
 
+  @doc "Removes all entries from the sink."
   @spec clear(pid()) :: :ok
   def clear(pid) when is_pid(pid), do: Agent.update(pid, fn _entries -> [] end)
 

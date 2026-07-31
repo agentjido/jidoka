@@ -33,18 +33,23 @@ defmodule Jidoka.Agent.Spec.Memory do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an agent memory policy."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the supported memory scopes."
   @spec scopes() :: [scope()]
   def scopes, do: @scopes
 
+  @doc "Returns the supported memory capture modes."
   @spec captures() :: [capture()]
   def captures, do: @captures
 
+  @doc "Returns the supported prompt injection positions."
   @spec injects() :: [inject()]
   def injects, do: @injects
 
+  @doc "Builds a memory policy from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs \\ []) do
     attrs =
@@ -56,9 +61,11 @@ defmodule Jidoka.Agent.Spec.Memory do
     Schema.parse(@schema, attrs)
   end
 
+  @doc "Builds a memory policy and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs \\ []), do: Schema.parse!(@schema, attrs, "memory policy")
 
+  @doc "Normalizes an optional memory policy, including boolean shorthand."
   @spec from_input(t() | keyword() | map() | true | false | nil) ::
           {:ok, t() | nil} | {:error, term()}
   def from_input(nil), do: {:ok, nil}
@@ -67,6 +74,7 @@ defmodule Jidoka.Agent.Spec.Memory do
   def from_input(%__MODULE__{} = memory), do: new(memory)
   def from_input(input), do: new(input)
 
+  @doc "Returns true when the policy captures the complete conversation."
   @spec capture_conversation?(t() | nil) :: boolean()
   def capture_conversation?(%__MODULE__{enabled: true, capture: :conversation}), do: true
   def capture_conversation?(_memory), do: false

@@ -25,15 +25,19 @@ defmodule Jidoka.Turn.Result do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a completed turn result."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a turn result from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds a turn result and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "turn result")
 
+  @doc "Projects finished turn state into the public result contract."
   @spec from_turn_state!(Turn.State.t()) :: t()
   def from_turn_state!(%Turn.State{status: :finished, result: content} = state) do
     new!(

@@ -54,19 +54,24 @@ defmodule Jidoka.Review.Interrupt do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a runtime review interrupt."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a review interrupt from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds a review interrupt and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "interrupt")
 
+  @doc "Normalizes an existing interrupt, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = interrupt), do: new(interrupt)
   def from_input(input), do: new(input)
 
+  @doc "Adds request and expiry times to an interrupt."
   @spec with_review_window(t(), non_neg_integer(), pos_integer() | nil) :: t()
   def with_review_window(%__MODULE__{} = interrupt, now_ms, ttl_ms)
       when is_integer(now_ms) and now_ms >= 0 and (is_nil(ttl_ms) or ttl_ms > 0) do
@@ -80,10 +85,12 @@ defmodule Jidoka.Review.Interrupt do
     }
   end
 
+  @doc "Returns true when the review window has expired."
   @spec expired?(t(), non_neg_integer()) :: boolean()
   def expired?(%__MODULE__{expires_at_ms: nil}, _now_ms), do: false
   def expired?(%__MODULE__{expires_at_ms: expires_at_ms}, now_ms), do: now_ms > expires_at_ms
 
+  @doc "Builds a stable review identifier from deterministic parts."
   @spec stable_id([term()]) :: String.t()
   def stable_id(parts) when is_list(parts) do
     digest =

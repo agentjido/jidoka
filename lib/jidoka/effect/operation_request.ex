@@ -24,19 +24,24 @@ defmodule Jidoka.Effect.OperationRequest do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an operation request."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an operation request from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds an operation request and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "operation request")
 
+  @doc "Normalizes an existing request, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = request), do: new(request)
   def from_input(input), do: new(input)
 
+  @doc "Projects an operation request into an effect payload."
   @spec to_payload(t()) :: map()
   def to_payload(%__MODULE__{} = request) do
     request

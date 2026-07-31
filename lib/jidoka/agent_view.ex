@@ -42,13 +42,23 @@ defmodule Jidoka.AgentView do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Prepares external resources before the initial view is built."
   @callback prepare(input()) :: :ok | {:error, term()}
+
+  @doc "Returns the agent module, specification, or plan for a view input."
   @callback agent_module(input()) :: module() | Jidoka.Agent.Spec.t() | Jidoka.Turn.Plan.t()
+
+  @doc "Returns the durable conversation identifier for a view input."
   @callback conversation_id(input()) :: String.t()
+
+  @doc "Returns the runtime agent identifier for a view input."
   @callback agent_id(input()) :: String.t()
+
+  @doc "Returns application context data for turns started by the view."
   @callback runtime_context(input()) :: map()
 
   @doc false
+  @spec __using__(keyword()) :: Macro.t()
   defmacro __using__(opts \\ []) do
     agent = Keyword.get(opts, :agent)
 
@@ -58,9 +68,12 @@ defmodule Jidoka.AgentView do
       @jidoka_agent_view_agent agent
 
       @impl Jidoka.AgentView
+      @spec prepare(Jidoka.AgentView.input()) :: :ok | {:error, term()}
       def prepare(_input), do: :ok
 
       @impl Jidoka.AgentView
+      @spec agent_module(Jidoka.AgentView.input()) ::
+              module() | Jidoka.Agent.Spec.t() | Jidoka.Turn.Plan.t()
       def agent_module(_input) do
         case @jidoka_agent_view_agent do
           nil ->
@@ -73,42 +86,55 @@ defmodule Jidoka.AgentView do
       end
 
       @impl Jidoka.AgentView
+      @spec conversation_id(Jidoka.AgentView.input()) :: String.t()
       def conversation_id(input), do: Jidoka.AgentView.default_conversation_id(input)
 
       @impl Jidoka.AgentView
+      @spec agent_id(Jidoka.AgentView.input()) :: String.t()
       def agent_id(input),
         do: Jidoka.AgentView.default_agent_id(agent_module(input), conversation_id(input))
 
       @impl Jidoka.AgentView
+      @spec runtime_context(Jidoka.AgentView.input()) :: map()
       def runtime_context(input),
         do: Jidoka.AgentView.default_runtime_context(input, conversation_id(input))
 
       @doc false
+      @spec initial(Jidoka.AgentView.input(), keyword()) ::
+              {:ok, Jidoka.AgentView.t()} | {:error, term()}
       def initial(input \\ %{}, opts \\ []), do: Jidoka.AgentView.initial(__MODULE__, input, opts)
 
       @doc false
+      @spec before_turn(Jidoka.AgentView.t(), String.t()) :: Jidoka.AgentView.t()
       def before_turn(view, message), do: Jidoka.AgentView.before_turn(view, message)
 
       @doc false
+      @spec after_turn(Jidoka.AgentView.t(), Jidoka.run_result()) :: Jidoka.AgentView.t()
       def after_turn(view, result), do: Jidoka.AgentView.after_turn(view, result)
 
       @doc false
+      @spec apply_event(Jidoka.AgentView.t(), Jidoka.Event.t() | map()) :: Jidoka.AgentView.t()
       def apply_event(view, event), do: Jidoka.AgentView.apply_event(view, event)
 
       @doc false
+      @spec run(Jidoka.AgentView.t(), String.t(), keyword()) :: Jidoka.AgentView.t()
       def run(view, message, opts \\ []),
         do: Jidoka.AgentView.run(__MODULE__, view, message, opts)
 
       @doc false
+      @spec visible_messages(Jidoka.AgentView.t()) :: [map()]
       def visible_messages(view), do: Jidoka.AgentView.visible_messages(view)
 
       @doc false
+      @spec lifecycle_hooks() :: [atom()]
       def lifecycle_hooks, do: Jidoka.AgentView.lifecycle_hooks()
 
       @doc false
+      @spec ui_hooks() :: [atom()]
       def ui_hooks, do: lifecycle_hooks()
 
       @doc false
+      @spec request_id() :: String.t()
       def request_id, do: Jidoka.AgentView.request_id()
 
       defoverridable prepare: 1,

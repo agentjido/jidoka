@@ -51,6 +51,7 @@ defmodule Jidoka.Operation.Source.Subagent do
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a bounded subagent operation source."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -76,6 +77,7 @@ defmodule Jidoka.Operation.Source.Subagent do
     end
   end
 
+  @doc "Builds a subagent source and raises if the settings are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do

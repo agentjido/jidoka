@@ -32,15 +32,19 @@ defmodule Jidoka.Harness.Replay do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for replay data."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds replay data from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds replay data and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "harness replay")
 
+  @doc "Builds replay data from a durable harness session."
   @spec from_session(Session.t()) :: {:ok, t()} | {:error, term()}
   def from_session(%Session{} = session) do
     new(
@@ -56,6 +60,7 @@ defmodule Jidoka.Harness.Replay do
     )
   end
 
+  @doc "Builds replay data from a hibernation snapshot."
   @spec from_snapshot(AgentSnapshot.t()) :: {:ok, t()} | {:error, term()}
   def from_snapshot(%AgentSnapshot{} = snapshot) do
     new(

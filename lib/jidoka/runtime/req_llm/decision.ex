@@ -25,6 +25,7 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
   @type t ::
           LLMDecision.t()
 
+  @doc "Parses model text as a normalized final or operation decision."
   @spec parse_text(String.t() | nil) :: {:ok, t()} | {:error, term()}
   def parse_text(nil), do: {:error, :empty_llm_response}
 
@@ -35,6 +36,7 @@ defmodule Jidoka.Runtime.ReqLLM.Decision do
     end
   end
 
+  @doc "Parses a decoded model response object as a normalized decision."
   @spec parse_object(map()) :: {:ok, t()} | {:error, term()}
   def parse_object(object) when is_map(object) do
     parse_object_by_type(object, Schema.get_key(object, :type))

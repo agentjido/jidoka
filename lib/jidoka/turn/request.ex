@@ -20,9 +20,11 @@ defmodule Jidoka.Turn.Request do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a turn request."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a turn request and applies runtime identifier defaults."
   @spec new(keyword() | map(), keyword()) :: {:ok, t()} | {:error, term()}
   def new(attrs, opts \\ []) do
     with {:ok, attrs} <- prepare_attrs(attrs, opts) do
@@ -30,6 +32,7 @@ defmodule Jidoka.Turn.Request do
     end
   end
 
+  @doc "Builds a turn request and raises if the attributes are invalid."
   @spec new!(keyword() | map(), keyword()) :: t()
   def new!(attrs, opts \\ []) do
     case new(attrs, opts) do
@@ -38,6 +41,7 @@ defmodule Jidoka.Turn.Request do
     end
   end
 
+  @doc "Normalizes a request struct, input string, keyword list, or map."
   @spec from_input(t() | String.t() | keyword() | map(), keyword()) ::
           {:ok, t()} | {:error, term()}
   def from_input(input, opts \\ [])

@@ -30,19 +30,24 @@ defmodule Jidoka.Effect.OperationResult do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an operation result."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an operation result from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds an operation result and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "operation result")
 
+  @doc "Normalizes an existing operation result, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = result), do: new(result)
   def from_input(input), do: new(input)
 
+  @doc "Builds an operation result from an operation intent and its output."
   @spec from_effect(Effect.Intent.t(), term()) :: {:ok, t()} | {:error, term()}
   def from_effect(%Effect.Intent{kind: :operation, payload: payload} = intent, output) do
     with {:ok, request} <- Effect.OperationRequest.from_input(payload) do
@@ -58,6 +63,7 @@ defmodule Jidoka.Effect.OperationResult do
     end
   end
 
+  @doc "Converts an operation result to a tool message for the model."
   @spec to_message(t()) :: Agent.Message.t()
   def to_message(%__MODULE__{} = result) do
     Agent.Message.tool(result.operation, result.output, content: result.content || inspect(result.output))

@@ -29,22 +29,28 @@ defmodule Jidoka.Review.Response do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a review response."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the supported review decisions."
   @spec decisions() :: [decision()]
   def decisions, do: @decisions
 
+  @doc "Builds a review response from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds a review response and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "review response")
 
+  @doc "Normalizes an existing response, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = response), do: new(response)
   def from_input(input), do: new(input)
 
+  @doc "Builds an approval response for an interrupt, request, or review identifier."
   @spec approve(Interrupt.t() | Request.t() | String.t(), keyword()) :: t()
   def approve(interrupt_or_id, opts \\ []) do
     new!(
@@ -56,6 +62,7 @@ defmodule Jidoka.Review.Response do
     )
   end
 
+  @doc "Builds a denial response for an interrupt, request, or review identifier."
   @spec deny(Interrupt.t() | Request.t() | String.t(), keyword()) :: t()
   def deny(interrupt_or_id, opts \\ []) do
     new!(

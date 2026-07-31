@@ -137,8 +137,9 @@ defmodule Jidoka.MixProject do
   # Explicit guide list.
   defp guide_extras do
     [
-      # ── Introduction ─────────────────────────────────────────────────────
+      # ── Start Here ───────────────────────────────────────────────────────
       "guides/getting-started.md",
+      "guides/documentation-overview.md",
       "guides/core-concepts.md",
       "guides/public-facade.md",
       "guides/configuration.md",
@@ -183,14 +184,14 @@ defmodule Jidoka.MixProject do
       "guides/import-and-snapshot-contracts.md",
       "guides/errors-and-config-reference.md",
 
-      # ── Developer / Internals ────────────────────────────────────────────
+      # ── Architecture / Internals ─────────────────────────────────────────
       "guides/runic-spine-internals.md",
       "guides/turn-runner-and-effect-interpreter.md",
       "guides/runtime-capabilities-internals.md",
       "guides/projection-internals.md",
       "guides/contributor-testing.md",
 
-      # ── Appendix ─────────────────────────────────────────────────────────
+      # ── Help ─────────────────────────────────────────────────────────────
       "guides/glossary.md",
       "guides/troubleshooting.md"
     ]
@@ -198,7 +199,7 @@ defmodule Jidoka.MixProject do
 
   defp groups_for_extras do
     [
-      Introduction: ~r{guides/(getting-started|core-concepts|public-facade|configuration)\.md},
+      "Start Here": ~r{guides/(getting-started|documentation-overview|core-concepts|public-facade|configuration)\.md},
       "Building Agents":
         ~r{guides/(agent-dsl|tools-and-operations|agent-orchestration|workflows|structured-results|controls|memory|handoffs|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
       "Operating Agents":
@@ -207,11 +208,12 @@ defmodule Jidoka.MixProject do
         ~r{guides/(live-llm-tool-loop|jido-process-integration|ash-jido|browser-tools|mcp-tools|skill-workflow-subagent-tools|kino-notebooks)\.md},
       Reference:
         ~r{guides/(agent-spec-contract|turn-and-effect-contracts|operation-source-contracts|memory-contracts|import-and-snapshot-contracts|errors-and-config-reference)\.md},
-      Internals:
+      "Architecture And Internals":
         ~r{guides/(runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
-      Appendix: ~r{guides/(glossary|troubleshooting)\.md},
+      Help: ~r{guides/(glossary|troubleshooting)\.md},
       Examples: ~r{examples/(?:README|[^/]+/README)\.md},
-      Livebooks: ~r{(?:examples/.+|guides/livebooks)/.*\.livemd}
+      Livebooks: ~r{(?:examples/.+|guides/livebooks)/.*\.livemd},
+      Project: ~r{^(?:README|CHANGELOG|CONTRIBUTING|usage-rules)\.md$|^LICENSE$}
     ]
   end
 

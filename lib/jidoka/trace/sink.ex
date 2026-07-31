@@ -11,8 +11,10 @@ defmodule Jidoka.Trace.Sink do
 
   @type sink :: module() | {module(), keyword() | map()}
 
+  @doc "Records already-filtered trace entries."
   @callback record([map()], Policy.t(), keyword()) :: :ok | {:error, term()}
 
+  @doc "Records trace entries through a sink module or configured sink tuple."
   @spec record(sink(), [map()], Policy.t(), keyword()) :: :ok | {:error, term()}
   def record(sink, entries, policy, opts \\ [])
 

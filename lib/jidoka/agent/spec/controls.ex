@@ -26,9 +26,11 @@ defmodule Jidoka.Agent.Spec.Controls do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for agent controls."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an agent control set from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs \\ []) do
     attrs = Schema.normalize_attrs(attrs)
@@ -55,6 +57,7 @@ defmodule Jidoka.Agent.Spec.Controls do
     end
   end
 
+  @doc "Builds an agent control set and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs \\ []) do
     case new(attrs) do
@@ -63,6 +66,7 @@ defmodule Jidoka.Agent.Spec.Controls do
     end
   end
 
+  @doc "Normalizes an existing control set, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = controls), do: new(controls)
   def from_input(input), do: new(input)

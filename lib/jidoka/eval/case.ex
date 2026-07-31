@@ -28,9 +28,11 @@ defmodule Jidoka.Eval.Case do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an evaluation case."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an evaluation case and validates its optional matcher."
   @spec new(keyword() | map(), keyword()) :: {:ok, t()} | {:error, term()}
   def new(attrs, opts \\ []) do
     attrs = Schema.normalize_attrs(attrs)
@@ -49,6 +51,7 @@ defmodule Jidoka.Eval.Case do
     end
   end
 
+  @doc "Builds an evaluation case and raises if the attributes are invalid."
   @spec new!(keyword() | map(), keyword()) :: t()
   def new!(attrs, opts \\ []) do
     case new(attrs, opts) do
@@ -60,6 +63,7 @@ defmodule Jidoka.Eval.Case do
     end
   end
 
+  @doc "Normalizes an existing evaluation case, keyword list, or map."
   @spec from_input(t() | keyword() | map(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_input(input, opts \\ [])
   def from_input(%__MODULE__{} = eval_case, opts), do: new(eval_case, opts)

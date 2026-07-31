@@ -35,12 +35,15 @@ defmodule Jidoka.Runtime.AgentSnapshot do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a durable agent snapshot."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the current snapshot schema version."
   @spec schema_version() :: pos_integer()
   def schema_version, do: @schema_version
 
+  @doc "Builds a durable agent snapshot from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs =
@@ -54,6 +57,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
     end
   end
 
+  @doc "Builds an agent snapshot and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do
@@ -62,6 +66,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
     end
   end
 
+  @doc "Normalizes a snapshot struct or authenticated serialized snapshot."
   @spec from_input(t() | String.t()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = snapshot), do: new(snapshot)
   def from_input(input) when is_binary(input), do: deserialize(input)
@@ -90,6 +95,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
     end
   end
 
+  @doc "Serializes and signs a snapshot, or raises if serialization fails."
   @spec serialize!(t()) :: String.t()
   def serialize!(snapshot_input) do
     case serialize(snapshot_input) do
@@ -115,6 +121,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
 
   def deserialize(_input), do: {:error, :invalid_snapshot_serialization}
 
+  @doc "Builds a phase-boundary snapshot from the current turn state."
   @spec from_turn_state(Turn.State.t(), Turn.Cursor.t(), keyword()) ::
           {:ok, t()} | {:error, term()}
   def from_turn_state(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts \\ []) do
@@ -132,6 +139,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
     end
   end
 
+  @doc "Builds a phase-boundary snapshot and raises on invalid data."
   @spec from_turn_state!(Turn.State.t(), Turn.Cursor.t(), keyword()) :: t()
   def from_turn_state!(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts \\ []) do
     case from_turn_state(state, cursor, opts) do

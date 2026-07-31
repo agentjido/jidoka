@@ -29,12 +29,15 @@ defmodule Jidoka.Import.AgentDocument do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a portable agent document."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the current portable document format version."
   @spec version() :: pos_integer()
   def version, do: @version
 
+  @doc "Builds a portable agent document from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     with {:ok, %__MODULE__{} = document} <- Schema.parse(@schema, attrs),
@@ -43,6 +46,7 @@ defmodule Jidoka.Import.AgentDocument do
     end
   end
 
+  @doc "Builds a portable agent document and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do

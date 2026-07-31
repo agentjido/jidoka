@@ -3,9 +3,11 @@ defmodule Jidoka.Runtime.Signals do
 
   @turn_run_type "jidoka.turn.run"
 
+  @doc "Returns the Jido signal type used to request a Jidoka turn."
   @spec turn_run_type() :: String.t()
   def turn_run_type, do: @turn_run_type
 
+  @doc "Builds a Jido signal that requests one Jidoka turn."
   @spec turn_run(String.t(), keyword()) :: Jido.Signal.t()
   def turn_run(input, opts \\ []) when is_binary(input) and is_list(opts) do
     data =

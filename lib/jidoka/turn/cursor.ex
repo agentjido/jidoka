@@ -19,17 +19,24 @@ defmodule Jidoka.Turn.Cursor do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a turn cursor."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a turn cursor from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs \\ []), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds a turn cursor and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs \\ []), do: Schema.parse!(@schema, attrs, "turn cursor")
 
+  @doc "Builds a cursor for the boundary after prompt assembly."
+  @spec after_prompt() :: t()
   def after_prompt, do: new!(phase: :after_prompt)
 
+  @doc "Builds a cursor for the boundary before one effect is interpreted."
+  @spec before_effect(Jidoka.Effect.Intent.t() | nil) :: t()
   def before_effect(nil), do: new!(phase: :before_effect)
 
   def before_effect(effect) do
@@ -42,6 +49,8 @@ defmodule Jidoka.Turn.Cursor do
     )
   end
 
+  @doc "Builds a cursor for a pending human-review boundary."
+  @spec review(Jidoka.Review.Interrupt.t()) :: t()
   def review(interrupt) do
     new!(
       phase: :review,

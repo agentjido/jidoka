@@ -27,12 +27,15 @@ defmodule Jidoka.Inspection.Preflight do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for preflight inspection data."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds preflight inspection data from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds preflight inspection data and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "inspection preflight")
 end

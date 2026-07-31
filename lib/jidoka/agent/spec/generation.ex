@@ -36,20 +36,25 @@ defmodule Jidoka.Agent.Spec.Generation do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for model generation settings."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds generation settings from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs \\ []), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds generation settings and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs \\ []), do: Schema.parse!(@schema, attrs, "generation")
 
+  @doc "Normalizes optional generation settings."
   @spec from_input(t() | keyword() | map() | nil) :: {:ok, t()} | {:error, term()}
   def from_input(nil), do: new()
   def from_input(%__MODULE__{} = generation), do: new(generation)
   def from_input(input) when is_list(input) or is_map(input), do: new(normalize_input(input))
 
+  @doc "Converts generation settings to options for ReqLLM."
   @spec to_req_llm_opts(t() | keyword() | map() | nil) :: keyword()
   def to_req_llm_opts(input) do
     case from_input(input) do

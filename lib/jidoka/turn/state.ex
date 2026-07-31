@@ -33,15 +33,19 @@ defmodule Jidoka.Turn.State do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for turn state."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds turn state from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, prepare_attrs(attrs))
 
+  @doc "Builds turn state and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, prepare_attrs(attrs), "turn state")
 
+  @doc "Restores turn state from a compatible agent snapshot."
   @spec from_snapshot(Jidoka.Runtime.AgentSnapshot.t()) :: {:ok, t()} | {:error, term()}
   def from_snapshot(%{turn_state: %__MODULE__{} = state}), do: new(state)
 
@@ -52,6 +56,7 @@ defmodule Jidoka.Turn.State do
     |> Schema.put_default(:journal, Jidoka.Effect.Journal.new!())
   end
 
+  @doc "Applies one interpreted effect result to turn state."
   @spec apply_effect_result(t(), Jidoka.Effect.Result.t()) :: {:ok, t()} | {:error, term()}
   def apply_effect_result(%__MODULE__{} = state, %Jidoka.Effect.Result{status: :ok} = result) do
     case current_pending_effect(state) do
@@ -75,18 +80,22 @@ defmodule Jidoka.Turn.State do
 
   def apply_effect_result(state, result), do: {:error, {:unexpected_effect_result, state, result}}
 
+  @doc "Returns the next pending effect, if one exists."
   @spec current_pending_effect(t()) :: Jidoka.Effect.Intent.t() | nil
   def current_pending_effect(%__MODULE__{pending_effects: [effect | _rest]}), do: effect
   def current_pending_effect(%__MODULE__{}), do: nil
 
+  @doc "Returns true when the turn has a pending effect."
   @spec pending_effect?(t()) :: boolean()
   def pending_effect?(%__MODULE__{} = state), do: not is_nil(current_pending_effect(state))
 
+  @doc "Replaces the pending effect queue."
   @spec set_pending_effects(t(), [Jidoka.Effect.Intent.t()]) :: t()
   def set_pending_effects(%__MODULE__{} = state, effects) when is_list(effects) do
     %__MODULE__{state | pending_effects: effects}
   end
 
+  @doc "Removes the current effect from the pending queue."
   @spec pop_pending_effect(t()) :: t()
   def pop_pending_effect(%__MODULE__{pending_effects: [_effect | rest]} = state) do
     %__MODULE__{state | pending_effects: rest}
@@ -94,11 +103,13 @@ defmodule Jidoka.Turn.State do
 
   def pop_pending_effect(%__MODULE__{} = state), do: state
 
+  @doc "Stores the review interrupt that paused the turn."
   @spec put_pending_interrupt(t(), Jidoka.Review.Interrupt.t()) :: t()
   def put_pending_interrupt(%__MODULE__{} = state, %Jidoka.Review.Interrupt{} = interrupt) do
     %__MODULE__{state | pending_interrupt: interrupt, status: :waiting}
   end
 
+  @doc "Removes the pending review interrupt from turn state."
   @spec clear_pending_interrupt(t()) :: t()
   def clear_pending_interrupt(%__MODULE__{} = state) do
     %__MODULE__{state | pending_interrupt: nil, status: :running}

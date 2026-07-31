@@ -23,9 +23,11 @@ defmodule Jidoka.Effect.Intent do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an effect intent."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an effect intent from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     with {:ok, %__MODULE__{} = intent} <- Schema.parse(@schema, attrs),
@@ -34,6 +36,7 @@ defmodule Jidoka.Effect.Intent do
     end
   end
 
+  @doc "Builds a validated effect intent for a kind and payload."
   @spec new(kind(), map(), keyword()) :: t()
   def new(kind, payload, opts \\ []) do
     payload = normalize_payload!(kind, payload)
@@ -49,6 +52,7 @@ defmodule Jidoka.Effect.Intent do
     })
   end
 
+  @doc "Builds an effect intent and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do

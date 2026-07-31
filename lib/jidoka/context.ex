@@ -69,9 +69,11 @@ defmodule Jidoka.Context do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for runtime context data."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds a runtime context from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs =
@@ -82,9 +84,11 @@ defmodule Jidoka.Context do
     Schema.parse(@schema, attrs)
   end
 
+  @doc "Builds a runtime context and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs |> Schema.normalize_attrs() |> normalize_context_alias(), "context")
 
+  @doc "Normalizes trusted runtime context input and preserves runtime-only fields."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = context), do: new(context)
   def from_input(input), do: new(input)
@@ -125,6 +129,7 @@ defmodule Jidoka.Context do
     end
   end
 
+  @doc "Builds policy context from the current turn state."
   @spec from_turn_state(Turn.State.t(), keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_turn_state(%Turn.State{} = state, attrs \\ []) do
     attrs = Schema.normalize_attrs(attrs)
@@ -151,6 +156,7 @@ defmodule Jidoka.Context do
     )
   end
 
+  @doc "Builds policy context from turn state and raises on invalid data."
   @spec from_turn_state!(Turn.State.t(), keyword() | map()) :: t()
   def from_turn_state!(%Turn.State{} = state, attrs \\ []) do
     case from_turn_state(state, attrs) do
@@ -159,6 +165,7 @@ defmodule Jidoka.Context do
     end
   end
 
+  @doc "Builds operation-boundary context for controls and approval predicates."
   @spec from_operation(
           Turn.State.t(),
           Effect.OperationRequest.t(),
@@ -196,6 +203,7 @@ defmodule Jidoka.Context do
     )
   end
 
+  @doc "Builds operation-boundary context and raises on invalid data."
   @spec from_operation!(
           Turn.State.t(),
           Effect.OperationRequest.t(),

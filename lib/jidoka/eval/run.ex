@@ -31,15 +31,19 @@ defmodule Jidoka.Eval.Run do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an evaluation run."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the possible evaluation run statuses."
   @spec statuses() :: [status()]
   def statuses, do: @statuses
 
+  @doc "Builds an evaluation run from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds an evaluation run and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "eval run")
 end

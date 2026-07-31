@@ -50,12 +50,15 @@ defmodule Jidoka.Runtime.Controls.OperationContext do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for operation control context."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds operation control context from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds operation control context and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs), do: Schema.parse!(@schema, attrs, "operation control context")
 end

@@ -95,6 +95,7 @@ defmodule Jidoka.Event do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for a runtime event."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
@@ -102,9 +103,11 @@ defmodule Jidoka.Event do
   @spec events() :: [atom()]
   def events, do: Map.keys(@event_defaults)
 
+  @doc "Builds a runtime event from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs), do: Schema.parse(@schema, attrs)
 
+  @doc "Builds a runtime event and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do

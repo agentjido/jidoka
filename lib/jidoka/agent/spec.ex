@@ -35,9 +35,11 @@ defmodule Jidoka.Agent.Spec do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an agent specification."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Builds an agent specification from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     with {:ok, attrs} <- normalize_model_input(attrs),
@@ -50,6 +52,7 @@ defmodule Jidoka.Agent.Spec do
     end
   end
 
+  @doc "Builds an agent specification and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do
@@ -58,6 +61,7 @@ defmodule Jidoka.Agent.Spec do
     end
   end
 
+  @doc "Normalizes a specification, DSL agent module, keyword list, or map."
   @spec from_input(t() | module() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = spec), do: new(spec)
 
@@ -73,6 +77,7 @@ defmodule Jidoka.Agent.Spec do
 
   def from_input(input), do: new(input)
 
+  @doc "Validates public context data against the agent context schema."
   @spec validate_context(t(), Jidoka.Context.t()) :: :ok | {:error, term()}
   def validate_context(%__MODULE__{context_schema: nil}, %Jidoka.Context{}), do: :ok
 
@@ -85,6 +90,7 @@ defmodule Jidoka.Agent.Spec do
     exception -> {:error, {:invalid_context_schema, exception}}
   end
 
+  @doc "Validates a result value against the optional structured-result contract."
   @spec validate_result(t(), term()) :: {:ok, term()} | {:error, term()}
   def validate_result(%__MODULE__{result: nil}, value), do: {:ok, value}
 
@@ -95,6 +101,7 @@ defmodule Jidoka.Agent.Spec do
     end
   end
 
+  @doc "Validates the control policy for every operation in the specification."
   @spec validate_operation_policies(t()) :: :ok | {:error, term()}
   def validate_operation_policies(%__MODULE__{operations: operations} = spec) do
     Enum.reduce_while(operations, :ok, fn %Jidoka.Agent.Spec.Operation{} = operation, :ok ->
@@ -105,6 +112,7 @@ defmodule Jidoka.Agent.Spec do
     end)
   end
 
+  @doc "Validates that one operation has the controls that its idempotency policy requires."
   @spec validate_operation_policy(t(), Jidoka.Agent.Spec.Operation.t()) :: :ok | {:error, term()}
   def validate_operation_policy(%__MODULE__{} = spec, %Jidoka.Agent.Spec.Operation{} = operation) do
     if Jidoka.Agent.Spec.Operation.requires_control?(operation) and not operation_controlled?(spec, operation) and

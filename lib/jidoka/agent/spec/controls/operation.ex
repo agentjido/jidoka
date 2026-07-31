@@ -35,9 +35,11 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
+  @doc "Returns the Zoi schema for an operation control."
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
 
+  @doc "Returns the operation kinds that a control can match."
   @spec valid_kinds() :: [atom()]
   def valid_kinds, do: @valid_kinds
 
@@ -81,6 +83,7 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
     })
   end
 
+  @doc "Builds an operation control from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     attrs = Schema.normalize_attrs(attrs)
@@ -93,6 +96,7 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
     end
   end
 
+  @doc "Builds an operation control and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()
   def new!(attrs) do
     case new(attrs) do
@@ -101,6 +105,7 @@ defmodule Jidoka.Agent.Spec.Controls.Operation do
     end
   end
 
+  @doc "Normalizes an existing operation control, keyword list, or map."
   @spec from_input(t() | keyword() | map()) :: {:ok, t()} | {:error, term()}
   def from_input(%__MODULE__{} = operation), do: new(operation)
   def from_input(input), do: new(input)

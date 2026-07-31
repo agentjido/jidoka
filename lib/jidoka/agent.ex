@@ -37,6 +37,7 @@ defmodule Jidoka.Agent do
   def default_instructions, do: @default_instructions
 
   @doc false
+  @spec __using__(keyword()) :: Macro.t()
   defmacro __using__(opts \\ []) do
     if opts != [] do
       raise CompileError,
@@ -53,6 +54,7 @@ defmodule Jidoka.Agent do
   end
 
   @doc false
+  @spec __before_compile__(Macro.Env.t()) :: Macro.t()
   # credo:disable-for-next-line Credo.Check.Refactor.CyclomaticComplexity
   defmacro __before_compile__(env) do
     definition = compile_definition!(env.module)
@@ -68,27 +70,36 @@ defmodule Jidoka.Agent do
       use Jido.Agent, unquote(Macro.escape(jido_opts))
 
       @doc "Returns the compiled Jidoka DSL definition for this agent module."
+      @spec __jidoka_agent__() :: map()
       def __jidoka_agent__, do: Jidoka.Agent.definition!(__MODULE__)
 
       @doc false
+      @spec __jidoka_agent_id__() :: String.t()
       def __jidoka_agent_id__, do: unquote(definition.id)
 
       @doc "Returns `{action_module, opts}` action declarations for this agent."
+      @spec __jidoka_tools__() :: [{module(), keyword()}]
       def __jidoka_tools__, do: Enum.map(Jidoka.Agent.action_modules(__MODULE__), &{&1, []})
 
       @doc "Returns the compiled `Jidoka.Agent.Spec` for this DSL agent."
+      @spec spec() :: Jidoka.Agent.Spec.t()
       def spec, do: Jidoka.Agent.spec(__MODULE__)
 
       @doc "Runs a full turn and returns the typed `Jidoka.Turn.Result`."
+      @spec run_turn(Jidoka.request_input(), keyword()) :: Jidoka.run_result()
       def run_turn(input, opts \\ []), do: Jidoka.Agent.run_turn(__MODULE__, input, opts)
 
       @doc "Runs a full turn and returns only final assistant text."
+      @spec chat(String.t(), keyword()) ::
+              {:ok, String.t()} | {:hibernate, Jidoka.Runtime.AgentSnapshot.t()} | {:error, term()}
       def chat(input, opts \\ []), do: Jidoka.Agent.chat(__MODULE__, input, opts)
 
       @doc "Starts this agent under the default `Jidoka.Jido` process tree."
+      @spec start(keyword()) :: DynamicSupervisor.on_start_child()
       def start(opts \\ []), do: Jidoka.start_agent(__MODULE__, opts)
 
       @doc "Returns a `Jido.AgentServer` child spec for supervising this agent."
+      @spec child_spec(keyword()) :: Supervisor.child_spec()
       def child_spec(opts \\ []) do
         __MODULE__
         |> Jidoka.Agent.agent_server_child_opts(opts)

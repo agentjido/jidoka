@@ -10,6 +10,7 @@ defmodule Jidoka.ApprovalPredicate do
 
   @type result :: boolean() | {:ok, boolean()} | {:error, term()}
 
+  @doc "Returns whether approval is required for the operation context."
   @callback call(Jidoka.Context.t()) :: result()
 
   @doc """
