@@ -153,9 +153,11 @@ and source-inspection UI. Jido/Jidoka owns the agent process and turn state.
 
 ## Add An Example Checklist
 
-1. Create `examples/<example_name>/` with a manifest, code, test, and Livebook.
+1. Create `examples/<example_name>/` with `manifest.yaml`, code, test, and a Livebook.
 2. Put agent behavior in `examples/<example_name>/lib/`.
-3. Put deterministic test support in `examples/<example_name>/support/`.
+3. Use shared deterministic helpers from `examples/_support/shared/`. Keep
+   example-specific support in `examples/<example_name>/support/` only when it
+   cannot be reused.
 4. Add `lib/jidoka_showcase_web/live/<example_name>_live/index.ex`.
 5. Add `lib/jidoka_showcase_web/live/<example_name>_live/view.ex`.
 6. Supervise the shared agent in `JidokaShowcase.Application`.

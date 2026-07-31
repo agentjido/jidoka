@@ -1,8 +1,9 @@
 # Support Agent
 
 This Livebook runs the package-level support-agent example from `examples/`.
-The agent, action, operation control, and Mock LLM each have a separate source
-file. None of those modules are part of production compilation.
+The agent, action, and operation control each have a separate source file. The
+Mock LLM is shared by all examples. None of those modules are part of production
+compilation.
 
 The example is deterministic. It does not use credentials, network access, or
 recorded model responses.
@@ -37,7 +38,8 @@ Jidoka.Kino.setup_notebook(model: "test:support-example-model", check_provider?:
 ## Inspect The Example Files
 
 ```elixir
-JidokaExamples.Catalog.source_files(support_example) ++
+JidokaExamples.Catalog.shared_support_files(examples_root) ++
+  JidokaExamples.Catalog.source_files(support_example) ++
   JidokaExamples.Catalog.support_files(support_example) ++
   [Path.join(support_example.root, "example.exs")]
 |> Enum.map(&Path.relative_to(&1, package_root))
@@ -49,7 +51,7 @@ in these phases:
 1. Action
 2. Operation control
 3. Agent
-4. Mock LLM
+4. Shared Mock LLM
 5. Example runner
 
 ## Inspect The Agent

@@ -21,13 +21,15 @@ defmodule JidokaExamples.Catalog do
   @showcase_keys [:live_view, :route, :sources, :tests, :view]
   @version 2
   @reserved_dirs ["_support", "guides"]
+  @identifier_pattern ~r/^[a-z][a-z0-9_]{0,63}$/
+  @module_pattern ~r/^(?:Elixir\.)?[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)+$/
 
   @spec load(String.t()) :: {[Manifest.t()], [map()]}
   def load(root \\ __DIR__) do
     root = Path.expand(root)
 
     root
-    |> Path.join("*/manifest.exs")
+    |> Path.join("*/manifest.yaml")
     |> Path.wildcard()
     |> Enum.sort()
     |> Enum.reduce({[], []}, fn path, {manifests, errors} ->
@@ -71,6 +73,15 @@ defmodule JidokaExamples.Catalog do
     |> Enum.sort()
   end
 
+  @spec shared_support_files(String.t()) :: [String.t()]
+  def shared_support_files(root \\ __DIR__) do
+    root
+    |> Path.expand()
+    |> Path.join("_support/shared/*.{ex,exs}")
+    |> Path.wildcard()
+    |> Enum.sort()
+  end
+
   @spec support_files(Manifest.t()) :: [String.t()]
   def support_files(%Manifest{} = manifest) do
     manifest.support_dir
@@ -103,7 +114,7 @@ defmodule JidokaExamples.Catalog do
   end
 
   defp load_manifest(path, root) do
-    with {:ok, value} <- evaluate(path),
+    with {:ok, value} <- read_manifest(path),
          :ok <- validate_map(value, path),
          {:ok, manifest} <- normalize(value, path, root),
          :ok <- validate_local_files(manifest) do
@@ -114,16 +125,112 @@ defmodule JidokaExamples.Catalog do
     end
   end
 
-  defp evaluate(path) do
-    try do
-      {value, _binding} = Code.eval_file(path)
-      {:ok, value}
-    rescue
-      exception -> {:error, "cannot evaluate manifest: #{Exception.message(exception)}"}
-    catch
-      kind, reason -> {:error, "cannot evaluate manifest: #{kind}: #{inspect(reason)}"}
+  defp read_manifest(path) do
+    case YamlElixir.read_all_from_file(path) do
+      {:ok, [value]} -> {:ok, decode_manifest(value)}
+      {:ok, documents} -> {:error, "manifest must contain one YAML document, got #{length(documents)}"}
+      {:error, exception} -> {:error, "cannot parse YAML manifest: #{Exception.message(exception)}"}
     end
   end
+
+  defp decode_manifest(value) when is_map(value) do
+    value
+    |> decode_keys(@allowed_keys)
+    |> update_value(:name, &decode_identifier/1)
+    |> update_value(:module, &decode_module/1)
+    |> update_value(:agent, &decode_module/1)
+    |> update_value(:scenarios, &decode_scenarios/1)
+    |> update_value(:surfaces, &decode_surfaces/1)
+  end
+
+  defp decode_manifest(value), do: value
+
+  defp decode_scenarios(scenarios) when is_list(scenarios), do: Enum.map(scenarios, &decode_scenario/1)
+  defp decode_scenarios(scenarios), do: scenarios
+
+  defp decode_scenario(scenario) when is_map(scenario) do
+    scenario
+    |> decode_keys(@scenario_keys)
+    |> update_value(:id, &decode_identifier/1)
+    |> update_value(:execution, &decode_execution/1)
+    |> update_value(:cases, &decode_cases/1)
+  end
+
+  defp decode_scenario(scenario), do: scenario
+
+  defp decode_cases(cases) when is_list(cases), do: Enum.map(cases, &decode_case/1)
+  defp decode_cases(cases), do: cases
+
+  defp decode_case(scenario_case) when is_map(scenario_case) do
+    scenario_case
+    |> decode_keys(@case_keys)
+    |> update_value(:id, &decode_identifier/1)
+    |> update_value(:proves, &decode_symbols/1)
+    |> update_value(:uses, &decode_symbols/1)
+  end
+
+  defp decode_case(scenario_case), do: scenario_case
+
+  defp decode_surfaces(surfaces) when is_map(surfaces) do
+    surfaces
+    |> decode_keys(@surface_keys)
+    |> update_value(:showcase, &decode_showcase/1)
+  end
+
+  defp decode_surfaces(surfaces), do: surfaces
+
+  defp decode_showcase(showcase) when is_map(showcase) do
+    showcase
+    |> decode_keys(@showcase_keys)
+    |> update_value(:live_view, &decode_module/1)
+    |> update_value(:view, &decode_module/1)
+  end
+
+  defp decode_showcase(showcase), do: showcase
+
+  defp decode_keys(map, allowed_keys) do
+    key_lookup = Map.new(allowed_keys, &{Atom.to_string(&1), &1})
+    Map.new(map, fn {key, value} -> {Map.get(key_lookup, key, key), value} end)
+  end
+
+  defp update_value(map, key, fun) do
+    case Map.fetch(map, key) do
+      {:ok, value} -> Map.put(map, key, fun.(value))
+      :error -> map
+    end
+  end
+
+  defp decode_identifier(value) when is_binary(value) do
+    if Regex.match?(@identifier_pattern, value), do: String.to_atom(value), else: value
+  end
+
+  defp decode_identifier(value), do: value
+
+  defp decode_execution("deterministic"), do: :deterministic
+  defp decode_execution("external"), do: :external
+  defp decode_execution(value), do: value
+
+  defp decode_symbols(values) when is_list(values), do: Enum.map(values, &decode_symbol/1)
+  defp decode_symbols(values), do: values
+
+  defp decode_symbol(value) when is_binary(value) do
+    known = Capabilities.names() ++ Capabilities.component_names()
+    Enum.find(known, value, &(Atom.to_string(&1) == value))
+  end
+
+  defp decode_symbol(value), do: value
+
+  defp decode_module(value) when is_binary(value) do
+    if Regex.match?(@module_pattern, value) do
+      value
+      |> String.trim_leading("Elixir.")
+      |> then(&String.to_atom("Elixir.#{&1}"))
+    else
+      value
+    end
+  end
+
+  defp decode_module(value), do: value
 
   defp validate_map(value, path) when is_map(value) do
     missing = @required_keys -- Map.keys(value)
@@ -148,12 +255,12 @@ defmodule JidokaExamples.Catalog do
 
     errors =
       []
-      |> maybe_error(not is_atom(name), path, "name must be an atom")
+      |> maybe_error(not is_atom(name), path, "name must be a snake_case identifier")
       |> maybe_error(is_atom(name) and Atom.to_string(name) != dir, path, "name must match folder #{inspect(dir)}")
       |> maybe_error(not non_empty_string?(Map.get(value, :title)), path, "title must be a non-empty string")
       |> maybe_error(not non_empty_string?(Map.get(value, :summary)), path, "summary must be a non-empty string")
-      |> maybe_error(not module_atom?(Map.get(value, :module)), path, "module must be a module atom")
-      |> maybe_error(not module_atom?(Map.get(value, :agent)), path, "agent must be a module atom")
+      |> maybe_error(not module_atom?(Map.get(value, :module)), path, "module must be a valid module name")
+      |> maybe_error(not module_atom?(Map.get(value, :agent)), path, "agent must be a valid module name")
       |> maybe_error(Map.get(value, :version) != @version, path, "version must be #{@version}")
       |> Kernel.++(scenario_errors(scenarios, path))
       |> Kernel.++(surface_errors(surfaces, path))
@@ -200,7 +307,7 @@ defmodule JidokaExamples.Catalog do
     []
     |> maybe_error(missing != [], path, "scenario #{inspect(id)} is missing keys: #{inspect(Enum.sort(missing))}")
     |> maybe_error(unknown != [], path, "scenario #{inspect(id)} has unknown keys: #{inspect(Enum.sort(unknown))}")
-    |> maybe_error(not is_atom(id), path, "scenario id must be an atom: #{inspect(id)}")
+    |> maybe_error(not is_atom(id), path, "scenario id must be a snake_case identifier: #{inspect(id)}")
     |> maybe_error(
       not non_empty_string?(Map.get(scenario, :title)),
       path,
@@ -242,7 +349,7 @@ defmodule JidokaExamples.Catalog do
     []
     |> maybe_error(missing != [], path, "#{label} is missing keys: #{inspect(Enum.sort(missing))}")
     |> maybe_error(unknown != [], path, "#{label} has unknown keys: #{inspect(Enum.sort(unknown))}")
-    |> maybe_error(not is_atom(case_id), path, "#{label} id must be an atom")
+    |> maybe_error(not is_atom(case_id), path, "#{label} id must be a snake_case identifier")
     |> Kernel.++(proof_value_errors(proves, path, label))
     |> Kernel.++(use_value_errors(uses, path, label))
     |> maybe_error(overlap?(proves, uses), path, "#{label} has overlapping proves and uses values")
@@ -254,7 +361,6 @@ defmodule JidokaExamples.Catalog do
 
   defp proof_value_errors(values, path, label) when is_list(values) and values != [] do
     []
-    |> maybe_error(Enum.any?(values, &(not is_atom(&1))), path, "#{label} proves must contain atoms")
     |> maybe_error(Enum.uniq(values) != values, path, "#{label} proves contains duplicates")
     |> Kernel.++(
       values
@@ -267,7 +373,6 @@ defmodule JidokaExamples.Catalog do
 
   defp use_value_errors(values, path, label) when is_list(values) do
     []
-    |> maybe_error(Enum.any?(values, &(not is_atom(&1))), path, "#{label} uses must contain atoms")
     |> maybe_error(Enum.uniq(values) != values, path, "#{label} uses contains duplicates")
     |> Kernel.++(
       values
@@ -309,8 +414,12 @@ defmodule JidokaExamples.Catalog do
       path,
       "showcase route must start with /"
     )
-    |> maybe_error(not module_atom?(Map.get(showcase, :live_view)), path, "showcase live_view must be a module atom")
-    |> maybe_error(not module_atom?(Map.get(showcase, :view)), path, "showcase view must be a module atom")
+    |> maybe_error(
+      not module_atom?(Map.get(showcase, :live_view)),
+      path,
+      "showcase live_view must be a valid module name"
+    )
+    |> maybe_error(not module_atom?(Map.get(showcase, :view)), path, "showcase view must be a valid module name")
     |> maybe_error(not relative_paths?(tests), path, "showcase tests must be non-empty safe relative paths")
     |> maybe_error(not relative_paths?(sources), path, "showcase sources must be non-empty safe relative paths")
     |> maybe_error(not showcase_modules?(showcase), path, "showcase modules must use the JidokaShowcase namespace")
@@ -368,8 +477,7 @@ defmodule JidokaExamples.Catalog do
       {"agent", Path.join(manifest.lib_dir, "agent.ex"), :file},
       {"example runner", Path.join(manifest.root, "example.exs"), :file},
       {"library folder", manifest.lib_dir, :dir},
-      {"Livebook", manifest.livebook, :file},
-      {"support folder", manifest.support_dir, :dir}
+      {"Livebook", manifest.livebook, :file}
     ]
 
     errors =
@@ -378,7 +486,6 @@ defmodule JidokaExamples.Catalog do
         if valid?, do: [], else: [error(manifest.manifest, "missing #{label}: #{path}")]
       end) ++
         maybe_file_error(source_files(manifest) == [], manifest, "library folder has no .ex files") ++
-        maybe_file_error(support_files(manifest) == [], manifest, "support folder has no .ex or .exs files") ++
         maybe_file_error(manifest.test_files == [], manifest, "no proof test files were found")
 
     if errors == [], do: :ok, else: {:error, errors}

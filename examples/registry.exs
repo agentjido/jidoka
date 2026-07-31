@@ -1,5 +1,11 @@
 Code.require_file("catalog.exs", __DIR__)
 
+unless Code.ensure_loaded?(JidokaExamples.MockLLM) do
+  for path <- JidokaExamples.Catalog.shared_support_files(__DIR__) do
+    Code.require_file(path)
+  end
+end
+
 defmodule JidokaExamples do
   @moduledoc false
 

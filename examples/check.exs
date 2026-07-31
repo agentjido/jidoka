@@ -85,7 +85,7 @@ defmodule JidokaExamples.Check do
 
     manifest_dirs =
       examples_root
-      |> Path.join("*/manifest.exs")
+      |> Path.join("*/manifest.yaml")
       |> Path.wildcard()
       |> MapSet.new(&Path.dirname/1)
 
@@ -100,7 +100,7 @@ defmodule JidokaExamples.Check do
         name -> Path.basename(path) == normalize_name(name)
       end
     end)
-    |> Enum.map(&"#{Path.relative_to(&1, root)}: missing manifest.exs")
+    |> Enum.map(&"#{Path.relative_to(&1, root)}: missing manifest.yaml")
   end
 
   defp duplicate_errors(examples) do
@@ -151,8 +151,7 @@ defmodule JidokaExamples.Check do
       {"agent", Path.join(example.lib_dir, "agent.ex"), :file},
       {"example runner", Path.join(example.root, "example.exs"), :file},
       {"library folder", example.lib_dir, :dir},
-      {"Livebook", example.livebook, :file},
-      {"support folder", example.support_dir, :dir}
+      {"Livebook", example.livebook, :file}
     ]
 
     path_errors =
@@ -163,7 +162,6 @@ defmodule JidokaExamples.Check do
 
     path_errors ++
       maybe_error(Catalog.source_files(example) == [], "#{example.name}: library folder has no .ex files") ++
-      maybe_error(Catalog.support_files(example) == [], "#{example.name}: support folder has no .ex or .exs files") ++
       maybe_error(example.test_files == [], "#{example.name}: no proof test files were found") ++
       namespace_errors(example)
   end

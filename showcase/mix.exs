@@ -43,13 +43,11 @@ defmodule JidokaShowcase.MixProject do
   defp elixirc_paths(_env), do: ["lib"] ++ example_paths()
 
   defp example_paths do
-    catalog = Path.expand("../examples/catalog.exs", __DIR__)
-    Code.require_file(catalog)
-
-    catalog
-    |> Path.dirname()
-    |> JidokaExamples.Catalog.load!()
-    |> Enum.filter(& &1.showcase)
-    |> Enum.map(& &1.lib_dir)
+    __DIR__
+    |> Path.join("../examples/*/lib")
+    |> Path.wildcard()
+    |> Enum.filter(&File.dir?/1)
+    |> Enum.map(&Path.expand/1)
+    |> Enum.sort()
   end
 end

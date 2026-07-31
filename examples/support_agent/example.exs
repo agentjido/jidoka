@@ -4,9 +4,10 @@ defmodule JidokaExamples.SupportAgent.Example do
   @behaviour JidokaExamples.Example
 
   alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Schema
+  alias JidokaExamples.MockLLM
   alias JidokaExamples.SupportAgent.Actions.LookupOrder
   alias JidokaExamples.SupportAgent.Agent
-  alias JidokaExamples.SupportAgent.LLMs.MockLLM
 
   @impl true
   def run(opts) do
@@ -47,7 +48,7 @@ defmodule JidokaExamples.SupportAgent.Example do
     }
 
     Agent.run_turn(request,
-      llm: MockLLM.new(order_id, observer),
+      llm: mock_llm(order_id, observer),
       operation_context: operation_context
     )
   end
@@ -58,7 +59,7 @@ defmodule JidokaExamples.SupportAgent.Example do
 
     Jidoka.approve(snapshot, review,
       reason: Keyword.get(opts, :reason, :operator_approved),
-      llm: MockLLM.new(order_id, observer),
+      llm: mock_llm(order_id, observer),
       operations: JidoActions.operations([LookupOrder]),
       operation_context: %{
         example_counter: Keyword.get(opts, :counter),
@@ -66,6 +67,32 @@ defmodule JidokaExamples.SupportAgent.Example do
       }
     )
   end
+
+  defp mock_llm(order_id, observer) do
+    MockLLM.operation_round_trip(
+      operation: "lookup_order",
+      arguments: %{"order_id" => order_id},
+      on_observation: &notify(observer, {:order_observation_seen, &1}),
+      final: &final_content/1
+    )
+  end
+
+  defp final_content(order) do
+    if Schema.get_key(order, :status) == "not_found" do
+      "Order #{Schema.get_key(order, :order_id)} was not found. " <>
+        "#{Schema.get_key(order, :recommended_action)}"
+    else
+      "Order #{Schema.get_key(order, :order_id)} is " <>
+        "#{format_status(Schema.get_key(order, :status))} with " <>
+        "#{Schema.get_key(order, :carrier)}. ETA: #{Schema.get_key(order, :eta)}. " <>
+        "#{Schema.get_key(order, :recommended_action)}"
+    end
+  end
+
+  defp format_status(status), do: status |> to_string() |> String.replace("_", " ")
+
+  defp notify(observer, message) when is_pid(observer), do: send(observer, message)
+  defp notify(_observer, _message), do: :ok
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)

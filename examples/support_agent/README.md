@@ -50,3 +50,5 @@ Open `support_agent.livemd` for the executable walkthrough. Start the Phoenix
 application in `showcase/` and open `/agents/support` for the curated UI.
 
 No path uses a real LLM, provider key, network request, or recorded fixture.
+The reusable Mock LLM is in `examples/_support/shared/mock_llm.ex`. This example
+supplies only its operation arguments and order-specific final response.

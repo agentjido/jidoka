@@ -4,6 +4,7 @@ Code.require_file("../../examples/check.exs", __DIR__)
 defmodule JidokaExamples.ProofModelTest do
   use ExUnit.Case, async: false
 
+  alias Jidoka.Effect
   alias JidokaExamples.{Catalog, Executor, Planner, Reporter}
 
   setup do
@@ -60,7 +61,7 @@ defmodule JidokaExamples.ProofModelTest do
     assert {[], errors} = Catalog.load(root)
     messages = Enum.map_join(errors, "\n", & &1.message)
 
-    assert messages =~ "id must be an atom"
+    assert messages =~ "id must be a snake_case identifier"
     assert messages =~ "unknown capability in proves"
     assert messages =~ "proves must be a non-empty list"
     assert messages =~ "overlapping proves and uses"
@@ -74,6 +75,54 @@ defmodule JidokaExamples.ProofModelTest do
 
     assert {[], errors} = Catalog.load(root)
     assert Enum.any?(errors, &(&1.message == "no proof test files were found"))
+  end
+
+  test "catalog loads YAML examples without an example-local support folder", %{examples_root: root} do
+    write_example(root, :shared_support)
+    File.rm_rf!(Path.join(root, "shared_support/support"))
+
+    assert [%{name: :shared_support}] = Catalog.load!(root)
+  end
+
+  test "catalog reports malformed and multi-document YAML", %{examples_root: root} do
+    malformed_root = Path.join(root, "malformed")
+    File.mkdir_p!(malformed_root)
+    File.write!(Path.join(malformed_root, "manifest.yaml"), "scenarios: [")
+
+    multi_root = Path.join(root, "multi")
+    File.mkdir_p!(multi_root)
+    File.write!(Path.join(multi_root, "manifest.yaml"), "---\nversion: 2\n---\nversion: 2\n")
+
+    assert {[], errors} = Catalog.load(root)
+    messages = Enum.map_join(errors, "\n", & &1.message)
+    assert messages =~ "cannot parse YAML manifest"
+    assert messages =~ "manifest must contain one YAML document"
+  end
+
+  test "shared Mock LLM runs an operation round trip and preserves a nil observation" do
+    llm =
+      JidokaExamples.MockLLM.operation_round_trip(
+        operation: "read_value",
+        arguments: %{"id" => "one"},
+        final: &inspect/1,
+        on_observation: &send(self(), {:observed, &1})
+      )
+
+    first_intent = Effect.Intent.new(:llm, %{prompt: %{messages: []}})
+    journal = Effect.Journal.new!()
+
+    assert {:ok, %{type: :operation, name: "read_value", arguments: %{"id" => "one"}}} =
+             llm.(first_intent, journal, %{})
+
+    second_intent =
+      Effect.Intent.new(:llm, %{
+        prompt: %{
+          messages: [%{role: :tool, operation: "read_value", output: nil}]
+        }
+      })
+
+    assert {:ok, %{type: :final, content: "nil"}} = llm.(second_intent, journal, %{})
+    assert_receive {:observed, nil}
   end
 
   test "reporter accepts one passed result and derives coverage", %{examples_root: root} do
@@ -313,7 +362,7 @@ defmodule JidokaExamples.ProofModelTest do
     assert {:ok, renamed} = Planner.plan(examples, [changed_paths: [rename]], File.cwd!())
     assert Enum.map(renamed.examples, & &1.name) == [:support_agent]
 
-    deletion = change("D", "examples/removed_agent/manifest.exs")
+    deletion = change("D", "examples/removed_agent/manifest.yaml")
     assert {:ok, deleted} = Planner.plan(examples, [changed_paths: [deletion]], File.cwd!())
     assert Enum.map(deleted.examples, & &1.name) == [:support_agent]
     assert deleted.global?
@@ -325,7 +374,7 @@ defmodule JidokaExamples.ProofModelTest do
         :timeout,
         0,
         ["elixir", "-e", "IO.puts(\"partial\"); Process.sleep(2_000)"],
-        500
+        1_000
       ),
       command_gate(:later, 1, ["elixir", "-e", "IO.puts(\"must not run\")"], 500)
     ]
@@ -396,8 +445,11 @@ defmodule JidokaExamples.ProofModelTest do
 
   test "normal Mix project startup does not evaluate the example catalog" do
     mix_source = File.read!(Path.join(File.cwd!(), "mix.exs"))
+    showcase_mix_source = File.read!(Path.join(File.cwd!(), "showcase/mix.exs"))
 
     refute mix_source =~ "JidokaExamples.Catalog.load!"
+    refute showcase_mix_source =~ "JidokaExamples.Catalog.load!"
+    assert showcase_mix_source =~ "../examples/*/lib"
     assert Mix.Project.config()[:app] == :jidoka
     assert "examples/_support" in Mix.Project.config()[:elixirc_paths]
   end
@@ -490,7 +542,7 @@ defmodule JidokaExamples.ProofModelTest do
   defp write_manifest(root, name, manifest) do
     scenario_root = Path.join(root, Atom.to_string(name))
     File.mkdir_p!(scenario_root)
-    File.write!(Path.join(scenario_root, "manifest.exs"), inspect(manifest, pretty: true, limit: :infinity))
+    File.write!(Path.join(scenario_root, "manifest.yaml"), Ymlr.document!(manifest))
   end
 
   defp valid_manifest(name, opts \\ []) do
