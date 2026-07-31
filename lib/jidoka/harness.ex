@@ -12,6 +12,7 @@ defmodule Jidoka.Harness do
   alias Jidoka.Harness.Replay
   alias Jidoka.Harness.Session
   alias Jidoka.Harness.Store
+  alias Jidoka.Instructions
   alias Jidoka.Memory
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.Capabilities
@@ -41,6 +42,7 @@ defmodule Jidoka.Harness do
          opts = runtime_opts(plan, opts),
          {:ok, request} <- Turn.Request.from_input(request_input, request_opts(opts)),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
+         {:ok, plan} <- Instructions.resolve(plan, request, opts),
          {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts),
          {:ok, capabilities} <- normalize_capabilities(opts) do
       plan
@@ -86,6 +88,7 @@ defmodule Jidoka.Harness do
          opts = runtime_opts(plan, opts),
          {:ok, request} <- Turn.Request.from_input(request_input, request_opts(opts)),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
+         {:ok, plan} <- Instructions.resolve(plan, request, opts),
          {:ok, memory} <-
            Memory.Runtime.recall(
              plan.spec,

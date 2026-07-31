@@ -96,6 +96,29 @@ Both are required non-empty strings. `id` is the spec identity used everywhere
 durable (sessions, snapshots, traces). `instructions` is the system-style
 prompt body assembled into each turn.
 
+The spec value stays static. To resolve instructions for one request, pass
+`instructions:` to `Jidoka.turn/3`, `Jidoka.Session.run/3`, or
+`Jidoka.preflight/3`. The option accepts a non-empty string, a two-argument
+function, or a module that implements `Jidoka.Instructions`:
+
+```elixir
+instructions = fn base, context ->
+  "#{base}\nServe tenant #{context.data.tenant_id}."
+end
+
+{:ok, result} =
+  Jidoka.turn(MyApp.SupportAgent, "Help me",
+    context: %{tenant_id: "tenant_1"},
+    instructions: instructions
+  )
+```
+
+The provider receives the base instructions and a new public
+`Jidoka.Context`. It can read the request input, public data, and request
+metadata. It cannot read trusted runtime data or internal request objects. The
+resolved text is stored in the turn plan and prompt. A hibernated turn resumes
+with the same resolved text and does not call the provider again.
+
 ### `model`
 
 Stored as a normalized `%LLMDB.Model{}` struct. `Spec.new/1` accepts any

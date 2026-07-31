@@ -11,6 +11,7 @@ defmodule Jidoka.Inspection do
   alias Jidoka.Effect
   alias Jidoka.Error
   alias Jidoka.Inspection.Preflight
+  alias Jidoka.Instructions
   alias Jidoka.Harness
   alias Jidoka.Memory
   alias Jidoka.Review
@@ -97,6 +98,7 @@ defmodule Jidoka.Inspection do
     with {:ok, plan} <- resolve_plan(spec_or_plan),
          {:ok, request} <- request(request_input, opts),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
+         {:ok, plan} <- Instructions.resolve(plan, request, opts),
          {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts) do
       plan
       |> initial_state(request, memory)

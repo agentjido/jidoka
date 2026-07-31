@@ -9,6 +9,7 @@ defmodule Jidoka.Error.Normalize.Basic do
   def normalize(reason, context) do
     with :error <- normalize_agent_reason(reason, context),
          :error <- normalize_context_reason(reason, context),
+         :error <- normalize_instruction_reason(reason, context),
          :error <- normalize_turn_reason(reason, context),
          :error <- normalize_effect_reason(reason, context) do
       normalize_control_reason(reason, context)
@@ -52,6 +53,34 @@ defmodule Jidoka.Error.Normalize.Basic do
   end
 
   defp normalize_context_reason(_reason, _context), do: :error
+
+  defp normalize_instruction_reason({:invalid_dynamic_instructions, value}, context) do
+    {:ok,
+     validation_error("Dynamic instructions must be a non-empty string.",
+       field: :instructions,
+       value: value,
+       details: details(context, %{reason: :invalid_dynamic_instructions})
+     )}
+  end
+
+  defp normalize_instruction_reason({:invalid_instruction_provider, provider}, context) do
+    {:ok,
+     validation_error("The instruction provider is not valid.",
+       field: :instructions,
+       value: provider,
+       details: details(context, %{reason: :invalid_instruction_provider})
+     )}
+  end
+
+  defp normalize_instruction_reason({:instruction_provider_failed, cause}, context) do
+    {:ok,
+     execution_error("The instruction provider failed.",
+       phase: :instructions,
+       details: details(context, %{reason: :instruction_provider_failed, cause: cause})
+     )}
+  end
+
+  defp normalize_instruction_reason(_reason, _context), do: :error
 
   defp normalize_turn_reason(:missing_input, context) do
     {:ok,
