@@ -4,6 +4,9 @@ Jidoka follows the Jido ecosystem package quality standards:
 
 - keep library code in `lib/`;
 - keep example-only app wiring in `showcase/`;
+- keep public documentation and standalone Livebooks in `guides/`;
+- keep complete reference agents in `examples/`;
+- keep local planning and research notes in the ignored `docs/` directory;
 - validate public data with Zoi structs;
 - normalize package errors through `Jidoka.Error`;
 - keep the Runic turn spine deterministic and runtime effects explicit.
@@ -43,9 +46,10 @@ mix test --include live test/jidoka/live_req_llm_test.exs
 
 ## Release Notes
 
-Use conventional commits for changes. Keep `CHANGELOG.md` current for release
-preparation, and publish through the version-controlled GitHub release workflow
-rather than an ad hoc local Hex publish.
+Use conventional commits for changes. The release workflow generates release
+notes from Git history. Do not edit `CHANGELOG.md` by hand. Publish through the
+version-controlled GitHub release workflow, not through an ad hoc local Hex
+publish.
 
 ## Jidoka-Specific Exceptions
 

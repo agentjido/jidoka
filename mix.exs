@@ -94,9 +94,7 @@ defmodule Jidoka.MixProject do
       files: [
         "lib",
         "guides",
-        "livebook",
         "examples",
-        "scripts",
         ".formatter.exs",
         "mix.exs",
         "README.md",
@@ -213,7 +211,7 @@ defmodule Jidoka.MixProject do
         ~r{guides/(runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
       Appendix: ~r{guides/(glossary|troubleshooting)\.md},
       Examples: ~r{examples/(README|PROVEN_FEATURES)\.md},
-      Livebooks: ~r{(?:examples|livebook)/.*\.livemd}
+      Livebooks: ~r{(?:examples/.+|guides/livebooks)/.*\.livemd}
     ]
   end
 
@@ -339,7 +337,7 @@ defmodule Jidoka.MixProject do
     ["examples/README.md", "examples/PROVEN_FEATURES.md"] ++
       Path.wildcard("examples/*/README.md") ++
       Path.wildcard("examples/*/*.livemd") ++
-      Path.wildcard("livebook/*.livemd")
+      Path.wildcard("guides/livebooks/*.livemd")
   end
 
   defp test_paths(_env) do

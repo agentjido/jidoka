@@ -243,9 +243,9 @@ mix jidoka.example --list
 mix jidoka.example support_agent
 ```
 
-Standalone Livebook guides live in `examples/guides/`. A dedicated agent keeps
-its Livebook beside its code and test, as the Support Agent does in
-`examples/support_agent/`.
+Standalone documentation Livebooks live in `guides/livebooks/`. A complete
+agent example keeps its Livebook beside its code and test, as the Support Agent
+does in `examples/support_agent/`.
 
 The current deterministic proof matrix is in
 [`examples/PROVEN_FEATURES.md`](examples/PROVEN_FEATURES.md).
@@ -264,8 +264,9 @@ Live provider tests are opt-in:
 mix test --include live test/jidoka/live_req_llm_test.exs
 ```
 
-Unit tests should inject fake `llm:` and `operations:` capabilities. Product
-guides and examples should use real provider keys.
+Tests, examples, and documentation Livebooks should inject deterministic
+`llm:` and `operations:` capabilities by default. Only explicit live-provider
+checks require provider keys.
 
 ## Guides
 
@@ -287,11 +288,10 @@ Useful next topics:
 - [Memory](guides/memory.md)
 - [Streaming](guides/streaming.md)
 - [Import JSON/YAML](guides/import-json-yaml.md)
-- [Inspection And Preflight](guides/inspection-and-preflight.md)
 
 ## Status
 
-This is the `1.0.0-beta.1` baseline. The public vocabulary is centered on:
+This is the `0.8.0-beta.1` baseline. The public vocabulary is centered on:
 
 - `Jidoka.Agent.Spec`
 - `Jidoka.Turn.Request`, `Jidoka.Turn.Plan`, and `Jidoka.Turn.Result`

@@ -10,7 +10,6 @@ defmodule JidokaExamples.Planner do
     "examples/registry.exs",
     "examples/test_helper.exs",
     "lib/",
-    "scripts/check_livebook.exs",
     "test/support/"
   ]
   @global_paths ["config/", "mix.exs", "mix.lock"]
@@ -186,7 +185,7 @@ defmodule JidokaExamples.Planner do
         "run",
         "--no-compile",
         "--no-deps-check",
-        "scripts/check_livebook.exs",
+        "examples/_support/check_livebook.exs",
         "--",
         "--project",
         Path.relative_to(example.livebook, root)
@@ -209,7 +208,7 @@ defmodule JidokaExamples.Planner do
         "run",
         "--no-compile",
         "--no-deps-check",
-        "scripts/check_livebook.exs",
+        "examples/_support/check_livebook.exs",
         "--",
         "--project",
         Path.relative_to(path, root)
@@ -290,7 +289,7 @@ defmodule JidokaExamples.Planner do
     |> Map.merge(Map.new(extra))
   end
 
-  defp selected_guides(:all, root), do: Path.wildcard(Path.join(root, "examples/guides/*.livemd"))
+  defp selected_guides(:all, root), do: Path.wildcard(Path.join(root, "guides/livebooks/*.livemd"))
 
   defp selected_guides(paths, root) do
     paths
@@ -305,7 +304,7 @@ defmodule JidokaExamples.Planner do
 
   defp global_path?(path) do
     Enum.any?(@global_paths, &path_matches?(path, &1)) or
-      path in ["examples/catalog.exs", "examples/check.exs", "scripts/check_livebook.exs"] or
+      path in ["examples/catalog.exs", "examples/check.exs"] or
       path in ["examples/README.md", "examples/PROVEN_FEATURES.md"] or
       (String.starts_with?(path, "showcase/") and not String.contains?(path, "support_agent")) or
       root_document?(path)
@@ -317,7 +316,7 @@ defmodule JidokaExamples.Planner do
   end
 
   defp example_path?(path, example), do: String.starts_with?(path, "examples/#{example.dir}/")
-  defp guide_path?(path), do: String.starts_with?(path, "examples/guides/") and String.ends_with?(path, ".livemd")
+  defp guide_path?(path), do: String.starts_with?(path, "guides/livebooks/") and String.ends_with?(path, ".livemd")
 
   defp root_document?(path) do
     Path.dirname(path) == "." and Path.extname(path) in [".md", ".livemd"]
@@ -337,7 +336,7 @@ defmodule JidokaExamples.Planner do
 
   defp scenario_path?("examples/" <> rest) do
     case String.split(rest, "/", parts: 2) do
-      [dir, _path] -> dir not in ["_support", "guides"]
+      [dir, _path] -> dir != "_support"
       _other -> false
     end
   end

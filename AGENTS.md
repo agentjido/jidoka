@@ -3,7 +3,7 @@
 ## Intent
 
 This directory contains the Jidoka V2 package. The public module namespace
-remains `Jidoka`, and the implementation follows the V2 plan in `JIDOKA_V2.md`.
+remains `Jidoka`. The current public architecture is documented in `guides/`.
 
 The old implementation was moved to `../jidoka_v1` and should be treated as the
 V1 reference.

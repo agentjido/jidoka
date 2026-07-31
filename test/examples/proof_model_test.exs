@@ -281,7 +281,7 @@ defmodule JidokaExamples.ProofModelTest do
     assert Enum.count(full.gates, &(&1.id == :showcase_compile)) == 1
     assert Enum.count(full.gates, &(&1.id == :showcase_test)) == 1
 
-    guide = "examples/guides/workflows.livemd"
+    guide = "guides/livebooks/workflows.livemd"
 
     assert {:ok, guide_plan} =
              Planner.plan(examples, [changed_paths: [change("M", guide)]], File.cwd!())
@@ -307,7 +307,7 @@ defmodule JidokaExamples.ProofModelTest do
     assert {:ok, deleted_guide} =
              Planner.plan(
                examples,
-               [changed_paths: [change("D", "examples/guides/removed.livemd")]],
+               [changed_paths: [change("D", "guides/livebooks/removed.livemd")]],
                File.cwd!()
              )
 
@@ -331,7 +331,7 @@ defmodule JidokaExamples.ProofModelTest do
           "examples/catalog.exs",
           "lib/jidoka.ex",
           "test/support/test_support.ex",
-          "scripts/check_livebook.exs",
+          "examples/_support/check_livebook.exs",
           "mix.exs",
           "config/config.exs"
         ] do
@@ -420,7 +420,7 @@ defmodule JidokaExamples.ProofModelTest do
           "run",
           "--no-compile",
           "--no-deps-check",
-          "scripts/check_livebook.exs",
+          "examples/_support/check_livebook.exs",
           "--",
           "--project",
           path

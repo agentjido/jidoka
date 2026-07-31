@@ -20,7 +20,7 @@ defmodule JidokaExamples.Catalog do
   @surface_keys [:livebook, :showcase]
   @showcase_keys [:live_view, :route, :sources, :tests, :view]
   @version 2
-  @reserved_dirs ["_support", "guides"]
+  @reserved_dirs ["_support"]
   @identifier_pattern ~r/^[a-z][a-z0-9_]{0,63}$/
   @module_pattern ~r/^(?:Elixir\.)?[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)+$/
 

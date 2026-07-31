@@ -29,6 +29,9 @@ Thumbs.db
 /.codex/
 /.compound-engineering/
 
+# Local architecture, research, and planning notes.
+/docs/
+
 # Local secrets and developer overrides.
 .env
 .env.*

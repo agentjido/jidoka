@@ -8,7 +8,7 @@ defmodule Jidoka.CheckLivebook do
     {opts, positional, invalid} = OptionParser.parse(args, strict: [project: :boolean])
 
     if invalid != [] or length(positional) != 1 do
-      raise "Usage: elixir scripts/check_livebook.exs [--project] PATH; got #{inspect(args)}"
+      raise "Usage: elixir examples/_support/check_livebook.exs [--project] PATH; got #{inspect(args)}"
     end
 
     path = positional |> List.first() |> Path.expand()

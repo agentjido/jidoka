@@ -33,8 +33,14 @@ binary keeps the example insulated from any globally installed `agent-browser`
 version. Set `JIDO_BROWSER_AGENT_BROWSER_BINARY_PATH` only if you need to point
 at a custom binary.
 
-Example-specific tests are optional. Use `mix format`, `mix compile`, and the
-running Phoenix route as the primary validation path.
+Run the complete example proof from the package root:
+
+```bash
+mix jidoka.examples.check
+```
+
+This command checks the example tests, Livebooks, command runners, and Showcase
+surfaces together.
 
 ## Current Examples
 
