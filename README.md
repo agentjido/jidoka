@@ -8,27 +8,45 @@
 [![Ecosystem](https://img.shields.io/badge/ecosystem-jido.run-0ea5e9.svg)](https://jido.run/ecosystem)
 [![Discord](https://img.shields.io/badge/discord-join-5865F2.svg?logo=discord&logoColor=white)](https://jido.run/discord)
 
-> **A data-driven agent framework for the Jido ecosystem with a Spark DSL and durable turn runtime.**
+> A data-driven Elixir agent framework for the Jido ecosystem.
 
-Jidoka is a small Elixir agent framework for the Jido ecosystem.
-
-Use it when you want an application agent that can call a real LLM, expose
-Jido actions as tools, keep turns inspectable, and pause safely for approval or
-resume later.
+Jidoka turns agent definitions into inspectable, resumable model and tool
+turns. Use it to build application agents that call LLMs, expose Jido actions,
+apply controls, keep conversation state, and pause safely for human review.
 
 ```text
-DSL / JSON / YAML
--> Jidoka.Agent.Spec
--> Jidoka.chat / Jidoka.turn / Jidoka.Session
--> model calls + bounded tool-call batches
--> text, Turn.Result, or snapshot
+Elixir DSL / JSON / YAML
+          ↓
+  Jidoka.Agent.Spec
+          ↓
+    Jidoka.Turn.Plan
+          ↓
+pure workflow steps → effect intents → runtime adapters
+          ↓
+result / events / journal / snapshot / session
 ```
 
-Jidoka keeps the authoring surface narrow: `agent`, `tools`, and `controls`.
-The rest is data: specs, requests, results, journals, snapshots, sessions, and
-events.
+Jidoka keeps agent definitions small and keeps runtime state explicit. Model
+calls and operations cross one effect boundary, so tests can replace them with
+deterministic capabilities.
 
-## Install
+## Why Jidoka
+
+- **Data first:** the DSL compiles to an immutable `Jidoka.Agent.Spec`.
+- **Inspectable:** preflight, events, journals, and projections show how each
+  turn was planned and run.
+- **Safe to pause:** controls can return a serializable snapshot for review and
+  later resume.
+- **Deterministic to test:** injected LLM and operation capabilities keep normal
+  tests offline.
+- **Jido native:** Jido actions, agent processes, browser tools, MCP tools, Ash
+  resources, workflows, skills, and subagents can become model operations.
+- **Built for applications:** sessions, structured results, memory, streaming,
+  handoffs, idempotency policy, and tracing have explicit contracts.
+
+## Installation
+
+Jidoka requires Elixir 1.18 or later.
 
 If your project uses [Igniter](https://hex.pm/packages/igniter), install the
 current beta from Hex:
@@ -37,35 +55,27 @@ current beta from Hex:
 mix igniter.install jidoka@0.8.0-beta.1
 ```
 
-For manual installation, add `jidoka` to your dependencies:
+For manual installation, add Jidoka to `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 0.8.0-beta"}
+    {:jidoka, "~> 0.8.0-beta.1"}
   ]
 end
 ```
+
+Then fetch the dependencies:
 
 ```bash
 mix deps.get
 ```
 
-Export a provider key before running live examples:
+Jidoka is beta software. The public API can change before a stable release.
 
-```bash
-export OPENAI_API_KEY=...
-# or
-export ANTHROPIC_API_KEY=...
-```
+## Quick Start
 
-Jidoka does not load `.env` files for applications. Put that policy in your
-host app, release config, showcase app, or shell.
-
-Jidoka is beta software. The `0.8.x` beta line is intended for early adopters
-while the public API is still allowed to change before a stable release.
-
-## Define An Agent
+Define an agent with the Spark DSL:
 
 ```elixir
 defmodule MyApp.Assistant do
@@ -76,24 +86,40 @@ defmodule MyApp.Assistant do
     instructions "Answer clearly and briefly."
   end
 end
+```
 
+Export a provider key before a live call:
+
+```bash
+export OPENAI_API_KEY=...
+# or
+export ANTHROPIC_API_KEY=...
+```
+
+Jidoka does not load `.env` files for applications. Your application, release
+configuration, or shell must provide credentials.
+
+Call `chat/3` when you need only the final text:
+
+```elixir
 {:ok, text} = MyApp.Assistant.chat("What can you help me with?")
 ```
 
-Use `chat/3` when you only need the final assistant text. Use `turn/3` when
-you need the full result, including journaled tool calls and events:
+Call `turn/3` when you also need usage, events, and the effect journal:
 
 ```elixir
-{:ok, result} = Jidoka.turn(MyApp.Assistant, "What can you help me with?")
+{:ok, result} =
+  Jidoka.turn(MyApp.Assistant, "What can you help me with?")
 
 result.content
+result.usage
 result.events
 result.journal.results
 ```
 
 ## Add A Tool
 
-Tools are Jido actions exposed to the model as operations.
+Tools are Jido actions that Jidoka exposes to the model as operations.
 
 ```elixir
 defmodule MyApp.LocalTime do
@@ -125,12 +151,64 @@ end
 {:ok, text} = MyApp.TimeAgent.chat("What time is it in Chicago?")
 ```
 
-The model decides whether to call `local_time`. Jidoka runs the action, feeds
-the observation back to the model, and returns the final answer.
+The model can request `local_time`. Jidoka validates the arguments, runs the
+action, adds the result to agent state, and asks the model for the final answer.
 
-## Keep A Conversation
+## Choose The Right API
 
-Use `Jidoka.Session` when the same agent should answer across turns.
+| Need | API |
+| --- | --- |
+| Final assistant text | `Jidoka.chat/3` |
+| Full result, usage, events, and journal | `Jidoka.turn/3` |
+| Multi-turn conversation state | `Jidoka.session/2` and `Jidoka.chat/3` |
+| Async UI request and event stream | `Jidoka.chat_async/3`, `Jidoka.stream/2`, and `Jidoka.await/2` |
+| Resume a paused turn | `Jidoka.resume/2` |
+| Approve or deny pending work | `Jidoka.approve/3` and `Jidoka.deny/3` |
+| Inspect the compiled agent or runtime data | `Jidoka.inspect/2` |
+| Assemble a prompt without live effects | `Jidoka.preflight/3` |
+| Run under a Jido agent process | `Jidoka.start_agent/2` |
+| Import or export portable agent data | `Jidoka.import/2` and `Jidoka.export/2` |
+
+Prefer the `Jidoka` facade in application code. Use the public contract modules
+when you build stores, adapters, integrations, or inspection tools.
+
+## Inspect Before A Live Call
+
+Preflight validates the request and assembles the prompt without calling a
+model or an operation:
+
+```elixir
+{:ok, preflight} =
+  Jidoka.preflight(
+    MyApp.TimeAgent,
+    "What time is it in Chicago?"
+  )
+
+preflight.prompt.messages
+preflight.prompt.operations
+preflight.timeline
+```
+
+Use `Jidoka.inspect/2` to read the compiled spec and plan:
+
+```elixir
+Jidoka.inspect(MyApp.TimeAgent)
+```
+
+After a turn, use `Jidoka.Debug.request/2` for a complete request summary:
+
+```elixir
+{:ok, summary} = Jidoka.Debug.request(result)
+
+summary.prompt.messages
+summary.operation_results
+summary.usage
+summary.replay_diagnostics.status
+```
+
+## Keep State And Pause Safely
+
+Use a session when the same agent must keep state across turns:
 
 ```elixir
 {:ok, session} = Jidoka.session(MyApp.Assistant, "support-thread-123")
@@ -142,33 +220,11 @@ Use `Jidoka.Session` when the same agent should answer across turns.
   Jidoka.chat(session, "What is my team called?")
 ```
 
-Sessions can run in memory for development and tests, or through a custom
-store in production.
-
-## Pause For Approval
-
-Controls run at explicit boundaries. An operation control can pause before a
-risky tool call:
+Controls can stop a turn before unsafe work. A stopped turn returns a snapshot:
 
 ```elixir
-defmodule MyApp.RequireRefundApproval do
-  use Jidoka.Control, name: "require_refund_approval"
-
-  @impl true
-  def call(%Jidoka.Runtime.Controls.OperationContext{} = operation) do
-    if operation.operation == "refund_order" do
-      {:interrupt, :approval_required}
-    else
-      :cont
-    end
-  end
-end
-```
-
-An interrupt returns a snapshot. Store it, review it, then resume:
-
-```elixir
-{:hibernate, snapshot} = Jidoka.turn(MyApp.SupportAgent, "Refund order A1001")
+{:hibernate, snapshot} =
+  Jidoka.turn(MyApp.SupportAgent, "Refund order A1001")
 
 approval =
   snapshot.turn_state.pending_interrupt
@@ -177,36 +233,13 @@ approval =
 {:ok, result} = Jidoka.resume(snapshot, approval: approval)
 ```
 
-## Inspect Before You Spend Tokens
-
-```elixir
-Jidoka.inspect(MyApp.TimeAgent)
-
-{:ok, preflight} =
-  Jidoka.preflight(MyApp.TimeAgent, "What time is it in Chicago?")
-
-preflight.prompt.messages
-preflight.prompt.tool_definitions
-```
-
-`preflight/3` validates the prompt and tool metadata without calling a model.
-
-After a turn, use `Jidoka.Debug.request/2` when you need the full request view
-for a user report, notebook, or test:
-
-```elixir
-{:ok, result} = Jidoka.turn(MyApp.TimeAgent, "What time is it in Chicago?")
-{:ok, summary} = Jidoka.Debug.request(result)
-
-summary.prompt.messages
-summary.operation_results
-summary.usage
-summary.replay_diagnostics.status
-```
+The built-in in-memory stores are for tests and one-node development. Use
+application-owned durable stores when state must survive a process or node
+failure.
 
 ## Author With Data
 
-Agents can also be imported from JSON or YAML:
+You can import agents from JSON or YAML:
 
 ```yaml
 version: 1
@@ -221,12 +254,45 @@ agent:
 {:ok, text} = Jidoka.chat(spec, "Hello")
 ```
 
-Executable refs such as actions, controls, Ash resources, and Zoi schemas are
-resolved through explicit registries during import.
+Import resolves executable references, such as actions, controls, Ash
+resources, and Zoi schemas, through explicit registries. Do not resolve
+untrusted references without an application policy.
 
-## Examples And Livebooks
+## Production Checklist
 
-The Phoenix showcase app lives in `showcase/`.
+Before live traffic:
+
+- set an explicit model, generation settings, turn limit, and timeout;
+- keep provider credentials in the host application or release environment;
+- apply controls to side-effecting operations;
+- select safe idempotency rules for retry and resume;
+- persist sessions and snapshots in an application-owned durable store;
+- redact sensitive prompt, tool, result, and trace data;
+- record provider usage, errors, and terminal turn events;
+- keep model and operation concurrency within provider and service limits;
+- use deterministic capabilities in the normal test suite;
+- keep real-provider checks small and opt-in.
+
+Start with [Configuration](guides/configuration.md),
+[Idempotency And Safety](guides/idempotency-and-safety.md), and
+[Tracing And Events](guides/tracing-and-events.md).
+
+## Examples
+
+The package includes deterministic reference agents under `examples/`:
+
+```bash
+mix jidoka.example --list
+mix jidoka.example support_agent
+mix jidoka.examples.check
+```
+
+The [Support Agent](examples/support_agent/README.md) proves a controlled tool
+call, human approval with snapshot resume, and operation-result handling. The
+default proof cases do not use provider keys, network calls, or recorded model
+fixtures.
+
+The Phoenix showcase application lives in `showcase/`:
 
 ```bash
 cd showcase
@@ -234,28 +300,48 @@ mix deps.get
 mix phx.server
 ```
 
-Package-level agent examples live in `examples/`. They use separate files for
-agents, actions, controls, workflows, and deterministic Mock LLMs. Example
-modules are loaded on demand and are not part of production compilation.
+Standalone Livebooks live in `guides/livebooks/`. Complete examples keep their
+Livebook beside their agent code and proof tests.
+
+## Documentation
+
+Use the [Documentation Overview](guides/documentation-overview.md) to select a
+path for application development, production operation, integrations, contract
+work, or maintenance.
+
+| Goal | Start here |
+| --- | --- |
+| Install and run one agent | [Getting Started](guides/getting-started.md) |
+| Understand specs, plans, turns, and effects | [Core Concepts](guides/core-concepts.md) |
+| Select a public facade function | [Public Facade](guides/public-facade.md) |
+| Define agents and tools | [Agent DSL](guides/agent-dsl.md) and [Tools And Operations](guides/tools-and-operations.md) |
+| Use sessions and durable stores | [Sessions And Stores](guides/sessions-and-stores.md) |
+| Add controls and human review | [Controls](guides/controls.md) and [Human In The Loop](guides/human-in-the-loop.md) |
+| Test without live providers | [Testing And Evals](guides/testing-and-evals.md) |
+| Verify a real provider loop | [Live LLM Tool Loop](guides/live-llm-tool-loop.md) |
+| Prepare a deployment | [Production Operator Path](guides/documentation-overview.md#production-operator-path) |
+
+The complete module reference is available on
+[HexDocs](https://hexdocs.pm/jidoka/).
+
+## Development
+
+Run the standard checks from the package root:
 
 ```bash
-mix jidoka.example --list
-mix jidoka.example support_agent
+mix deps.get
+mix format --check-formatted
+mix compile --warnings-as-errors
+mix test
+mix quality
+mix docs
+mix doctor --raise
 ```
 
-Standalone documentation Livebooks live in `guides/livebooks/`. A complete
-agent example keeps its Livebook beside its code and test, as the Support Agent
-does in `examples/support_agent/`.
-
-A complete `mix jidoka.examples.check` run writes its generated capability
-report to the ignored local file `docs/PROVEN_FEATURES.md`.
-
-## Test
+Run the complete deterministic example proof system with:
 
 ```bash
-mix test
-mix test --cover
-mix format --check-formatted
+mix jidoka.examples.check
 ```
 
 Live provider tests are opt-in:
@@ -264,44 +350,19 @@ Live provider tests are opt-in:
 mix test --include live test/jidoka/live_req_llm_test.exs
 ```
 
-Tests, examples, and documentation Livebooks should inject deterministic
-`llm:` and `operations:` capabilities by default. Only explicit live-provider
-checks require provider keys.
+See [Contributing](CONTRIBUTING.md) and
+[Contributor Testing](guides/contributor-testing.md) before you submit a
+change.
 
-## Guides
+## Project Status
 
-Start here:
+The current package version is `0.8.0-beta.1`. The stable application surface
+is centered on the `Jidoka` facade, the agent DSL, and public data contracts.
 
-- [Getting Started](guides/getting-started.md)
-- [Agent DSL](guides/agent-dsl.md)
-- [Tools And Operations](guides/tools-and-operations.md)
-- [Agent Orchestration](guides/agent-orchestration.md)
-- [Workflows](guides/workflows.md)
-- [Controls](guides/controls.md)
-- [Sessions And Stores](guides/sessions-and-stores.md)
-- [Inspection And Preflight](guides/inspection-and-preflight.md)
-- [Testing And Evals](guides/testing-and-evals.md)
-
-Useful next topics:
-
-- [Structured Results](guides/structured-results.md)
-- [Memory](guides/memory.md)
-- [Streaming](guides/streaming.md)
-- [Import JSON/YAML](guides/import-json-yaml.md)
-
-## Status
-
-This is the `0.8.0-beta.1` baseline. The public vocabulary is centered on:
-
-- `Jidoka.Agent.Spec`
-- `Jidoka.Turn.Request`, `Jidoka.Turn.Plan`, and `Jidoka.Turn.Result`
-- `Jidoka.Session`
-- `Jidoka.import/2`, `Jidoka.chat/3`, `Jidoka.turn/3`, `Jidoka.resume/2`
-- `tools`, `controls`, `memory`, `result`, `trace`, and `eval`
-
-Native provider tool calling, inline workflow sugar, and production
-store/runtime adapters are still active design areas.
+The runtime uses a provider-neutral JSON decision protocol. Native provider
+tool calling, inline workflow syntax, and additional production adapters remain
+active design areas.
 
 ## License
 
-Licensed under the Apache License, Version 2.0. See [LICENSE](LICENSE).
+Jidoka is available under the Apache License 2.0. See [LICENSE](LICENSE).
