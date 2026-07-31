@@ -63,7 +63,10 @@ end
 ```
 
 Credentials for live turns (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, etc.) belong
-in the host process environment. Jidoka itself does not read `.env` files.
+in the host process environment. Jidoka has no `.env` loader of its own, but
+ReqLLM loads `.env` from the current working directory by default. Set
+`config :req_llm, load_dotenv: false` when the host or deployment platform owns
+credential loading.
 
 ### Security / Trust Boundaries
 

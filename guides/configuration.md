@@ -221,17 +221,32 @@ if budget = System.get_env("JIDOKA_DEFAULT_MAX_TURNS") do
 end
 ```
 
-### Step 6: Export Provider Credentials Where The Application Can See Them
+### Step 6: Configure Provider Credential Loading
 
-Jidoka does not read `.env` files. ReqLLM reads `OPENAI_API_KEY` and similar
-env vars at call time. In development, export them in the shell:
+Jidoka does not implement a `.env` loader. ReqLLM is a required runtime
+dependency, and it loads `.env` from the current working directory by default
+when the application starts. It adds only variables that are not already in
+the system environment.
+
+For production, make this policy explicit and let the host application or
+deployment platform provide credentials:
+
+```elixir
+# config/runtime.exs
+import Config
+
+config :req_llm, load_dotenv: false
+```
+
+In local development, you can keep ReqLLM's default loading behavior or export
+the variables in the shell:
 
 ```bash
 export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 ```
 
-In production, use the deployment platform's secret manager (systemd
+Use the deployment platform's secret manager in production (systemd
 `EnvironmentFile`, Fly secrets, AWS Parameter Store, Kubernetes secrets) so
 that the BEAM process sees them at boot. Inside Livebook, prefer the `LB_*`
 prefix and mirror with `Jidoka.Kino.load_provider_env/1`. See

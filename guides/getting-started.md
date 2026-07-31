@@ -32,8 +32,22 @@ export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 ```
 
-Jidoka does not load `.env` files for applications. Put that policy in your
-app or release config.
+ReqLLM is a Jidoka runtime dependency. By default, ReqLLM loads `.env` from the
+current working directory when the application starts. Existing system
+environment values take priority.
+
+Disable automatic loading when your application or deployment platform owns
+credential loading:
+
+```elixir
+# config/runtime.exs
+import Config
+
+config :req_llm, load_dotenv: false
+```
+
+For production, provide credentials through the deployment environment or a
+secret manager.
 
 ## Define An Agent
 

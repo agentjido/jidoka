@@ -22,9 +22,19 @@ model call to produce the final answer.
 
 ## Configure Credentials
 
-Jidoka does not load `.env` files from the package runtime. Export a provider
-key in the shell that runs the live check, or configure ReqLLM in the host
-application.
+The Jidoka source repository disables ReqLLM's automatic `.env` loading for
+package commands. Export a provider key in the shell that runs this live check.
+
+In a host application, ReqLLM loads `.env` from the current working directory
+by default. To make the host application or deployment platform own credential
+loading, set this configuration:
+
+```elixir
+# config/runtime.exs
+import Config
+
+config :req_llm, load_dotenv: false
+```
 
 For example:
 
