@@ -35,7 +35,7 @@ defmodule JidokaShowcase.MixProject do
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.1"},
       # jido_action still selects the vulnerable Req 0.5 line.
-      {:req, "~> 0.6.0", override: true}
+      {:req, "~> 0.7.1", override: true}
     ]
   end
 
