@@ -276,6 +276,7 @@ defmodule JidokaExamples.ProofModelTest do
            ]
 
     assert hd(focused.gates).timeout_ms == 240_000
+    assert Enum.find(focused.gates, &(&1.id == :showcase_compile)).timeout_ms == 240_000
 
     assert {:ok, full} = Planner.plan(examples, [], File.cwd!())
     assert full.mode == :all
