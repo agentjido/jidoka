@@ -35,6 +35,7 @@ defmodule Jidoka.Runtime.Actions.RunTurn do
   defp fetch_input(params) do
     case get(params, :input) do
       input when is_binary(input) and input != "" -> {:ok, input}
+      input when is_list(input) and input != [] -> {:ok, input}
       _other -> {:error, :missing_input}
     end
   end

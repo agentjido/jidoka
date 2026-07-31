@@ -38,7 +38,8 @@ defmodule Jidoka do
 
   @type agent_input :: module() | Agent.Spec.t() | keyword() | map()
   @type plan_input :: module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
-  @type request_input :: Turn.Request.t() | String.t() | keyword() | map()
+  @type request_input ::
+          Turn.Request.t() | String.t() | [Jidoka.ContentPart.input()] | keyword() | map()
   @type runtime_opts :: keyword()
   @type server_ref :: Jido.AgentServer.server()
   @type runnable_input :: plan_input() | server_ref()
@@ -281,7 +282,7 @@ defmodule Jidoka do
   def turn(spec_or_server, request_input, opts \\ [])
 
   def turn(server, input, opts)
-      when is_binary(input) and is_server_ref(server) and is_list(opts) do
+      when (is_binary(input) or is_list(input)) and is_server_ref(server) and is_list(opts) do
     Jidoka.Facade.AgentServer.turn(server, input, opts)
   end
 

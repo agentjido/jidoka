@@ -5,7 +5,11 @@ defmodule Jidoka.Facade.AgentServer do
   alias Jidoka.Runtime.AgentServerState
   alias Jidoka.Runtime.Signals
 
-  @spec turn(Jido.AgentServer.server(), String.t(), keyword()) :: Jidoka.run_result()
+  @spec turn(
+          Jido.AgentServer.server(),
+          String.t() | [Jidoka.ContentPart.input()],
+          keyword()
+        ) :: Jidoka.run_result()
   def turn(server, input, opts) do
     timeout = Keyword.get(opts, :timeout, 30_000)
 

@@ -8,8 +8,9 @@ defmodule Jidoka.Effect.LLMDecision do
   on loose maps.
   """
 
-  alias Jidoka.Schema
+  alias Jidoka.ContentPart
   alias Jidoka.Effect.OperationRequest
+  alias Jidoka.Schema
 
   @types [:final, :operation, :operations]
 
@@ -18,6 +19,9 @@ defmodule Jidoka.Effect.LLMDecision do
             %{
               type: Schema.atom_enum(@types),
               content: Zoi.string() |> Zoi.nullish(),
+              parts:
+                Zoi.array(Zoi.lazy({ContentPart, :schema, []}))
+                |> Zoi.default([]),
               result: Zoi.any() |> Zoi.nullish(),
               name: Schema.non_empty_string() |> Zoi.nullish(),
               arguments: Zoi.map() |> Zoi.default(%{}),
@@ -64,11 +68,12 @@ defmodule Jidoka.Effect.LLMDecision do
   def from_input(input), do: new(input)
 
   @doc "Builds a final-answer model decision."
-  @spec final(String.t(), keyword()) :: t()
-  def final(content, opts \\ []) when is_binary(content) do
+  @spec final(String.t() | [ContentPart.input()], keyword()) :: t()
+  def final(content, opts \\ []) when is_binary(content) or is_list(content) do
     new!(
       type: :final,
       content: content,
+      parts: Keyword.get(opts, :parts, []),
       result: Keyword.get(opts, :result),
       metadata: Keyword.get(opts, :metadata, %{})
     )
@@ -97,9 +102,9 @@ defmodule Jidoka.Effect.LLMDecision do
 
   @doc "Projects a model decision into its effect payload."
   @spec to_payload(t()) :: map()
-  def to_payload(%__MODULE__{type: :final, content: content, result: result}) do
-    %{type: :final, content: content, result: result}
-    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+  def to_payload(%__MODULE__{type: :final, content: content, parts: parts, result: result}) do
+    %{type: :final, content: content, parts: parts, result: result}
+    |> Enum.reject(fn {_key, value} -> is_nil(value) or value == [] end)
     |> Map.new()
   end
 
@@ -115,12 +120,47 @@ defmodule Jidoka.Effect.LLMDecision do
   defp normalized_type(type), do: type
 
   defp new_final(attrs) do
-    case Schema.get_key(attrs, :content) do
-      content when is_binary(content) ->
-        parse_typed(attrs, :final)
+    with {:ok, attrs} <- normalize_final_parts(attrs) do
+      case Schema.get_key(attrs, :content) do
+        content when is_binary(content) ->
+          parse_typed(attrs, :final)
 
-      other ->
-        {:error, {:invalid_final_content, other}}
+        other ->
+          {:error, {:invalid_final_content, other}}
+      end
+    end
+  end
+
+  defp normalize_final_parts(attrs) do
+    content = Schema.get_key(attrs, :content)
+    parts = Schema.get_key(attrs, :parts, [])
+
+    cond do
+      is_list(content) and content != [] -> put_normalized_parts(attrs, content)
+      is_list(parts) and parts != [] -> put_normalized_parts(attrs, parts)
+      parts == [] -> {:ok, Map.put(attrs, :parts, [])}
+      true -> {:error, {:invalid_final_parts, parts}}
+    end
+  end
+
+  defp put_normalized_parts(attrs, inputs) do
+    case ContentPart.from_inputs(inputs) do
+      {:ok, parts} ->
+        content =
+          case Schema.get_key(attrs, :content) do
+            content when is_binary(content) -> content
+            _other -> ContentPart.text_content(parts)
+          end
+
+        {:ok,
+         attrs
+         |> Map.delete("content")
+         |> Map.delete("parts")
+         |> Map.put(:content, content)
+         |> Map.put(:parts, parts)}
+
+      {:error, reason} ->
+        {:error, {:invalid_final_parts, reason}}
     end
   end
 

@@ -19,7 +19,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
       ]
       |> Enum.reject(&is_nil/1)
       |> Kernel.++(state.request.agent_state.messages)
-      |> Kernel.++([Agent.Message.user(state.request.input)])
+      |> Kernel.++([request_message(state.request)])
       |> Kernel.++(current_turn_messages(state))
 
     messages = Enum.map(messages, &Agent.Message.to_map/1)
@@ -182,6 +182,11 @@ defmodule Jidoka.Runtime.Spine.Steps do
   defp current_turn_messages(%Turn.State{} = state) do
     Enum.drop(state.agent_state.messages, length(state.request.agent_state.messages))
   end
+
+  defp request_message(%Turn.Request{content: []} = request),
+    do: Agent.Message.user(request.input)
+
+  defp request_message(%Turn.Request{content: content}), do: Agent.Message.user(content)
 
   defp stable_key(parts) do
     :crypto.hash(:sha256, :erlang.term_to_binary(parts))

@@ -1,16 +1,20 @@
 defmodule Jidoka.Turn.Result do
   @moduledoc "Final app-facing result of one Jidoka turn."
 
-  alias Jidoka.Schema
   alias Jidoka.Agent
   alias Jidoka.Config
+  alias Jidoka.ContentPart
   alias Jidoka.Effect
+  alias Jidoka.Schema
   alias Jidoka.Turn
 
   @schema Zoi.struct(
             __MODULE__,
             %{
               content: Zoi.string(),
+              parts:
+                Zoi.array(Zoi.lazy({ContentPart, :schema, []}))
+                |> Zoi.default([]),
               value: Zoi.any() |> Zoi.nullish(),
               agent_state: Zoi.lazy({Agent.State, :schema, []}),
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
@@ -42,6 +46,7 @@ defmodule Jidoka.Turn.Result do
   def from_turn_state!(%Turn.State{status: :finished, result: content} = state) do
     new!(
       content: content,
+      parts: state.result_parts,
       value: state.result_value,
       agent_state: state.agent_state,
       journal: state.journal,
@@ -72,7 +77,10 @@ defmodule Jidoka.Turn.Result do
     %{
       model: Map.get(prompt, :model, Map.get(prompt, "model")),
       loop_index: Map.get(prompt, :loop_index, Map.get(prompt, "loop_index")),
-      messages: Map.get(prompt, :messages, Map.get(prompt, "messages", [])),
+      messages:
+        prompt
+        |> Map.get(:messages, Map.get(prompt, "messages", []))
+        |> Jidoka.project(),
       message_count: length(Map.get(prompt, :messages, Map.get(prompt, "messages", []))),
       operations: operations,
       operation_names: Enum.map(operations, &operation_name/1),

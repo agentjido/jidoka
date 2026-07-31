@@ -6,6 +6,7 @@ defmodule Jidoka.Agent.Message do
   shapes, but the agent session keeps a typed, serializable message contract.
   """
 
+  alias Jidoka.ContentPart
   alias Jidoka.Schema
 
   @roles [:system, :user, :assistant, :tool]
@@ -15,6 +16,9 @@ defmodule Jidoka.Agent.Message do
             %{
               role: Schema.atom_enum(@roles),
               content: Zoi.string() |> Zoi.nullish(),
+              parts:
+                Zoi.array(Zoi.lazy({ContentPart, :schema, []}))
+                |> Zoi.default([]),
               operation: Schema.non_empty_string() |> Zoi.nullish(),
               output: Zoi.any() |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
@@ -38,7 +42,8 @@ defmodule Jidoka.Agent.Message do
   @doc "Builds a validated durable chat message."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
-    with {:ok, %__MODULE__{} = message} <- Schema.parse(@schema, attrs),
+    with {:ok, attrs} <- normalize_parts(attrs),
+         {:ok, %__MODULE__{} = message} <- Schema.parse(@schema, attrs),
          :ok <- validate(message) do
       {:ok, message}
     end
@@ -59,15 +64,15 @@ defmodule Jidoka.Agent.Message do
   def from_input(input), do: new(input)
 
   @doc "Builds a system message."
-  @spec system(String.t(), keyword()) :: t()
+  @spec system(String.t() | [ContentPart.input()], keyword()) :: t()
   def system(content, opts \\ []), do: message!(:system, content, opts)
 
   @doc "Builds a user message."
-  @spec user(String.t(), keyword()) :: t()
+  @spec user(String.t() | [ContentPart.input()], keyword()) :: t()
   def user(content, opts \\ []), do: message!(:user, content, opts)
 
   @doc "Builds an assistant message."
-  @spec assistant(String.t(), keyword()) :: t()
+  @spec assistant(String.t() | [ContentPart.input()], keyword()) :: t()
   def assistant(content, opts \\ []), do: message!(:assistant, content, opts)
 
   @doc "Builds a tool result message for an operation output."
@@ -87,6 +92,8 @@ defmodule Jidoka.Agent.Message do
   def to_map(%__MODULE__{} = message) do
     message
     |> Map.from_struct()
+    |> message_content(message)
+    |> Map.delete(:parts)
     |> Enum.reject(fn
       {_key, nil} -> true
       {:metadata, metadata} when metadata == %{} -> true
@@ -95,17 +102,18 @@ defmodule Jidoka.Agent.Message do
     |> Map.new()
   end
 
-  defp message!(role, content, opts) when role in @roles and is_binary(content) do
+  defp message!(role, content, opts) when role in @roles and is_list(opts) do
     new!(
       role: role,
       content: content,
+      parts: Keyword.get(opts, :parts, []),
       metadata: Keyword.get(opts, :metadata, %{})
     )
   end
 
-  defp validate(%__MODULE__{role: role, content: content})
+  defp validate(%__MODULE__{role: role, content: content, parts: parts})
        when role in [:system, :user, :assistant] do
-    if is_binary(content) do
+    if is_binary(content) or parts != [] do
       :ok
     else
       {:error, {:missing_message_content, role}}
@@ -119,4 +127,61 @@ defmodule Jidoka.Agent.Message do
       {:error, :missing_tool_message_operation}
     end
   end
+
+  defp normalize_parts(attrs) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    if is_map(attrs) do
+      normalize_parts_map(attrs)
+    else
+      {:error, {:invalid_message_attributes, attrs}}
+    end
+  end
+
+  defp normalize_parts_map(attrs) do
+    content = Schema.get_key(attrs, :content)
+    parts = Schema.get_key(attrs, :parts, [])
+
+    cond do
+      is_list(content) and content != [] ->
+        put_normalized_parts(attrs, content, nil)
+
+      is_list(parts) and parts != [] ->
+        put_normalized_parts(attrs, parts, content)
+
+      parts == [] ->
+        {:ok, put_parts(attrs, [])}
+
+      true ->
+        {:error, {:invalid_message_parts, parts}}
+    end
+  end
+
+  defp put_normalized_parts(attrs, inputs, content) do
+    case ContentPart.from_inputs(inputs) do
+      {:ok, parts} ->
+        content = content || empty_to_nil(ContentPart.text_content(parts))
+
+        {:ok,
+         attrs
+         |> Map.delete("content")
+         |> Map.put(:content, content)
+         |> put_parts(parts)}
+
+      {:error, reason} ->
+        {:error, {:invalid_message_parts, reason}}
+    end
+  end
+
+  defp put_parts(attrs, parts) do
+    attrs
+    |> Map.delete("parts")
+    |> Map.put(:parts, parts)
+  end
+
+  defp message_content(map, %__MODULE__{parts: []}), do: map
+  defp message_content(map, %__MODULE__{parts: parts}), do: Map.put(map, :content, parts)
+
+  defp empty_to_nil(""), do: nil
+  defp empty_to_nil(value), do: value
 end

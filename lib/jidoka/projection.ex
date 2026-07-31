@@ -106,6 +106,7 @@ defmodule Jidoka.Projection do
     %{
       request_id: request.request_id,
       input: request.input,
+      content: Value.project(request.content),
       context: Value.project(Jidoka.Context.data(request.context)),
       metadata: Value.project(request.metadata),
       agent_state: project(request.agent_state)
@@ -120,7 +121,7 @@ defmodule Jidoka.Projection do
     }
   end
 
-  def project(%Agent.Message{} = message), do: Agent.Message.to_map(message)
+  def project(%Agent.Message{} = message), do: message |> Agent.Message.to_map() |> Value.project()
 
   def project(%Turn.State{} = state) do
     %{
@@ -135,6 +136,7 @@ defmodule Jidoka.Projection do
       pending_effects: Enum.map(state.pending_effects, &project/1),
       pending_interrupt: project(state.pending_interrupt),
       result: state.result,
+      result_parts: Value.project(state.result_parts),
       result_value: Value.project(state.result_value),
       result_repair_count: state.result_repair_count,
       status: state.status,
@@ -157,6 +159,7 @@ defmodule Jidoka.Projection do
   def project(%Turn.Result{} = result) do
     %{
       content: result.content,
+      parts: Value.project(result.parts),
       value: Value.project(result.value),
       agent_state: project(result.agent_state),
       journal: project(result.journal),

@@ -8,8 +8,9 @@ defmodule Jidoka.Runtime.Signals do
   def turn_run_type, do: @turn_run_type
 
   @doc "Builds a Jido signal that requests one Jidoka turn."
-  @spec turn_run(String.t(), keyword()) :: Jido.Signal.t()
-  def turn_run(input, opts \\ []) when is_binary(input) and is_list(opts) do
+  @spec turn_run(String.t() | [Jidoka.ContentPart.input()], keyword()) :: Jido.Signal.t()
+  def turn_run(input, opts \\ [])
+      when (is_binary(input) or is_list(input)) and is_list(opts) do
     data =
       %{
         input: input,

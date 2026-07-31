@@ -231,6 +231,7 @@ defmodule Jidoka.MixProject do
         Jidoka.AgentView
       ],
       "Agent Data": [
+        Jidoka.ContentPart,
         Jidoka.Agent.Message,
         Jidoka.Agent.State,
         ~r/^Jidoka\.Agent\.Spec(\.|$)/

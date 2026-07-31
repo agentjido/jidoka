@@ -101,14 +101,64 @@ Input envelope for one turn.
 
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `input` | non-empty string | required | User-facing input passed to prompt assembly. |
+| `input` | non-empty string | required | Text input or the derived text summary for multimodal input. |
+| `content` | `[Jidoka.ContentPart.t()]` | `[]` | Ordered typed text and media input. |
 | `request_id` | non-empty string | generated prefixed UUIDv7 (`"turn_…"`) | Stable id used by snapshots and logs. |
 | `agent_state` | `Agent.State.t()` | empty agent state | Carries history across turns. |
 | `context` | map | `%{}` | Per-turn context map (validated against `spec.context_schema`). |
 | `metadata` | map | `%{}` | Caller metadata. |
 
-`Turn.Request.from_input/2` accepts a string, map, or keyword list and fills in
-defaults.
+`Turn.Request.from_input/2` accepts a string, an ordered content-part list, a
+map, or a keyword list. A content-part list keeps its full typed form in
+`content`. The request derives `input` from its text parts. If there is no text,
+it uses a non-empty summary such as `"[Multimodal input: image, audio]"`. Input
+controls, memory, and dynamic instructions continue to receive a stable string.
+
+### `Jidoka.ContentPart`
+
+Provider-neutral content for requests, messages, decisions, and results.
+
+| Field | Type | Purpose |
+| --- | --- | --- |
+| `type` | `:text \| :image \| :audio \| :video \| :document` | Content kind. |
+| `text` | string or `nil` | Required for a text part. |
+| `url` | string or `nil` | Remote media source. |
+| `data` | binary or `nil` | Inline media source. |
+| `file_id` | string or `nil` | Provider-managed media source. |
+| `media_type` | string or `nil` | MIME type. Builders provide a default for each media type. |
+| `filename` | string or `nil` | Optional provider filename. |
+| `metadata` | map | Media or provider hints. |
+
+A media part must have exactly one source: `url`, `data`, or `file_id`. Use the
+builders to make this rule explicit:
+
+```elixir
+alias Jidoka.ContentPart
+
+input = [
+  ContentPart.text("Describe this image."),
+  ContentPart.image({:data, image_bytes},
+    media_type: "image/png",
+    filename: "diagram.png"
+  ),
+  ContentPart.audio({:file_id, "file_123"}, media_type: "audio/mpeg")
+]
+
+{:ok, result} = Jidoka.turn(MyApp.MediaAgent, input)
+```
+
+The ReqLLM adapter sends supported parts as native ReqLLM content parts. Image
+and video URLs stay as URLs. Inline media and file ids stay typed. ReqLLM does
+not have a provider-neutral native form for audio or document URLs. The adapter
+returns `{:unsupported_media_source, type, :url}` for those two cases. A
+provider can still reject a valid native part when its selected model does not
+support that media type. Jidoka returns that provider error without changing
+it.
+
+Raw media is durable data. Signed snapshots preserve it so resume is lossless.
+`Jidoka.project/1`, debug prompt views, and terminal event data omit media
+bytes, URLs, and file ids. They show the type, source kind, media type,
+filename, byte size, and redacted metadata.
 
 ### `Jidoka.Turn.State`
 
@@ -124,7 +174,7 @@ Ephemeral value threaded through the workflow.
 | `operation_plan` | `Effect.OperationRequest.t() \| nil` | First pending operation request, kept for inspection compatibility. |
 | `pending_effects` | `[Effect.Intent.t()]` | Effects awaiting interpretation. Operation batches are stored here in model order. |
 | `pending_interrupt` | `Review.Interrupt.t() \| nil` | Review boundary, if any. |
-| `result` / `result_value` | string / term | Final assistant content and validated structured value. |
+| `result` / `result_parts` / `result_value` | string / content parts / term | Final assistant text, typed output, and validated structured value. |
 | `result_repair_count` | non-negative integer | Repair attempts so far. |
 | `status` | `:running \| :waiting \| :finished` | Loop state. |
 | `loop_index` | non-negative integer | Current model round. |
@@ -169,6 +219,7 @@ Final app-facing value.
 | Field | Type | Purpose |
 | --- | --- | --- |
 | `content` | string | Final assistant text. |
+| `parts` | `[Jidoka.ContentPart.t()]` | Ordered typed text and media output. |
 | `value` | term or `nil` | Validated structured value when `spec.result` is set. |
 | `agent_state` | `Agent.State.t()` | Conversation state after the turn. |
 | `journal` | `Effect.Journal.t()` | Effects observed during the turn. |
@@ -178,6 +229,25 @@ Final app-facing value.
 
 Produced by [`Jidoka.Turn.Result.from_turn_state!/1`](`Jidoka.Turn.Result`)
 once `status` reaches `:finished`.
+
+A custom LLM capability can return typed output beside its final text:
+
+```elixir
+{:ok,
+ %{
+   type: :final,
+   content: "Created the image.",
+   parts: [
+     Jidoka.ContentPart.text("Created the image."),
+     Jidoka.ContentPart.image({:data, image_bytes}, media_type: "image/png")
+   ]
+ }}
+```
+
+The built-in ReqLLM capability converts provider image, video, audio, and file
+parts into this contract. It also keeps provider metadata, response model,
+finish reason, message metadata, and usage on the LLM decision and its journal
+result.
 
 When the LLM capability is backed by ReqLLM, `usage` contains normalized token
 and cost fields when the provider returns them:
@@ -279,6 +349,7 @@ Constrained JSON decision protocol returned by every LLM capability.
 | --- | --- | --- |
 | `type` | `:final \| :operation \| :operations` | Branch of the decision protocol. |
 | `content` | string or `nil` | Required for `:final`. Optional metadata text for operation decisions. |
+| `parts` | list of `ContentPart` | Ordered typed model output. |
 | `result` | term or `nil` | Structured result for `:final` when `spec.result` is set. |
 | `name` | non-empty string or `nil` | Required for `:operation`. |
 | `arguments` | map | Operation arguments. Required for `:operation`. |
@@ -339,6 +410,7 @@ end
 ## Reference
 
 - [`Jidoka.Turn.Plan`](`Jidoka.Turn.Plan`)
+- [`Jidoka.ContentPart`](`Jidoka.ContentPart`)
 - [`Jidoka.Turn.Request`](`Jidoka.Turn.Request`)
 - [`Jidoka.Turn.State`](`Jidoka.Turn.State`)
 - [`Jidoka.Turn.Transition`](`Jidoka.Turn.Transition`)

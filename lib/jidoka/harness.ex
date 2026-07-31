@@ -25,7 +25,8 @@ defmodule Jidoka.Harness do
 
   @type agent_input :: module() | Agent.Spec.t() | keyword() | map()
   @type plan_input :: module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
-  @type request_input :: Turn.Request.t() | String.t() | keyword() | map()
+  @type request_input ::
+          Turn.Request.t() | String.t() | [Jidoka.ContentPart.input()] | keyword() | map()
   @type runtime_opts :: keyword()
   @type session_input :: Session.t() | String.t()
 

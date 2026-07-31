@@ -9,6 +9,8 @@ defmodule Jidoka.Projection.Value do
   @spec project(term()) :: term()
   def project(%_{} = exception) when is_exception(exception), do: Error.to_map(exception)
 
+  def project(%Jidoka.ContentPart{} = part), do: Jidoka.ContentPart.project(part)
+
   def project(%LLMDB.Model{} = model), do: Jidoka.Config.model_ref(model)
 
   def project(%module{} = struct) do

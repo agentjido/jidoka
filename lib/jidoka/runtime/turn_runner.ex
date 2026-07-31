@@ -8,17 +8,18 @@ defmodule Jidoka.Runtime.TurnRunner do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Effect
   alias Jidoka.Event
-  alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Projection.Value
+  alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
   alias Jidoka.Runtime.Review
-  alias Jidoka.Stream, as: EventStream
-  alias Jidoka.Effect
-  alias Jidoka.Review.Interrupt
-  alias Jidoka.Turn
   alias Jidoka.Runtime.Spine.Compiler
+  alias Jidoka.Stream, as: EventStream
+  alias Jidoka.Turn
   alias Runic.Workflow
 
   @type run_result ::
@@ -261,10 +262,16 @@ defmodule Jidoka.Runtime.TurnRunner do
     |> Turn.Transition.event(:turn_finished,
       agent_id: state.spec.id,
       request_id: state.request.request_id,
-      loop_index: state.loop_index
+      loop_index: state.loop_index,
+      data: result_parts_data(state.result_parts)
     )
     |> Turn.Transition.commit()
   end
+
+  defp result_parts_data([]), do: %{}
+
+  defp result_parts_data(parts),
+    do: %{parts: Value.project(parts)}
 
   defp emit_turn_started(%Turn.State{} = state, opts) do
     Event.build(:turn_started, state.events,

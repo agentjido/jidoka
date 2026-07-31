@@ -271,7 +271,7 @@ defmodule Jidoka.Debug do
     %{
       model: map_get(prompt, :model),
       loop_index: map_get(prompt, :loop_index),
-      messages: map_get(prompt, :messages, []),
+      messages: prompt |> map_get(:messages, []) |> Jidoka.project(),
       message_count: length(map_get(prompt, :messages, [])),
       operations: map_get(prompt, :operations, []),
       operation_names: Enum.map(map_get(prompt, :operations, []), &map_get(&1, :name)),

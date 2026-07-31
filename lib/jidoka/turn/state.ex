@@ -17,6 +17,9 @@ defmodule Jidoka.Turn.State do
               pending_effects: Zoi.array(Zoi.lazy({:"Elixir.Jidoka.Effect.Intent", :schema, []})) |> Zoi.default([]),
               pending_interrupt: Zoi.lazy({:"Elixir.Jidoka.Review.Interrupt", :schema, []}) |> Zoi.nullish(),
               result: Zoi.string() |> Zoi.nullish(),
+              result_parts:
+                Zoi.array(Zoi.lazy({:"Elixir.Jidoka.ContentPart", :schema, []}))
+                |> Zoi.default([]),
               result_value: Zoi.any() |> Zoi.nullish(),
               result_repair_count: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               status: Schema.atom_enum([:running, :waiting, :finished]) |> Zoi.default(:running),
@@ -202,9 +205,9 @@ defmodule Jidoka.Turn.State do
 
   defp apply_final_result(
          %__MODULE__{spec: %Jidoka.Agent.Spec{result: nil}} = state,
-         %Jidoka.Effect.LLMDecision{content: content}
+         %Jidoka.Effect.LLMDecision{content: content, parts: parts}
        ) do
-    finish_turn(state, content, nil)
+    finish_turn(state, content, parts, nil)
   end
 
   defp apply_final_result(
@@ -216,21 +219,22 @@ defmodule Jidoka.Turn.State do
         state =
           append_result_validated(state, value)
 
-        finish_turn(state, decision.content, value)
+        finish_turn(state, decision.content, decision.parts, value)
 
       {:error, {:invalid_result, reason}} ->
         maybe_repair_result(state, decision, result, reason)
     end
   end
 
-  defp finish_turn(%__MODULE__{} = state, content, value) do
-    message = Jidoka.Agent.Message.assistant(content)
+  defp finish_turn(%__MODULE__{} = state, content, parts, value) do
+    message = Jidoka.Agent.Message.assistant(content, parts: parts)
 
     {:ok,
      %__MODULE__{
        state
        | pending_effects: [],
          result: content,
+         result_parts: parts,
          result_value: value,
          status: :finished,
          agent_state: append_message(state.agent_state, message)

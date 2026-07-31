@@ -9,9 +9,10 @@ defmodule Jidoka.Runtime.ReqLLM do
 
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Config
-  alias Jidoka.Event
   alias Jidoka.Effect
-  alias Jidoka.Runtime.ReqLLM.Decision
+  alias Jidoka.Event
+  alias Jidoka.Runtime.ReqLLM.PromptAdapter
+  alias Jidoka.Runtime.ReqLLM.ResponseAdapter
   alias Jidoka.Schema
   alias Jidoka.Stream, as: EventStream
 
@@ -59,6 +60,16 @@ defmodule Jidoka.Runtime.ReqLLM do
   def generate(%Effect.Intent{kind: kind}, _journal, _opts),
     do: {:error, {:unsupported_effect_kind, kind}}
 
+  @doc false
+  @spec messages(map()) :: {:ok, [ReqLLM.Message.t()]} | {:error, term()}
+  def messages(payload_or_prompt) when is_map(payload_or_prompt) do
+    case Schema.fetch_key(payload_or_prompt, :prompt) do
+      {:ok, prompt} when is_map(prompt) -> PromptAdapter.build(prompt)
+      {:ok, prompt} -> {:error, {:invalid_prompt_payload, prompt}}
+      :error -> PromptAdapter.build(payload_or_prompt)
+    end
+  end
+
   defp fetch_model(payload, opts) do
     case Keyword.fetch(opts, :model) do
       {:ok, model} ->
@@ -83,20 +94,9 @@ defmodule Jidoka.Runtime.ReqLLM do
 
   defp build_messages(payload) when is_map(payload) do
     case Schema.fetch_key(payload, :prompt) do
-      {:ok, prompt} when is_map(prompt) -> build_prompt_messages(prompt)
-      {:ok, prompt} -> {:error, {:invalid_prompt_payload, prompt}}
+      {:ok, _prompt} -> messages(payload)
       :error -> {:error, {:missing_prompt_payload, payload}}
     end
-  end
-
-  defp build_prompt_messages(prompt) do
-    {:ok,
-     [
-       %{role: :system, content: runtime_system_prompt(prompt)},
-       %{role: :user, content: Jason.encode!(prompt)}
-     ]}
-  rescue
-    exception -> {:error, {:invalid_prompt_payload, exception}}
   end
 
   defp provider_opts(opts) do
@@ -112,9 +112,8 @@ defmodule Jidoka.Runtime.ReqLLM do
   end
 
   defp generate_text_response(model, messages, llm_opts) do
-    with {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts),
-         {:ok, decision} <- response |> ReqLLM.Response.text() |> Decision.parse_text() do
-      {:ok, attach_response_metadata(decision, model, response)}
+    with {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts) do
+      decision(response, model)
     end
   end
 
@@ -131,14 +130,22 @@ defmodule Jidoka.Runtime.ReqLLM do
                on_thinking: &handle_stream_thinking_delta(stream_state_key, intent, opts, &1)
              ),
            text <- response_text(stream_state_key, response),
-           {:ok, decision} <- Decision.parse_text(text) do
-        decision = attach_response_metadata(decision, model, response)
+           {:ok, decision} <- ResponseAdapter.decision(response, model, text) do
         emit_remaining_final_delta(stream_state_key, intent, decision, opts)
         {:ok, decision}
       end
 
     Process.delete(stream_state_key)
     result
+  end
+
+  @doc false
+  @spec decision(ReqLLM.Response.t(), LLMDB.Model.t() | nil) ::
+          {:ok, Effect.LLMDecision.t()} | {:error, term()}
+  def decision(response, model \\ nil)
+
+  def decision(%ReqLLM.Response{} = response, model) do
+    ResponseAdapter.decision(response, model)
   end
 
   defp response_text(stream_state_key, response) do
@@ -151,31 +158,6 @@ defmodule Jidoka.Runtime.ReqLLM do
       true -> text
     end
   end
-
-  defp attach_response_metadata(%Effect.LLMDecision{} = decision, model, response) do
-    metadata =
-      %{}
-      |> maybe_put(:usage, response_usage(response))
-      |> maybe_put(:model, model_ref(model))
-      |> maybe_put(:finish_reason, ReqLLM.Response.finish_reason(response))
-
-    %Effect.LLMDecision{decision | metadata: Map.merge(decision.metadata, metadata)}
-  end
-
-  defp response_usage(response) do
-    response
-    |> ReqLLM.Response.usage()
-    |> Jidoka.Usage.normalize()
-    |> empty_to_nil()
-  end
-
-  defp model_ref(%LLMDB.Model{} = model), do: LLMDB.Model.spec(model)
-
-  defp empty_to_nil(%{} = map) when map_size(map) == 0, do: nil
-  defp empty_to_nil(value), do: value
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp stream_enabled?(opts) do
     Keyword.get(opts, :stream) == true or Keyword.has_key?(opts, :stream_to) or
@@ -323,51 +305,4 @@ defmodule Jidoka.Runtime.ReqLLM do
   end
 
   defp hex?(hex), do: String.match?(hex, ~r/\A[0-9a-fA-F]{4}\z/)
-
-  defp runtime_system_prompt(prompt) do
-    operation_instructions =
-      if operations_available?(prompt) do
-        """
-
-        To call an available operation:
-        {"type":"operation","name":"operation_name","arguments":{}}
-
-        To call multiple independent operations in the same turn:
-        {"type":"operations","operations":[{"name":"first_operation","arguments":{}},{"name":"second_operation","arguments":{}}]}
-
-        Use only operations listed in the prompt payload. Never invent operation
-        names. If a tool observation is present in the message history, use it
-        to produce the final answer.
-        """
-      else
-        """
-
-        This prompt payload has no available operations. Never return an
-        operation decision. Continue the conversation by returning a final
-        answer, including clarifying questions when the task requires them.
-        """
-      end
-
-    """
-    You are the model side of a Jidoka agent turn.
-
-    Return exactly one JSON object and no markdown.
-
-    To answer the user directly:
-    {"type":"final","content":"your answer"}
-
-    If the prompt payload includes a non-null "result" contract, include a
-    "result" field with the structured application value. Follow the result
-    schema fields exactly:
-    {"type":"final","content":"short user-facing answer","result":{}}
-    #{operation_instructions}
-    """
-  end
-
-  defp operations_available?(prompt) when is_map(prompt) do
-    case Schema.get_key(prompt, :operations) do
-      operations when is_list(operations) -> operations != []
-      _other -> false
-    end
-  end
 end
