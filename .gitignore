@@ -25,6 +25,10 @@ Thumbs.db
 # Temporary files, for example, from tests.
 /tmp/
 
+# Repository-local agent tooling and generated work artifacts.
+/.codex/
+/.compound-engineering/
+
 # Local secrets and developer overrides.
 .env
 .env.*
