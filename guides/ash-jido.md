@@ -31,12 +31,13 @@ defmodule MyApp.Support.Ticket do
     domain: MyApp.Support,
     extensions: [AshJido]
 
-  ash_jido do
-    expose [:read, :create]
-  end
-
   actions do
     defaults [:read, :create, :update]
+  end
+
+  jido do
+    action :read
+    action :create
   end
 end
 ```
@@ -186,9 +187,9 @@ context.
   )
 ```
 
-The `:ash_resource` capability forwards the public context (everything that is
-not stripped by a `forward_context: {:except, ...}` policy) into the generated
-Jido action's `context` argument.
+The `:ash_resource` capability projects caller-supplied context data into the
+plain map expected by each generated Jido action. Thus, `:actor` and `:tenant`
+are top-level keys in the action's `context` argument.
 
 ### Step 4: Import The Same Agent From YAML
 

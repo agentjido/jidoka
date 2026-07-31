@@ -161,10 +161,46 @@ defmodule Jidoka.DataStructsTest do
     assert %Jidoka.Context{runtime: %{client: :trusted}} =
              Jidoka.Context.from_data!(trusted_context, runtime: %{client: :trusted})
 
+    assert %Jidoka.Context{data: %{}} = Jidoka.Context.from_data!(nil)
+    assert {:error, {:invalid_context_data, :invalid}} = Jidoka.Context.from_data(:invalid)
+
+    assert_raise ArgumentError, ~r/invalid context data/, fn ->
+      Jidoka.Context.from_data!(:invalid)
+    end
+
     assert %{tenant: "northwind"} =
              Jidoka.Context.from_data!(%{tenant: "northwind"}, runtime: %{client: :trusted})
              |> Jidoka.Context.sanitize()
              |> Jidoka.Context.data()
+  end
+
+  test "Jidoka.Context projects a spoof-safe Jido action context" do
+    context =
+      Jidoka.Context.from_data!(
+        %{
+          "__jidoka__" => :spoofed_string,
+          actor: "actor-1",
+          tenant: "tenant-1",
+          __jidoka__: :spoofed_atom
+        },
+        runtime: %{client: :trusted},
+        boundary: :operation,
+        operation: "lookup"
+      )
+
+    action_context = Jidoka.Context.to_action_context(context)
+
+    refute is_struct(action_context)
+    assert Map.get(action_context, :actor) == "actor-1"
+    assert action_context[:tenant] == "tenant-1"
+    assert Jidoka.Context.get(action_context, :actor) == "actor-1"
+    assert Jidoka.Context.get_runtime(action_context, :client) == :trusted
+    assert Jidoka.Context.fetch_runtime(%{}, :client) == :error
+    assert Jidoka.Context.get_runtime(%{}, :client, :missing) == :missing
+    assert action_context.__jidoka__.context == context
+    refute Map.has_key?(action_context, "__jidoka__")
+    refute Map.has_key?(action_context, :runtime)
+    refute Map.has_key?(action_context, :operation)
   end
 
   test "operation specs carry approval policy data" do

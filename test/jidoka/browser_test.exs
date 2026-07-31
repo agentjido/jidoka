@@ -112,14 +112,35 @@ defmodule Jidoka.BrowserTest do
       )
 
     context = Jidoka.Context.from_data!(%{}, runtime: %{jidoka_spec: %{operations: [operation]}})
+    action_context = Jidoka.Context.to_action_context(context)
 
     assert :ok =
              Runtime.validate_allowlist("https://docs.example.com/guide", context, "read_page")
+
+    assert :ok =
+             Runtime.validate_allowlist("https://docs.example.com/guide", action_context, "read_page")
 
     assert :ok = Runtime.validate_allowlist("https://example.com", %{}, "read_page")
 
     assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :browser_url_not_allowed}}} =
              Runtime.validate_allowlist("https://example.com", context, "read_page")
+
+    assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :browser_url_not_allowed}}} =
+             Runtime.validate_allowlist("https://example.com", action_context, "read_page")
+
+    assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :browser_url_not_allowed}}} =
+             Runtime.validate_allowlist(:not_a_url, action_context, "read_page")
+
+    missing_operation_context =
+      Jidoka.Context.from_data!(%{}, runtime: %{jidoka_spec: %{operations: []}})
+      |> Jidoka.Context.to_action_context()
+
+    assert :ok =
+             Runtime.validate_allowlist(
+               "https://example.com",
+               missing_operation_context,
+               "read_page"
+             )
   end
 
   test "browser allowlists reject prefix-confused hosts and enforce URL paths" do

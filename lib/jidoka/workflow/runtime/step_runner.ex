@@ -1,6 +1,7 @@
 defmodule Jidoka.Workflow.Runtime.StepRunner do
   @moduledoc false
 
+  alias Jidoka.Runtime.JidoActions
   alias Jidoka.Workflow.Runtime.{Retry, Value}
   alias Jidoka.Workflow.Step
 
@@ -42,7 +43,7 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   def execute_step(%Step{kind: :action} = step, state) do
     with {:ok, params} <- resolve_map(step.input, state, :action_input),
          {:ok, tool} <- action_tool(step.target) do
-      Retry.call(step, fn -> call_tool(tool, params, state.context) end)
+      Retry.call(step, fn -> JidoActions.invoke_tool(tool, params, state.context) end)
     end
   end
 
@@ -190,7 +191,7 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
 
   defp execute_map_target(%Step{target_kind: :action} = step, params, context) do
     with {:ok, tool} <- action_tool(step.target) do
-      Retry.call(step, fn -> call_tool(tool, params, context) end)
+      Retry.call(step, fn -> JidoActions.invoke_tool(tool, params, context) end)
     end
   end
 
@@ -222,25 +223,6 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   end
 
   defp action_tool(action), do: {:error, {:invalid_action_module, action}}
-
-  defp call_tool(%{function: function}, arguments, context) when is_function(function, 2) do
-    case function.(arguments, context) do
-      {:ok, encoded} -> {:ok, decode_tool_payload(encoded)}
-      {:error, encoded} -> {:error, decode_tool_payload(encoded)}
-      other -> {:error, {:invalid_action_result, other}}
-    end
-  end
-
-  defp call_tool(_tool, _arguments, _context), do: {:error, :invalid_action_tool}
-
-  defp decode_tool_payload(encoded) when is_binary(encoded) do
-    case Jason.decode(encoded) do
-      {:ok, decoded} -> decoded
-      {:error, _reason} -> encoded
-    end
-  end
-
-  defp decode_tool_payload(value), do: value
 
   defp ensure_prompt(prompt) when is_binary(prompt), do: {:ok, prompt}
   defp ensure_prompt(prompt), do: {:error, {:expected_prompt, prompt}}
