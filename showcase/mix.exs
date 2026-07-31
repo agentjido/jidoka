@@ -25,7 +25,7 @@ defmodule JidokaShowcase.MixProject do
       {:bandit, "~> 1.6"},
       {:dotenvy, "~> 1.1"},
       # tzdata 1.1 still selects the vulnerable Hackney 1.x line.
-      {:hackney, "~> 4.0.1", override: true},
+      {:hackney, "~> 4.6.0", override: true},
       {:jason, "~> 1.4"},
       {:jido_action, github: "agentjido/jido_action", branch: "main", override: true},
       {:jido_memory, "~> 1.0"},
@@ -34,8 +34,8 @@ defmodule JidokaShowcase.MixProject do
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
       {:phoenix_live_view, "~> 1.1"},
-      # jido_action still selects the vulnerable Req 0.5 line.
-      {:req, "~> 0.6.0", override: true}
+      # Jido dependencies still select older Req releases.
+      {:req, "~> 0.7.1", override: true}
     ]
   end
 
