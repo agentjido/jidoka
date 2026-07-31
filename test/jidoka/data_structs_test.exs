@@ -18,6 +18,12 @@ defmodule Jidoka.DataStructsTest.Support.AmountPredicate do
   end
 end
 
+defmodule Jidoka.DataStructsTest.Support.CallerData do
+  @moduledoc false
+
+  defstruct [:actor, :tenant]
+end
+
 defmodule Jidoka.DataStructsTest do
   use ExUnit.Case, async: true
 
@@ -30,7 +36,7 @@ defmodule Jidoka.DataStructsTest do
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
-  alias Jidoka.DataStructsTest.Support.{AllowControl, AmountPredicate}
+  alias Jidoka.DataStructsTest.Support.{AllowControl, AmountPredicate, CallerData}
 
   test "agent state accepts nil, maps, and structs as input" do
     assert {:ok, %Agent.State{messages: [], operation_results: [], metadata: %{}}} =
@@ -201,6 +207,27 @@ defmodule Jidoka.DataStructsTest do
     refute Map.has_key?(action_context, "__jidoka__")
     refute Map.has_key?(action_context, :runtime)
     refute Map.has_key?(action_context, :operation)
+  end
+
+  test "Jidoka.Context removes struct identity from Jido action context data" do
+    %Jidoka.Context{} = context = Jidoka.Context.from_data!(%{})
+
+    context =
+      %Jidoka.Context{
+        context
+        | data: %CallerData{
+            actor: "actor-1",
+            tenant: "tenant-1"
+          }
+      }
+
+    action_context = Jidoka.Context.to_action_context(context)
+
+    refute is_struct(action_context)
+    refute Map.has_key?(action_context, :__struct__)
+    assert action_context.actor == "actor-1"
+    assert action_context.tenant == "tenant-1"
+    assert action_context.__jidoka__.context == context
   end
 
   test "operation specs carry approval policy data" do

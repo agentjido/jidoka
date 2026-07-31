@@ -232,7 +232,7 @@ defmodule Jidoka.Context do
   def to_action_context(%__MODULE__{} = context) do
     context
     |> data()
-    |> Map.drop([@action_context_namespace, Atom.to_string(@action_context_namespace)])
+    |> Map.drop([:__struct__, @action_context_namespace, Atom.to_string(@action_context_namespace)])
     |> Map.put(@action_context_namespace, %{context: context})
   end
 
