@@ -66,7 +66,7 @@ defmodule Jidoka.MixProject do
       {:splode, "~> 0.3.0"},
       {:spark, "~> 2.6"},
       {:yaml_elixir, "~> 2.12"},
-      {:ymlr, "~> 5.0"},
+      {:ymlr, "~> 5.1.6"},
       {:zoi, "~> 0.18"},
 
       # Development, test, and release tooling
@@ -80,7 +80,7 @@ defmodule Jidoka.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  defp elixirc_paths(:test), do: ["lib", "test/support", "examples/_support"]
   defp elixirc_paths(_env), do: ["lib"]
 
   defp dialyzer do
@@ -337,9 +337,12 @@ defmodule Jidoka.MixProject do
 
   defp example_extras do
     ["examples/README.md", "examples/PROVEN_FEATURES.md"] ++
-      Path.wildcard("examples/**/*.livemd") ++ Path.wildcard("livebook/*.livemd")
+      Path.wildcard("examples/*/README.md") ++
+      Path.wildcard("examples/*/*.livemd") ++
+      Path.wildcard("livebook/*.livemd")
   end
 
-  defp test_paths(:test), do: ["test", "examples"]
-  defp test_paths(_env), do: ["test"]
+  defp test_paths(_env) do
+    if File.regular?("test/test_helper.exs"), do: ["test"], else: ["examples"]
+  end
 end

@@ -1,31 +1,52 @@
 # Support Agent
 
-This example shows a small order-support agent with one action and one
-operation control.
+The Support Agent is the first complete Jidoka proof example. Its one scenario,
+`controlled_tool_call`, follows this path:
 
-The deterministic path is:
+```text
+request
+  -> Mock LLM tool request
+  -> operation control
+  -> action or interrupt
+  -> operation result
+  -> next Mock LLM observation
+  -> final result
+```
 
-1. The Mock LLM requests `lookup_order`.
-2. The operation control checks whether order access needs human review.
-3. Jidoka runs the action when access is allowed.
-4. Jidoka puts the action result in the next model prompt.
-5. The Mock LLM uses the order result in its final answer.
+The scenario has three deterministic cases:
 
-When the request context contains a credential reference, the control pauses
-the turn before the action runs. The ExUnit test also proves that this snapshot
-can resume after approval.
+- `allowed_round_trip` verifies tool calling, operation control, and tool
+  observation.
+- `interrupted_and_approved` verifies operation control, human review, and
+  snapshot resume.
+- `not_found_result` verifies that a sparse action result reaches the next
+  model input without malformed answer text.
 
-Run the example:
+The agent and action are components that these cases use. The cases do not
+claim to prove their complete public contracts.
+
+## Run It
+
+Run the command demonstration:
 
 ```bash
 mix jidoka.example support_agent
 ```
 
-Run its test:
+Run the three proof cases with normal ExUnit output:
 
 ```bash
-mix test examples/support_agent/support_agent_test.exs
+mix test examples/support_agent/test/controlled_tool_call_test.exs --trace
 ```
 
-Open `examples/support_agent/support_agent.livemd` for the executable
-walkthrough.
+Check every Support Agent surface:
+
+```bash
+mix jidoka.examples.check --example support_agent
+mix jidoka.examples.check --example support_agent --verbose
+```
+
+Open `support_agent.livemd` for the executable walkthrough. Start the Phoenix
+application in `showcase/` and open `/agents/support` for the curated UI.
+
+No path uses a real LLM, provider key, network request, or recorded fixture.

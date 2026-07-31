@@ -21,11 +21,7 @@ defmodule JidokaExamples.SupportAgent.LLMs.MockLLM do
           {:ok,
            %{
              type: :final,
-             content:
-               "Order #{Schema.get_key(order, :order_id)} is " <>
-                 "#{format_status(Schema.get_key(order, :status))} with " <>
-                 "#{Schema.get_key(order, :carrier)}. ETA: #{Schema.get_key(order, :eta)}. " <>
-                 "#{Schema.get_key(order, :recommended_action)}"
+             content: final_content(order)
            }}
       end
     end
@@ -44,6 +40,18 @@ defmodule JidokaExamples.SupportAgent.LLMs.MockLLM do
   end
 
   defp format_status(status), do: status |> to_string() |> String.replace("_", " ")
+
+  defp final_content(order) do
+    if Schema.get_key(order, :status) == "not_found" do
+      "Order #{Schema.get_key(order, :order_id)} was not found. " <>
+        "#{Schema.get_key(order, :recommended_action)}"
+    else
+      "Order #{Schema.get_key(order, :order_id)} is " <>
+        "#{format_status(Schema.get_key(order, :status))} with " <>
+        "#{Schema.get_key(order, :carrier)}. ETA: #{Schema.get_key(order, :eta)}. " <>
+        "#{Schema.get_key(order, :recommended_action)}"
+    end
+  end
 
   defp notify(observer, message) when is_pid(observer), do: send(observer, message)
   defp notify(_observer, _message), do: :ok

@@ -40,7 +40,12 @@ defmodule Mix.Tasks.Jidoka.Example do
   defp print_examples(opts) do
     examples =
       Enum.map(examples(), fn example ->
-        Map.take(example, [:name, :title, :features])
+        %{
+          name: example.name,
+          title: example.title,
+          summary: example.summary,
+          capabilities: capability_names(example)
+        }
       end)
 
     if opts[:json] do
@@ -50,8 +55,8 @@ defmodule Mix.Tasks.Jidoka.Example do
 
       Enum.each(examples(), fn example ->
         name = example.name |> Atom.to_string() |> String.pad_trailing(20)
-        features = feature_labels(example.features)
-        Mix.shell().info("  #{name} #{example.title} (#{features})")
+        capabilities = capability_labels(example)
+        Mix.shell().info("  #{name} #{example.title} (#{capabilities})")
       end)
     end
   end
@@ -81,9 +86,9 @@ defmodule Mix.Tasks.Jidoka.Example do
 
   defp print_result(result, opts) do
     if opts[:json] do
-      Mix.shell().info(encode_json!(result))
+      Mix.shell().info(encode_json!(Jidoka.project(result)))
     else
-      IO.inspect(result, label: "jidoka.example")
+      Mix.shell().info("jidoka.example: #{inspect(result, pretty: true)}")
     end
   end
 
@@ -98,7 +103,15 @@ defmodule Mix.Tasks.Jidoka.Example do
 
   defp examples, do: apply(@registry_module, :all, [])
   defp run_example(name), do: apply(@registry_module, :run, [name])
-  defp feature_labels(features), do: apply(@registry_module, :feature_labels, [features])
+  defp capability_labels(example), do: apply(@registry_module, :capability_labels, [example])
+
+  defp capability_names(example) do
+    example.scenarios
+    |> Enum.flat_map(& &1.cases)
+    |> Enum.flat_map(& &1.proves)
+    |> Enum.uniq()
+    |> Enum.sort()
+  end
 
   defp print_help do
     Mix.shell().info("""

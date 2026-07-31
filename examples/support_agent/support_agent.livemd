@@ -26,11 +26,8 @@ Code.require_file(Path.join(examples_root, "registry.exs"))
 {:ok, support_example} = JidokaExamples.fetch(:support_agent)
 {:ok, _modules} = JidokaExamples.load(support_example)
 
-alias Jidoka.Runtime.JidoActions
-alias JidokaExamples.SupportAgent.Actions.LookupOrder
 alias JidokaExamples.SupportAgent.Agent, as: SupportAgent
 alias JidokaExamples.SupportAgent.Example
-alias JidokaExamples.SupportAgent.LLMs.MockLLM
 ```
 
 ```elixir
@@ -40,15 +37,19 @@ Jidoka.Kino.setup_notebook(model: "test:support-example-model", check_provider?:
 ## Inspect The Example Files
 
 ```elixir
-support_example.files
+JidokaExamples.Catalog.source_files(support_example) ++
+  JidokaExamples.Catalog.support_files(support_example) ++
+  [Path.join(support_example.root, "example.exs")]
+|> Enum.map(&Path.relative_to(&1, package_root))
 ```
 
-The registry gives the files an explicit load order:
+The registry derives the files from the standard scenario layout. It loads them
+in these phases:
 
 1. Action
 2. Operation control
-3. Mock LLM
-4. Agent
+3. Agent
+4. Mock LLM
 5. Example runner
 
 ## Inspect The Agent
@@ -126,7 +127,7 @@ checks = %{
   model_received_action_result: model_observation == operation_result.output,
   final_answer_used_order:
     result.content ==
-      "Order A1001 is in transit with UPS. ETA: 2026-06-03. " <>
+      "Order A1001 is in transit with UPS. ETA: the next business day. " <>
         "Tell the customer the package is on schedule and ask them to watch for delivery updates."
 }
 
@@ -155,10 +156,12 @@ control pauses the turn before the action runs.
 
 ```elixir
 review_observer = self()
+{:ok, action_counter} = Elixir.Agent.start_link(fn -> 0 end)
 
 {:hibernate, snapshot} =
   Example.execute(
     observer: review_observer,
+    counter: action_counter,
     credential_ref: "credential:support-demo"
   )
 
@@ -176,6 +179,11 @@ review_control_call =
 
 {:ok, [review]} = Jidoka.pending_reviews(snapshot)
 
+unless Elixir.Agent.get(action_counter, & &1) == 0 and
+         snapshot.turn_state.agent_state.operation_results == [] do
+  raise "the action ran before approval"
+end
+
 %{
   control: review_control_call,
   operation: review.operation,
@@ -191,17 +199,19 @@ its result to the Mock LLM.
 
 ```elixir
 {:ok, approved_result} =
-  Jidoka.approve(snapshot, review,
-    reason: :operator_approved,
-    llm: MockLLM.new("A1001", review_observer),
-    operations: JidoActions.operations([LookupOrder]),
-    operation_context: %{example_observer: review_observer}
+  Example.approve(snapshot, review,
+    observer: review_observer,
+    counter: action_counter
   )
 
 receive do
   {:lookup_order_called, "A1001"} -> :action_ran_once
 after
   0 -> raise "approved action did not run"
+end
+
+unless Elixir.Agent.get(action_counter, & &1) == 1 do
+  raise "the approved action did not run exactly once"
 end
 
 receive do
@@ -214,4 +224,37 @@ end
 
 ```elixir
 {:ok, _approved_timeline} = Jidoka.Kino.timeline(approved_result)
+```
+
+## Keep A Not-Found Result Intact
+
+The edge case uses the same controlled tool-call path. The Mock LLM must not
+invent carrier or ETA text when the action returns a not-found result.
+
+```elixir
+not_found_observer = self()
+{:ok, not_found_result} = Example.execute(order_id: " z9999 ", observer: not_found_observer)
+
+not_found_observation =
+  receive do
+    {:order_observation_seen, order} -> order
+  after
+    0 -> :missing
+  end
+
+not_found_checks = %{
+  normalized_id: not_found_observation["order_id"] == "Z9999",
+  status_preserved: not_found_observation["status"] == "not_found",
+  clear_answer:
+    not_found_result.content ==
+      "Order Z9999 was not found. Ask the customer to confirm the order id.",
+  no_blank_fields:
+    not String.contains?(not_found_result.content, ["with .", "ETA: ."])
+}
+
+unless Enum.all?(not_found_checks, fn {_name, passed?} -> passed? end) do
+  raise "not-found example failed: #{inspect(not_found_checks)}"
+end
+
+not_found_checks
 ```

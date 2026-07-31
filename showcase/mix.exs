@@ -29,6 +29,7 @@ defmodule JidokaShowcase.MixProject do
       {:jason, "~> 1.4"},
       {:jido_action, github: "agentjido/jido_action", branch: "main", override: true},
       {:jido_memory, "~> 1.0"},
+      {:lazy_html, ">= 0.1.0", only: :test},
       {:mdex, "~> 0.13.5"},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.2"},
@@ -42,6 +43,13 @@ defmodule JidokaShowcase.MixProject do
   defp elixirc_paths(_env), do: ["lib"] ++ example_paths()
 
   defp example_paths do
-    Path.wildcard(Path.expand("../examples/*/lib", __DIR__))
+    catalog = Path.expand("../examples/catalog.exs", __DIR__)
+    Code.require_file(catalog)
+
+    catalog
+    |> Path.dirname()
+    |> JidokaExamples.Catalog.load!()
+    |> Enum.filter(& &1.showcase)
+    |> Enum.map(& &1.lib_dir)
   end
 end

@@ -1,66 +1,83 @@
 # Jidoka Examples
 
-These examples are small agent applications. Each scenario keeps its agent
-code, deterministic support code, test, and Livebook together.
+Each example is one complete reference agent. It owns its agent code,
+deterministic support, proof cases, README, Livebook, and optional showcase
+surface.
 
-Examples are not part of `elixirc_paths`. Jidoka loads them only when an example,
-test, or Livebook asks for them.
+Example code is not part of the production package build. The checker loads or
+compiles only the selected non-production surfaces.
 
-List the available examples:
+## Start Here
+
+List and run examples:
 
 ```bash
 mix jidoka.example --list
-```
-
-Run one deterministic example:
-
-```bash
 mix jidoka.example support_agent
 ```
 
-Run all deterministic examples:
+Run the complete check for one example while you work:
 
 ```bash
-mix jidoka.example --all
+mix jidoka.examples.check --example support_agent
+mix jidoka.examples.check --example support_agent --verbose
 ```
 
-## File Layout
+Run all proof and documentation surfaces before you publish a change:
+
+```bash
+mix jidoka.examples.check
+```
+
+All default proof cases are deterministic and offline. They use local Mock LLM
+functions. They do not use provider keys, network calls, or recorded fixtures.
+
+## Standard Layout
 
 ```text
 examples/support_agent/
 ├── README.md
 ├── manifest.exs
 ├── example.exs
-├── support_agent_test.exs
 ├── support_agent.livemd
 ├── lib/
 │   ├── agent.ex
 │   ├── actions/
 │   └── controls/
-└── support/
-    └── mock_llm.ex
+├── support/
+│   └── mock_llm.ex
+└── test/
+    └── controlled_tool_call_test.exs
 ```
 
-Each `manifest.exs` gives its scenario an explicit module load order and proof
-files. `examples/registry.exs` discovers these manifests. The root package does
-not compile example code.
+The manifest declares expected scenarios, cases, capabilities, dependencies,
+and user surfaces. Normal tagged ExUnit tests are the only proof authority. The
+checker derives run coverage from passed case results.
 
-The Phoenix app in `showcase/` compiles the `lib/` folder for each scenario.
-It uses the same agent code as the command, test, and Livebook.
+The runner is only a useful command demonstration. The Livebook is an
+executable walkthrough. The showcase is an optional interactive surface. None
+of these surfaces can create capability proof.
 
-Standalone Livebook guides live in `examples/guides/`. A guide can move into a
-scenario folder when it becomes a dedicated agent.
+## Add An Example
 
-Run the deterministic Livebook code cells:
+Use `support_agent` as the reference. Keep these rules:
 
-```bash
-for notebook in examples/guides/*.livemd examples/support_agent/*.livemd; do
-  elixir scripts/check_livebook.exs "$notebook"
-done
-```
+1. Use one causal Jidoka behavior for each scenario.
+2. Put deterministic paths and edge cases under that scenario.
+3. Give each manifest case exactly one ExUnit test with `proof_case` and
+   `proof_example` tags.
+4. Declare stable Jidoka guarantees under `proves`.
+5. Declare required capabilities and components under `uses`.
+6. Keep the Mock LLM local and deterministic.
+7. Make `example.exs` return a domain result, not a capability map.
+8. Keep one README and one Livebook for the complete example.
+9. Add structured showcase metadata only when the example has a curated route.
 
-The approval walkthrough in `livebook/` is a live-provider guide. It is not part
-of this deterministic check.
+There is no example generator or custom test DSL. This keeps the files clear to
+a developer who already knows ExUnit.
 
-See [PROVEN_FEATURES.md](PROVEN_FEATURES.md) for the current proof matrix and
-the limits of each check.
+Standalone Livebook guides stay in `examples/guides/`. They are documentation
+assets and do not create capability proof.
+
+See [PROVEN_FEATURES.md](PROVEN_FEATURES.md) for verified coverage and showcase
+inventory.

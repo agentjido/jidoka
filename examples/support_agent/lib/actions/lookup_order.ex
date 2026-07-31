@@ -7,21 +7,21 @@ defmodule JidokaExamples.SupportAgent.Actions.LookupOrder do
     "A1001" => %{
       "status" => "in_transit",
       "carrier" => "UPS",
-      "eta" => "2026-06-03",
+      "eta" => "the next business day",
       "summary" => "The order left the Chicago regional hub this morning.",
       "recommended_action" => "Tell the customer the package is on schedule and ask them to watch for delivery updates."
     },
     "B2002" => %{
       "status" => "delayed",
       "carrier" => "FedEx",
-      "eta" => "2026-06-05",
+      "eta" => "within two business days",
       "summary" => "Weather delayed the package at the Denver sort facility.",
       "recommended_action" => "Apologize, explain the weather delay, and offer to monitor the shipment."
     },
     "C3003" => %{
       "status" => "delivered",
       "carrier" => "USPS",
-      "eta" => "2026-05-30",
+      "eta" => "delivered",
       "summary" => "The package was delivered to the front desk.",
       "recommended_action" => "Ask the customer to check with the front desk or building mailroom."
     }
@@ -46,6 +46,7 @@ defmodule JidokaExamples.SupportAgent.Actions.LookupOrder do
       |> String.trim()
       |> String.upcase()
 
+    increment_counter(context)
     notify(context, {:lookup_order_called, order_id})
 
     order =
@@ -62,6 +63,13 @@ defmodule JidokaExamples.SupportAgent.Actions.LookupOrder do
     case Jidoka.Context.get_runtime(context, :example_observer) do
       observer when is_pid(observer) -> send(observer, message)
       _observer -> :ok
+    end
+  end
+
+  defp increment_counter(context) do
+    case Jidoka.Context.get_runtime(context, :example_counter) do
+      counter when is_pid(counter) -> Elixir.Agent.update(counter, &(&1 + 1))
+      _counter -> :ok
     end
   end
 end

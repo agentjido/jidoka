@@ -24,3 +24,17 @@ jobs:
       docs_command: mix docs -f html && mix doctor --raise
       test_command: mix test --cover && mix test.coverage
       credo_command: mix credo --min-priority higher
+
+  proof:
+    name: Example proof system
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.19"
+          otp-version: "28"
+      - run: mix deps.get
+      - run: mix deps.get
+        working-directory: showcase
+      - run: mix jidoka.examples.check
