@@ -1,5 +1,5 @@
 unless Code.ensure_loaded?(JidokaExamples.Manifest) do
-  Code.require_file("_support/model.ex", __DIR__)
+  Code.require_file("model.ex", __DIR__)
 end
 
 defmodule JidokaExamples.Example do
@@ -13,6 +13,8 @@ defmodule JidokaExamples.Catalog do
 
   alias JidokaExamples.{Capabilities, Manifest, Scenario, ScenarioCase, ShowcaseSurface}
 
+  @examples_root Path.expand("..", __DIR__)
+
   @allowed_keys [:agent, :module, :name, :scenarios, :summary, :surfaces, :title, :version]
   @required_keys @allowed_keys
   @scenario_keys [:cases, :execution, :id, :intent, :title]
@@ -25,7 +27,7 @@ defmodule JidokaExamples.Catalog do
   @module_pattern ~r/^(?:Elixir\.)?[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)+$/
 
   @spec load(String.t()) :: {[Manifest.t()], [map()]}
-  def load(root \\ __DIR__) do
+  def load(root \\ @examples_root) do
     root = Path.expand(root)
 
     root
@@ -42,7 +44,7 @@ defmodule JidokaExamples.Catalog do
   end
 
   @spec load!(String.t()) :: [Manifest.t()]
-  def load!(root \\ __DIR__) do
+  def load!(root \\ @examples_root) do
     case load(root) do
       {manifests, []} ->
         manifests
@@ -54,7 +56,7 @@ defmodule JidokaExamples.Catalog do
   end
 
   @spec scenario_dirs(String.t()) :: [String.t()]
-  def scenario_dirs(root \\ __DIR__) do
+  def scenario_dirs(root \\ @examples_root) do
     root
     |> Path.expand()
     |> Path.join("*")
@@ -74,7 +76,7 @@ defmodule JidokaExamples.Catalog do
   end
 
   @spec shared_support_files(String.t()) :: [String.t()]
-  def shared_support_files(root \\ __DIR__) do
+  def shared_support_files(root \\ @examples_root) do
     root
     |> Path.expand()
     |> Path.join("_support/shared/*.{ex,exs}")

@@ -247,8 +247,8 @@ Standalone documentation Livebooks live in `guides/livebooks/`. A complete
 agent example keeps its Livebook beside its code and test, as the Support Agent
 does in `examples/support_agent/`.
 
-The current deterministic proof matrix is in
-[`examples/PROVEN_FEATURES.md`](examples/PROVEN_FEATURES.md).
+A complete `mix jidoka.examples.check` run writes its generated capability
+report to the ignored local file `docs/PROVEN_FEATURES.md`.
 
 ## Test
 

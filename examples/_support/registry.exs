@@ -1,7 +1,7 @@
 Code.require_file("catalog.exs", __DIR__)
 
 unless Code.ensure_loaded?(JidokaExamples.MockLLM) do
-  for path <- JidokaExamples.Catalog.shared_support_files(__DIR__) do
+  for path <- JidokaExamples.Catalog.shared_support_files() do
     Code.require_file(path)
   end
 end
@@ -11,7 +11,7 @@ defmodule JidokaExamples do
 
   alias JidokaExamples.{Catalog, Manifest}
 
-  @root __DIR__
+  @root Path.expand("..", __DIR__)
   @examples Catalog.load!(@root)
 
   @spec all() :: [Manifest.t()]

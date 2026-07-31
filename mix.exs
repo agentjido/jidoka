@@ -210,7 +210,7 @@ defmodule Jidoka.MixProject do
       Internals:
         ~r{guides/(runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
       Appendix: ~r{guides/(glossary|troubleshooting)\.md},
-      Examples: ~r{examples/(README|PROVEN_FEATURES)\.md},
+      Examples: ~r{examples/(?:README|[^/]+/README)\.md},
       Livebooks: ~r{(?:examples/.+|guides/livebooks)/.*\.livemd}
     ]
   end
@@ -334,7 +334,7 @@ defmodule Jidoka.MixProject do
   end
 
   defp example_extras do
-    ["examples/README.md", "examples/PROVEN_FEATURES.md"] ++
+    ["examples/README.md"] ++
       Path.wildcard("examples/*/README.md") ++
       Path.wildcard("examples/*/*.livemd") ++
       Path.wildcard("guides/livebooks/*.livemd")

@@ -1,5 +1,5 @@
-Code.require_file("../../examples/registry.exs", __DIR__)
-Code.require_file("../../examples/check.exs", __DIR__)
+Code.require_file("../../examples/_support/registry.exs", __DIR__)
+Code.require_file("../../examples/_support/check.exs", __DIR__)
 
 defmodule JidokaExamples.ProofModelTest do
   use ExUnit.Case, async: false
@@ -312,15 +312,6 @@ defmodule JidokaExamples.ProofModelTest do
              )
 
     assert Enum.map(deleted_guide.gates, & &1.id) == [:root_compile, :documentation]
-
-    assert {:error, message} =
-             Planner.plan(
-               examples,
-               [example: "support_agent", update_proof: true],
-               File.cwd!()
-             )
-
-    assert message =~ "full check"
   end
 
   test "planner applies shared, showcase, rename, and deletion impacts" do
@@ -328,7 +319,7 @@ defmodule JidokaExamples.ProofModelTest do
 
     for path <- [
           "examples/_support/reporter.ex",
-          "examples/catalog.exs",
+          "examples/_support/catalog.exs",
           "lib/jidoka.ex",
           "test/support/test_support.ex",
           "examples/_support/check_livebook.exs",
@@ -434,13 +425,11 @@ defmodule JidokaExamples.ProofModelTest do
     assert output =~ "cell failed"
   end
 
-  test "proof document replacement is transactional when markers are invalid", %{root: root} do
-    path = Path.join(root, "PROVEN_FEATURES.md")
-    original = "# Proof\n\nNo generated markers.\n"
-    File.write!(path, original)
+  test "proof document publishing creates its local documentation directory", %{root: root} do
+    path = Path.join(root, "docs/PROVEN_FEATURES.md")
 
-    assert {:error, _message} = Reporter.candidate(original, "generated")
-    assert File.read!(path) == original
+    assert :ok = Reporter.publish(path, "# Proven Features\n")
+    assert File.read!(path) == "# Proven Features\n"
   end
 
   test "normal Mix project startup does not evaluate the example catalog" do

@@ -15,7 +15,7 @@ defmodule Mix.Tasks.Jidoka.Example do
 
   @impl Mix.Task
   def run(args) do
-    Code.require_file(Path.join(@examples_dir, "registry.exs"))
+    Code.require_file(Path.join(@examples_dir, "_support/registry.exs"))
 
     {opts, positional, invalid} =
       OptionParser.parse(args,

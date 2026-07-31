@@ -1,19 +1,19 @@
 Code.require_file("catalog.exs", __DIR__)
 
 unless Code.ensure_loaded?(JidokaExamples.Timeouts) do
-  Code.require_file("_support/timeouts.ex", __DIR__)
+  Code.require_file("timeouts.ex", __DIR__)
 end
 
 unless Code.ensure_loaded?(JidokaExamples.Planner) do
-  Code.require_file("_support/planner.ex", __DIR__)
+  Code.require_file("planner.ex", __DIR__)
 end
 
 unless Code.ensure_loaded?(JidokaExamples.Executor) do
-  Code.require_file("_support/executor.ex", __DIR__)
+  Code.require_file("executor.ex", __DIR__)
 end
 
 unless Code.ensure_loaded?(JidokaExamples.Reporter) do
-  Code.require_file("_support/reporter.ex", __DIR__)
+  Code.require_file("reporter.ex", __DIR__)
 end
 
 defmodule JidokaExamples.Check do
@@ -44,7 +44,7 @@ defmodule JidokaExamples.Check do
 
       selection
       |> Reporter.build([catalog_gate, static_gate] ++ execution.gates, execution.artifacts)
-      |> publication_gate(examples, opts, root)
+      |> publication_gate(examples, root)
     else
       {:error, message} -> failed_report(message, opts)
     end
@@ -200,34 +200,13 @@ defmodule JidokaExamples.Check do
     |> Enum.map(fn {key, _count} -> "duplicate proof case identity: #{inspect(key)}" end)
   end
 
-  defp publication_gate(%ProofReport{} = report, examples, opts, root) do
+  defp publication_gate(%ProofReport{} = report, examples, root) do
     if report.selection.mode == :all and report.status == :ok do
-      path = Path.join(root, "examples/PROVEN_FEATURES.md")
-      generated = Reporter.document(report, examples)
+      path = Path.join(root, "docs/PROVEN_FEATURES.md")
 
-      with {:ok, content} <- File.read(path),
-           {:ok, candidate} <- Reporter.candidate(content, generated) do
-        cond do
-          Keyword.get(opts, :update_proof, false) ->
-            case Reporter.publish(path, candidate) do
-              :ok -> append_gate(report, publication_result(:ok, "Updated examples/PROVEN_FEATURES.md."))
-              {:error, reason} -> append_gate(report, publication_result(:error, inspect(reason)))
-            end
-
-          candidate == content ->
-            append_gate(report, publication_result(:ok, nil))
-
-          true ->
-            append_gate(
-              report,
-              publication_result(
-                :error,
-                "Verified coverage is not current. Run mix jidoka.examples.check --update-proof."
-              )
-            )
-        end
-      else
-        {:error, reason} -> append_gate(report, publication_result(:error, format_file_error(reason)))
+      case Reporter.publish(path, Reporter.document(report, examples)) do
+        :ok -> append_gate(report, publication_result(:ok, "Updated local docs/PROVEN_FEATURES.md."))
+        {:error, reason} -> append_gate(report, publication_result(:error, inspect(reason)))
       end
     else
       report
@@ -352,8 +331,6 @@ defmodule JidokaExamples.Check do
   defp maybe_error(true, message), do: [message]
   defp maybe_error(false, _message), do: []
   defp catalog_error(error), do: "#{error.path}: #{error.message}"
-  defp format_file_error(reason) when is_atom(reason), do: :file.format_error(reason) |> to_string()
-  defp format_file_error(reason), do: inspect(reason)
 
   defp normalize_name(name) do
     name

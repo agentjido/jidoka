@@ -44,5 +44,5 @@ Use the Support Agent as the reference for a new example. Keep one causal
 Jidoka behavior in each scenario. Put stable guarantees under `proves` and
 required capabilities or components under `uses`.
 
-See [PROVEN_FEATURES.md](PROVEN_FEATURES.md) for coverage verified by the latest
-complete proof run.
+A complete proof run writes verified coverage to the ignored local file
+`docs/PROVEN_FEATURES.md`.

@@ -6,7 +6,6 @@ defmodule Mix.Tasks.Jidoka.Examples.Check do
       mix jidoka.examples.check --example support_agent
       mix jidoka.examples.check --changed origin/main
       mix jidoka.examples.check --verbose
-      mix jidoka.examples.check --update-proof
 
   The default command checks all scenarios. It does not make network calls.
   """
@@ -29,7 +28,6 @@ defmodule Mix.Tasks.Jidoka.Examples.Check do
           example: :string,
           help: :boolean,
           json: :boolean,
-          update_proof: :boolean,
           verbose: :boolean
         ],
         aliases: [a: :all, h: :help]
@@ -40,14 +38,13 @@ defmodule Mix.Tasks.Jidoka.Examples.Check do
     if opts[:help] do
       print_help()
     else
-      Code.require_file(Path.join(@examples_dir, "check.exs"))
+      Code.require_file(Path.join(@examples_dir, "_support/check.exs"))
 
       result =
         apply(@check_module, :run, [
           [
             example: opts[:example],
             changed: opts[:changed],
-            update_proof: opts[:update_proof] || false,
             verbose: opts[:verbose] || false
           ]
         ])
@@ -136,7 +133,6 @@ defmodule Mix.Tasks.Jidoka.Examples.Check do
       --all             Check all scenarios. This is the default.
       --example NAME    Check one scenario.
       --changed REF     Check scenarios changed since a Git reference.
-      --update-proof    Publish verified coverage after a full successful check.
       --verbose         Stream complete gate output with gate prefixes.
       --json            Print a machine-readable result.
     """)

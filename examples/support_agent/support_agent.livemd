@@ -22,7 +22,7 @@ Mix.install(
   consolidate_protocols: false
 )
 
-Code.require_file(Path.join(examples_root, "registry.exs"))
+Code.require_file(Path.join(examples_root, "_support/registry.exs"))
 
 {:ok, support_example} = JidokaExamples.fetch(:support_agent)
 {:ok, _modules} = JidokaExamples.load(support_example)

@@ -1,5 +1,5 @@
-Code.require_file("../../test_helper.exs", __DIR__)
-Code.require_file("../../registry.exs", __DIR__)
+Code.require_file("../../_support/test_helper.exs", __DIR__)
+Code.require_file("../../_support/registry.exs", __DIR__)
 
 unless Code.ensure_loaded?(JidokaExamples.TestSupport) do
   Code.require_file("../../_support/test_support.ex", __DIR__)

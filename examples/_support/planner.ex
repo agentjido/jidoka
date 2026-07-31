@@ -5,10 +5,6 @@ defmodule JidokaExamples.Planner do
 
   @proof_infrastructure [
     "examples/_support/",
-    "examples/catalog.exs",
-    "examples/check.exs",
-    "examples/registry.exs",
-    "examples/test_helper.exs",
     "lib/",
     "test/support/"
   ]
@@ -16,19 +12,9 @@ defmodule JidokaExamples.Planner do
 
   @spec plan([Manifest.t()], keyword(), String.t()) :: {:ok, map()} | {:error, String.t()}
   def plan(examples, opts, root) do
-    with :ok <- validate_update_mode(opts),
-         {:ok, selection} <- select(examples, opts) do
+    with {:ok, selection} <- select(examples, opts) do
       gates = build_gates(selection, root, Keyword.get(opts, :verbose, false))
       {:ok, Map.put(selection, :gates, gates)}
-    end
-  end
-
-  defp validate_update_mode(opts) do
-    if Keyword.get(opts, :update_proof, false) and
-         (Keyword.get(opts, :example) || Keyword.get(opts, :changed)) do
-      {:error, "--update-proof is valid only for a full check."}
-    else
-      :ok
     end
   end
 
@@ -304,8 +290,7 @@ defmodule JidokaExamples.Planner do
 
   defp global_path?(path) do
     Enum.any?(@global_paths, &path_matches?(path, &1)) or
-      path in ["examples/catalog.exs", "examples/check.exs"] or
-      path in ["examples/README.md", "examples/PROVEN_FEATURES.md"] or
+      path == "examples/README.md" or
       (String.starts_with?(path, "showcase/") and not String.contains?(path, "support_agent")) or
       root_document?(path)
   end

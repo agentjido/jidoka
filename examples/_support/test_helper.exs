@@ -8,7 +8,7 @@ Application.put_env(:tzdata, :autoupdate, :disabled)
 
 if not is_nil(System.get_env("JIDOKA_PROOF_RESULT_PATH")) and
      not Code.ensure_loaded?(JidokaExamples.ExUnitFormatter) do
-  Code.require_file("_support/ex_unit_formatter.ex", __DIR__)
+  Code.require_file("ex_unit_formatter.ex", __DIR__)
 end
 
 ExUnit.start(exclude: [:live, :parity])

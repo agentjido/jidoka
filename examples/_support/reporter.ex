@@ -3,8 +3,6 @@ defmodule JidokaExamples.Reporter do
 
   alias JidokaExamples.{CaseResult, GateResult, ProofReport}
 
-  @proof_start "<!-- jidoka-examples-check:start -->"
-  @proof_end "<!-- jidoka-examples-check:end -->"
   @schema_version 1
 
   @spec build(map(), [GateResult.t()], map()) :: ProofReport.t()
@@ -34,11 +32,11 @@ defmodule JidokaExamples.Reporter do
           manifest = Map.fetch!(manifest_by_name, result.example) do
         [
           label(capability),
-          "[#{manifest.title}](#{manifest.dir}/README.md)",
+          "[#{manifest.title}](../examples/#{manifest.dir}/README.md)",
           label(result.scenario),
           label(result.case_id),
-          "[ExUnit](#{relative_example_path(result.test.file)})",
-          "[Livebook](#{manifest.dir}/#{manifest.dir}.livemd)",
+          "[ExUnit](../#{result.test.file})",
+          "[Livebook](../examples/#{manifest.dir}/#{manifest.dir}.livemd)",
           showcase_label(manifest.showcase)
         ]
       end
@@ -46,7 +44,11 @@ defmodule JidokaExamples.Reporter do
     rows = Enum.sort_by(rows, &{Enum.at(&1, 0), Enum.at(&1, 1), Enum.at(&1, 2), Enum.at(&1, 3)})
 
     [
-      @proof_start,
+      "# Proven Features",
+      "",
+      "This local report comes from the latest complete `mix jidoka.examples.check` run.",
+      "It is generated proof output and is not part of the public package.",
+      "",
       "## Verified Capability Coverage",
       "",
       "This table comes only from passed ExUnit proof cases in a complete check.",
@@ -56,23 +58,18 @@ defmodule JidokaExamples.Reporter do
       markdown_row(["---", "---", "---", "---", "---", "---", "---"])
       | Enum.map(rows, &markdown_row/1)
     ]
-    |> Kernel.++([@proof_end])
     |> Enum.join("\n")
-  end
-
-  @spec candidate(String.t(), String.t()) :: {:ok, String.t()} | {:error, String.t()}
-  def candidate(content, generated) do
-    pattern = ~r/#{Regex.escape(@proof_start)}.*?#{Regex.escape(@proof_end)}/s
-
-    if Regex.match?(pattern, content) do
-      {:ok, Regex.replace(pattern, content, generated)}
-    else
-      {:error, "examples/PROVEN_FEATURES.md has no generated proof markers."}
-    end
+    |> Kernel.<>("\n")
   end
 
   @spec publish(String.t(), String.t()) :: :ok | {:error, term()}
   def publish(path, content) do
+    with :ok <- File.mkdir_p(Path.dirname(path)) do
+      publish_file(path, content)
+    end
+  end
+
+  defp publish_file(path, content) do
     temporary =
       Path.join(
         Path.dirname(path),
@@ -321,9 +318,6 @@ defmodule JidokaExamples.Reporter do
 
   defp showcase_label(nil), do: "—"
   defp showcase_label(showcase), do: "`#{showcase.route}`"
-
-  defp relative_example_path("examples/" <> path), do: path
-  defp relative_example_path(path), do: path
 
   defp label(value) do
     value
