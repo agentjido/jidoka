@@ -7,15 +7,16 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   effect id.
   """
 
+  alias Jidoka.Effect
   alias Jidoka.Error
+  alias Jidoka.ModelPolicy
+  alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.CapabilityInvoker
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Runtime.Controls
-  alias Jidoka.Runtime.OperationBatch
   alias Jidoka.Runtime.EffectTrace
-  alias Jidoka.Effect
-  alias Jidoka.Review.Interrupt
+  alias Jidoka.Runtime.OperationBatch
   alias Jidoka.Turn
 
   @doc "Interprets the next pending effect or reuses its journaled result."
@@ -182,7 +183,10 @@ defmodule Jidoka.Runtime.EffectInterpreter do
         {:ok, Effect.Result.ok(intent, output, metadata: output_metadata(output))}
 
       {:error, reason} ->
-        {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
+        {:ok,
+         Effect.Result.error(intent, normalize_capability_error(reason, intent),
+           metadata: ModelPolicy.error_metadata(reason)
+         )}
 
       other ->
         {:ok,

@@ -18,14 +18,15 @@ defmodule Jidoka.Agent do
       {:ok, text} = MyApp.TimeAgent.chat("What time is it in Chicago?")
   """
 
+  alias Jidoka.Agent.ControlCompiler
+  alias Jidoka.Agent.ServerOptions
   alias Jidoka.Agent.Spec
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Agent.Spec.Memory
   alias Jidoka.Agent.Spec.Result
-  alias Jidoka.Agent.ControlCompiler
-  alias Jidoka.Agent.ServerOptions
   alias Jidoka.Agent.ToolSources
   alias Jidoka.Config
+  alias Jidoka.ModelPolicy
   alias Jidoka.Runtime.Actions.RunTurn
   alias Jidoka.Runtime.ReqLLM
   alias Jidoka.Runtime.Signals
@@ -276,7 +277,7 @@ defmodule Jidoka.Agent do
     |> Generation.to_req_llm_opts()
     |> Keyword.merge(Keyword.get(opts, :llm_opts, []))
     |> Keyword.merge(stream_opts(opts))
-    |> Keyword.put_new(:model, spec.model)
+    |> ModelPolicy.configure_llm_opts(spec.model, opts)
   end
 
   defp stream_opts(opts), do: Keyword.take(opts, [:stream, :stream_to, :on_event])

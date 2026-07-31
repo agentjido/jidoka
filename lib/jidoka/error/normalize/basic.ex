@@ -10,6 +10,7 @@ defmodule Jidoka.Error.Normalize.Basic do
     with :error <- normalize_agent_reason(reason, context),
          :error <- normalize_context_reason(reason, context),
          :error <- normalize_instruction_reason(reason, context),
+         :error <- normalize_model_policy_reason(reason, context),
          :error <- normalize_turn_reason(reason, context),
          :error <- normalize_effect_reason(reason, context) do
       normalize_control_reason(reason, context)
@@ -81,6 +82,40 @@ defmodule Jidoka.Error.Normalize.Basic do
   end
 
   defp normalize_instruction_reason(_reason, _context), do: :error
+
+  defp normalize_model_policy_reason({:model_policy_failed, attempts, cause}, context) do
+    {:ok,
+     execution_error("The model policy exhausted its routes.",
+       phase: :model,
+       details:
+         details(context, %{
+           reason: :model_policy_failed,
+           model_attempts: attempts,
+           cause: cause
+         })
+     )}
+  end
+
+  defp normalize_model_policy_reason(cause, context)
+       when is_tuple(cause) and tuple_size(cause) > 0 and
+              elem(cause, 0) in [
+                :invalid_model_policy,
+                :invalid_model_policy_callback,
+                :invalid_model_policy_model,
+                :invalid_model_policy_models,
+                :invalid_model_policy_retry,
+                :invalid_model_policy_sleep
+              ] do
+    reason = elem(cause, 0)
+
+    {:ok,
+     config_error("The model policy is not valid.",
+       field: :model_policy,
+       details: details(context, %{reason: reason, cause: cause})
+     )}
+  end
+
+  defp normalize_model_policy_reason(_reason, _context), do: :error
 
   defp normalize_turn_reason(:missing_input, context) do
     {:ok,

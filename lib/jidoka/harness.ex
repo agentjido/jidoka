@@ -9,11 +9,13 @@ defmodule Jidoka.Harness do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Harness.Replay
   alias Jidoka.Harness.Session
   alias Jidoka.Harness.Store
   alias Jidoka.Instructions
   alias Jidoka.Memory
+  alias Jidoka.ModelPolicy
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.ReqLLM
@@ -328,24 +330,29 @@ defmodule Jidoka.Harness do
 
   defp default_llm_opts(%Agent.Spec{} = spec, opts) do
     spec.generation
-    |> Agent.Spec.Generation.to_req_llm_opts()
+    |> Generation.to_req_llm_opts()
     |> Keyword.merge(Keyword.get(opts, :llm_opts, []))
     |> Keyword.merge(Keyword.take(opts, [:stream, :stream_to, :on_event]))
-    |> Keyword.put_new(:model, spec.model)
+    |> ModelPolicy.configure_llm_opts(spec.model, opts)
   end
 
   defp normalize_capabilities(opts) do
-    case Keyword.get(opts, :capabilities) do
-      %Capabilities{} = capabilities ->
-        {:ok, capabilities}
+    capabilities =
+      case Keyword.get(opts, :capabilities) do
+        %Capabilities{} = capabilities ->
+          {:ok, capabilities}
 
-      capability_attrs when is_list(capability_attrs) or is_map(capability_attrs) ->
-        capability_attrs
-        |> capability_attrs_with_defaults(opts)
-        |> Capabilities.new()
+        capability_attrs when is_list(capability_attrs) or is_map(capability_attrs) ->
+          capability_attrs
+          |> capability_attrs_with_defaults(opts)
+          |> Capabilities.new()
 
-      nil ->
-        Capabilities.new(opts)
+        nil ->
+          Capabilities.new(opts)
+      end
+
+    with {:ok, capabilities} <- capabilities do
+      ModelPolicy.wrap(capabilities, Keyword.get(opts, :model_policy))
     end
   end
 

@@ -15,7 +15,7 @@ defmodule Jidoka.Runtime.EffectTrace do
         :error -> :capability_call_failed
       end
 
-    append(state, intent, event, [error: result_error(result)], opts)
+    append(state, intent, event, [error: result_error(result), data: result_data(intent, result)], opts)
   end
 
   @spec append_effect_result(Turn.State.t(), Effect.Intent.t(), Effect.Result.t(), keyword()) :: Turn.State.t()
@@ -26,7 +26,7 @@ defmodule Jidoka.Runtime.EffectTrace do
         :error -> :effect_failed
       end
 
-    append(state, intent, event, [error: result_error(result)], opts)
+    append(state, intent, event, [error: result_error(result), data: result_data(intent, result)], opts)
   end
 
   @spec append(Turn.State.t(), Effect.Intent.t(), atom(), keyword(), keyword()) :: Turn.State.t()
@@ -87,4 +87,12 @@ defmodule Jidoka.Runtime.EffectTrace do
 
   defp result_error(%Effect.Result{status: :error, output: output}), do: Error.to_map(output)
   defp result_error(_result), do: nil
+
+  defp result_data(%Effect.Intent{} = intent, %Effect.Result{} = result) do
+    %{
+      idempotency: intent.idempotency,
+      idempotency_key: intent.idempotency_key
+    }
+    |> Map.merge(Map.take(result.metadata, [:model, :provider, :model_attempts]))
+  end
 end

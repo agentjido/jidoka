@@ -172,6 +172,51 @@ one tool loop; `default_turn_timeout_ms` is the wall-clock cap for the turn.
 Both round-trip through `Jidoka.Config.normalize_positive_integer/2`, which
 rejects zero and negative values with a clear error.
 
+### Route, Retry, And Fall Back Model Calls
+
+Use the per-run `model_policy:` option when one static model is not sufficient.
+The ordered `models` list supplies the primary model and its fallbacks. The
+retry bound applies to each model. Only failures classified as `:transient`
+retry the same model.
+
+```elixir
+model_policy = [
+  models: ["openai:gpt-4o-mini", "anthropic:claude-3-5-haiku"],
+  retry: [
+    max_attempts: 2,
+    backoff: [type: :exponential, min: 100, max: 1_000]
+  ],
+  select: fn models, context ->
+    if Jidoka.Context.get_runtime(context, :prefer_anthropic) do
+      Enum.reverse(models)
+    else
+      models
+    end
+  end
+]
+
+{:ok, result} =
+  Jidoka.turn(MyApp.SupportAgent, "Help me",
+    model_policy: model_policy,
+    llm_context: %{prefer_anthropic: true}
+  )
+```
+
+The selector runs for every model call. Its context includes the trusted
+`llm_context:` map. Do not put these values in public request context. The
+built-in classifier retries transport errors, timeouts, rate limits, and HTTP
+5xx errors. Use `classify:` with a one-argument function or module to replace
+this rule.
+
+Each LLM effect result and completion event records `:model_attempts`. Each
+entry has the provider, model, attempt number, status, and failure class. The
+successful entry has `winner: true`. Raw provider errors are not copied into
+attempt metadata. Model retry stays inside the LLM effect, so it cannot repeat
+a completed operation effect.
+
+An injected custom `llm:` capability must read the selected model from
+`intent.payload.model`. The built-in ReqLLM capability does this automatically.
+
 ### Step 4: Layer Env-Specific Overrides
 
 The standard `config/{dev,test,prod}.exs` layering applies to `:jidoka` like
