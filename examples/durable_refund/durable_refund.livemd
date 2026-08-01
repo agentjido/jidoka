@@ -1,11 +1,5 @@
 # Durable Refund Agent
 
-This Livebook runs one deterministic refund agent through asynchronous
-streaming, cancellation, execution limits, crash recovery, and a safe session
-fork. It does not use a provider key or network access.
-
-## Setup
-
 ```elixir
 package_root = Path.expand("../..", __DIR__)
 examples_root = Path.expand("..", __DIR__)
@@ -27,6 +21,12 @@ Code.require_file(Path.join(examples_root, "_support/registry.exs"))
 alias JidokaExamples.DurableRefund.Agent, as: DurableRefundAgent
 alias JidokaExamples.DurableRefund.Example
 ```
+
+## Run The Demo
+
+This Livebook runs one deterministic refund agent through asynchronous
+streaming, cancellation, execution limits, crash recovery, and a safe session
+fork. It does not use a provider key or network access.
 
 ```elixir
 Jidoka.Kino.setup_notebook(model: "test:durable-refund-script", check_provider?: false)
