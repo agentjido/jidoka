@@ -2,15 +2,21 @@ defmodule JidokaExamples.Capabilities do
   @moduledoc false
 
   @definitions %{
+    async_execution: "Runs a request asynchronously and awaits one terminal result.",
+    cancellation: "Cancels active work with typed terminal evidence and bounded cleanup.",
     code_first_authoring: "Compiles an agent specification from the Elixir DSL.",
+    crash_recovery: "Recovers expired leased work from durable effect evidence.",
     data_defined_authoring: "Compiles an agent specification from a portable data document.",
     dynamic_instructions: "Resolves request instructions from validated public context.",
+    event_streaming: "Streams correlated incremental and semantic request events.",
+    execution_budgets: "Enforces declared turn, token, concurrency, or timeout limits.",
     human_review: "Creates and resolves a pending human review.",
     model_routing: "Retries a failed model and selects an ordered fallback.",
     multimodal_content: "Preserves typed media input and output through a turn.",
     operation_control: "Applies a control before an operation executes.",
     provider_model_abstraction: "Uses one provider-neutral effect contract with models from different providers.",
     result_repair: "Repairs an invalid structured result within a declared bound.",
+    safe_session_fork: "Creates an independent runnable branch from a stored safe snapshot.",
     snapshot_resume: "Resumes a hibernated snapshot after a review decision.",
     structured_results: "Validates a typed final result before turn completion.",
     tool_calling: "Accepts and dispatches a model tool request.",

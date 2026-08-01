@@ -1,0 +1,47 @@
+version: 2
+name: durable_refund
+title: Durable Refund Agent
+summary: A deterministic refund agent that proves async control, execution limits, crash recovery, and safe session forks.
+module: JidokaExamples.DurableRefund.Example
+agent: JidokaExamples.DurableRefund.Agent
+scenarios:
+  - id: execution_and_continuation
+    title: Execution And Continuation
+    intent: Run one refund agent through asynchronous delivery, cancellation, bounded execution, durable recovery, and a safe branch.
+    execution: deterministic
+    cases:
+      - id: async_streaming
+        proves:
+          - async_execution
+          - event_streaming
+        uses:
+          - agent
+      - id: typed_cancellation
+        proves:
+          - cancellation
+        uses:
+          - agent
+          - async_execution
+      - id: bounded_execution
+        proves:
+          - execution_budgets
+        uses:
+          - agent
+          - action
+      - id: crash_recovery
+        proves:
+          - crash_recovery
+        uses:
+          - agent
+          - action
+          - tool_calling
+          - tool_observation
+      - id: safe_fork
+        proves:
+          - safe_session_fork
+        uses:
+          - agent
+          - snapshot_resume
+surfaces:
+  livebook: true
+  showcase: false

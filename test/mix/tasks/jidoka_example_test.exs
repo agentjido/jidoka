@@ -23,8 +23,10 @@ defmodule Mix.Tasks.Jidoka.ExampleTest do
     run_task(["--list"])
 
     assert_receive {:mix_shell, :info, ["Available Jidoka examples:\n"]}
+    assert_receive {:mix_shell, :info, [durable_refund_text]}
     assert_receive {:mix_shell, :info, [support_text]}
     assert_receive {:mix_shell, :info, [warranty_text]}
+    assert durable_refund_text =~ "durable_refund"
     assert support_text =~ "support_agent"
     assert warranty_text =~ "warranty_claim"
 
@@ -33,10 +35,12 @@ defmodule Mix.Tasks.Jidoka.ExampleTest do
     assert_receive {:mix_shell, :info, [encoded]}
 
     assert [
+             %{"name" => "durable_refund"} = durable_refund,
              %{"name" => "support_agent"} = support_agent,
              %{"name" => "warranty_claim"} = warranty_claim
            ] = Jason.decode!(encoded)
 
+    assert "crash_recovery" in durable_refund["capabilities"]
     assert is_list(support_agent["capabilities"])
     assert "multimodal_content" in warranty_claim["capabilities"]
   end

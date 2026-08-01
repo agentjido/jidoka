@@ -13,8 +13,10 @@ Standalone documentation Livebooks stay in `guides/livebooks/`.
 mix jidoka.example --list
 mix jidoka.example support_agent
 mix jidoka.example warranty_claim
+mix jidoka.example durable_refund
 mix jidoka.examples.check --example support_agent
 mix jidoka.examples.check --example warranty_claim
+mix jidoka.examples.check --example durable_refund
 mix jidoka.examples.check
 ```
 
@@ -45,8 +47,10 @@ The optional Showcase surface provides an interactive UI.
 Use the Support Agent as the reference for a controlled tool flow. Use the
 Warranty Claim example as the reference for agent authoring, model policy,
 structured results, and multimodal content. Keep one causal Jidoka behavior in
-each proof case. Put stable guarantees under `proves` and required capabilities
-or components under `uses`.
+each proof case. Use the Durable Refund Agent as the reference for asynchronous
+execution, cancellation, execution limits, durable recovery, and safe forks.
+Put stable guarantees under `proves` and required capabilities or components
+under `uses`.
 
 A complete proof run writes verified coverage to the ignored local file
 `docs/PROVEN_FEATURES.md`.

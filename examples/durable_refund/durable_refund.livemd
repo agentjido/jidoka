@@ -1,0 +1,129 @@
+# Durable Refund Agent
+
+This Livebook runs one deterministic refund agent through asynchronous
+streaming, cancellation, execution limits, crash recovery, and a safe session
+fork. It does not use a provider key or network access.
+
+## Setup
+
+```elixir
+package_root = Path.expand("../..", __DIR__)
+examples_root = Path.expand("..", __DIR__)
+
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: package_root}
+  ],
+  consolidate_protocols: false,
+  lockfile: Path.join(package_root, "mix.lock")
+)
+
+Code.require_file(Path.join(examples_root, "_support/registry.exs"))
+
+{:ok, durable_refund_example} = JidokaExamples.fetch(:durable_refund)
+{:ok, _modules} = JidokaExamples.load(durable_refund_example)
+
+alias JidokaExamples.DurableRefund.Agent, as: DurableRefundAgent
+alias JidokaExamples.DurableRefund.Example
+```
+
+```elixir
+Jidoka.Kino.setup_notebook(model: "test:durable-refund-script", check_provider?: false)
+```
+
+## Inspect The Agent
+
+```elixir
+{:ok, _inspection} = Jidoka.Kino.debug_agent(DurableRefundAgent)
+{:ok, _diagram} = Jidoka.Kino.agent_diagram(DurableRefundAgent)
+```
+
+## Stream One Async Request
+
+```elixir
+{:ok, stream_report} = Example.async_streaming(observer: self())
+
+unless stream_report.answer == stream_report.text and
+         length(stream_report.terminal_events) == 1 do
+  raise "the async stream did not produce one correlated result"
+end
+
+%{
+  answer: stream_report.answer,
+  thinking: stream_report.thinking,
+  event_names: Enum.map(stream_report.events, & &1.event)
+}
+```
+
+## Cancel Active Work
+
+```elixir
+{:ok, cancellation_report} = Example.typed_cancellation(observer: self())
+
+unless cancellation_report.cancellation.reason == :cancelled and
+         cancellation_report.capability_alive? == false and
+         length(cancellation_report.terminal_events) == 1 do
+  raise "typed cancellation did not clean up the active capability"
+end
+
+%{
+  cancellation: cancellation_report.cancellation,
+  terminal_events: cancellation_report.terminal_events
+}
+```
+
+## Enforce Execution Limits
+
+```elixir
+{:ok, budget_report} = Example.bounded_execution(observer: self())
+
+%{
+  max_output_tokens: budget_report.max_tokens,
+  operation_calls: budget_report.operation_calls,
+  turn_error: budget_report.turn_result,
+  timeout_error: budget_report.timeout_result
+}
+```
+
+## Recover After A Worker Crash
+
+The first worker stops after the unsafe refund result is in the durable
+snapshot. The second worker takes the expired lease and finishes from the
+stored result.
+
+```elixir
+{:ok, recovery_report} = Example.durable_recovery(observer: self())
+
+unless recovery_report.operation_calls == 1 and
+         recovery_report.session.status == :finished do
+  raise "crash recovery repeated or lost the refund"
+end
+
+%{
+  answer: recovery_report.answer,
+  operation_calls: recovery_report.operation_calls,
+  session_revision: recovery_report.session.revision,
+  stored_effects: map_size(recovery_report.durable_snapshot.turn_state.journal.results)
+}
+```
+
+## Fork One Safe Snapshot
+
+```elixir
+{:ok, fork_report} = Example.safe_fork()
+
+unless fork_report.source_answer != fork_report.branch_answer and
+         fork_report.branch.lineage.parent_session_id == fork_report.source.session_id do
+  raise "the safe fork did not create an independent lineage-aware branch"
+end
+
+%{
+  source: %{id: fork_report.source.session_id, answer: fork_report.source_answer},
+  branch: %{
+    id: fork_report.branch.session_id,
+    answer: fork_report.branch_answer,
+    lineage: Jidoka.project(fork_report.branch.lineage)
+  }
+}
+```
