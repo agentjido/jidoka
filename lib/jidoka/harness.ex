@@ -10,6 +10,7 @@ defmodule Jidoka.Harness do
 
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Generation
+  alias Jidoka.Cancellation
   alias Jidoka.Harness.Replay
   alias Jidoka.Harness.Session
   alias Jidoka.Harness.Store
@@ -196,7 +197,7 @@ defmodule Jidoka.Harness do
 
       {:error, reason} ->
         session
-        |> Session.put_error(reason)
+        |> put_session_error(reason)
         |> persist_session_result(opts, fn _session -> {:error, reason} end)
     end
   end
@@ -227,7 +228,7 @@ defmodule Jidoka.Harness do
 
       {:error, reason} ->
         session
-        |> Session.put_error(reason)
+        |> put_session_error(reason)
         |> persist_session_result(opts, fn _session -> {:error, reason} end)
     end
   end
@@ -235,6 +236,14 @@ defmodule Jidoka.Harness do
   defp persist_session_result(%Session{} = session, opts, callback) do
     with {:ok, session} <- persist_session(session, opts) do
       callback.(session)
+    end
+  end
+
+  defp put_session_error(%Session{} = session, reason) do
+    if Cancellation.cancelled_reason?(reason) do
+      Session.put_cancellation(session, reason)
+    else
+      Session.put_error(session, reason)
     end
   end
 

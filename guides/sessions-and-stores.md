@@ -83,8 +83,8 @@ session data between turns.
   optional `claim_session/3` for atomic single-runner semantics.
 
 A session status is one of `:new`, `:running`, `:hibernated`, `:waiting`,
-`:finished`, or `:error`. Jidoka computes it from snapshots, pending reviews,
-and the latest result.
+`:finished`, `:cancelled`, or `:error`. Jidoka computes it from snapshots,
+pending reviews, the latest result, and typed cancellation evidence.
 
 ## How To
 

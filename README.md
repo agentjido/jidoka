@@ -170,7 +170,7 @@ action, adds the result to agent state, and asks the model for the final answer.
 | Final assistant text | `Jidoka.chat/3` |
 | Full result, usage, events, and journal | `Jidoka.turn/3` |
 | Multi-turn conversation state | `Jidoka.session/2` and `Jidoka.chat/3` |
-| Async UI request and event stream | `Jidoka.chat_async/3`, `Jidoka.stream/2`, and `Jidoka.await/2` |
+| Async UI request and event stream | `Jidoka.chat_async/3`, `Jidoka.stream/2`, `Jidoka.await/2`, and `Jidoka.cancel/2` |
 | Resume a paused turn | `Jidoka.resume/2` |
 | Approve or deny pending work | `Jidoka.approve/3` and `Jidoka.deny/3` |
 | Inspect the compiled agent or runtime data | `Jidoka.inspect/2` |

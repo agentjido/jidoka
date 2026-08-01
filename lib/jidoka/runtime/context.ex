@@ -33,7 +33,7 @@ defmodule Jidoka.Runtime.Context do
         operation,
         operation_match,
         intent,
-        runtime: Keyword.get(opts, :operation_context, %{})
+        runtime: runtime(state, opts, :operation_context)
       )
     end
   end
@@ -44,6 +44,15 @@ defmodule Jidoka.Runtime.Context do
       {:ok, context} -> context
       {:error, reason} -> raise ArgumentError, "invalid operation context: #{inspect(reason)}"
     end
+  end
+
+  @doc false
+  @spec runtime(Turn.State.t(), keyword(), atom()) :: map()
+  def runtime(%Turn.State{} = state, opts, context_key) when is_list(opts) and is_atom(context_key) do
+    state.request.context
+    |> Context.runtime()
+    |> Map.merge(normalize_runtime(Keyword.get(opts, context_key, %{})))
+    |> maybe_put_cancellation(Keyword.get(opts, :cancellation))
   end
 
   @spec operation_match_data(OperationSpec.t() | nil, Effect.OperationRequest.t()) :: map()
@@ -71,4 +80,10 @@ defmodule Jidoka.Runtime.Context do
 
   defp operation_metadata(%OperationSpec{metadata: metadata}) when is_map(metadata), do: metadata
   defp operation_metadata(_operation), do: %{}
+
+  defp normalize_runtime(runtime) when is_map(runtime), do: runtime
+  defp normalize_runtime(_runtime), do: %{}
+
+  defp maybe_put_cancellation(runtime, nil), do: runtime
+  defp maybe_put_cancellation(runtime, cancellation), do: Map.put(runtime, :cancellation, cancellation)
 end

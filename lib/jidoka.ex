@@ -18,7 +18,8 @@ defmodule Jidoka do
   * `plan/1` compiles definition data into executable turn data;
   * `turn/3` runs one full model/tool turn;
   * `chat/3` runs a turn and returns only final assistant text;
-  * `chat_async/3`, `stream/2`, and `await/2` support UI-friendly async flows;
+  * `chat_async/3`, `stream/2`, `await/2`, and `cancel/2` support UI-friendly
+    async flows;
   * `session/2` starts durable multi-turn state;
   * `resume/2` continues from a hibernated snapshot;
   * `pending_reviews/1`, `approve/3`, and `deny/3` cover common approval flows;
@@ -240,7 +241,13 @@ defmodule Jidoka do
   """
   @spec chat_async(chat_input(), String.t(), runtime_opts()) ::
           {:ok, Chat.Request.t()} | {:error, term()}
-  def chat_async(target, input, opts \\ []) when is_binary(input) and is_list(opts) do
+  def chat_async(target, input, opts \\ [])
+
+  def chat_async(%Session{} = session, input, opts) when is_binary(input) and is_list(opts) do
+    Jidoka.Session.chat_async(session, input, opts)
+  end
+
+  def chat_async(target, input, opts) when is_binary(input) and is_list(opts) do
     Chat.Request.start(target, input, opts)
   end
 
@@ -257,12 +264,18 @@ defmodule Jidoka do
   Waits for a chat request or stream to finish.
 
   This returns the same normalized result shape as `chat/3`, including session
-  results when the request target is a `Jidoka.Session`.
+  results when the request target is a `Jidoka.Session`. A cancelled request
+  returns `{:cancelled, %Jidoka.Cancellation{}}`.
   """
   @spec await(Chat.Request.t() | Jidoka.Stream.t(), keyword()) :: term()
   def await(request_or_stream, opts \\ [])
   def await(%Chat.Request{} = request, opts), do: Chat.Request.await(request, opts)
   def await(%Jidoka.Stream{} = stream, opts), do: Jidoka.Stream.await(stream, opts)
+
+  @doc "Cancels an active asynchronous chat request and returns typed evidence."
+  @spec cancel(Chat.Request.t(), keyword()) ::
+          {:ok, Jidoka.Cancellation.t()} | {:error, term()}
+  def cancel(%Chat.Request{} = request, opts \\ []), do: Chat.Request.cancel(request, opts)
 
   @doc """
   Runs one agent turn through the Jidoka Runic spine.

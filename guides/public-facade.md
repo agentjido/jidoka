@@ -103,6 +103,13 @@ end
 `stream/2` yields `Jidoka.Event` values. `await/2` returns the same normalized
 shape as `chat/3`.
 
+Use `cancel/2` to stop an active request. The result is typed and terminal.
+
+```elixir
+{:ok, cancellation} = Jidoka.cancel(request)
+{:cancelled, ^cancellation} = Jidoka.await(request)
+```
+
 ## Keep State
 
 Use sessions for multi-turn conversations:
@@ -240,7 +247,7 @@ owner state.
 | Compile runtime plan | `plan/1` |
 | Final text | `chat/3` |
 | Full turn result | `turn/3` |
-| Async UI request | `chat_async/3` |
+| Async UI request | `chat_async/3`, `cancel/2` |
 | Event stream | `stream/2` |
 | Await async result | `await/2` |
 | Multi-turn state | `session/2` or `session/3` |

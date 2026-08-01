@@ -8,6 +8,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Cancellation
   alias Jidoka.Effect
   alias Jidoka.Event
   alias Jidoka.Projection.Value
@@ -36,7 +37,8 @@ defmodule Jidoka.Runtime.TurnRunner do
         opts \\ []
       ) do
     result =
-      with :ok <- Agent.Spec.validate_operation_policies(plan.spec),
+      with :ok <- Cancellation.check(opts),
+           :ok <- Agent.Spec.validate_operation_policies(plan.spec),
            state <-
              Turn.State.new!(
                spec: plan.spec,
@@ -47,6 +49,7 @@ defmodule Jidoka.Runtime.TurnRunner do
                started_at_ms: clock_ms(opts)
              ),
            :ok <- emit_turn_started(state, opts),
+           :ok <- Cancellation.check(opts),
            {:ok, state} <- run_and_emit(state, opts, &Controls.run_input_controls/1),
            :ok <- enforce_timeout(state, opts) do
         run_loop(state, capabilities, opts)
@@ -97,7 +100,8 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp run_loop(%Turn.State{loop_index: loop_index, plan: plan} = state, capabilities, opts) do
-    with :ok <- enforce_timeout(state, opts) do
+    with :ok <- Cancellation.check(opts),
+         :ok <- enforce_timeout(state, opts) do
       if loop_index >= plan.max_model_turns do
         {:error, {:max_model_turns_exceeded, plan.max_model_turns}}
       else
@@ -128,7 +132,8 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp maybe_hibernate_before_effect(%Turn.State{} = state, capabilities, opts) do
-    with :ok <- enforce_timeout(state, opts) do
+    with :ok <- Cancellation.check(opts),
+         :ok <- enforce_timeout(state, opts) do
       case {Turn.State.current_pending_effect(state), checkpoint_policy(opts)} do
         {nil, _policy} ->
           continue_after_pending_effect(state, capabilities, opts)
@@ -148,8 +153,10 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp continue_after_pending_effect(%Turn.State{} = state, capabilities, opts) do
-    with :ok <- enforce_timeout(state, opts),
+    with :ok <- Cancellation.check(opts),
+         :ok <- enforce_timeout(state, opts),
          {:ok, effect_results, state} <- interpret_or_hibernate(state, capabilities, opts),
+         :ok <- Cancellation.check(opts),
          state_before_apply <- state,
          {:ok, %Turn.State{} = state} <- apply_effect_results(state, List.wrap(effect_results)),
          :ok <- emit_new_events(state_before_apply, state, opts),
@@ -159,7 +166,9 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp continue_after_effect_applied(%Turn.State{status: :finished} = state, _capabilities, opts) do
-    with {:ok, state} <- run_and_emit(state, opts, &Controls.run_output_controls/1),
+    with :ok <- Cancellation.check(opts),
+         {:ok, state} <- run_and_emit(state, opts, &Controls.run_output_controls/1),
+         :ok <- Cancellation.check(opts),
          :ok <- enforce_timeout(state, opts) do
       finished_state = append_turn_finished(state)
       emit_new_events(state, finished_state, opts)

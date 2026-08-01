@@ -15,7 +15,7 @@ defmodule Jidoka.Harness.Session do
   alias Jidoka.Turn
 
   @schema_version 1
-  @statuses [:new, :running, :hibernated, :waiting, :finished, :error]
+  @statuses [:new, :running, :hibernated, :waiting, :finished, :cancelled, :error]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -35,7 +35,7 @@ defmodule Jidoka.Harness.Session do
             coerce: true
           )
 
-  @type status :: :new | :running | :hibernated | :waiting | :finished | :error
+  @type status :: :new | :running | :hibernated | :waiting | :finished | :cancelled | :error
   @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
@@ -132,6 +132,12 @@ defmodule Jidoka.Harness.Session do
   @spec put_error(t(), term()) :: t()
   def put_error(%__MODULE__{} = session, reason) do
     %__MODULE__{session | status: :error, error: reason}
+  end
+
+  @doc "Records typed cancellation evidence and marks the session as cancelled."
+  @spec put_cancellation(t(), Jidoka.Cancellation.t() | term()) :: t()
+  def put_cancellation(%__MODULE__{} = session, cancellation) do
+    %__MODULE__{session | status: :cancelled, error: cancellation}
   end
 
   @doc "Returns the most recent session snapshot, if one exists."

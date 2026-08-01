@@ -45,6 +45,20 @@ end
 The stream yields `Jidoka.Event` values and stops when the turn finishes,
 fails, or hibernates.
 
+Cancel an active request through its handle:
+
+```elixir
+{:ok, %Jidoka.Cancellation{} = cancellation} =
+  Jidoka.cancel(request, grace_ms: 100)
+
+{:cancelled, ^cancellation} = Jidoka.await(request)
+```
+
+Cancellation first asks the runtime and active capabilities to stop. If they
+do not stop within `:grace_ms`, Jidoka stops the request process tree. The
+stream receives one terminal `:turn_failed` event with
+`data.reason == :cancelled`. It cannot later receive `:turn_finished`.
+
 ## Concepts
 
 Streaming is a per-request side channel. The runtime stays terminal-result
@@ -86,6 +100,10 @@ Key facts:
 - `Jidoka.Stream.events/2` builds a mailbox-backed `Stream` enumerable
   scoped to a `request_id`. Use it when you want a lazy enumerable rather
   than a hand-rolled `receive`.
+- `Jidoka.cancel/2` returns typed `Jidoka.Cancellation` evidence after
+  bounded cleanup. Capabilities can call
+  `Jidoka.Cancellation.requested?/1` with their runtime context when they
+  support their own cooperative cleanup.
 
 ## How To
 
@@ -212,6 +230,26 @@ Sessions accept the same options.
 The terminal events still apply: `:turn_hibernated` ends the stream for
 that turn even though the session may continue later.
 
+### Step 7: Cancel A Session Request
+
+Start the session turn asynchronously, then cancel the returned handle.
+
+```elixir
+{:ok, request} =
+  Jidoka.Session.chat_async(session_id, "Prepare report",
+    store: store,
+    stream: true
+  )
+
+{:ok, cancellation} = Jidoka.Session.cancel(request)
+{:cancelled, ^cancellation} = Jidoka.Session.await(request)
+```
+
+A persisted active session changes to `:cancelled`. The session stores the
+typed cancellation value in its `error` field. Cancellation does not roll
+back an external operation that already completed. Operations must use their
+idempotency keys and reconciliation policy for that case.
+
 ## Common Patterns
 
 - **Always filter on `request_id`.** Concurrent turns share the mailbox
@@ -226,6 +264,8 @@ that turn even though the session may continue later.
   telemetry inside the same process.
 - **Do not lean on streaming for state.** Use `Turn.Result` for the final
   truth; use streaming for UX.
+- **Treat cancellation as a terminal result.** Match on
+  `{:cancelled, %Jidoka.Cancellation{}}`. Do not convert it to success.
 
 ## Testing
 
@@ -264,6 +304,7 @@ deterministically without polling.
 | `on_event:` callback errors disappear | Jidoka ignores callback failures so the turn can finish. | Log inside the callback before raising. |
 | Loop never terminates | Consumer never saw a terminal event. | Always check `Jidoka.Stream.terminal?/1` and add an `after` timeout. |
 | `Jidoka.Stream.events/2` halts immediately | Default `:stream_event_timeout_ms` elapsed before the turn ran. | Increase the timeout, or start the turn before subscribing. |
+| Cancel returns `:request_already_finished` | A terminal event won the race before cancellation. | Use the completed result. Jidoka never replaces it with cancellation. |
 
 ## Reference
 
@@ -277,6 +318,10 @@ Key modules touched in this guide:
   `:on_event`.
 - [`Jidoka.Session.run/3`](`Jidoka.Session.run/3`) - forwards the same
   options for session-backed turns.
+- [`Jidoka.cancel/2`](`Jidoka.cancel/2`) - cancels one async request and
+  waits for bounded cleanup.
+- [`Jidoka.Cancellation`](`Jidoka.Cancellation`) - typed terminal
+  cancellation evidence and cooperative token inspection.
 - [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) - emits
   lifecycle events that consumers observe.
 

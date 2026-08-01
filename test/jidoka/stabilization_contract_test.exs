@@ -245,7 +245,15 @@ defmodule Jidoka.StabilizationContractTest do
 
     spec = agent_spec()
 
-    assert Session.statuses() == [:new, :running, :hibernated, :waiting, :finished, :error]
+    assert Session.statuses() == [
+             :new,
+             :running,
+             :hibernated,
+             :waiting,
+             :finished,
+             :cancelled,
+             :error
+           ]
 
     assert {:error, {:unsupported_session_schema_version, 2, 1}} =
              Session.new(%{

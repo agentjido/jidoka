@@ -10,6 +10,7 @@ defmodule Jidoka.Application do
     children =
       [
         {Task.Supervisor, name: Jidoka.Chat.TaskSupervisor},
+        {DynamicSupervisor, name: Jidoka.Chat.RequestSupervisor, strategy: :one_for_one},
         {Task.Supervisor, name: Jidoka.Runtime.TaskSupervisor}
       ] ++
         handoff_owner_store_children() ++

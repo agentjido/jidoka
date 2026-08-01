@@ -7,9 +7,14 @@ defmodule Jidoka.Chat.Request do
   stream request-scoped events, and await the normalized final chat result.
   """
 
+  alias Jidoka.Cancellation
+  alias Jidoka.Chat.RequestController
+
   @type t :: %__MODULE__{
           request_id: String.t(),
           task: Task.t(),
+          controller: pid() | nil,
+          cancellation: Cancellation.Token.t() | nil,
           target: term(),
           session_id: String.t() | nil,
           stream_to: pid() | nil,
@@ -22,6 +27,8 @@ defmodule Jidoka.Chat.Request do
             %{
               request_id: Zoi.string(),
               task: Zoi.any(),
+              controller: Zoi.any() |> Zoi.nullish(),
+              cancellation: Zoi.any() |> Zoi.nullish(),
               target: Zoi.any(),
               session_id: Zoi.string() |> Zoi.nullish(),
               stream_to: Zoi.any() |> Zoi.nullish(),
@@ -58,28 +65,51 @@ defmodule Jidoka.Chat.Request do
     caller = self()
     opts = prepare_opts(opts, request_id, caller)
 
-    task =
-      Task.Supervisor.async_nolink(Jidoka.Chat.TaskSupervisor, fn ->
-        fun.(opts)
-      end)
-
-    {:ok,
-     new(
-       request_id: request_id,
-       task: task,
-       target: target,
-       session_id: session_id(target),
-       stream_to: stream_to(opts),
-       started_at_ms: System.system_time(:millisecond),
-       metadata: metadata(opts)
-     )}
+    with {:ok, controller} <-
+           RequestController.start(
+             request_id: request_id,
+             owner: caller,
+             target: target,
+             runtime_opts: opts,
+             fun: fun
+           ),
+         {:ok, task, cancellation} <- RequestController.runtime(controller) do
+      {:ok,
+       new(
+         request_id: request_id,
+         task: task,
+         controller: controller,
+         cancellation: cancellation,
+         target: target,
+         session_id: session_id(target),
+         stream_to: stream_to(opts),
+         started_at_ms: System.system_time(:millisecond),
+         metadata: metadata(opts)
+       )}
+    end
   rescue
     exception -> {:error, exception}
   end
 
   @doc "Waits for an async chat request to finish."
-  @spec await(t(), keyword()) :: term() | {:error, term()}
-  def await(%__MODULE__{task: %Task{} = task}, opts \\ []) when is_list(opts) do
+  @spec await(t(), keyword()) :: term() | {:cancelled, Cancellation.t()} | {:error, term()}
+  def await(request, opts \\ [])
+
+  def await(%__MODULE__{controller: controller} = request, opts)
+      when is_pid(controller) and is_list(opts) do
+    timeout = Keyword.get(opts, :timeout, 30_000)
+
+    case RequestController.await(controller, timeout) do
+      {:error, :timeout} = timeout_result ->
+        maybe_cancel_after_timeout(request, opts)
+        timeout_result
+
+      result ->
+        result
+    end
+  end
+
+  def await(%__MODULE__{task: %Task{} = task}, opts) when is_list(opts) do
     timeout = Keyword.get(opts, :timeout, 30_000)
 
     case Task.yield(task, timeout) do
@@ -89,12 +119,40 @@ defmodule Jidoka.Chat.Request do
     end
   end
 
+  @doc "Cancels an active async chat request and waits for bounded cleanup."
+  @spec cancel(t(), keyword()) :: {:ok, Cancellation.t()} | {:error, term()}
+  def cancel(request, opts \\ [])
+
+  def cancel(%__MODULE__{controller: controller}, opts)
+      when is_pid(controller) and is_list(opts) do
+    RequestController.cancel(controller, opts)
+  end
+
+  def cancel(%__MODULE__{task: %Task{} = task, request_id: request_id}, _opts) do
+    _shutdown = Task.shutdown(task, :brutal_kill)
+
+    {:ok,
+     Cancellation.new!(
+       request_id: request_id,
+       forced?: true,
+       cancelled_at_ms: System.system_time(:millisecond)
+     )}
+  end
+
   defp timeout_result(%Task{} = task, opts) do
     if Keyword.get(opts, :cancel_on_timeout, true) do
       Task.shutdown(task, :brutal_kill)
     end
 
     {:error, :timeout}
+  end
+
+  defp maybe_cancel_after_timeout(request, opts) do
+    if Keyword.get(opts, :cancel_on_timeout, true) do
+      _result = cancel(request, grace_ms: Keyword.get(opts, :cancel_grace_ms, 100))
+    end
+
+    :ok
   end
 
   defp request_id(opts) do

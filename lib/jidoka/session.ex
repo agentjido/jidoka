@@ -8,6 +8,7 @@ defmodule Jidoka.Session do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Cancellation
   alias Jidoka.Chat
   alias Jidoka.Harness
   alias Jidoka.Harness.Session, as: HarnessSession
@@ -24,6 +25,7 @@ defmodule Jidoka.Session do
   @type chat_result ::
           {:ok, t(), String.t()}
           | {:hibernate, t(), AgentSnapshot.t()}
+          | {:cancelled, Cancellation.t()}
           | {:error, term()}
   @type async_result :: {:ok, Chat.Request.t()} | {:error, term()}
 
@@ -96,7 +98,12 @@ defmodule Jidoka.Session do
   """
   @spec chat_async(session_input(), String.t(), opts()) :: async_result()
   def chat_async(session_or_id, input, opts \\ []) when is_binary(input) and is_list(opts) do
-    Chat.Request.start_fun(session_or_id, input, opts, fn prepared_opts ->
+    runtime_opts =
+      Keyword.put(opts, :on_cancelled, fn cancellation ->
+        persist_forced_cancellation(session_or_id, opts, cancellation)
+      end)
+
+    Chat.Request.start_fun(session_or_id, input, runtime_opts, fn prepared_opts ->
       chat(session_or_id, input, prepared_opts)
     end)
   end
@@ -105,6 +112,12 @@ defmodule Jidoka.Session do
   @spec await(Chat.Request.t(), opts()) :: chat_result()
   def await(%Chat.Request{} = request, opts \\ []) when is_list(opts) do
     Chat.Request.await(request, opts)
+  end
+
+  @doc "Cancels an active asynchronous session request."
+  @spec cancel(Chat.Request.t(), opts()) :: {:ok, Cancellation.t()} | {:error, term()}
+  def cancel(%Chat.Request{} = request, opts \\ []) when is_list(opts) do
+    Chat.Request.cancel(request, opts)
   end
 
   @doc """
@@ -139,6 +152,33 @@ defmodule Jidoka.Session do
   @doc "Lists persisted sessions from a configured session store."
   @spec list(Store.store()) :: {:ok, [t()]} | {:error, term()}
   def list(store), do: Harness.store_list_sessions(store)
+
+  defp persist_forced_cancellation(session_or_id, opts, %Cancellation{} = cancellation) do
+    with {:ok, store} <- Keyword.fetch(opts, :store),
+         {:ok, session_id} <- cancellation_session_id(session_or_id),
+         {:ok, %HarnessSession{} = session} <- Store.get_session(store, session_id),
+         true <- active_request?(session, cancellation.request_id) do
+      session
+      |> HarnessSession.put_cancellation(cancellation)
+      |> then(&Store.put_session(store, &1))
+    else
+      _result -> :ok
+    end
+  end
+
+  defp cancellation_session_id(%HarnessSession{session_id: session_id}), do: {:ok, session_id}
+  defp cancellation_session_id(session_id) when is_binary(session_id), do: {:ok, session_id}
+  defp cancellation_session_id(_session), do: :error
+
+  defp active_request?(%HarnessSession{status: status, requests: requests}, request_id)
+       when status in [:running, :cancelled] do
+    case List.last(requests) do
+      %Turn.Request{request_id: ^request_id} -> true
+      _request -> false
+    end
+  end
+
+  defp active_request?(_session, _request_id), do: false
 
   defp resolve_agent_input(agent_module) when is_atom(agent_module) do
     cond do
