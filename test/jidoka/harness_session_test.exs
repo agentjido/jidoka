@@ -4,6 +4,7 @@ defmodule Jidoka.HarnessSessionTest do
   alias Jidoka.Agent
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
+  alias Jidoka.Harness.SessionLineage
   alias Jidoka.Harness.Store
   alias Jidoka.Harness.Store.InMemory
   alias Jidoka.Review
@@ -141,6 +142,107 @@ defmodule Jidoka.HarnessSessionTest do
             }} = Harness.replay(session)
   end
 
+  test "safe forks copy stored snapshot evidence and record durable lineage" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    source = Session.start(spec(), session_id: "sess_source", metadata: %{tenant: "acme"}) |> elem(1)
+    request = Turn.Request.new!(input: "Hello", request_id: "turn_source")
+
+    snapshot =
+      base_state(request)
+      |> AgentSnapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "snap_source")
+
+    source = source |> Session.put_request(request) |> Session.put_snapshot(snapshot)
+    assert {:ok, ^source} = Store.put_session(store, source)
+    assert {:ok, signed_snapshot} = AgentSnapshot.serialize(snapshot)
+
+    assert {:ok,
+            %Session{
+              session_id: "sess_fork",
+              status: :hibernated,
+              requests: [%Turn.Request{request_id: "turn_source"}],
+              snapshots: [%AgentSnapshot{snapshot_id: "snap_fork"}],
+              lineage: %SessionLineage{
+                root_session_id: "sess_source",
+                parent_session_id: "sess_source",
+                source_snapshot_id: "snap_source",
+                forked_at_ms: 1_234,
+                depth: 1
+              },
+              metadata: %{tenant: "acme", branch: "alternate"}
+            } = fork} =
+             Harness.fork_session("sess_source",
+               store: store,
+               session_id: "sess_fork",
+               fork_snapshot_id: "snap_fork",
+               snapshot: signed_snapshot,
+               clock: fn -> 1_234 end,
+               metadata: %{branch: "alternate"}
+             )
+
+    assert hd(fork.snapshots).turn_state == snapshot.turn_state
+    assert hd(fork.snapshots).metadata["fork"]["source_snapshot_id"] == "snap_source"
+    assert {:ok, ^source} = Store.get_session(store, "sess_source")
+    assert {:ok, ^fork} = Store.get_session(store, "sess_fork")
+
+    assert {:ok, %Harness.Replay{lineage: %{parent_session_id: "sess_source", depth: 1}}} =
+             Harness.replay(fork)
+  end
+
+  test "safe forks reject running sources, changed snapshots, and existing targets" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    source = Session.start(spec(), session_id: "sess_source") |> elem(1)
+    snapshot = AgentSnapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
+    source = Session.put_snapshot(source, snapshot)
+    assert {:ok, ^source} = Store.put_session(store, source)
+
+    changed = %AgentSnapshot{snapshot | metadata: %{"changed" => true}}
+
+    assert {:error, {:session_snapshot_mismatch, snapshot_id}} =
+             Harness.fork_session(source, snapshot: changed, session_id: "sess_changed")
+
+    assert snapshot_id == snapshot.snapshot_id
+
+    assert {:ok, %Session{session_id: "sess_existing"}} =
+             Harness.start_session(spec(), session_id: "sess_existing", store: store)
+
+    assert {:error, {:fork_session_already_exists, "sess_existing"}} =
+             Harness.fork_session(source, session_id: "sess_existing", store: store)
+
+    running = Session.put_request(source, Turn.Request.new!(input: "Active"))
+
+    assert {:error, {:cannot_fork_running_session, "sess_source"}} =
+             Harness.fork_session(running, session_id: "sess_running_fork")
+  end
+
+  test "nested forks keep the root session and increase lineage depth" do
+    source = Session.start(spec(), session_id: "sess_root") |> elem(1)
+    snapshot = AgentSnapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
+    source = Session.put_snapshot(source, snapshot)
+
+    assert {:ok, first} =
+             Harness.fork_session(source,
+               session_id: "sess_child",
+               fork_snapshot_id: "snap_child",
+               clock: fn -> 10 end
+             )
+
+    assert {:ok, second} =
+             Harness.fork_session(first,
+               session_id: "sess_grandchild",
+               fork_snapshot_id: "snap_grandchild",
+               clock: fn -> 20 end
+             )
+
+    assert %SessionLineage{
+             root_session_id: "sess_root",
+             parent_session_id: "sess_child",
+             source_snapshot_id: "snap_child",
+             depth: 2
+           } = second.lineage
+  end
+
   defp spec do
     Agent.Spec.new!(
       id: "harness_session_agent",
@@ -149,10 +251,10 @@ defmodule Jidoka.HarnessSessionTest do
     )
   end
 
-  defp base_state do
+  defp base_state(request \\ nil) do
     spec = spec()
     plan = Turn.Plan.new!(spec)
-    request = Turn.Request.new!(input: "Hello")
+    request = request || Turn.Request.new!(input: "Hello")
 
     Turn.State.new!(
       spec: spec,

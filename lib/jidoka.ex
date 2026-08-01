@@ -149,6 +149,16 @@ defmodule Jidoka do
   end
 
   @doc """
+  Creates a new session from a safe snapshot in an existing session.
+
+  The source session is not changed. Use `Jidoka.Session.resume/2` to run the
+  returned fork from its copied snapshot.
+  """
+  @spec fork_session(Jidoka.Session.session_input(), keyword()) ::
+          {:ok, Jidoka.Session.t()} | {:error, term()}
+  def fork_session(session_or_id, opts \\ []), do: Jidoka.Session.fork(session_or_id, opts)
+
+  @doc """
   Returns the current handoff owner for a conversation, if one has been recorded.
 
   Handoffs are durable routing data. They indicate which agent should own

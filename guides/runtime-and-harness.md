@@ -53,6 +53,7 @@ requests or process restarts. It contains:
 - hibernated snapshots;
 - pending review requests;
 - the latest result or error;
+- optional fork lineage;
 - metadata owned by the application/harness.
 
 Sessions are still data. They do not contain runtime clients or processes.
@@ -76,7 +77,17 @@ store = {Jidoka.Harness.Store.InMemory, pid: pid}
     store: store,
     llm: llm
   )
+
+{:ok, branch} =
+  Jidoka.Session.fork(session,
+    session_id: "support-session-1-alternate"
+  )
 ```
+
+A fork copies one stored, safe hibernation snapshot into a new session. It
+keeps the effect journal, records root and parent lineage, and leaves the
+source session unchanged. It does not support arbitrary state editing,
+cursor movement, or effect re-execution.
 
 The store behaviour is intentionally small: put/get/list sessions. Pending
 review listing is derived from stored session data:
@@ -85,11 +96,13 @@ review listing is derived from stored session data:
 {:ok, reviews} = Jidoka.Session.pending_reviews(store)
 ```
 
-Replay is a projection over stored data, not a runtime call:
+Replay is a projection over stored data, not a runtime call. Fork is the
+separate API that creates a runnable branch:
 
 ```elixir
 {:ok, replay} = Jidoka.Session.replay(session)
 replay.timeline
+replay.lineage
 ```
 
 Replay diagnostics explain whether recorded effects are complete and safe to

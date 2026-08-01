@@ -23,6 +23,7 @@ defmodule Jidoka.Harness.Replay do
               journal: Zoi.map() |> Zoi.default(%{intents: [], results: []}),
               pending_reviews: Zoi.array(Zoi.map()) |> Zoi.default([]),
               result: Zoi.map() |> Zoi.nullish(),
+              lineage: Zoi.map() |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -56,6 +57,7 @@ defmodule Jidoka.Harness.Replay do
       journal: latest_journal(session),
       pending_reviews: Enum.map(session.pending_reviews, &Jidoka.project/1),
       result: project_result(session.result),
+      lineage: project_lineage(session.lineage),
       metadata: session.metadata
     )
   end
@@ -123,6 +125,9 @@ defmodule Jidoka.Harness.Replay do
 
   defp project_result(%Turn.Result{} = result), do: Jidoka.project(result)
   defp project_result(nil), do: nil
+
+  defp project_lineage(nil), do: nil
+  defp project_lineage(lineage), do: Jidoka.project(lineage)
 
   defp snapshot_states(%Session{snapshots: snapshots}), do: Enum.map(snapshots, & &1.turn_state)
 

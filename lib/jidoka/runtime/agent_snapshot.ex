@@ -17,6 +17,7 @@ defmodule Jidoka.Runtime.AgentSnapshot do
   @serialized_prefix "jidoka:snapshot:v1:"
   @signature_algorithm :sha256
   @minimum_signing_secret_bytes 32
+  @forkable_phases [:after_prompt, :before_effect, :review, :wait]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -151,6 +152,37 @@ defmodule Jidoka.Runtime.AgentSnapshot do
     end
   end
 
+  @doc """
+  Copies a hibernation snapshot for a new session fork.
+
+  The copied snapshot keeps the exact turn state and effect journal. It gets a
+  new snapshot id and records the source in metadata. Only resumable phase
+  boundaries can be forked.
+  """
+  @spec fork(t(), keyword()) :: {:ok, t()} | {:error, term()}
+  def fork(%__MODULE__{} = snapshot, opts) when is_list(opts) do
+    with :ok <- validate_forkable_cursor(snapshot),
+         {:ok, snapshot_id} <- snapshot_id(opts) do
+      metadata =
+        snapshot.metadata
+        |> Map.put("fork", %{
+          "source_snapshot_id" => snapshot.snapshot_id,
+          "parent_session_id" => Keyword.fetch!(opts, :parent_session_id),
+          "root_session_id" => Keyword.fetch!(opts, :root_session_id)
+        })
+
+      new(%__MODULE__{snapshot | snapshot_id: snapshot_id, metadata: metadata})
+    end
+  rescue
+    KeyError -> {:error, :missing_snapshot_fork_lineage}
+  end
+
+  def fork(_snapshot, _opts), do: {:error, :unsafe_snapshot_fork_input}
+
+  @doc "Returns the phase boundaries that support safe session forks."
+  @spec forkable_phases() :: [atom()]
+  def forkable_phases, do: @forkable_phases
+
   defp snapshot_id(opts) do
     case Keyword.fetch(opts, :snapshot_id) do
       {:ok, snapshot_id} when is_binary(snapshot_id) and snapshot_id != "" ->
@@ -162,6 +194,14 @@ defmodule Jidoka.Runtime.AgentSnapshot do
       :error ->
         Id.generate("snap", Keyword.get(opts, :id_generator))
     end
+  end
+
+  defp validate_forkable_cursor(%__MODULE__{cursor: %Turn.Cursor{phase: phase}})
+       when phase in @forkable_phases,
+       do: :ok
+
+  defp validate_forkable_cursor(%__MODULE__{snapshot_id: snapshot_id, cursor: cursor}) do
+    {:error, {:snapshot_not_forkable, snapshot_id, cursor.phase}}
   end
 
   defp validate_schema_version(%__MODULE__{schema_version: @schema_version}), do: :ok

@@ -8,6 +8,7 @@ defmodule Jidoka.Harness.Session do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Harness.SessionLineage
   alias Jidoka.Id
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
@@ -30,6 +31,7 @@ defmodule Jidoka.Harness.Session do
               result: Zoi.lazy({Turn.Result, :schema, []}) |> Zoi.nullish(),
               pending_reviews: Zoi.array(Zoi.lazy({Review.Request, :schema, []})) |> Zoi.default([]),
               error: Zoi.any() |> Zoi.nullish(),
+              lineage: Zoi.lazy({SessionLineage, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -87,6 +89,32 @@ defmodule Jidoka.Harness.Session do
         status: :new,
         metadata: Keyword.get(opts, :metadata, %{})
       )
+    end
+  end
+
+  @doc "Builds a new session from a copied, safe snapshot and lineage data."
+  @spec fork(t(), AgentSnapshot.t(), SessionLineage.t(), keyword()) ::
+          {:ok, t()} | {:error, term()}
+  def fork(
+        %__MODULE__{} = source,
+        %AgentSnapshot{} = snapshot,
+        %SessionLineage{} = lineage,
+        opts \\ []
+      ) do
+    with :ok <- validate_fork_agent(source, snapshot),
+         {:ok, fork_session_id} <- session_id(opts),
+         :ok <- validate_distinct_fork_id(source, fork_session_id),
+         {:ok, fork} <-
+           new(
+             schema_version: @schema_version,
+             session_id: fork_session_id,
+             agent_id: source.agent_id,
+             spec: source.spec,
+             requests: requests_through_snapshot(source, snapshot),
+             lineage: lineage,
+             metadata: Map.merge(source.metadata, Keyword.get(opts, :metadata, %{}))
+           ) do
+      {:ok, put_snapshot(fork, snapshot)}
     end
   end
 
@@ -154,6 +182,31 @@ defmodule Jidoka.Harness.Session do
 
       :error ->
         Id.generate("sess", Keyword.get(opts, :id_generator))
+    end
+  end
+
+  defp validate_fork_agent(
+         %__MODULE__{agent_id: agent_id},
+         %AgentSnapshot{agent_id: agent_id}
+       ),
+       do: :ok
+
+  defp validate_fork_agent(%__MODULE__{} = source, %AgentSnapshot{} = snapshot) do
+    {:error, {:snapshot_agent_mismatch, source.agent_id, snapshot.agent_id}}
+  end
+
+  defp validate_distinct_fork_id(%__MODULE__{session_id: session_id}, session_id) do
+    {:error, {:fork_session_id_matches_source, session_id}}
+  end
+
+  defp validate_distinct_fork_id(%__MODULE__{}, _fork_session_id), do: :ok
+
+  defp requests_through_snapshot(%__MODULE__{requests: requests}, %AgentSnapshot{
+         turn_state: %{request: %Turn.Request{request_id: request_id} = snapshot_request}
+       }) do
+    case Enum.find_index(requests, &(&1.request_id == request_id)) do
+      nil -> [snapshot_request]
+      index -> Enum.take(requests, index + 1)
     end
   end
 

@@ -303,6 +303,7 @@ defmodule Jidoka.Projection do
       result: project(session.result),
       pending_reviews: Enum.map(session.pending_reviews, &project/1),
       error: Value.project(session.error),
+      lineage: Value.project(session.lineage),
       metadata: Value.project(session.metadata)
     }
   end

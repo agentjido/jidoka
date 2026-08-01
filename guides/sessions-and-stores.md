@@ -55,7 +55,8 @@ session data between turns.
 ╭──────────────────────╮
 │   Jidoka.Session     │
 │ start / run / chat   │
-│ resume / replay      │
+│ resume / fork        │
+│ replay               │
 ╰──────────┬───────────╯
            │ reads and writes
            ▼
@@ -64,6 +65,7 @@ session data between turns.
 │ spec / requests          │
 │ snapshots / result       │
 │ pending_reviews          │
+│ optional lineage         │
 ╰──────────┬───────────────╯
            │ persists through
            ▼
@@ -170,7 +172,46 @@ Resume picks up the latest snapshot recorded on the session:
 See [Snapshots And Resume](snapshots-and-resume.md) for the full snapshot
 lifecycle and serialization format.
 
-### Step 4: List Pending Reviews
+### Step 4: Fork A Safe Snapshot
+
+`Jidoka.Session.fork/2` creates a new runnable session from a snapshot that is
+already in the source session. The source does not change.
+
+```elixir
+{:ok, branch} =
+  Jidoka.Session.fork(session.session_id,
+    store: store,
+    session_id: "support-123-alternate"
+  )
+
+branch.status
+#=> :hibernated
+
+branch.lineage.parent_session_id
+#=> "support-123"
+
+{:ok, branch, result} =
+  Jidoka.Session.resume(branch.session_id,
+    store: store
+  )
+```
+
+The default selector is `snapshot: :latest`. You can also pass a stored
+snapshot id, the exact snapshot struct, or its signed serialized string. A
+struct or signed string must exactly match a snapshot in the source session.
+Jidoka rejects a changed snapshot, a running source session, a target id that
+matches the source, and a target id that is already in the configured store.
+
+Each fork gets a new snapshot id. Pass `fork_snapshot_id:` when an application
+needs a fixed id. The copied turn state and effect journal do not change. If an
+unsafe operation has a completed result in that journal, resume uses the result
+and does not call the operation again.
+
+Fork is a narrow continuation contract. It does not edit stored state, move a
+cursor to an arbitrary phase, or re-execute effects. Replay remains a data-only
+inspection contract.
+
+### Step 5: List Pending Reviews
 
 Pending review requests are derived from snapshot metadata when an operation
 control returns `{:interrupt, reason}`. They can be listed per session or
@@ -188,7 +229,7 @@ The store-level helper iterates `list_sessions/1` and flattens
 For the durable approval flow itself, see
 [Human In The Loop](human-in-the-loop.md).
 
-### Step 5: Implement A Custom Store
+### Step 6: Implement A Custom Store
 
 A store is a module implementing `Jidoka.Harness.Store`. The required
 callbacks are small.
@@ -229,7 +270,7 @@ Callers reference a store as either `Module` or `{Module, opts}`. The
 in-memory store is `{Jidoka.Harness.Store.InMemory, pid: pid}` so the same
 shape works for stores that need configuration (database, namespace, region).
 
-### Step 6: Inspect Sessions
+### Step 7: Inspect Sessions
 
 Replay is a data-only projection over what a session already knows. It does
 not call any capability and is safe to run anywhere.

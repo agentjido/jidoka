@@ -128,6 +128,17 @@ defmodule Jidoka.Session do
     Harness.resume_session(session_or_id, opts)
   end
 
+  @doc """
+  Creates a new session from a safe snapshot in an existing session.
+
+  The source session stays unchanged. By default, this function forks the
+  latest snapshot. Pass `snapshot:` to select another stored snapshot.
+  """
+  @spec fork(session_input(), opts()) :: {:ok, t()} | {:error, term()}
+  def fork(session_or_id, opts \\ []) when is_list(opts) do
+    Harness.fork_session(session_or_id, opts)
+  end
+
   @doc "Lists pending human-review requests from a session or session store."
   @spec pending_reviews(t() | Store.store()) ::
           {:ok, [Jidoka.Review.Request.t()]} | {:error, term()}

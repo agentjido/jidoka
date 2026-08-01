@@ -13,6 +13,7 @@ defmodule Jidoka.Harness do
   alias Jidoka.Cancellation
   alias Jidoka.Harness.Replay
   alias Jidoka.Harness.Session
+  alias Jidoka.Harness.SessionLineage
   alias Jidoka.Harness.Store
   alias Jidoka.Instructions
   alias Jidoka.Memory
@@ -124,6 +125,34 @@ defmodule Jidoka.Harness do
          {:ok, capabilities} <- normalize_capabilities(opts) do
       session
       |> resume_session_snapshot(snapshot, capabilities, opts)
+    end
+  end
+
+  @doc """
+  Creates a new session from a safe snapshot in an existing session.
+
+  The source session is not changed. The fork keeps completed effect evidence,
+  gets new session and snapshot identifiers, and records durable lineage.
+  Pass `snapshot: :latest`, a snapshot id, a signed snapshot string, or a
+  snapshot struct that exactly matches source session data.
+  """
+  @spec fork_session(session_input(), runtime_opts()) ::
+          {:ok, Session.t()} | {:error, term()}
+  def fork_session(session_input, opts \\ []) do
+    with {:ok, source} <- resolve_session(session_input, opts),
+         :ok <- ensure_forkable_session(source),
+         {:ok, source_snapshot} <- select_fork_snapshot(source, Keyword.get(opts, :snapshot, :latest)),
+         {:ok, lineage} <-
+           SessionLineage.next(
+             source.lineage,
+             source.session_id,
+             source_snapshot.snapshot_id,
+             clock_ms(opts)
+           ),
+         {:ok, fork_snapshot} <- fork_snapshot(source_snapshot, source, lineage, opts),
+         {:ok, fork} <- Session.fork(source, fork_snapshot, lineage, fork_session_opts(opts)),
+         :ok <- ensure_fork_destination_available(fork, opts) do
+      persist_session(fork, opts)
     end
   end
 
@@ -281,6 +310,66 @@ defmodule Jidoka.Harness do
     end
   end
 
+  defp select_fork_snapshot(%Session{} = session, :latest), do: latest_snapshot(session)
+
+  defp select_fork_snapshot(%Session{} = session, %AgentSnapshot{} = candidate) do
+    case Enum.find(session.snapshots, &(&1.snapshot_id == candidate.snapshot_id)) do
+      ^candidate -> {:ok, candidate}
+      %AgentSnapshot{} -> {:error, {:session_snapshot_mismatch, candidate.snapshot_id}}
+      nil -> {:error, {:session_snapshot_not_found, session.session_id, candidate.snapshot_id}}
+    end
+  end
+
+  defp select_fork_snapshot(%Session{} = session, snapshot_input) when is_binary(snapshot_input) do
+    case Enum.find(session.snapshots, &(&1.snapshot_id == snapshot_input)) do
+      %AgentSnapshot{} = snapshot ->
+        {:ok, snapshot}
+
+      nil ->
+        with {:ok, %AgentSnapshot{} = snapshot} <- AgentSnapshot.from_input(snapshot_input) do
+          select_fork_snapshot(session, snapshot)
+        end
+    end
+  end
+
+  defp select_fork_snapshot(%Session{} = session, snapshot_input) do
+    {:error, {:invalid_session_snapshot_selector, session.session_id, snapshot_input}}
+  end
+
+  defp fork_snapshot(%AgentSnapshot{} = snapshot, %Session{} = source, lineage, opts) do
+    fork_opts =
+      [
+        snapshot_id: Keyword.get(opts, :fork_snapshot_id),
+        id_generator: Keyword.get(opts, :id_generator),
+        parent_session_id: source.session_id,
+        root_session_id: lineage.root_session_id
+      ]
+      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
+
+    AgentSnapshot.fork(snapshot, fork_opts)
+  end
+
+  defp ensure_forkable_session(%Session{status: :running, session_id: session_id}) do
+    {:error, {:cannot_fork_running_session, session_id}}
+  end
+
+  defp ensure_forkable_session(%Session{}), do: :ok
+
+  defp ensure_fork_destination_available(%Session{} = fork, opts) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} -> ensure_session_absent(store, fork.session_id)
+      :error -> :ok
+    end
+  end
+
+  defp ensure_session_absent(store, session_id) do
+    case Store.get_session(store, session_id) do
+      {:error, {:session_not_found, ^session_id}} -> :ok
+      {:ok, %Session{}} -> {:error, {:fork_session_already_exists, session_id}}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
   defp ensure_runnable_session(%Session{status: :running, session_id: session_id}) do
     {:error, {:session_already_running, session_id}}
   end
@@ -295,6 +384,16 @@ defmodule Jidoka.Harness do
   end
 
   defp session_opts(opts), do: Keyword.take(opts, [:session_id, :id_generator, :metadata])
+
+  defp fork_session_opts(opts),
+    do: Keyword.take(opts, [:session_id, :id_generator, :metadata])
+
+  defp clock_ms(opts) do
+    case Keyword.get(opts, :clock) do
+      clock when is_function(clock, 0) -> clock.()
+      _clock -> System.system_time(:millisecond)
+    end
+  end
 
   defp runtime_opts(%Turn.Plan{spec: %Agent.Spec{} = spec}, opts) do
     runtime_opts(spec, opts)
