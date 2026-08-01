@@ -2,11 +2,20 @@ defmodule JidokaExamples.Capabilities do
   @moduledoc false
 
   @definitions %{
+    code_first_authoring: "Compiles an agent specification from the Elixir DSL.",
+    data_defined_authoring: "Compiles an agent specification from a portable data document.",
+    dynamic_instructions: "Resolves request instructions from validated public context.",
     human_review: "Creates and resolves a pending human review.",
+    model_routing: "Retries a failed model and selects an ordered fallback.",
+    multimodal_content: "Preserves typed media input and output through a turn.",
     operation_control: "Applies a control before an operation executes.",
+    provider_model_abstraction: "Uses one provider-neutral effect contract with models from different providers.",
+    result_repair: "Repairs an invalid structured result within a declared bound.",
     snapshot_resume: "Resumes a hibernated snapshot after a review decision.",
+    structured_results: "Validates a typed final result before turn completion.",
     tool_calling: "Accepts and dispatches a model tool request.",
-    tool_observation: "Returns an operation result to the next model input."
+    tool_observation: "Returns an operation result to the next model input.",
+    typed_context: "Validates public request context against an agent schema."
   }
 
   @components %{

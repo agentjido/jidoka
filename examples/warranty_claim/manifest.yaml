@@ -1,0 +1,36 @@
+version: 2
+name: warranty_claim
+title: Warranty Claim
+summary: A deterministic multimodal claim review with model fallback and typed result repair.
+module: JidokaExamples.WarrantyClaim.Example
+agent: JidokaExamples.WarrantyClaim.Agent
+scenarios:
+  - id: warranty_claim_triage
+    title: Warranty Claim Triage
+    intent: Review a claim with equivalent authoring paths, tenant policy, media evidence, model fallback, and a valid decision contract.
+    execution: deterministic
+    cases:
+      - id: equivalent_authoring
+        proves:
+          - code_first_authoring
+          - data_defined_authoring
+        uses:
+          - agent
+      - id: tenant_policy
+        proves:
+          - dynamic_instructions
+          - typed_context
+        uses:
+          - agent
+      - id: resilient_typed_decision
+        proves:
+          - model_routing
+          - multimodal_content
+          - provider_model_abstraction
+          - result_repair
+          - structured_results
+        uses:
+          - agent
+surfaces:
+  livebook: true
+  showcase: false

@@ -23,14 +23,22 @@ defmodule Mix.Tasks.Jidoka.ExampleTest do
     run_task(["--list"])
 
     assert_receive {:mix_shell, :info, ["Available Jidoka examples:\n"]}
-    assert_receive {:mix_shell, :info, [example]}
-    assert example =~ "support_agent"
+    assert_receive {:mix_shell, :info, [support_text]}
+    assert_receive {:mix_shell, :info, [warranty_text]}
+    assert support_text =~ "support_agent"
+    assert warranty_text =~ "warranty_claim"
 
     run_task(["--list", "--json"])
 
     assert_receive {:mix_shell, :info, [encoded]}
-    assert [%{"name" => "support_agent"} = support_agent] = Jason.decode!(encoded)
+
+    assert [
+             %{"name" => "support_agent"} = support_agent,
+             %{"name" => "warranty_claim"} = warranty_claim
+           ] = Jason.decode!(encoded)
+
     assert is_list(support_agent["capabilities"])
+    assert "multimodal_content" in warranty_claim["capabilities"]
   end
 
   test "rejects invalid options and extra example names" do

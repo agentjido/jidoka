@@ -12,7 +12,9 @@ Standalone documentation Livebooks stay in `guides/livebooks/`.
 ```bash
 mix jidoka.example --list
 mix jidoka.example support_agent
+mix jidoka.example warranty_claim
 mix jidoka.examples.check --example support_agent
+mix jidoka.examples.check --example warranty_claim
 mix jidoka.examples.check
 ```
 
@@ -40,9 +42,11 @@ surfaces. Tagged ExUnit tests are the only capability-proof authority. The
 runner demonstrates normal use. The Livebook is an executable walkthrough.
 The optional Showcase surface provides an interactive UI.
 
-Use the Support Agent as the reference for a new example. Keep one causal
-Jidoka behavior in each scenario. Put stable guarantees under `proves` and
-required capabilities or components under `uses`.
+Use the Support Agent as the reference for a controlled tool flow. Use the
+Warranty Claim example as the reference for agent authoring, model policy,
+structured results, and multimodal content. Keep one causal Jidoka behavior in
+each proof case. Put stable guarantees under `proves` and required capabilities
+or components under `uses`.
 
 A complete proof run writes verified coverage to the ignored local file
 `docs/PROVEN_FEATURES.md`.

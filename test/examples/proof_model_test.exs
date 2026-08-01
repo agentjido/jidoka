@@ -319,6 +319,7 @@ defmodule JidokaExamples.ProofModelTest do
 
   test "planner applies shared, showcase, rename, and deletion impacts" do
     examples = Catalog.load!()
+    all_example_names = Enum.map(examples, & &1.name)
 
     for path <- [
           "examples/_support/reporter.ex",
@@ -332,7 +333,7 @@ defmodule JidokaExamples.ProofModelTest do
       assert {:ok, plan} =
                Planner.plan(examples, [changed_paths: [change("M", path)]], File.cwd!())
 
-      assert Enum.map(plan.examples, & &1.name) == [:support_agent]
+      assert Enum.map(plan.examples, & &1.name) == all_example_names
     end
 
     source = "showcase/lib/jidoka_showcase_web/live/support_agent_live/index.ex"
@@ -358,7 +359,7 @@ defmodule JidokaExamples.ProofModelTest do
 
     deletion = change("D", "examples/removed_agent/manifest.yaml")
     assert {:ok, deleted} = Planner.plan(examples, [changed_paths: [deletion]], File.cwd!())
-    assert Enum.map(deleted.examples, & &1.name) == [:support_agent]
+    assert Enum.map(deleted.examples, & &1.name) == all_example_names
     assert deleted.global?
   end
 

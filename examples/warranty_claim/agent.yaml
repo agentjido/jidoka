@@ -1,0 +1,18 @@
+version: 1
+agent:
+  id: warranty_claim
+  model:
+    provider: test
+    id: warranty-static
+  generation:
+    temperature: 0.0
+    max_tokens: 700
+  instructions: Review the warranty claim from only the supplied statement, photo, receipt, and tenant policy. Return a clear decision and the required next actions.
+  context:
+    ref: warranty_context
+  result:
+    ref: warranty_result
+    max_repairs: 1
+controls:
+  max_turns: 3
+  timeout: 10000
