@@ -14,7 +14,8 @@ Mix.install(
     {:kino, "~> 0.14"},
     {:jidoka, path: package_root}
   ],
-  consolidate_protocols: false
+  consolidate_protocols: false,
+  lockfile: Path.join(package_root, "mix.lock")
 )
 
 Code.require_file(Path.join(examples_root, "_support/registry.exs"))
