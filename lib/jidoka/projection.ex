@@ -295,6 +295,7 @@ defmodule Jidoka.Projection do
   def project(%Harness.Session{} = session) do
     %{
       schema_version: session.schema_version,
+      revision: session.revision,
       session_id: session.session_id,
       agent_id: session.agent_id,
       status: session.status,
@@ -303,6 +304,7 @@ defmodule Jidoka.Projection do
       result: project(session.result),
       pending_reviews: Enum.map(session.pending_reviews, &project/1),
       error: Value.project(session.error),
+      lease: Value.project(session.lease),
       lineage: Value.project(session.lineage),
       metadata: Value.project(session.metadata)
     }

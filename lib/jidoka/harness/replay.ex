@@ -16,6 +16,7 @@ defmodule Jidoka.Harness.Replay do
             __MODULE__,
             %{
               session_id: Schema.non_empty_string() |> Zoi.nullish(),
+              session_revision: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),
               agent_id: Schema.non_empty_string(),
               status: Schema.atom_enum(Session.statuses()) |> Zoi.nullish(),
               snapshots: Zoi.array(Zoi.map()) |> Zoi.default([]),
@@ -50,6 +51,7 @@ defmodule Jidoka.Harness.Replay do
   def from_session(%Session{} = session) do
     new(
       session_id: session.session_id,
+      session_revision: session.revision,
       agent_id: session.agent_id,
       status: session.status,
       snapshots: Enum.map(session.snapshots, &snapshot_summary/1),

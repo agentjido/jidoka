@@ -9,6 +9,7 @@ defmodule Jidoka.Harness.Session do
 
   alias Jidoka.Agent
   alias Jidoka.Harness.SessionLineage
+  alias Jidoka.Harness.SessionLease
   alias Jidoka.Id
   alias Jidoka.Review
   alias Jidoka.Runtime.AgentSnapshot
@@ -22,6 +23,7 @@ defmodule Jidoka.Harness.Session do
             __MODULE__,
             %{
               schema_version: Zoi.integer() |> Zoi.positive() |> Zoi.default(@schema_version),
+              revision: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               session_id: Schema.non_empty_string(),
               agent_id: Schema.non_empty_string(),
               spec: Zoi.lazy({Agent.Spec, :schema, []}),
@@ -31,6 +33,7 @@ defmodule Jidoka.Harness.Session do
               result: Zoi.lazy({Turn.Result, :schema, []}) |> Zoi.nullish(),
               pending_reviews: Zoi.array(Zoi.lazy({Review.Request, :schema, []})) |> Zoi.default([]),
               error: Zoi.any() |> Zoi.nullish(),
+              lease: Zoi.lazy({SessionLease, :schema, []}) |> Zoi.nullish(),
               lineage: Zoi.lazy({SessionLineage, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
@@ -129,6 +132,36 @@ defmodule Jidoka.Harness.Session do
     }
   end
 
+  @doc "Adds active lease ownership to a running session."
+  @spec put_lease(t(), SessionLease.t()) :: t()
+  def put_lease(%__MODULE__{} = session, %SessionLease{} = lease) do
+    %__MODULE__{session | lease: lease, status: :running}
+  end
+
+  @doc "Removes active lease ownership from a session."
+  @spec clear_lease(t()) :: t()
+  def clear_lease(%__MODULE__{} = session), do: %__MODULE__{session | lease: nil}
+
+  @doc "Increments the durable session revision."
+  @spec bump_revision(t()) :: t()
+  def bump_revision(%__MODULE__{revision: revision} = session) do
+    %__MODULE__{session | revision: revision + 1}
+  end
+
+  @doc "Records a durable in-run checkpoint while lease ownership stays active."
+  @spec put_durable_checkpoint(t(), AgentSnapshot.t()) :: t()
+  def put_durable_checkpoint(%__MODULE__{} = session, %AgentSnapshot{} = snapshot) do
+    snapshots = upsert_snapshot(session.snapshots, snapshot)
+
+    %__MODULE__{
+      session
+      | agent_id: snapshot.agent_id,
+        snapshots: snapshots,
+        status: :running,
+        error: nil
+    }
+  end
+
   @doc "Adds a snapshot and marks the session as hibernated."
   @spec put_snapshot(t(), AgentSnapshot.t()) :: t()
   def put_snapshot(%__MODULE__{snapshots: snapshots} = session, %AgentSnapshot{} = snapshot) do
@@ -137,7 +170,7 @@ defmodule Jidoka.Harness.Session do
     %__MODULE__{
       session
       | agent_id: snapshot.agent_id,
-        snapshots: snapshots ++ [snapshot],
+        snapshots: upsert_snapshot(snapshots, snapshot),
         pending_reviews: pending_reviews,
         status: snapshot_status(snapshot, pending_reviews),
         error: nil
@@ -171,6 +204,12 @@ defmodule Jidoka.Harness.Session do
   @doc "Returns the most recent session snapshot, if one exists."
   @spec latest_snapshot(t()) :: AgentSnapshot.t() | nil
   def latest_snapshot(%__MODULE__{snapshots: snapshots}), do: List.last(snapshots)
+
+  @doc "Merges snapshot evidence without adding duplicate snapshot ids."
+  @spec merge_snapshots([AgentSnapshot.t()], [AgentSnapshot.t()]) :: [AgentSnapshot.t()]
+  def merge_snapshots(existing, additions) when is_list(existing) and is_list(additions) do
+    Enum.reduce(additions, existing, &upsert_snapshot(&2, &1))
+  end
 
   defp session_id(opts) do
     case Keyword.fetch(opts, :session_id) do
@@ -234,4 +273,11 @@ defmodule Jidoka.Harness.Session do
   defp snapshot_status(%AgentSnapshot{cursor: %{phase: :review}}, _pending_reviews), do: :waiting
   defp snapshot_status(_snapshot, [_review | _rest]), do: :waiting
   defp snapshot_status(_snapshot, _pending_reviews), do: :hibernated
+
+  defp upsert_snapshot(snapshots, %AgentSnapshot{} = snapshot) do
+    case Enum.find_index(snapshots, &(&1.snapshot_id == snapshot.snapshot_id)) do
+      nil -> snapshots ++ [snapshot]
+      index -> List.replace_at(snapshots, index, snapshot)
+    end
+  end
 end

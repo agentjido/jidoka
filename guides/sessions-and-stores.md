@@ -20,7 +20,8 @@ own provider clients or long-running processes.
   [Getting Started](getting-started.md).
 - A provider key in scope for live examples.
 - For persistence: a started [`Jidoka.Harness.Store.InMemory`](`Jidoka.Harness.Store.InMemory`)
-  process, or a module that implements [`Jidoka.Harness.Store`](`Jidoka.Harness.Store`).
+  or [`Jidoka.Harness.Store.Dets`](`Jidoka.Harness.Store.Dets`) process, or a
+  module that implements [`Jidoka.Harness.Store`](`Jidoka.Harness.Store`).
 
 ```bash
 mix deps.get
@@ -81,8 +82,8 @@ session data between turns.
   struct. Its `schema_version/0` is `1`; older or newer payloads fail at
   normalization rather than silently loading a half-valid session.
 - [`Jidoka.Harness.Store`](`Jidoka.Harness.Store`) is the persistence
-  behaviour: `put_session/2`, `get_session/2`, `list_sessions/1`, and
-  optional `claim_session/3` for atomic single-runner semantics.
+  behaviour. Its base callbacks store and read session data. Lease-aware
+  callbacks provide atomic claim, checkpoint, commit, renewal, and recovery.
 
 A session status is one of `:new`, `:running`, `:hibernated`, `:waiting`,
 `:finished`, `:cancelled`, or `:error`. Jidoka computes it from snapshots,
@@ -229,7 +230,67 @@ The store-level helper iterates `list_sessions/1` and flattens
 For the durable approval flow itself, see
 [Human In The Loop](human-in-the-loop.md).
 
-### Step 6: Implement A Custom Store
+### Step 6: Use Durable Recovery
+
+Lease-aware stores assign one worker to a running session. Jidoka renews the
+lease while the worker runs. Before each capability call, Jidoka saves the
+effect intent and a safe snapshot. After the call, Jidoka saves the result and
+snapshot before it continues the turn.
+
+If the worker or node stops, the lease expires. A recovery worker can list and
+claim the session:
+
+```elixir
+{:ok, recoverable} =
+  Jidoka.Session.recoverable(store)
+
+{:ok, session, result} =
+  Jidoka.Session.recover("support-123",
+    store: store,
+    owner_id: "worker-2",
+    lease_ttl_ms: 30_000
+  )
+```
+
+Recovery uses the latest durable snapshot:
+
+- if the worker stopped before its first snapshot, Jidoka restarts the stored
+  request because no effect intent exists yet;
+- a recorded result is replayed without another capability call;
+- an incomplete `:pure` or `:idempotent` effect can run again with the same
+  idempotency key;
+- an incomplete `:dedupe` or `:reconcile` effect returns a reconciliation
+  error;
+- an incomplete `:unsafe_once` effect returns
+  `:unsafe_once_incomplete_effect` and does not run again.
+
+A stale worker cannot renew, checkpoint, or commit after recovery replaces its
+lease. Capability tasks are owned by the worker, so they stop when that worker
+stops.
+
+For disk persistence on one BEAM node, use the DETS adapter:
+
+```elixir
+{:ok, pid} =
+  Jidoka.Harness.Store.Dets.start_link(
+    path: "/var/lib/my_app/jidoka_sessions.dets"
+  )
+
+store = {Jidoka.Harness.Store.Dets, pid: pid}
+```
+
+The DETS adapter serializes transitions through one process and calls
+`:dets.sync/1` before it acknowledges a write. It survives store process and
+node restarts. It is a single-node adapter. Use a database-backed store with
+the same lease callbacks for multi-node worker ownership.
+
+Jidoka makes session state and a completed effect result durable in one store
+transition before the turn accepts that result. It cannot make an arbitrary
+external service call and the store write one distributed transaction. An
+external service should honor the stable idempotency key. If it cannot, use
+`:reconcile` or `:unsafe_once` and resolve an incomplete intent explicitly.
+
+### Step 7: Implement A Custom Store
 
 A store is a module implementing `Jidoka.Harness.Store`. The required
 callbacks are small.
@@ -261,16 +322,29 @@ defmodule MyApp.PostgresSessionStore do
 end
 ```
 
-`claim_session/3` is optional. Implement it when the backend has a native
-atomic compare-and-set; otherwise the default fallback uses `get_session/2`
-followed by `put_session/2` after rejecting any session already in
-`:running` state.
+`claim_session/3` remains optional for older stores. Its fallback uses
+`get_session/2` followed by `put_session/2`, but that fallback is not a durable
+lease protocol.
+
+A crash-safe store implements these callbacks as atomic compare-and-set
+transitions:
+
+- `claim_session/3` for a new request;
+- `claim_resume/2` for a normal hibernated resume;
+- `recover_session/2` to replace an expired lease;
+- `checkpoint_session/4` to save intent or result evidence;
+- `renew_session/3` to extend ownership;
+- `commit_session/4` to save final state and release ownership.
+
+Use the helpers in `Jidoka.Harness.Store` to apply the standard transition
+rules. A backend transaction, row lock, compare-and-set, or single-owner
+process must make each transition atomic.
 
 Callers reference a store as either `Module` or `{Module, opts}`. The
 in-memory store is `{Jidoka.Harness.Store.InMemory, pid: pid}` so the same
 shape works for stores that need configuration (database, namespace, region).
 
-### Step 7: Inspect Sessions
+### Step 8: Inspect Sessions
 
 Replay is a data-only projection over what a session already knows. It does
 not call any capability and is safe to run anywhere.

@@ -5,6 +5,7 @@ defmodule Jidoka.HarnessSessionTest do
   alias Jidoka.Harness
   alias Jidoka.Harness.Session
   alias Jidoka.Harness.SessionLineage
+  alias Jidoka.Harness.SessionLease
   alias Jidoka.Harness.Store
   alias Jidoka.Harness.Store.InMemory
   alias Jidoka.Review
@@ -68,8 +69,10 @@ defmodule Jidoka.HarnessSessionTest do
     assert {:ok,
             %Session{
               session_id: "sess_claim",
+              revision: 1,
               status: :running,
-              requests: [%Turn.Request{request_id: "turn_claim_1"}]
+              requests: [%Turn.Request{request_id: "turn_claim_1"}],
+              lease: %SessionLease{request_id: "turn_claim_1"}
             }} = Store.claim_session(store, "sess_claim", request)
 
     assert {:error, {:session_already_running, "sess_claim"}} =

@@ -12,7 +12,9 @@ defmodule Jidoka.Harness do
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Cancellation
   alias Jidoka.Harness.Replay
+  alias Jidoka.Harness.LeaseHeartbeat
   alias Jidoka.Harness.Session
+  alias Jidoka.Harness.SessionLease
   alias Jidoka.Harness.SessionLineage
   alias Jidoka.Harness.Store
   alias Jidoka.Instructions
@@ -102,15 +104,14 @@ defmodule Jidoka.Harness do
            ),
          {:ok, capabilities} <- normalize_capabilities(opts),
          {:ok, session} <- claim_session(session_input, session, request, opts) do
-      session
-      |> run_session_turn(
-        plan,
-        request,
-        capabilities,
+      runtime_opts =
         opts
         |> Keyword.put(:memory, memory)
         |> Keyword.put(:session_id, session.session_id)
-      )
+
+      with_session_lease(session, runtime_opts, fn leased_opts ->
+        run_session_turn(session, plan, request, capabilities, leased_opts)
+      end)
     end
   end
 
@@ -120,11 +121,28 @@ defmodule Jidoka.Harness do
   @spec resume_session(session_input(), runtime_opts()) :: session_run_result()
   def resume_session(session_input, opts \\ []) do
     with {:ok, session} <- resolve_session(session_input, opts),
+         {:ok, session} <- claim_resume_session(session, opts),
          {:ok, snapshot} <- latest_snapshot(session),
          opts = runtime_opts(snapshot, opts),
          {:ok, capabilities} <- normalize_capabilities(opts) do
-      session
-      |> resume_session_snapshot(snapshot, capabilities, opts)
+      with_session_lease(session, opts, fn leased_opts ->
+        resume_session_snapshot(session, snapshot, capabilities, leased_opts)
+      end)
+    end
+  end
+
+  @doc """
+  Recovers a stored session after its worker lease expires.
+
+  Recovery atomically replaces the expired lease and resumes the latest
+  durable snapshot. A completed journal result is replayed. An incomplete
+  effect follows its declared idempotency or reconciliation policy.
+  """
+  @spec recover_session(String.t(), runtime_opts()) :: session_run_result()
+  def recover_session(session_id, opts \\ []) when is_binary(session_id) and is_list(opts) do
+    with {:ok, store} <- fetch_store(opts),
+         {:ok, session} <- Store.recover_session(store, session_id, lease_store_opts(opts)) do
+      recover_claimed_session(session, opts)
     end
   end
 
@@ -204,6 +222,11 @@ defmodule Jidoka.Harness do
   @spec store_list_sessions(Store.store()) :: {:ok, [Session.t()]} | {:error, term()}
   def store_list_sessions(store), do: Store.list_sessions(store)
 
+  @doc false
+  @spec store_list_recoverable(Store.store(), keyword()) ::
+          {:ok, [Session.t()]} | {:error, term()}
+  def store_list_recoverable(store, opts \\ []), do: Store.list_recoverable(store, opts)
+
   defp run_session_turn(
          %Session{} = session,
          %Turn.Plan{} = plan,
@@ -278,14 +301,25 @@ defmodule Jidoka.Harness do
 
   defp persist_session(%Session{} = session, opts) do
     case Keyword.fetch(opts, :store) do
-      {:ok, store} -> Store.put_session(store, session)
+      {:ok, store} -> persist_stored_session(store, session, opts)
       :error -> {:ok, session}
     end
   end
 
+  defp persist_stored_session(
+         store,
+         %Session{lease: %SessionLease{lease_id: lease_id}} = session,
+         opts
+       ) do
+    Store.commit_session(store, session.session_id, lease_id, session, lease_store_opts(opts))
+  end
+
+  defp persist_stored_session(store, %Session{} = session, _opts),
+    do: Store.put_session(store, session)
+
   defp claim_session(session_id, _session, %Turn.Request{} = request, opts) when is_binary(session_id) do
     with {:ok, store} <- fetch_store(opts) do
-      Store.claim_session(store, session_id, request)
+      Store.claim_session(store, session_id, request, lease_store_opts(opts))
     end
   end
 
@@ -302,6 +336,63 @@ defmodule Jidoka.Harness do
       Store.get_session(store, session_id)
     end
   end
+
+  defp claim_resume_session(%Session{} = session, opts) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} -> Store.claim_resume(store, session.session_id, lease_store_opts(opts))
+      :error -> ensure_resumable_session(session)
+    end
+  end
+
+  defp recover_claimed_session(%Session{} = session, opts) do
+    case Session.latest_snapshot(session) do
+      %AgentSnapshot{} = snapshot ->
+        opts = runtime_opts(snapshot, opts)
+
+        with {:ok, capabilities} <- normalize_capabilities(opts) do
+          with_session_lease(session, opts, fn leased_opts ->
+            resume_session_snapshot(session, snapshot, capabilities, leased_opts)
+          end)
+        end
+
+      nil ->
+        restart_recovered_request(session, opts)
+    end
+  end
+
+  defp restart_recovered_request(%Session{} = session, opts) do
+    with %Turn.Request{} = request <- List.last(session.requests),
+         {:ok, plan} <- plan(session.spec),
+         opts = runtime_opts(plan, opts),
+         :ok <- Agent.Spec.validate_context(plan.spec, request.context),
+         {:ok, plan} <- Instructions.resolve(plan, request, opts),
+         {:ok, memory} <-
+           Memory.Runtime.recall(
+             plan.spec,
+             request,
+             Keyword.put(opts, :session_id, session.session_id)
+           ),
+         {:ok, capabilities} <- normalize_capabilities(opts) do
+      runtime_opts =
+        opts
+        |> Keyword.put(:memory, memory)
+        |> Keyword.put(:session_id, session.session_id)
+
+      with_session_lease(session, runtime_opts, fn leased_opts ->
+        run_session_turn(session, plan, request, capabilities, leased_opts)
+      end)
+    else
+      nil -> {:error, {:session_not_recoverable, session.session_id, :missing_request}}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp ensure_resumable_session(%Session{status: status} = session)
+       when status in [:hibernated, :waiting],
+       do: {:ok, session}
+
+  defp ensure_resumable_session(%Session{session_id: session_id, status: status}),
+    do: {:error, {:session_not_resumable, session_id, status}}
 
   defp latest_snapshot(%Session{} = session) do
     case Session.latest_snapshot(session) do
@@ -393,6 +484,99 @@ defmodule Jidoka.Harness do
       clock when is_function(clock, 0) -> clock.()
       _clock -> System.system_time(:millisecond)
     end
+  end
+
+  defp with_session_lease(%Session{} = session, opts, run) when is_function(run, 1) do
+    opts = durable_runtime_opts(session, opts)
+
+    case start_lease_heartbeat(session, opts) do
+      {:ok, heartbeat} ->
+        try do
+          run.(opts)
+        after
+          stop_lease_heartbeat(heartbeat)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
+  defp durable_runtime_opts(
+         %Session{lease: %SessionLease{} = lease} = session,
+         opts
+       ) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} ->
+        opts = Keyword.put_new(opts, :cancellation, Cancellation.Token.new())
+
+        checkpoint = fn state, intent, stage ->
+          durable_checkpoint(store, session, lease, state, intent, stage, opts)
+        end
+
+        Keyword.put(opts, :durable_checkpoint, checkpoint)
+
+      :error ->
+        opts
+    end
+  end
+
+  defp durable_runtime_opts(%Session{}, opts), do: opts
+
+  defp durable_checkpoint(store, session, lease, state, intent, stage, opts) do
+    cursor = Turn.Cursor.before_effect(intent)
+
+    with {:ok, snapshot} <-
+           AgentSnapshot.from_turn_state(state, cursor,
+             id_generator: Keyword.get(opts, :id_generator),
+             metadata: %{"durable_checkpoint" => Atom.to_string(stage)}
+           ),
+         {:ok, stored} <-
+           Store.checkpoint_session(
+             store,
+             session.session_id,
+             lease.lease_id,
+             snapshot,
+             lease_store_opts(opts)
+           ) do
+      run_durable_checkpoint_hook(stage, snapshot, stored, opts)
+    end
+  end
+
+  defp run_durable_checkpoint_hook(stage, snapshot, stored, opts) do
+    case Keyword.get(opts, :on_durable_checkpoint) do
+      hook when is_function(hook, 3) -> hook.(stage, snapshot, stored)
+      _hook -> :ok
+    end
+  end
+
+  defp start_lease_heartbeat(
+         %Session{lease: %SessionLease{lease_id: lease_id}, session_id: session_id},
+         opts
+       ) do
+    cond do
+      not Keyword.has_key?(opts, :store) ->
+        {:ok, nil}
+
+      Keyword.get(opts, :lease_heartbeat, true) == false ->
+        {:ok, nil}
+
+      true ->
+        LeaseHeartbeat.start_link(Keyword.fetch!(opts, :store), session_id, lease_id, opts)
+    end
+  end
+
+  defp start_lease_heartbeat(%Session{}, _opts), do: {:ok, nil}
+
+  defp stop_lease_heartbeat(nil), do: :ok
+
+  defp stop_lease_heartbeat(pid) when is_pid(pid) do
+    if Process.alive?(pid), do: GenServer.stop(pid, :normal)
+    :ok
+  end
+
+  defp lease_store_opts(opts) do
+    Keyword.take(opts, [:clock, :id_generator, :lease_ttl_ms, :owner_id])
   end
 
   defp runtime_opts(%Turn.Plan{spec: %Agent.Spec{} = spec}, opts) do

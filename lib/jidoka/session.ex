@@ -139,6 +139,18 @@ defmodule Jidoka.Session do
     Harness.fork_session(session_or_id, opts)
   end
 
+  @doc "Recovers a session after its durable worker lease expires."
+  @spec recover(String.t(), opts()) :: run_result()
+  def recover(session_id, opts \\ []) when is_binary(session_id) and is_list(opts) do
+    Harness.recover_session(session_id, opts)
+  end
+
+  @doc "Lists stored sessions that are ready for crash recovery."
+  @spec recoverable(Store.store(), opts()) :: {:ok, [t()]} | {:error, term()}
+  def recoverable(store, opts \\ []) when is_list(opts) do
+    Harness.store_list_recoverable(store, opts)
+  end
+
   @doc "Lists pending human-review requests from a session or session store."
   @spec pending_reviews(t() | Store.store()) ::
           {:ok, [Jidoka.Review.Request.t()]} | {:error, term()}
@@ -169,9 +181,18 @@ defmodule Jidoka.Session do
          {:ok, session_id} <- cancellation_session_id(session_or_id),
          {:ok, %HarnessSession{} = session} <- Store.get_session(store, session_id),
          true <- active_request?(session, cancellation.request_id) do
-      session
-      |> HarnessSession.put_cancellation(cancellation)
-      |> then(&Store.put_session(store, &1))
+      cancelled = HarnessSession.put_cancellation(session, cancellation)
+
+      case session.lease do
+        %Jidoka.Harness.SessionLease{lease_id: lease_id} ->
+          Store.commit_session(store, session_id, lease_id, cancelled,
+            clock: Keyword.get(opts, :clock),
+            lease_ttl_ms: Keyword.get(opts, :lease_ttl_ms, 30_000)
+          )
+
+        nil ->
+          Store.put_session(store, cancelled)
+      end
     else
       _result -> :ok
     end

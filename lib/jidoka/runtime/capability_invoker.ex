@@ -86,7 +86,30 @@ defmodule Jidoka.Runtime.CapabilityInvoker do
   defp cancellable?(opts), do: not is_nil(Keyword.get(opts, :cancellation))
 
   defp async_task(fun) do
-    Task.Supervisor.async_nolink(@task_supervisor, fun)
+    owner = self()
+    Task.Supervisor.async_nolink(@task_supervisor, fn -> run_owned_capability(owner, fun) end)
+  end
+
+  defp run_owned_capability(owner, fun) do
+    Process.flag(:trap_exit, true)
+    owner_ref = Process.monitor(owner)
+    result_ref = make_ref()
+    parent = self()
+    worker = spawn_link(fn -> send(parent, {result_ref, fun.()}) end)
+
+    receive do
+      {^result_ref, result} ->
+        Process.demonitor(owner_ref, [:flush])
+        result
+
+      {:DOWN, ^owner_ref, :process, ^owner, _reason} ->
+        Process.exit(worker, :kill)
+        exit(:shutdown)
+
+      {:EXIT, ^worker, reason} ->
+        Process.demonitor(owner_ref, [:flush])
+        {:error, {:capability_exit, reason}}
+    end
   end
 
   defp maybe_register_task(%Task{pid: pid}, opts) do

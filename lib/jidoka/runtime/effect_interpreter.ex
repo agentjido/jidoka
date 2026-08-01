@@ -104,6 +104,24 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
+  defp validate_incomplete_effect_replay(
+         %Turn.State{journal: journal},
+         %Effect.Intent{idempotency: idempotency} = intent
+       )
+       when idempotency in [:dedupe, :reconcile] do
+    if Effect.Journal.incomplete_intent?(journal, intent) do
+      {:error,
+       Error.normalize({:effect_reconciliation_required, intent},
+         operation: EffectTrace.operation(intent),
+         phase: :effect,
+         intent_id: intent.id,
+         effect_kind: intent.kind
+       )}
+    else
+      :ok
+    end
+  end
+
   defp validate_incomplete_effect_replay(_state, _intent), do: :ok
 
   defp approved_interrupt_id(%Effect.Intent{metadata: metadata}) when is_map(metadata) do
@@ -121,13 +139,16 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       {:ok, %Turn.State{} = state} ->
         state = EffectTrace.append(state, intent, :capability_call_started, [], opts)
 
-        with {:ok, result} <- call_capability(state, intent, capabilities, journal, opts) do
+        with :ok <- durable_checkpoint(state, intent, :intent, opts),
+             {:ok, result} <- call_capability(state, intent, capabilities, journal, opts) do
           journal = Effect.Journal.put_result(journal, result)
           state = %Turn.State{state | journal: journal}
           state = EffectTrace.append_capability_result(state, intent, result, opts)
           state = EffectTrace.append_effect_result(state, intent, result, opts)
 
-          {:ok, result, state}
+          with :ok <- durable_checkpoint(state, intent, :result, opts) do
+            {:ok, result, state}
+          end
         end
 
       {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
@@ -338,6 +359,12 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     state = %Turn.State{state | journal: journal}
     state = Enum.reduce(intents, state, &EffectTrace.append(&2, &1, :capability_call_started, [], opts))
 
+    with :ok <- durable_checkpoint(state, hd(intents), :intent, opts) do
+      execute_durable_operation_batch(state, intents, capabilities, journal, opts)
+    end
+  end
+
+  defp execute_durable_operation_batch(state, intents, capabilities, journal, opts) do
     case OperationBatch.execute(state, intents, capabilities, journal, opts) do
       {:ok, results} ->
         state =
@@ -356,10 +383,27 @@ defmodule Jidoka.Runtime.EffectInterpreter do
             |> EffectTrace.append_effect_result(intent, result, opts)
           end)
 
-        {:ok, state, results}
+        with :ok <- durable_checkpoint(state, hd(intents), :result, opts) do
+          {:ok, state, results}
+        end
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp durable_checkpoint(%Turn.State{} = state, %Effect.Intent{} = intent, stage, opts) do
+    case Keyword.get(opts, :durable_checkpoint) do
+      checkpoint when is_function(checkpoint, 3) ->
+        case checkpoint.(state, intent, stage) do
+          :ok -> :ok
+          {:ok, _stored} -> :ok
+          {:error, _reason} = error -> error
+          other -> {:error, {:invalid_durable_checkpoint_result, other}}
+        end
+
+      _checkpoint ->
+        :ok
     end
   end
 end

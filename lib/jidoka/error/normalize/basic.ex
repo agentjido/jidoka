@@ -244,6 +244,25 @@ defmodule Jidoka.Error.Normalize.Basic do
      )}
   end
 
+  defp normalize_effect_reason(
+         {:effect_reconciliation_required, %Effect.Intent{} = intent} = reason,
+         context
+       ) do
+    {:ok,
+     execution_error("Incomplete operation effect requires reconciliation before resume.",
+       phase: :effect,
+       details:
+         details(context, %{
+           reason: :effect_reconciliation_required,
+           operation_name: effect_operation_name(intent),
+           intent_id: intent.id,
+           idempotency: intent.idempotency,
+           idempotency_key: intent.idempotency_key,
+           cause: reason
+         })
+     )}
+  end
+
   defp normalize_effect_reason(_reason, _context), do: :error
 
   defp normalize_control_reason({:control_blocked, control, boundary, cause}, context) do

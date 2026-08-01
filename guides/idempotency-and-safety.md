@@ -302,7 +302,8 @@ has the desired shape and assert that resume routes correctly.
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
 | `{:error, {:unsafe_once_requires_control, name, kind}}` | An `:unsafe_once` operation has no approval policy or matching operation control. | Add `approval: true` or a `controls do ... operation ... when: [name: name] end` clause. |
-| `{:error, %Jidoka.Error{reason: :unsafe_once_incomplete_effect}}` | Resume saw a recorded intent without a result. | Route the snapshot to reconciliation; do not auto-retry. |
+| `{:error, %Jidoka.Error{reason: :unsafe_once_incomplete_effect}}` | Resume saw a recorded unsafe intent without a result. | Route the snapshot to reconciliation; do not auto-retry. |
+| `{:error, %Jidoka.Error{reason: :effect_reconciliation_required}}` | Resume saw an incomplete `:dedupe` or `:reconcile` intent. | Reconcile the external state and write or replace the continuation evidence before resume. |
 | Capability called twice on resume | Operation is `:idempotent` and the journal lost the result. | Persist the full snapshot including its journal; ensure your store preserves all fields. |
 | Reconciliation never fires | The journal had no incomplete intents because the runtime did call the capability. | Confirm the policy is `:reconcile`, not `:idempotent`, and inspect `result.journal`. |
 | Approved interrupt still errors on `:unsafe_once` | Approval target was the wrong interrupt id. | Build the response with `Jidoka.Review.Response.approve(review.interrupt_id)`. |

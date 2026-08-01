@@ -248,6 +248,32 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
     assert idempotency_key == intent.idempotency_key
   end
 
+  test "incomplete reconcile and dedupe intents require application reconciliation" do
+    for idempotency <- [:reconcile, :dedupe] do
+      intent =
+        Effect.Intent.new(:operation, %{name: "charge", arguments: %{invoice_id: "inv_1"}}, idempotency: idempotency)
+
+      journal = Effect.Journal.new!() |> Effect.Journal.put_intent(intent)
+      state = state_with_pending_effect(intent, journal: journal)
+
+      operations = fn _intent, _journal, _ctx ->
+        flunk("an incomplete #{idempotency} operation must not run automatically")
+      end
+
+      {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+      assert {:error,
+              %Jidoka.Error.ExecutionError{
+                phase: :effect,
+                details: %{
+                  reason: :effect_reconciliation_required,
+                  idempotency: ^idempotency,
+                  operation_name: "charge"
+                }
+              }} = EffectInterpreter.interpret_pending(state, capabilities)
+    end
+  end
+
   test "returns an error when no pending effect exists" do
     {:ok, capabilities} = Capabilities.new(llm: missing_llm())
 

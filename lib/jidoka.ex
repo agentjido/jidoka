@@ -158,6 +158,10 @@ defmodule Jidoka do
           {:ok, Jidoka.Session.t()} | {:error, term()}
   def fork_session(session_or_id, opts \\ []), do: Jidoka.Session.fork(session_or_id, opts)
 
+  @doc "Recovers a stored session after its durable worker lease expires."
+  @spec recover_session(String.t(), keyword()) :: Jidoka.Session.run_result()
+  def recover_session(session_id, opts \\ []), do: Jidoka.Session.recover(session_id, opts)
+
   @doc """
   Returns the current handoff owner for a conversation, if one has been recorded.
 

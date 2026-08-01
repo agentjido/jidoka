@@ -89,8 +89,9 @@ keeps the effect journal, records root and parent lineage, and leaves the
 source session unchanged. It does not support arbitrary state editing,
 cursor movement, or effect re-execution.
 
-The store behaviour is intentionally small: put/get/list sessions. Pending
-review listing is derived from stored session data:
+The base store behaviour is small: put/get/list sessions. Lease-aware adapters
+also implement claim, resume claim, checkpoint, renewal, recovery, and commit
+transitions. Pending review listing is derived from stored session data:
 
 ```elixir
 {:ok, reviews} = Jidoka.Session.pending_reviews(store)
@@ -104,6 +105,12 @@ separate API that creates a runnable branch:
 replay.timeline
 replay.lineage
 ```
+
+For crash recovery, `Jidoka.Session.recoverable/2` lists expired leased work
+that has a durable snapshot. `Jidoka.Session.recover/2` atomically takes a new
+lease and resumes it. `Jidoka.Harness.Store.Dets` provides a synced,
+single-node disk adapter. A multi-node deployment can implement the same store
+callbacks with database compare-and-set transactions.
 
 Replay diagnostics explain whether recorded effects are complete and safe to
 reason about without calling providers or tools:
@@ -317,6 +324,9 @@ External work is represented as data:
 
 The effect interpreter records intents and results in `Effect.Journal`. On
 resume, existing results are reused instead of re-running the same effect.
+During a lease-backed session run, the harness also saves a snapshot after the
+intent and after the result. The result checkpoint is durable before the turn
+applies the result.
 
 ## Operation Idempotency
 
@@ -332,6 +342,11 @@ Every operation declares one idempotency policy:
 `:unsafe_once` operations require either an approval policy or an explicit
 operation control. This makes risky work visible at preflight time instead of
 discovering it after a model chooses the operation.
+
+On recovery, incomplete `:dedupe` and `:reconcile` intents do not run
+automatically. Incomplete `:unsafe_once` intents also stop. Only `:pure` and
+`:idempotent` effects are automatic retry candidates, and they keep the same
+idempotency key.
 
 If a journal already has a result for an operation effect, resume replays that
 result and does not call the operation capability again. If an `:unsafe_once`

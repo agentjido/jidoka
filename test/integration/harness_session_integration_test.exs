@@ -51,6 +51,9 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
 
     assert {:ok, %Session{status: :finished, result: %Turn.Result{content: "stored hello"}}} =
              Harness.store_get_session(store, "sess_chat")
+
+    assert {:error, {:session_not_resumable, "sess_chat", :finished}} =
+             Harness.resume_session("sess_chat", store: store, llm: llm)
   end
 
   test "sessions are marked running before effect interpretation to guard duplicate turns" do
