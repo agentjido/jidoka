@@ -13,6 +13,7 @@ defmodule Jidoka.Runtime.Controls do
   alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.Controls.Decision
   alias Jidoka.Runtime.Controls.Operation
+  alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Turn
 
   @type boundary_control :: Input.t() | Output.t()
@@ -81,7 +82,7 @@ defmodule Jidoka.Runtime.Controls do
       result_value: state.result_value,
       context: Jidoka.Context.data(state.request.context),
       ctx:
-        Jidoka.Context.from_turn_state!(state,
+        RuntimeContext.from_turn_state!(state,
           boundary: boundary,
           control: control.control,
           control_name: control_name(control.control),

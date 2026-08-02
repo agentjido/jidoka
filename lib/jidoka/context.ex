@@ -8,10 +8,7 @@ defmodule Jidoka.Context do
   into turn internals.
   """
 
-  alias Jidoka.Agent
-  alias Jidoka.Effect
   alias Jidoka.Schema
-  alias Jidoka.Turn
 
   @boundaries [:input, :operation, :output]
   @operation_kinds [
@@ -131,104 +128,6 @@ defmodule Jidoka.Context do
     end
   end
 
-  @doc "Builds policy context from the current turn state."
-  @spec from_turn_state(Turn.State.t(), keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def from_turn_state(%Turn.State{} = state, attrs \\ []) do
-    attrs = Schema.normalize_attrs(attrs)
-
-    new(
-      Map.merge(
-        %{
-          agent_id: state.spec.id,
-          request_id: state.request.request_id,
-          session_id: session_id(state.request.metadata, attrs),
-          loop_index: state.loop_index,
-          input: state.request.input,
-          data: data(state.request.context),
-          runtime: runtime(state.request.context),
-          request_metadata: state.request.metadata,
-          spec: state.spec,
-          plan: state.plan,
-          request: state.request,
-          agent_state: state.agent_state,
-          result: state.result,
-          result_value: state.result_value
-        },
-        attrs
-      )
-    )
-  end
-
-  @doc "Builds policy context from turn state and raises on invalid data."
-  @spec from_turn_state!(Turn.State.t(), keyword() | map()) :: t()
-  def from_turn_state!(%Turn.State{} = state, attrs \\ []) do
-    case from_turn_state(state, attrs) do
-      {:ok, context} -> context
-      {:error, reason} -> raise ArgumentError, "invalid context: #{inspect(reason)}"
-    end
-  end
-
-  @doc "Builds operation-boundary context for controls and approval predicates."
-  @spec from_operation(
-          Turn.State.t(),
-          Effect.OperationRequest.t(),
-          Agent.Spec.Operation.t() | nil,
-          map(),
-          Effect.Intent.t(),
-          keyword() | map()
-        ) :: {:ok, t()} | {:error, term()}
-  def from_operation(
-        %Turn.State{} = state,
-        %Effect.OperationRequest{} = request,
-        operation,
-        operation_match,
-        %Effect.Intent{} = intent,
-        attrs \\ []
-      )
-      when is_map(operation_match) do
-    attrs = Schema.normalize_attrs(attrs)
-
-    from_turn_state(
-      state,
-      Map.merge(
-        %{
-          boundary: :operation,
-          operation: request.name,
-          operation_kind: Map.get(operation_match, :kind),
-          operation_source: Map.get(operation_match, :source),
-          arguments: request.arguments,
-          operation_metadata: Map.get(operation_match, :metadata, %{}),
-          idempotency: operation_idempotency(operation, intent),
-          idempotency_key: intent.idempotency_key
-        },
-        attrs
-      )
-    )
-  end
-
-  @doc "Builds operation-boundary context and raises on invalid data."
-  @spec from_operation!(
-          Turn.State.t(),
-          Effect.OperationRequest.t(),
-          Agent.Spec.Operation.t() | nil,
-          map(),
-          Effect.Intent.t(),
-          keyword() | map()
-        ) :: t()
-  def from_operation!(
-        %Turn.State{} = state,
-        %Effect.OperationRequest{} = request,
-        operation,
-        operation_match,
-        %Effect.Intent{} = intent,
-        attrs \\ []
-      ) do
-    case from_operation(state, request, operation, operation_match, intent, attrs) do
-      {:ok, context} -> context
-      {:error, reason} -> raise ArgumentError, "invalid operation context: #{inspect(reason)}"
-    end
-  end
-
   @doc "Projects caller data into the context map expected by Jido actions."
   @spec to_action_context(t()) :: map()
   def to_action_context(%__MODULE__{} = context) do
@@ -310,14 +209,6 @@ defmodule Jidoka.Context do
     end
   end
 
-  defp session_id(request_metadata, attrs) do
-    get_any(attrs, [:session_id, "session_id"]) ||
-      get_any(request_metadata, [:session_id, "session_id"])
-  end
-
-  defp operation_idempotency(%Agent.Spec.Operation{idempotency: idempotency}, _intent), do: idempotency
-  defp operation_idempotency(_operation, %Effect.Intent{idempotency: idempotency}), do: idempotency
-
   defp fetch_any(map, key) when is_map(map) do
     Enum.find_value(map, :error, fn {candidate_key, value} ->
       if same_key?(candidate_key, key), do: {:ok, value}
@@ -331,6 +222,4 @@ defmodule Jidoka.Context do
     do: left == Atom.to_string(right)
 
   defp same_key?(left, right), do: left == right
-
-  defp get_any(map, keys) when is_map(map), do: Enum.find_value(keys, &Map.get(map, &1))
 end

@@ -11,6 +11,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
   alias Jidoka.Review.Policy
   alias Jidoka.Runtime.Controls.Decision
   alias Jidoka.Runtime.Controls.OperationContext
+  alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Turn
 
   @doc "Applies matching operation controls to an operation intent."
@@ -116,7 +117,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
         input: state.request.input,
         context: Jidoka.Context.data(state.request.context),
         ctx:
-          Jidoka.Context.from_operation!(
+          RuntimeContext.from_operation!(
             state,
             request,
             operation,

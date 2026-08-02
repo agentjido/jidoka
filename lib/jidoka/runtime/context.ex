@@ -9,7 +9,7 @@ defmodule Jidoka.Runtime.Context do
 
   @spec llm(Turn.State.t(), keyword() | map()) :: {:ok, Context.t()} | {:error, term()}
   def llm(%Turn.State{} = state, attrs \\ []) do
-    Context.from_turn_state(state, attrs)
+    from_turn_state(state, attrs)
   end
 
   @spec llm!(Turn.State.t(), keyword() | map()) :: Context.t()
@@ -27,7 +27,7 @@ defmodule Jidoka.Runtime.Context do
       operation = operation_for(state, request.name)
       operation_match = operation_match_data(operation, request)
 
-      Context.from_operation(
+      from_operation(
         state,
         request,
         operation,
@@ -35,6 +35,97 @@ defmodule Jidoka.Runtime.Context do
         intent,
         runtime: runtime(state, opts, :operation_context)
       )
+    end
+  end
+
+  @doc false
+  @spec from_turn_state(Turn.State.t(), keyword() | map()) :: {:ok, Context.t()} | {:error, term()}
+  def from_turn_state(%Turn.State{} = state, attrs \\ []) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    Context.new(
+      Map.merge(
+        %{
+          agent_id: state.spec.id,
+          request_id: state.request.request_id,
+          session_id: session_id(state.request.metadata, attrs),
+          loop_index: state.loop_index,
+          input: state.request.input,
+          data: Context.data(state.request.context),
+          runtime: Context.runtime(state.request.context),
+          request_metadata: state.request.metadata,
+          spec: state.spec,
+          plan: state.plan,
+          request: state.request,
+          agent_state: state.agent_state,
+          result: state.result,
+          result_value: state.result_value
+        },
+        attrs
+      )
+    )
+  end
+
+  @doc false
+  @spec from_turn_state!(Turn.State.t(), keyword() | map()) :: Context.t()
+  def from_turn_state!(%Turn.State{} = state, attrs \\ []) do
+    case from_turn_state(state, attrs) do
+      {:ok, context} -> context
+      {:error, reason} -> raise ArgumentError, "invalid runtime context: #{inspect(reason)}"
+    end
+  end
+
+  @doc false
+  @spec from_operation(
+          Turn.State.t(),
+          Effect.OperationRequest.t(),
+          OperationSpec.t() | nil,
+          map(),
+          Effect.Intent.t(),
+          keyword() | map()
+        ) :: {:ok, Context.t()} | {:error, term()}
+  def from_operation(
+        %Turn.State{} = state,
+        %Effect.OperationRequest{} = request,
+        operation,
+        operation_match,
+        %Effect.Intent{} = intent,
+        attrs \\ []
+      )
+      when is_map(operation_match) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    from_turn_state(
+      state,
+      Map.merge(
+        %{
+          boundary: :operation,
+          operation: request.name,
+          operation_kind: Map.get(operation_match, :kind),
+          operation_source: Map.get(operation_match, :source),
+          arguments: request.arguments,
+          operation_metadata: Map.get(operation_match, :metadata, %{}),
+          idempotency: operation_idempotency(operation, intent),
+          idempotency_key: intent.idempotency_key
+        },
+        attrs
+      )
+    )
+  end
+
+  @doc false
+  @spec from_operation!(
+          Turn.State.t(),
+          Effect.OperationRequest.t(),
+          OperationSpec.t() | nil,
+          map(),
+          Effect.Intent.t(),
+          keyword() | map()
+        ) :: Context.t()
+  def from_operation!(state, request, operation, operation_match, intent, attrs \\ []) do
+    case from_operation(state, request, operation, operation_match, intent, attrs) do
+      {:ok, context} -> context
+      {:error, reason} -> raise ArgumentError, "invalid operation context: #{inspect(reason)}"
     end
   end
 
@@ -80,6 +171,16 @@ defmodule Jidoka.Runtime.Context do
 
   defp operation_metadata(%OperationSpec{metadata: metadata}) when is_map(metadata), do: metadata
   defp operation_metadata(_operation), do: %{}
+
+  defp operation_idempotency(%OperationSpec{idempotency: idempotency}, _intent), do: idempotency
+  defp operation_idempotency(_operation, %Effect.Intent{idempotency: idempotency}), do: idempotency
+
+  defp session_id(request_metadata, attrs) do
+    get_any(attrs, [:session_id, "session_id"]) ||
+      get_any(request_metadata, [:session_id, "session_id"])
+  end
+
+  defp get_any(map, keys) when is_map(map), do: Enum.find_value(keys, &Map.get(map, &1))
 
   defp normalize_runtime(runtime) when is_map(runtime), do: runtime
   defp normalize_runtime(_runtime), do: %{}
