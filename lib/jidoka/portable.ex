@@ -1,6 +1,7 @@
 defmodule Jidoka.Portable do
   @moduledoc false
 
+  alias Jidoka.ContentPart
   alias Jidoka.Error
 
   @sensitive_words ~w(authorization credential credentials password secret token)
@@ -9,7 +10,27 @@ defmodule Jidoka.Portable do
   @spec project(term()) :: term()
   def project(%_{} = exception) when is_exception(exception), do: Error.to_map(exception)
 
-  def project(%Jidoka.ContentPart{} = part), do: Jidoka.ContentPart.project(part)
+  def project(%ContentPart{type: :text} = part) do
+    %{type: :text, text: part.text, metadata: project(part.metadata)}
+    |> drop_empty_metadata()
+  end
+
+  def project(%ContentPart{} = part) do
+    %{
+      type: part.type,
+      source: ContentPart.source_kind(part),
+      media_type: part.media_type,
+      filename: part.filename,
+      byte_size: data_size(part.data),
+      metadata: project(part.metadata)
+    }
+    |> Enum.reject(fn
+      {_key, nil} -> true
+      {:metadata, metadata} when metadata == %{} -> true
+      {_key, _value} -> false
+    end)
+    |> Map.new()
+  end
 
   def project(%LLMDB.Model{} = model), do: Jidoka.Config.model_ref(model)
 
@@ -53,4 +74,12 @@ defmodule Jidoka.Portable do
   end
 
   defp sensitive_key?(_key), do: false
+
+  defp data_size(data) when is_binary(data), do: byte_size(data)
+  defp data_size(_data), do: nil
+
+  defp drop_empty_metadata(%{metadata: metadata} = map) when metadata == %{},
+    do: Map.delete(map, :metadata)
+
+  defp drop_empty_metadata(map), do: map
 end

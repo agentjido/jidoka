@@ -7,7 +7,6 @@ defmodule Jidoka.ContentPart do
   projections omit the value and show only its kind and safe size data.
   """
 
-  alias Jidoka.Portable
   alias Jidoka.Schema
 
   @types [:text, :image, :audio, :video, :document]
@@ -152,30 +151,6 @@ defmodule Jidoka.ContentPart do
     |> Map.new()
   end
 
-  @doc "Returns a safe public projection without media bytes or references."
-  @spec project(t()) :: map()
-  def project(%__MODULE__{type: :text} = part) do
-    %{type: :text, text: part.text, metadata: Portable.project(part.metadata)}
-    |> drop_empty_metadata()
-  end
-
-  def project(%__MODULE__{} = part) do
-    %{
-      type: part.type,
-      source: source_kind(part),
-      media_type: part.media_type,
-      filename: part.filename,
-      byte_size: data_size(part.data),
-      metadata: Portable.project(part.metadata)
-    }
-    |> Enum.reject(fn
-      {_key, nil} -> true
-      {:metadata, metadata} when metadata == %{} -> true
-      {_key, _value} -> false
-    end)
-    |> Map.new()
-  end
-
   defp media!(type, source, opts) when type in @media_types and is_list(opts) do
     source_attrs = source_attrs!(source)
 
@@ -254,12 +229,4 @@ defmodule Jidoka.ContentPart do
   end
 
   defp put_default_media_type(attrs), do: attrs
-
-  defp data_size(data) when is_binary(data), do: byte_size(data)
-  defp data_size(_data), do: nil
-
-  defp drop_empty_metadata(%{metadata: metadata} = map) when metadata == %{},
-    do: Map.delete(map, :metadata)
-
-  defp drop_empty_metadata(map), do: map
 end
