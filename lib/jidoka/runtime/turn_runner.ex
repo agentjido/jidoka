@@ -13,12 +13,12 @@ defmodule Jidoka.Runtime.TurnRunner do
   alias Jidoka.Event
   alias Jidoka.Portable
   alias Jidoka.Review.Interrupt
-  alias Jidoka.Snapshot
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
   alias Jidoka.Runtime.EventDispatcher
   alias Jidoka.Runtime.Review
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   @type run_result ::
@@ -100,14 +100,19 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp run_loop(%Turn.State{loop_index: loop_index, plan: plan} = state, capabilities, opts) do
     with :ok <- Cancellation.check(opts),
          :ok <- enforce_timeout(state, opts) do
-      if loop_index >= plan.max_model_turns do
-        {:error, {:max_model_turns_exceeded, plan.max_model_turns}}
-      else
-        with {:ok, planned_state} <- execute_model_turn(plan, state, opts) do
-          emit_new_events(state, planned_state, opts)
-          maybe_hibernate_after_prompt(planned_state, capabilities, opts)
-        end
-      end
+      continue_model_loop(state, capabilities, opts, loop_index, plan)
+    end
+  end
+
+  defp continue_model_loop(_state, _capabilities, _opts, loop_index, plan)
+       when loop_index >= plan.max_model_turns do
+    {:error, {:max_model_turns_exceeded, plan.max_model_turns}}
+  end
+
+  defp continue_model_loop(state, capabilities, opts, _loop_index, plan) do
+    with {:ok, planned_state} <- execute_model_turn(plan, state, opts) do
+      emit_new_events(state, planned_state, opts)
+      maybe_hibernate_after_prompt(planned_state, capabilities, opts)
     end
   end
 
