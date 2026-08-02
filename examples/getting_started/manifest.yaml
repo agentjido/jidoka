@@ -1,0 +1,11 @@
+name: getting_started
+title: Getting Started Agent
+summary: The smallest deterministic Jidoka agent with one prompt and one answer.
+agent: JidokaExamples.GettingStarted.Agent
+features:
+  - code_first_authoring
+  - provider_model_abstraction
+  - synchronous_execution
+tests:
+  - test/getting_started_test.exs
+livebook: getting_started.livemd

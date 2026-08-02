@@ -5,6 +5,16 @@ Build one agent, call a real model, then add one tool.
 Jidoka agents are Elixir modules. The DSL compiles to `Jidoka.Agent.Spec`
 data, and the runtime handles model calls, tool calls, sessions, and resume.
 
+If you are working in the Jidoka source checkout, run the deterministic
+[Getting Started example](../examples/getting_started/README.md):
+
+```bash
+mix run examples/getting_started/example.exs
+```
+
+It uses the same basic agent shape as this guide, but it injects a local model
+function. You can run it without a provider key or network access.
+
 ## Install
 
 Add Jidoka to your application:
@@ -253,6 +263,8 @@ See [Testing And Evals](testing-and-evals.md) for the full pattern.
 
 ## Next
 
+- [Getting Started Example](../examples/getting_started/README.md) - the
+  deterministic command runner, test, and Livebook for this guide.
 - [Agent DSL](agent-dsl.md) - the full agent DSL.
 - [Tools And Operations](tools-and-operations.md) - actions, browsers, MCP,
   workflows, and subagents.

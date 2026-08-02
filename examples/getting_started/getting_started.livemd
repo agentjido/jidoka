@@ -1,0 +1,77 @@
+# Getting Started Agent
+
+This Livebook defines the smallest useful Jidoka flow: inspect one agent,
+preview one prompt, and get one answer. It does not use a provider key or
+network access.
+
+```elixir
+package_root = Path.expand("../..", __DIR__)
+
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: package_root}
+  ],
+  consolidate_protocols: false,
+  lockfile: Path.join(package_root, "mix.lock")
+)
+
+Code.require_file(Path.expand("../loader.exs", __DIR__))
+JidokaExamples.Loader.load!(__DIR__)
+
+alias JidokaExamples.GettingStarted.Agent
+alias JidokaExamples.GettingStarted.Scenario
+
+Jidoka.Kino.setup_notebook(model: "test:getting-started", check_provider?: false)
+```
+
+## Inspect The Agent
+
+The agent has one model, one instruction, and no tools.
+
+```elixir
+inspection = Jidoka.inspect(Agent)
+
+%{
+  id: inspection.spec.id,
+  instructions: inspection.spec.instructions,
+  model: inspection.spec.model,
+  operations: inspection.spec.operations
+}
+```
+
+## Preview The Prompt
+
+Preflight builds the exact prompt without calling the model.
+
+```elixir
+input = "What can you help me with?"
+{:ok, preflight} = Jidoka.preflight(Agent, input)
+
+%{
+  diagnostics: preflight.diagnostics,
+  messages: preflight.prompt.messages,
+  model: preflight.prompt.model,
+  operations: preflight.prompt.operations
+}
+```
+
+## Run One Chat
+
+The scenario injects one deterministic model function. A production call uses
+the model declared by the agent.
+
+```elixir
+{:ok, report} = Scenario.run(input: input)
+
+%{
+  answer: report.answer,
+  input: report.input,
+  model: report.model
+}
+```
+
+## Continue
+
+Open `examples/support_agent/support_agent.livemd` to add a tool, an operation
+control, and an approval path.

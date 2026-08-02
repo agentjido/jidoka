@@ -8,16 +8,18 @@ are not part of the production Jidoka application.
 ## Start Here
 
 If you have not used Jidoka, start with
-[`guides/getting-started.md`](../guides/getting-started.md). It teaches the
-smallest agent and the normal `chat/3` API. Then use these examples in order:
+[`guides/getting-started.md`](../guides/getting-started.md). Then use these
+examples in order:
 
-1. **Support Agent** - learn one complete tool call and approval flow.
-2. **Warranty Claim** - add typed context, model policy, media, and results.
-3. **Durable Refund** - add asynchronous and durable runtime behavior.
+1. **Getting Started** - learn one agent, prompt, and `chat/3` result.
+2. **Support Agent** - add one complete tool call and approval flow.
+3. **Warranty Claim** - add typed context, model policy, media, and results.
+4. **Durable Refund** - add asynchronous and durable runtime behavior.
 
 The agent, action, control, instruction, and YAML files are application
-patterns. The scenario, scripted model, command runner, test, and manifest
-files make the examples deterministic and are not required in production.
+patterns. The scenario, optional scripted model, command runner, test, and
+manifest files make the examples deterministic and are not required in
+production.
 
 `ScriptedLLM` is a model test double. It returns known decisions without a
 provider or network request. Production code normally uses the model declared
@@ -31,6 +33,7 @@ compiles the same source files normally when it runs the example tests.
 ## Run Examples
 
 ```bash
+mix run examples/getting_started/example.exs
 mix run examples/support_agent/example.exs
 mix run examples/warranty_claim/example.exs
 mix run examples/durable_refund/example.exs
@@ -67,7 +70,7 @@ examples/<name>/
 ├── lib/
 │   ├── agent.ex
 │   ├── scenario.ex
-│   ├── scripted_llm.ex
+│   ├── scripted_llm.ex  # optional for multi-step model behavior
 │   ├── actions/
 │   ├── controls/
 │   └── scenarios/       # optional for examples with several workflows
@@ -79,11 +82,13 @@ examples/<name>/
 
 | Example | Level | Read it to learn |
 | --- | --- | --- |
+| Getting Started | Beginner | Agent definition, preflight, and one text answer |
 | Support Agent | Intermediate | Tools, observations, controls, approval, and resume |
 | Warranty Claim | Advanced | Data authoring, typed results, media, fallback, and repair |
 | Durable Refund | Expert | Async work, streams, limits, recovery, and forks |
 
-Use the Support Agent for a controlled tool flow. Use the Warranty Claim for
-agent authoring, model policy, structured results, and multimodal content. Use
-the Durable Refund Agent for asynchronous execution, cancellation, execution
-limits, durable recovery, and safe session forks.
+Use Getting Started for the smallest complete agent. Use the Support Agent for
+a controlled tool flow. Use the Warranty Claim for agent authoring, model
+policy, structured results, and multimodal content. Use the Durable Refund
+Agent for asynchronous execution, cancellation, execution limits, durable
+recovery, and safe session forks.
