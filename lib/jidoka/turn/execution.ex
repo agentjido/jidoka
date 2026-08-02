@@ -8,6 +8,8 @@ defmodule Jidoka.Turn.Execution do
 
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Generation
+  alias Jidoka.Adapter.Runic.OperationBatch
+  alias Jidoka.Adapter.Runic.TurnCompiler
   alias Jidoka.Instructions
   alias Jidoka.Memory
   alias Jidoka.ModelPolicy
@@ -103,10 +105,15 @@ defmodule Jidoka.Turn.Execution do
     do: runtime_opts(spec, opts)
 
   defp runtime_opts(%Agent.Spec{} = spec, opts) do
-    case dsl_agent_module(spec) do
-      nil -> Keyword.put_new(opts, :llm, ReqLLM.llm(default_llm_opts(spec, opts)))
-      agent_module -> Agent.runtime_opts(agent_module, spec, opts)
-    end
+    opts =
+      case dsl_agent_module(spec) do
+        nil -> Keyword.put_new(opts, :llm, ReqLLM.llm(default_llm_opts(spec, opts)))
+        agent_module -> Agent.runtime_opts(agent_module, spec, opts)
+      end
+
+    opts
+    |> Keyword.put_new(:model_turn_executor, &TurnCompiler.run_model_turn/2)
+    |> Keyword.put_new(:operation_batch_executor, &OperationBatch.execute/5)
   end
 
   defp dsl_agent_module(%Agent.Spec{metadata: metadata}) when is_map(metadata) do

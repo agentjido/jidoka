@@ -71,6 +71,23 @@ defmodule Jidoka.Adapter.Jido.Actions do
   end
 
   @doc false
+  @spec invoke_action(action_module(), map(), Jidoka.Context.t()) :: {:ok, term()} | {:error, term()}
+  def invoke_action(action, arguments, %Jidoka.Context{} = context)
+      when is_atom(action) and is_map(arguments) do
+    if Code.ensure_loaded?(action) and function_exported?(action, :to_tool, 0) do
+      action
+      |> apply(:to_tool, [])
+      |> invoke_tool(arguments, context)
+    else
+      {:error, {:invalid_action_module, action}}
+    end
+  rescue
+    exception -> {:error, {:invalid_action_module, action, exception}}
+  end
+
+  def invoke_action(action, _arguments, _context), do: {:error, {:invalid_action_module, action}}
+
+  @doc false
   @spec invoke_tool(map(), map(), Jidoka.Context.t()) :: {:ok, term()} | {:error, term()}
   def invoke_tool(%{function: function}, arguments, %Jidoka.Context{} = context)
       when is_function(function, 2) and is_map(arguments) do

@@ -18,7 +18,6 @@ defmodule Jidoka.Runtime.TurnRunner do
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
   alias Jidoka.Runtime.Review
-  alias Jidoka.Adapter.Runic.TurnCompiler, as: Compiler
   alias Jidoka.Stream, as: EventStream
   alias Jidoka.Turn
 
@@ -104,12 +103,32 @@ defmodule Jidoka.Runtime.TurnRunner do
       if loop_index >= plan.max_model_turns do
         {:error, {:max_model_turns_exceeded, plan.max_model_turns}}
       else
-        planned_state = Compiler.run_model_turn(plan, state)
-
-        emit_new_events(state, planned_state, opts)
-        maybe_hibernate_after_prompt(planned_state, capabilities, opts)
+        with {:ok, planned_state} <- execute_model_turn(plan, state, opts) do
+          emit_new_events(state, planned_state, opts)
+          maybe_hibernate_after_prompt(planned_state, capabilities, opts)
+        end
       end
     end
+  end
+
+  defp execute_model_turn(%Turn.Plan{} = plan, %Turn.State{} = state, opts) do
+    case Keyword.fetch(opts, :model_turn_executor) do
+      {:ok, executor} when is_function(executor, 2) ->
+        case executor.(plan, state) do
+          %Turn.State{} = planned_state -> {:ok, planned_state}
+          other -> {:error, {:invalid_model_turn_result, other}}
+        end
+
+      {:ok, executor} ->
+        {:error, {:invalid_model_turn_executor, executor}}
+
+      :error ->
+        {:error, :missing_model_turn_executor}
+    end
+  rescue
+    exception -> {:error, {:model_turn_execution_failed, exception}}
+  catch
+    kind, reason -> {:error, {:model_turn_execution_failed, {kind, reason}}}
   end
 
   defp maybe_hibernate_after_prompt(state, capabilities, opts) do
@@ -292,9 +311,17 @@ defmodule Jidoka.Runtime.TurnRunner do
       agent_id: state.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
-      data: %{cursor: Jidoka.Projection.Turn.project(cursor)}
+      data: %{cursor: cursor_contract(cursor)}
     )
     |> Turn.Transition.commit()
+  end
+
+  defp cursor_contract(%Turn.Cursor{} = cursor) do
+    %{
+      phase: cursor.phase,
+      loop_index: cursor.loop_index,
+      metadata: Portable.project(cursor.metadata)
+    }
   end
 
   defp maybe_emit_turn_failed({:error, reason} = result, %Turn.Plan{} = plan, request, opts) do

@@ -1123,6 +1123,7 @@ defmodule Jidoka.WorkflowDslTest do
       input: %{},
       context: Jidoka.Context.from_data!(%{}),
       steps: %{},
+      action_runner: &Jidoka.Adapter.Jido.Actions.invoke_action/3,
       agent_opts: [],
       error: nil
     }

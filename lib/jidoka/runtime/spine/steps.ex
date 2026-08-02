@@ -5,6 +5,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Config
   alias Jidoka.Effect
+  alias Jidoka.Portable
   alias Jidoka.Turn
 
   @doc "Assembles prompt data and plans memory effects without external calls."
@@ -174,9 +175,20 @@ defmodule Jidoka.Runtime.Spine.Steps do
 
   defp memory_contract(memory) do
     %{
-      entries: Enum.map(memory.entries, &Jidoka.Projection.Memory.project/1),
+      entries: Enum.map(memory.entries, &memory_entry_contract/1),
       count: length(memory.entries)
     }
+  end
+
+  defp memory_entry_contract(entry) do
+    %{
+      id: entry.id,
+      agent_id: entry.agent_id,
+      session_id: entry.session_id,
+      content: entry.content,
+      metadata: Portable.project(entry.metadata)
+    }
+    |> Map.reject(fn {_key, value} -> is_nil(value) end)
   end
 
   defp current_turn_messages(%Turn.State{} = state) do

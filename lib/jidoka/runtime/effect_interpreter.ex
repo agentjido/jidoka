@@ -16,7 +16,6 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectTrace
-  alias Jidoka.Adapter.Runic.OperationBatch
   alias Jidoka.Turn
 
   @doc "Interprets the next pending effect or reuses its journaled result."
@@ -386,7 +385,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   end
 
   defp execute_durable_operation_batch(state, intents, capabilities, journal, opts) do
-    case OperationBatch.execute(state, intents, capabilities, journal, opts) do
+    case execute_operation_batch(state, intents, capabilities, journal, opts) do
       {:ok, results} ->
         state =
           results
@@ -411,6 +410,23 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp execute_operation_batch(state, intents, capabilities, journal, opts) do
+    case Keyword.fetch(opts, :operation_batch_executor) do
+      {:ok, executor} when is_function(executor, 5) ->
+        executor.(state, intents, capabilities, journal, opts)
+
+      {:ok, executor} ->
+        {:error, {:invalid_operation_batch_executor, executor}}
+
+      :error ->
+        {:error, :missing_operation_batch_executor}
+    end
+  rescue
+    exception -> {:error, {:operation_batch_execution_failed, exception}}
+  catch
+    kind, reason -> {:error, {:operation_batch_execution_failed, {kind, reason}}}
   end
 
   defp durable_checkpoint(%Turn.State{} = state, %Effect.Intent{} = intent, stage, opts) do

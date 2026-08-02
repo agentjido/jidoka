@@ -3,6 +3,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
 
   require Runic
 
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Context
   alias Jidoka.Workflow.Runtime.{StepRunner, Value}
   alias Jidoka.Workflow.Snapshot
@@ -38,6 +39,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
          outcomes: %{},
          workflow_id: spec.id,
          workflow_spec: spec,
+         action_runner: &Actions.invoke_action/3,
          agent_opts: runtime_opts.agent_opts,
          max_concurrency: runtime_opts.max_concurrency,
          suspension: nil,
@@ -61,6 +63,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
         outcomes: snapshot.outcomes,
         workflow_id: spec.id,
         workflow_spec: spec,
+        action_runner: &Actions.invoke_action/3,
         agent_opts: runtime_opts.agent_opts,
         max_concurrency: runtime_opts.max_concurrency,
         suspension: snapshot.loop_cursor,
@@ -210,6 +213,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
           outcomes: %{},
           workflow_id: nil,
           workflow_spec: nil,
+          action_runner: &Actions.invoke_action/3,
           agent_opts: [],
           max_concurrency: nil,
           suspension: nil,
@@ -229,6 +233,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       outcomes: %{},
       workflow_id: nil,
       workflow_spec: nil,
+      action_runner: &Actions.invoke_action/3,
       agent_opts: [],
       max_concurrency: nil,
       suspension: nil,

@@ -1,7 +1,6 @@
 defmodule Jidoka.Workflow.Runtime.StepRunner do
   @moduledoc false
 
-  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Workflow.Loop
   alias Jidoka.Workflow.Loop.Cursor
   alias Jidoka.Workflow.Runtime.{Retry, Value}
@@ -72,8 +71,8 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
 
   def execute_step(%Step{kind: :action} = step, state) do
     with {:ok, params} <- resolve_map(step.input, state, :action_input),
-         {:ok, tool} <- action_tool(step.target) do
-      Retry.call(step, fn -> Actions.invoke_tool(tool, params, state.context) end)
+         {:ok, action_runner} <- action_runner(state) do
+      Retry.call(step, fn -> action_runner.(step.target, params, state.context) end)
     end
   end
 
@@ -211,14 +210,18 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
       |> Map.put(:index, index)
 
     with {:ok, params} <- resolve_map(step.input, item_state, :map_input),
-         {:ok, result} <- execute_map_target(step, params, state.context) do
+         {:ok, result} <- execute_map_target(step, params, state) do
       {:ok, result}
     else
       {:error, reason} -> {:error, {index, reason}}
     end
   end
 
-  defp execute_map_target(%Step{target_kind: :function, target: {module, function, 2}} = step, params, context) do
+  defp execute_map_target(
+         %Step{target_kind: :function, target: {module, function, 2}} = step,
+         params,
+         %{context: context}
+       ) do
     Retry.call(step, fn ->
       module
       |> apply(function, [params, context])
@@ -226,13 +229,14 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
     end)
   end
 
-  defp execute_map_target(%Step{target_kind: :action} = step, params, context) do
-    with {:ok, tool} <- action_tool(step.target) do
-      Retry.call(step, fn -> Actions.invoke_tool(tool, params, context) end)
+  defp execute_map_target(%Step{target_kind: :action} = step, params, state) do
+    with {:ok, action_runner} <- action_runner(state) do
+      Retry.call(step, fn -> action_runner.(step.target, params, state.context) end)
     end
   end
 
-  defp execute_map_target(%Step{} = step, _params, _context), do: {:error, {:unsupported_map_target, step.target_kind}}
+  defp execute_map_target(%Step{} = step, _params, _state),
+    do: {:error, {:unsupported_map_target, step.target_kind}}
 
   defp child_context(data, %Jidoka.Context{} = parent_context) do
     Jidoka.Context.from_data(data, runtime: Jidoka.Context.runtime(parent_context))
@@ -251,15 +255,10 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   defp normalize_function_result({:error, reason}), do: {:error, reason}
   defp normalize_function_result(result), do: {:ok, result}
 
-  defp action_tool(action) when is_atom(action) do
-    if Code.ensure_loaded?(action) and function_exported?(action, :to_tool, 0) do
-      {:ok, action.to_tool()}
-    else
-      {:error, {:invalid_action_module, action}}
-    end
-  end
+  defp action_runner(%{action_runner: action_runner}) when is_function(action_runner, 3),
+    do: {:ok, action_runner}
 
-  defp action_tool(action), do: {:error, {:invalid_action_module, action}}
+  defp action_runner(_state), do: {:error, :missing_workflow_action_runner}
 
   defp ensure_prompt(prompt) when is_binary(prompt), do: {:ok, prompt}
   defp ensure_prompt(prompt), do: {:error, {:expected_prompt, prompt}}
