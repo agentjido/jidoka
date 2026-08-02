@@ -21,7 +21,7 @@ jobs:
     uses: agentjido/github-actions/.github/workflows/jido-ci.yml@v5
     secrets: inherit
     with:
-      docs_command: mix docs.check && mix doctor --raise
+      docs_command: mix docs --warnings-as-errors && mix run scripts/check_docs.exs && mix doctor --raise
       test_command: mix test --cover && mix test.coverage
       credo_command: mix credo --min-priority higher
 

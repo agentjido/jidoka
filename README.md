@@ -307,7 +307,8 @@ Start with [Configuration](guides/configuration.md),
 
 ## Examples
 
-The package includes deterministic reference agents under `examples/`:
+The source repository includes deterministic reference agents under
+`examples/`:
 
 ```bash
 mix run examples/support_agent/example.exs
@@ -319,6 +320,9 @@ The [Support Agent](examples/support_agent/README.md) demonstrates a controlled 
 call, human approval with snapshot resume, and operation-result handling. The
 default scenarios do not use provider keys, network calls, or recorded model
 fixtures.
+
+The examples run in CI and appear in the published documentation. They are not
+copied into the Hex package archive.
 
 The Phoenix showcase application lives in `showcase/`:
 
@@ -362,7 +366,7 @@ mix format --check-formatted
 mix compile --warnings-as-errors
 mix test
 mix quality
-mix docs.check
+mix docs --warnings-as-errors
 ```
 
 Run all example and guide Livebooks with:

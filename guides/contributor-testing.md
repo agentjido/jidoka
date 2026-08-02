@@ -312,8 +312,7 @@ Run live tests with `mix test --include live`.
 
 ### Step 7: Clear `mix quality` Before You Push
 
-The `mix quality` alias (also aliased as `mix q`) runs the gates defined in
-`mix.exs`:
+The `mix quality` alias runs the gates defined in `mix.exs`:
 
 ```elixir
 quality: [
@@ -321,7 +320,6 @@ quality: [
   "compile --warnings-as-errors",
   "xref graph --format cycles --fail-above 0",
   "cmd env MIX_ENV=test mix test test/architecture/boundaries_test.exs",
-  "docs.check",
   "credo",
   "dialyzer",
   "doctor --raise"
@@ -336,12 +334,11 @@ Each step is non-negotiable:
 | `compile --warnings-as-errors` | Warnings are real bugs; treat them like failing tests. |
 | `xref graph --format cycles --fail-above 0` | Keeps compile-time dependency cycles out of the package. |
 | Architecture boundary test | Enforces the allowed layer dependency direction. |
-| `docs.check` | Builds ExDoc, checks links and public paths, tests manifests, and runs all Livebooks. |
 | `credo` | Style and idiom enforcement. Refactor; do not add `# credo:disable` lightly. |
 | `dialyzer` | Catches contract drift in the Zoi-backed structs and capability functions. |
 | `doctor --raise` | Documentation coverage. New public functions need `@spec` and `@doc`. |
 
-Run `mix q` after every meaningful change. Do not push a branch that fails
+Run `mix quality` after every meaningful change. Do not push a branch that fails
 any of these.
 
 ## Common Patterns
@@ -373,16 +370,26 @@ mix test --include live
 # Full quality bar.
 mix quality
 
-# Documentation, examples, and Livebooks.
-mix docs.check
+# Production coverage. The minimum is 75%.
+mix test --cover
+mix test.coverage
+
+# Documentation warnings and alignment rules.
+mix docs --warnings-as-errors
+mix run scripts/check_docs.exs
 ```
+
+Production coverage excludes the development-only Kino layer, test support
+modules, and complete example applications. These modules do not compile into
+the production application. DSL and verifier modules are counted because they
+implement production authoring and validation behavior.
 
 For a single contributor change, the loop is usually:
 
 ```bash
 mix test path/to/test_file.exs
 mix format
-mix q
+mix quality
 ```
 
 ## Troubleshooting
@@ -396,7 +403,7 @@ mix q
 | `mix dialyzer` complains about an opaque type | A capability function was typed too loosely | Add `@spec` matching `t:Jidoka.Runtime.Capabilities.llm_capability/0` or `t:Jidoka.Runtime.Capabilities.operation_capability/0`. |
 | `mix doctor --raise` fails on a new function | Missing `@doc` or `@spec` on a public function | Document the function and add a spec. Hide internal helpers with `@doc false`. |
 | `credo` flags `Credo.Check.Refactor.PipeChainStart` on a fixture | Helper builds a struct in one line | Wrap in `Map.new/2` or split into a named step. |
-| `mix q` fails on `compile --warnings-as-errors` for unused alias | Test or module aliases a struct it does not use | Remove the alias or suppress with `_ = SomeModule`. |
+| `mix quality` fails on `compile --warnings-as-errors` for unused alias | Test or module aliases a struct it does not use | Remove the alias or suppress with `_ = SomeModule`. |
 | Test agent process leaks between tests | `Jidoka.start_agent/2` not torn down | Use `start_supervised!(MyApp.TimeAgent)` or call `Jidoka.stop_agent/2` in `on_exit/1`. |
 
 ## Reference

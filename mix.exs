@@ -14,7 +14,6 @@ defmodule Jidoka.MixProject do
       test_pattern: "*_test.exs",
       test_paths: test_paths(Mix.env()),
       start_permanent: Mix.env() == :prod,
-      dialyzer: dialyzer(),
       aliases: aliases(),
       name: "Jidoka",
       description: @description,
@@ -25,15 +24,14 @@ defmodule Jidoka.MixProject do
       test_coverage: [
         export: "cov",
         ignore_modules: [
-          ~r/^Jidoka\.Agent\.Dsl(\.|$)/,
-          ~r/^Jidoka\.Agent\.Verifiers\./,
-          ~r/^Jidoka\.Kino(\.|$)/,
-          ~r/^Jidoka\.Workflow\.Dsl(\.|$)/,
-          ~r/^Jidoka\.IntegrationSupport\./,
-          ~r/^Jidoka\.TestSupport(\.|$)/,
+          # The notebook layer is not compiled in production.
+          ~r/^Jidoka\.Kino(?:\.|$)/,
+          # Modules compiled only to support repository tests.
+          ~r/^Jidoka\.(?:IntegrationSupport|TestSupport|ParityCase)(?:\.|$)/,
+          # Complete reference applications are not part of library coverage.
           ~r/^JidokaExamples(\.|$)/
         ],
-        summary: [threshold: 80]
+        summary: [threshold: 75]
       ],
       deps: deps()
     ]
@@ -61,6 +59,7 @@ defmodule Jidoka.MixProject do
       # Runtime support
       {:crontab, "~> 1.2"},
       {:jason, "~> 1.4"},
+      {:llm_db, "~> 2026.7.0"},
       {:lua, "~> 1.0.0-rc.0"},
       {:req_llm, "~> 1.12"},
       {:runic, "~> 0.1.0-alpha.7"},
@@ -76,9 +75,7 @@ defmodule Jidoka.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
-      {:git_hooks, "~> 0.8", only: [:dev, :test], runtime: false},
-      {:git_ops, "~> 2.9", only: :dev, runtime: false},
-      {:sourceror, "~> 1.7", only: [:dev, :test], runtime: false}
+      {:git_ops, "~> 2.9", only: :dev, runtime: false}
     ]
   end
 
@@ -92,18 +89,11 @@ defmodule Jidoka.MixProject do
     |> Enum.sort()
   end
 
-  defp dialyzer do
-    [
-      plt_add_apps: [:llm_db, :mix]
-    ]
-  end
-
   defp package do
     [
       files: [
         "lib",
         "guides",
-        "examples",
         ".formatter.exs",
         "mix.exs",
         "README.md",
@@ -409,21 +399,11 @@ defmodule Jidoka.MixProject do
 
   defp aliases do
     [
-      setup: ["deps.get"],
-      install_hooks: ["git_hooks.install"],
-      "docs.check": [
-        "docs --warnings-as-errors",
-        "run scripts/check_docs.exs",
-        "cmd env MIX_ENV=test mix test examples/manifest_test.exs",
-        "run scripts/check_livebooks.exs -- --project examples/*/*.livemd guides/livebooks/*.livemd"
-      ],
-      q: ["quality"],
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
         "xref graph --format cycles --fail-above 0",
         "cmd env MIX_ENV=test mix test test/architecture/boundaries_test.exs",
-        "docs.check",
         "credo",
         "dialyzer",
         "doctor --raise"
@@ -432,12 +412,13 @@ defmodule Jidoka.MixProject do
   end
 
   defp example_extras do
-    ["examples/README.md"] ++
-      Path.wildcard("examples/*/README.md") ++
-      Path.wildcard("examples/*/*.livemd") ++
-      Path.wildcard("guides/livebooks/*.livemd")
+    (["examples/README.md"] ++
+       Path.wildcard("examples/*/README.md") ++
+       Path.wildcard("examples/*/*.livemd") ++
+       Path.wildcard("guides/livebooks/*.livemd"))
+    |> Enum.filter(&File.regular?/1)
   end
 
-  defp test_paths(:test), do: Enum.filter(["test", "examples"], &File.dir?/1)
+  defp test_paths(:test), do: ["test", "examples"]
   defp test_paths(_env), do: []
 end

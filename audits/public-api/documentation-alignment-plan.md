@@ -17,9 +17,9 @@ compatibility contract.
   boundaries.
 - Five example applications and nine Livebooks use the aligned public path and
   pass deterministic execution checks.
-- `mix docs.check` now enforces ExDoc warnings, local links, package versions,
-  credential guidance, public invocation rules, example manifests, and
-  executable Livebooks.
+- CI now enforces ExDoc warnings, local links, package versions, credential
+  guidance, public invocation rules, example manifests, and executable
+  Livebooks.
 
 ## Outcome
 

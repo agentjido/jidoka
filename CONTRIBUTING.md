@@ -14,17 +14,8 @@ Jidoka follows the Jido ecosystem package quality standards:
 ## Setup
 
 ```bash
-mix setup
+mix deps.get
 ```
-
-Install git hooks explicitly from the primary checkout when you want local hook
-coverage:
-
-```bash
-mix install_hooks
-```
-
-Hooks are not auto-installed during compile or dependency fetches.
 
 ## Quality Gate
 
@@ -32,7 +23,6 @@ Run the package gate before opening a PR:
 
 ```bash
 mix quality
-mix docs.check
 mix test --cover
 mix hex.build --unpack
 ```
