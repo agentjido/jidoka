@@ -112,14 +112,6 @@ defmodule Jidoka.Runtime.Review do
     end
   end
 
-  @doc "Adds or removes pending-review metadata in a durable metadata map."
-  @spec put_pending_metadata(map(), Review.Interrupt.t() | nil) :: map()
-  def put_pending_metadata(metadata, nil), do: metadata
-
-  def put_pending_metadata(metadata, %Review.Interrupt{} = interrupt) when is_map(metadata) do
-    Map.put(metadata, "pending_review", Review.Request.from_interrupt!(interrupt))
-  end
-
   defp normalize_response(response) do
     case Review.Response.from_input(response) do
       {:ok, response} -> {:ok, response}
