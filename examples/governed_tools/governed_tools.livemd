@@ -1,0 +1,90 @@
+# Governed Tools Agent
+
+This Livebook shows one local quality loop for a governed tool agent. It uses
+deterministic model and browser doubles. It does not use provider credentials
+or the network.
+
+```elixir
+package_root = Path.expand("../..", __DIR__)
+
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: package_root}
+  ],
+  consolidate_protocols: false,
+  lockfile: Path.join(package_root, "mix.lock")
+)
+
+Code.require_file(Path.expand("../loader.exs", __DIR__))
+JidokaExamples.Loader.load!(__DIR__)
+
+alias JidokaExamples.GovernedTools.Agent
+alias JidokaExamples.GovernedTools.Scenario
+
+Jidoka.Kino.setup_notebook(model: "test:governed-tools", check_provider?: false)
+```
+
+## Inspect The Static Tool Contract
+
+The same seven operations are visible for every request. Skills can define a
+fixed tool set, but Jidoka does not yet have a general request-time tool
+preparation callback.
+
+```elixir
+{:ok, contract} = Scenario.tool_contract()
+
+%{
+  operations: contract.operations,
+  skill: contract.skill_metadata
+}
+```
+
+## Run The Governed Sources
+
+```elixir
+{:ok, skill_result} = Scenario.skill_round_trip()
+{:ok, catalog_result} = Scenario.catalog_round_trip()
+{:ok, browser_result} = Scenario.browser_round_trip()
+
+%{
+  skill: skill_result.content,
+  catalog: catalog_result.content,
+  browser: browser_result.content
+}
+```
+
+## Run Repeatable Eval Cases
+
+The first case requires correct prose and a policy operation. The second case
+has the same prose but does not use the operation, so it fails.
+
+```elixir
+{:ok, evaluation} = Scenario.evaluation_suite()
+
+Enum.map(evaluation.runs, fn run ->
+  %{
+    case_id: run.case_id,
+    status: run.status,
+    operations: run.observations.operation_calls,
+    score: evaluation.trajectory_scores[run.case_id]
+  }
+end)
+```
+
+## Render Local Developer Evidence
+
+```elixir
+{:ok, evidence} = Scenario.notebook_evidence()
+
+%{
+  agent: evidence.preflight.agent.id,
+  operations: Enum.map(evidence.preflight.prompt.operations, & &1.name),
+  graph: evidence.diagram
+}
+```
+
+## Continue
+
+Use the Support Agent for input, output, and operation controls. Use the
+Durable Refund Agent for checkpoints, trace sinks, usage, and process hosting.

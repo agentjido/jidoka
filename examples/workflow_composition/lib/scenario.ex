@@ -4,7 +4,12 @@ defmodule JidokaExamples.WorkflowComposition.Scenario do
   alias Jidoka.Effect
   alias Jidoka.Workflow
   alias Jidoka.Workflow.{Background, Scheduler}
-  alias JidokaExamples.WorkflowComposition.{Agent, FulfillmentWorkflow, ScriptedLLM}
+  alias JidokaExamples.WorkflowComposition.{
+    Agent,
+    FulfillmentWorkflow,
+    ScriptedLLM,
+    StaticMultiAgentWorkflow
+  }
 
   @input %{
     expedited: true,
@@ -77,6 +82,14 @@ defmodule JidokaExamples.WorkflowComposition.Scenario do
     end)
   end
 
+  def static_multi_agent(opts \\ []) do
+    observer = Keyword.get(opts, :observer)
+
+    Workflow.run(StaticMultiAgentWorkflow, %{order_id: "A1001"},
+      agent_opts: [llm: static_agent_model(observer)]
+    )
+  end
+
   defp run_direct(observer) do
     with_retry_context([observer: observer], fn context ->
       Workflow.run(FulfillmentWorkflow, @input,
@@ -97,6 +110,25 @@ defmodule JidokaExamples.WorkflowComposition.Scenario do
     end)
   end
 
+  defp static_agent_model(observer) do
+    fn _intent, _journal, context ->
+      stage = Jidoka.Context.get(context, :stage)
+      notify(observer, {:static_agent_node_called, stage})
+
+      case stage do
+        :draft ->
+          {:ok, %{type: :final, content: "Order A1001 is ready for priority fulfillment."}}
+
+        :review ->
+          {:ok,
+           %{
+             type: :final,
+             content: "Approved: Order A1001 is ready for priority fulfillment."
+           }}
+      end
+    end
+  end
+
   defp with_retry_context(opts, fun) do
     {:ok, counter} = Elixir.Agent.start_link(fn -> 0 end)
 
@@ -114,4 +146,7 @@ defmodule JidokaExamples.WorkflowComposition.Scenario do
       if Process.alive?(counter), do: Elixir.Agent.stop(counter)
     end
   end
+
+  defp notify(observer, message) when is_pid(observer), do: send(observer, message)
+  defp notify(_observer, _message), do: :ok
 end

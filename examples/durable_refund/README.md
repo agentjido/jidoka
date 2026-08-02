@@ -8,7 +8,7 @@ request, or recorded model response.
 
 ## Features
 
-The six deterministic demonstrations show:
+The eight deterministic demonstrations show:
 
 - one asynchronous request with thinking and content deltas;
 - two read-only operations that finish in reverse order but stay in model order;
@@ -17,6 +17,8 @@ The six deterministic demonstrations show:
 - worker crash recovery after an unsafe refund result is durable;
 - data-only replay plus an independent runnable fork with root and parent
   lineage.
+- normalized token and cost usage plus a redacted local trace sink;
+- one supervised process-hosted agent with stable lookup and terminal state.
 
 The crash case stops the first worker after the refund result reaches the
 session store but before the worker can acknowledge it. A second worker takes
@@ -35,9 +37,11 @@ calling `issue_refund` again.
    behavior.
 7. `lib/scenarios/safe_fork.ex` - data-only replay and independent session
    branches.
-8. `test/execution_and_continuation_test.exs` - application behavior and
+8. `lib/scenarios/observability.ex` - usage, trace projection, and redaction.
+9. `lib/scenarios/process_host.ex` - supervised process hosting.
+10. `test/execution_and_continuation_test.exs` - application behavior and
    runtime guarantees.
-9. `durable_refund.livemd` - the guided runtime walkthrough.
+11. `durable_refund.livemd` - the guided runtime walkthrough.
 
 The agent, action, control, limits, and store interfaces are application
 patterns. `ScriptedLLM`, the scenario modules, `example.exs`, the manifest, and
@@ -70,6 +74,7 @@ Open `durable_refund.livemd` for the complete executable walkthrough.
 
 The command prints evidence for streaming, stable parallel result order,
 cancellation, execution limits, crash recovery, replay, and a safe fork.
+It also prints local trace, usage, and process-host evidence.
 
 ## Next Guide
 

@@ -5,12 +5,18 @@ agent: JidokaExamples.DurableRefund.Agent
 features:
   - async_execution
   - cancellation
+  - checkpoint_state
   - crash_recovery
   - data_only_replay
+  - effect_idempotency
   - event_streaming
   - execution_budgets
+  - local_trace_sink
   - parallel_tool_calling
+  - process_hosted_agent
   - safe_session_fork
+  - trace_redaction
+  - usage_accounting
 tests:
   - test/execution_and_continuation_test.exs
 livebook: durable_refund.livemd

@@ -17,6 +17,10 @@ agent definition
 The example is deterministic. It does not need a provider key, network
 request, recorded response, tool, session, or store.
 
+The preflight report is also the local-inspection proof: it exposes the exact
+prompt and confirms that no model or operation ran. The chat then injects one
+provider-free model function through the normal production turn path.
+
 ## Read It In This Order
 
 1. `lib/agent.ex` - the application code to copy.

@@ -42,6 +42,15 @@ agent_view = Jidoka.inspect(FulfillmentAgent)
 }
 ```
 
+## Run Two Static Agent Nodes
+
+This graph has one draft agent and one review agent. The dependency edge and
+termination are static. It does not claim a dynamic team or group-chat runtime.
+
+```elixir
+{:ok, _agent_node_result} = Scenario.static_multi_agent()
+```
+
 ## Run Directly And Through The Agent
 
 This cell proves that direct execution and the agent tool return the same

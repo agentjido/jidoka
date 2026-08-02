@@ -33,6 +33,32 @@ defmodule JidokaExamples.ManifestTest do
     "W08" => ["scheduled_runs"]
   }
 
+  @existing_capability_features %{
+    "G01" => ["input_controls"],
+    "G02" => ["output_controls"],
+    "G03" => ["operation_policy"],
+    "G05" => ["trace_redaction"],
+    "M04" => ["static_multi_agent_workflow"],
+    "O01" => ["lifecycle_events"],
+    "O02" => ["local_inspection"],
+    "O03" => ["local_trace_sink"],
+    "O04" => ["usage_accounting"],
+    "O05" => ["deterministic_evals"],
+    "O06" => ["repeatable_eval_cases"],
+    "O07" => ["trajectory_assertions"],
+    "R01" => ["process_hosted_agent"],
+    "R04" => ["local_developer_notebook"],
+    "R05" => ["ui_projection"],
+    "R07" => ["provider_free_testing"],
+    "S02" => ["checkpoint_state"],
+    "T01" => ["schema_derived_tools"],
+    "T02" => ["static_tool_narrowing"],
+    "T03" => ["catalog_discovery"],
+    "T04" => ["skill_bundle"],
+    "T06" => ["effect_idempotency"],
+    "T11" => ["read_only_browser_tools"]
+  }
+
   test "each example has valid metadata and required files" do
     manifests = Path.wildcard("examples/*/manifest.yaml") |> Enum.sort()
     example_dirs = example_dirs()
@@ -45,14 +71,7 @@ defmodule JidokaExamples.ManifestTest do
   end
 
   test "examples cover every feature in the completed parity sections" do
-    features =
-      "examples/*/manifest.yaml"
-      |> Path.wildcard()
-      |> Enum.flat_map(fn path ->
-        {:ok, [manifest]} = YamlElixir.read_all_from_file(path)
-        manifest["features"]
-      end)
-      |> MapSet.new()
+    features = manifest_features()
 
     expected_ids =
       Enum.map(1..9, &"A0#{&1}") ++
@@ -62,6 +81,19 @@ defmodule JidokaExamples.ManifestTest do
     assert @milestone_features |> Map.keys() |> Enum.sort() == expected_ids
 
     for {id, required_features} <- @milestone_features,
+        feature <- required_features do
+      assert MapSet.member?(features, feature),
+             "#{id} is missing its #{feature} example coverage"
+    end
+  end
+
+  test "examples cover every shipped feature that had proof debt" do
+    features = manifest_features()
+
+    assert @existing_capability_features |> Map.keys() |> Enum.sort() ==
+             ~w(G01 G02 G03 G05 M04 O01 O02 O03 O04 O05 O06 O07 R01 R04 R05 R07 S02 T01 T02 T03 T04 T06 T11)
+
+    for {id, required_features} <- @existing_capability_features,
         feature <- required_features do
       assert MapSet.member?(features, feature),
              "#{id} is missing its #{feature} example coverage"
@@ -104,5 +136,15 @@ defmodule JidokaExamples.ManifestTest do
     |> Enum.filter(&File.dir?/1)
     |> Enum.reject(&(Path.basename(&1) |> String.starts_with?("_")))
     |> Enum.sort()
+  end
+
+  defp manifest_features do
+    "examples/*/manifest.yaml"
+    |> Path.wildcard()
+    |> Enum.flat_map(fn path ->
+      {:ok, [manifest]} = YamlElixir.read_all_from_file(path)
+      manifest["features"]
+    end)
+    |> MapSet.new()
   end
 end

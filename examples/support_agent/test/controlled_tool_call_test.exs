@@ -2,10 +2,12 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Effect
+  alias Jidoka.Error.ExecutionError
   alias Jidoka.Snapshot
   alias Jidoka.Turn
   alias JidokaExamples.SupportAgent.Agent
   alias JidokaExamples.SupportAgent.Scenario
+  alias JidokaExamples.SupportAgent.View
 
   @moduletag example: :support_agent
   @moduletag scenario: :controlled_tool_call
@@ -24,7 +26,9 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
 
   describe "runtime invariants" do
     @tag :tool_calling
+    @tag :lifecycle_events
     @tag :operation_control
+    @tag :operation_policy
     @tag :tool_observation
     test "returns a tool observation through the controlled operation path" do
       {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
@@ -71,6 +75,68 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
         event_index(result.events, :prompt_assembled, loop_index: 1),
         event_index(result.events, :turn_finished)
       ])
+    end
+
+    @tag :input_controls
+    test "blocks sensitive input before the model runs" do
+      llm = fn _intent, _journal, _context ->
+        flunk("a blocked input must not call the model")
+      end
+
+      assert {:error,
+              %ExecutionError{
+                phase: :control,
+                details: %{
+                  boundary: :input,
+                  cause: :sensitive_input,
+                  control: "protect_sensitive_data",
+                  reason: :control_blocked
+                }
+              }} = Jidoka.turn(Agent, "Use credential: support-admin", llm: llm)
+    end
+
+    @tag :output_controls
+    test "blocks sensitive output before it leaves the turn" do
+      llm = fn _intent, _journal, _context ->
+        {:ok, %{type: :final, content: "Authorization: private-support-token"}}
+      end
+
+      assert {:error,
+              %ExecutionError{
+                phase: :control,
+                details: %{
+                  boundary: :output,
+                  cause: :sensitive_output,
+                  control: "protect_sensitive_data",
+                  reason: :control_blocked
+                }
+              }} = Jidoka.turn(Agent, "Give a short general answer.", llm: llm)
+    end
+
+    @tag :ui_projection
+    test "projects one completed tool turn into stable UI state" do
+      assert {:ok, view} = View.initial(%{conversation_id: "Order A1001"})
+      running = View.before_turn(view, "Check order A1001")
+
+      assert {:ok, %Turn.Result{} = result} = Scenario.execute()
+      finished = View.after_turn(running, {:ok, result})
+
+      assert finished.status == :idle
+      assert finished.agent_id == "support_agent-order_a1001"
+
+      assert [
+               %{role: :user, content: "Check order A1001", pending?: false},
+               %{role: :assistant, content: answer}
+             ] = View.visible_messages(finished)
+
+      assert answer =~ "Order A1001 is in transit with UPS."
+
+      assert Enum.any?(finished.events, fn event ->
+               event.kind == :operation_result and event.refs.operation == "lookup_order"
+             end)
+
+      refute Map.has_key?(Map.from_struct(finished), :pid)
+      refute Map.has_key?(Map.from_struct(finished), :transcript)
     end
 
     @tag :operation_control

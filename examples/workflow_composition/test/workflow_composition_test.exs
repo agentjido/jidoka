@@ -73,4 +73,14 @@ defmodule JidokaExamples.WorkflowCompositionTest do
     assert report.run.status == :completed
     assert report.run.output.reservation_attempts == 2
   end
+
+  @tag :static_multi_agent_workflow
+  test "runs two bounded agent nodes through static deterministic edges" do
+    assert {:ok, "Approved: Order A1001 is ready for priority fulfillment."} =
+             Scenario.static_multi_agent(observer: self())
+
+    assert_receive {:static_agent_node_called, :draft}
+    assert_receive {:static_agent_node_called, :review}
+    refute_receive {:static_agent_node_called, _stage}
+  end
 end

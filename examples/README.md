@@ -13,9 +13,11 @@ examples in order:
 
 1. **Getting Started** - learn one agent, prompt, and `chat/3` result.
 2. **Support Agent** - add one complete tool call and approval flow.
-3. **Warranty Claim** - add typed context, model policy, media, and results.
-4. **Durable Refund** - add asynchronous and durable runtime behavior.
-5. **Workflow Composition** - add a complete graph, loops, background runs,
+3. **Governed Tools** - add skills, catalog discovery, bounded browser tools,
+   and deterministic evals.
+4. **Warranty Claim** - add typed context, model policy, media, and results.
+5. **Durable Refund** - add asynchronous, observable, and durable runtime behavior.
+6. **Workflow Composition** - add a complete graph, agent nodes, loops, background runs,
    and schedules.
 
 The agent, action, control, instruction, and YAML files are application
@@ -101,6 +103,39 @@ for the documented single-node durable contract and application-owned store
 extension. E08 means data-only replay and lineage-aware forks from safe
 snapshots; it does not mean arbitrary state editing or effect re-execution.
 
+## Existing Capability Proof Coverage
+
+The same example suite now provides executable evidence for all 23 features
+that had product code but no grouped example proof. Complete features prove
+their shipped contract. Partial and bounded features prove only the named
+boundary.
+
+| ID | Shipped boundary | Example coverage |
+| --- | --- | --- |
+| G01 | Input controls | Support Agent: `input_controls` |
+| G02 | Output controls | Support Agent: `output_controls` |
+| G03 | Operation policy | Support Agent: `operation_policy` |
+| G05 | Trace redaction policy | Durable Refund: `trace_redaction` |
+| M04 | Static agent workflow composition (partial) | Workflow Composition: `static_multi_agent_workflow` |
+| O01 | Ordered lifecycle events | Support Agent: `lifecycle_events` |
+| O02 | Local inspection and effect-free preflight | Getting Started: `local_inspection` |
+| O03 | Local sequence-stable trace sink (partial) | Durable Refund: `local_trace_sink` |
+| O04 | Usage and cost aggregation | Durable Refund: `usage_accounting` |
+| O05 | Deterministic behavioral evals | Governed Tools: `deterministic_evals` |
+| O06 | Repeatable cases grouped by application code (partial) | Governed Tools: `repeatable_eval_cases` |
+| O07 | Public trajectory assertions (partial) | Governed Tools: `trajectory_assertions` |
+| R01 | Process-hosted agent | Durable Refund: `process_hosted_agent` |
+| R04 | Development-only Kino evidence (partial) | Governed Tools: `local_developer_notebook` |
+| R05 | Stable UI projection | Support Agent: `ui_projection` |
+| R07 | Provider-free capability injection | Getting Started: `provider_free_testing` |
+| S02 | Serializable checkpoint state | Durable Refund: `checkpoint_state` |
+| T01 | Schema-derived action tool | Governed Tools: `schema_derived_tools` |
+| T02 | Static tool narrowing (partial) | Governed Tools: `static_tool_narrowing` |
+| T03 | Progressive catalog discovery | Governed Tools: `catalog_discovery` |
+| T04 | Skill prompt and action bundle | Governed Tools: `skill_bundle` |
+| T06 | Effect idempotency and completed-result reuse | Durable Refund: `effect_idempotency` |
+| T11 | Read-only allowlisted browser tools (bounded) | Governed Tools: `read_only_browser_tools` |
+
 Run all Livebooks without their standalone `Mix.install` calls:
 
 ```bash
@@ -132,14 +167,16 @@ examples/<name>/
 | --- | --- | --- |
 | Getting Started | Beginner | Agent definition, preflight, and one text answer |
 | Support Agent | Intermediate | Tools, controls, approval, serialized pause, and resume |
+| Governed Tools | Advanced | Skills, catalogs, bounded browser tools, evals, and Kino evidence |
 | Warranty Claim | Advanced | Data authoring, typed results, media, fallback, and repair |
-| Durable Refund | Expert | Async work, parallel tools, streams, limits, recovery, and forks |
-| Workflow Composition | Expert | Typed graphs, branches, fan-out, loops, retry, background work, and schedules |
+| Durable Refund | Expert | Async work, traces, usage, process hosting, recovery, and forks |
+| Workflow Composition | Expert | Typed graphs, agent nodes, branches, loops, background work, and schedules |
 
 Use Getting Started for the smallest complete agent. Use the Support Agent for
-a controlled tool flow. Use the Warranty Claim for agent authoring, model
+a controlled tool flow. Use Governed Tools for bounded capability composition
+and local quality evidence. Use the Warranty Claim for agent authoring, model
 policy, structured results, and multimodal content. Use the Durable Refund
-Agent for asynchronous execution, cancellation, execution limits, durable
-recovery, parallel tool calls, and safe session forks. Use Workflow Composition
-for deterministic business graphs, runtime-created work, reconnectable jobs,
-and cron triggers.
+Agent for asynchronous execution, cancellation, traces, usage, process hosting,
+durable recovery, and safe session forks. Use Workflow Composition for
+deterministic business graphs, bounded agent nodes, runtime-created work,
+reconnectable jobs, and cron triggers.

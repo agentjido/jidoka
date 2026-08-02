@@ -16,7 +16,7 @@ defmodule JidokaExamples.SupportAgent.Agent do
   use Jidoka.Agent
 
   alias JidokaExamples.SupportAgent.Actions.LookupOrder
-  alias JidokaExamples.SupportAgent.Controls.RequireOrderApproval
+  alias JidokaExamples.SupportAgent.Controls.{ProtectSensitiveData, RequireOrderApproval}
 
   @context_schema Zoi.object(%{
                     account_id: Zoi.string() |> Zoi.default("acct_demo"),
@@ -49,6 +49,9 @@ defmodule JidokaExamples.SupportAgent.Agent do
   controls do
     max_turns 4
     timeout 20_000
+
+    input ProtectSensitiveData
+    output ProtectSensitiveData
 
     operation RequireOrderApproval,
       when: [kind: :action, name: "lookup_order"]

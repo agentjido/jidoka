@@ -5,7 +5,9 @@ defmodule JidokaExamples.DurableRefund.Scenario do
   alias JidokaExamples.DurableRefund.Scenarios.AsyncExecution
   alias JidokaExamples.DurableRefund.Scenarios.DurableRecovery
   alias JidokaExamples.DurableRefund.Scenarios.ExecutionLimits
+  alias JidokaExamples.DurableRefund.Scenarios.Observability
   alias JidokaExamples.DurableRefund.Scenarios.ParallelOperations
+  alias JidokaExamples.DurableRefund.Scenarios.ProcessHost
   alias JidokaExamples.DurableRefund.Scenarios.SafeFork
 
   def run(opts \\ []) do
@@ -16,7 +18,9 @@ defmodule JidokaExamples.DurableRefund.Scenario do
          {:ok, cancellation} <- typed_cancellation(opts),
          {:ok, limits} <- bounded_execution(opts),
          {:ok, recovery} <- durable_recovery(opts),
-         {:ok, fork} <- safe_fork(opts) do
+         {:ok, fork} <- safe_fork(opts),
+         {:ok, observability} <- observability(),
+         {:ok, process_host} <- process_host() do
       {:ok,
        %{
          async_streaming: %{
@@ -47,6 +51,14 @@ defmodule JidokaExamples.DurableRefund.Scenario do
            replay_status: fork.source_replay.status,
            source_answer: fork.source_answer,
            source_id: fork.source.session_id
+         },
+         observability: %{
+           trace_entries: length(observability.trace),
+           usage: observability.usage
+         },
+         process_host: %{
+           answer: process_host.result.content,
+           status: process_host.terminal.status
          }
        }}
     end
@@ -58,4 +70,6 @@ defmodule JidokaExamples.DurableRefund.Scenario do
   def bounded_execution(opts \\ []), do: ExecutionLimits.run(opts)
   def durable_recovery(opts \\ []), do: DurableRecovery.run(opts)
   def safe_fork(opts \\ []), do: SafeFork.run(opts)
+  def observability, do: Observability.run()
+  def process_host, do: ProcessHost.run()
 end

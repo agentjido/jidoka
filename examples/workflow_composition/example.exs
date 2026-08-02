@@ -21,7 +21,7 @@ end
 
 direct =
   run!.(
-    "[1/4] Run the fulfillment graph directly, then expose the same graph as one agent tool.",
+    "[1/5] Run the fulfillment graph directly, then expose the same graph as one agent tool.",
     fn -> Scenario.direct_and_agent() end
   )
 
@@ -33,7 +33,14 @@ IO.puts("      Dynamic work created: #{length(direct.direct_output.created_work)
 IO.puts("      Direct and agent results match: #{direct.parity?}")
 IO.puts("      Agent answer: #{direct.agent_answer}")
 
-IO.puts("\n[2/4] Start the supervised background runner and schedule service.")
+multi_agent =
+  run!.("[2/5] Run two bounded agent nodes through static graph edges.", fn ->
+    Scenario.static_multi_agent()
+  end)
+
+IO.puts("      Agent-node result: #{multi_agent}")
+
+IO.puts("\n[3/5] Start the supervised background runner and schedule service.")
 
 children = [
   {Background, name: runner},
@@ -46,7 +53,7 @@ IO.puts("      Scheduler: #{inspect(scheduler)}")
 
 background =
   run!.(
-    "[3/4] Submit the same graph as a background run and reconnect by its stable ID.",
+    "[4/5] Submit the same graph as a background run and reconnect by its stable ID.",
     fn -> Scenario.background(runner) end
   )
 
@@ -57,7 +64,7 @@ IO.puts("      Output route: #{background.run.output.route}")
 
 scheduled =
   run!.(
-    "[4/4] Trigger a one-time schedule that creates another normal background run.",
+    "[5/5] Trigger a one-time schedule that creates another normal background run.",
     fn -> Scenario.scheduled(scheduler, runner, now) end
   )
 
@@ -68,8 +75,10 @@ IO.puts("      Run status: #{scheduled.run.status}")
 
 IO.puts("""
 
-The same workflow graph now works in four forms:
+The fulfillment graph works in four forms:
   direct call -> one agent tool -> background run -> scheduled background run
+
+The same example also proves the current static, bounded agent-node graph.
 
 Next:
   Read examples/workflow_composition/lib/fulfillment_workflow.ex for the graph.

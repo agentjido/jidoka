@@ -29,6 +29,10 @@ defmodule JidokaExamples.DurableRefund.ExecutionAndContinuationTest do
       assert report.safe_fork.lineage.depth == 1
       assert report.safe_fork.replay_status == :finished
       assert report.safe_fork.replay_event_count > 0
+      assert report.observability.usage.total_tokens == 41
+      assert report.observability.trace_entries > 0
+      assert report.process_host.answer == "The supervised refund agent is ready."
+      assert report.process_host.status == :completed
     end
   end
 
@@ -94,6 +98,7 @@ defmodule JidokaExamples.DurableRefund.ExecutionAndContinuationTest do
     end
 
     @tag :crash_recovery
+    @tag :effect_idempotency
     test "recovers one durable unsafe result without issuing the refund twice" do
       assert {:ok, report} = Scenario.durable_recovery(observer: self())
       assert report.answer == "Refund refund_A1001 is queued."
@@ -107,6 +112,7 @@ defmodule JidokaExamples.DurableRefund.ExecutionAndContinuationTest do
     end
 
     @tag :safe_session_fork
+    @tag :checkpoint_state
     @tag :data_only_replay
     test "runs independent answers from a lineage-aware safe fork" do
       assert {:ok, report} = Scenario.safe_fork()
@@ -129,6 +135,44 @@ defmodule JidokaExamples.DurableRefund.ExecutionAndContinuationTest do
       assert report.source_replay.status == :finished
       assert report.source_replay.result.content == report.source_answer
       assert report.source_replay.timeline != []
+    end
+
+    @tag :local_trace_sink
+    @tag :trace_redaction
+    @tag :usage_accounting
+    test "records redacted local traces and aggregates model usage" do
+      assert {:ok, report} = Scenario.observability()
+
+      assert report.result.content == "Order A1001 is eligible for the standard refund."
+      assert report.usage.llm_calls == 2
+      assert report.usage.input_tokens == 30
+      assert report.usage.output_tokens == 11
+      assert report.usage.total_tokens == 41
+      assert_in_delta report.usage.total_cost, 0.003, 1.0e-9
+
+      sensitive =
+        Enum.find(report.trace, fn entry ->
+          entry.event == :prompt_assembled and Map.has_key?(Map.get(entry, :data, %{}), :api_key)
+        end)
+
+      assert sensitive.data.api_key == "[REDACTED]"
+      assert sensitive.data.visible.token == "[REDACTED]"
+      assert sensitive.data.visible.operation == "check_refund_policy"
+      refute Map.has_key?(sensitive.data, :prompt)
+      refute inspect(report.trace) =~ "example-secret-key"
+      refute inspect(report.trace) =~ "raw prompt omitted before export"
+      refute inspect(report.trace) =~ "example-token"
+    end
+
+    @tag :process_hosted_agent
+    test "runs the same agent through a supervised process host" do
+      assert {:ok, report} = Scenario.process_host()
+
+      assert report.result.content == "The supervised refund agent is ready."
+      assert report.terminal.status == :completed
+      assert report.terminal.result == report.result.content
+      assert is_pid(report.pid)
+      assert Jidoka.whereis(report.id) == nil
     end
   end
 end

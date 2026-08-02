@@ -25,6 +25,7 @@ JidokaExamples.Loader.load!(__DIR__)
 
 alias JidokaExamples.SupportAgent.Agent, as: SupportAgent
 alias JidokaExamples.SupportAgent.Scenario
+alias JidokaExamples.SupportAgent.View
 
 Jidoka.Kino.setup_notebook(model: "test:support-example-model", check_provider?: false)
 
@@ -140,6 +141,39 @@ end
 ```elixir
 {:ok, _timeline} = Jidoka.Kino.timeline(result)
 {:ok, _graph} = Jidoka.Kino.call_graph(result)
+```
+
+## Project Stable UI State
+
+The view owns visible application data. It does not own a runtime process,
+transcript store, or hidden agent state.
+
+```elixir
+{:ok, view} = View.initial(%{conversation_id: "order-a1001"})
+
+projected_view =
+  view
+  |> View.before_turn("Check order A1001")
+  |> View.after_turn({:ok, result})
+
+%{
+  status: projected_view.status,
+  messages: View.visible_messages(projected_view),
+  activity: projected_view.events
+}
+```
+
+## Block Sensitive Input Before Effects
+
+```elixir
+blocked_model = fn _intent, _journal, _context ->
+  raise "the sensitive input control did not stop the model"
+end
+
+{:error, blocked_input} =
+  Jidoka.turn(SupportAgent, "Use credential: support-admin", llm: blocked_model)
+
+Jidoka.error_to_map(blocked_input)
 ```
 
 ## Require Human Review

@@ -11,6 +11,7 @@ features:
   - workflow_tool
   - background_runs
   - scheduled_runs
+  - static_multi_agent_workflow
 tests:
   - test/workflow_composition_test.exs
 livebook: workflow_composition.livemd

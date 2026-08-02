@@ -19,6 +19,7 @@ defmodule JidokaExamples.Loader do
   defp phase(path) do
     cond do
       Path.basename(path) == "agent.ex" -> 1
+      Path.basename(path) == "agent_view.ex" -> 2
       "scenarios" in Path.split(path) -> 2
       Path.basename(path) == "scenario.ex" -> 3
       true -> 0

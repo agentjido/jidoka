@@ -8,7 +8,9 @@ defmodule JidokaExamples.GettingStartedTest do
   @moduletag timeout: 5_000
 
   @tag :code_first_authoring
+  @tag :local_inspection
   @tag :provider_model_abstraction
+  @tag :provider_free_testing
   @tag :synchronous_execution
   test "answers one text request through the public chat path" do
     assert {:ok, report} = Scenario.run(observer: self())

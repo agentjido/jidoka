@@ -4,11 +4,16 @@ summary: A deterministic agent that demonstrates a controlled tool-call lifecycl
 agent: JidokaExamples.SupportAgent.Agent
 features:
   - human_review
+  - input_controls
+  - lifecycle_events
   - operation_control
+  - operation_policy
+  - output_controls
   - serializable_pause_resume
   - snapshot_resume
   - tool_calling
   - tool_observation
+  - ui_projection
 tests:
   - test/controlled_tool_call_test.exs
 livebook: support_agent.livemd

@@ -1,0 +1,17 @@
+name: governed_tools
+title: Governed Tools Agent
+summary: A deterministic agent for skills, catalog discovery, read-only browsing, and local eval evidence.
+agent: JidokaExamples.GovernedTools.Agent
+features:
+  - catalog_discovery
+  - deterministic_evals
+  - local_developer_notebook
+  - read_only_browser_tools
+  - repeatable_eval_cases
+  - schema_derived_tools
+  - skill_bundle
+  - static_tool_narrowing
+  - trajectory_assertions
+tests:
+  - test/governed_tools_test.exs
+livebook: governed_tools.livemd

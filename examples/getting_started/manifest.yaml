@@ -4,7 +4,9 @@ summary: The smallest deterministic Jidoka agent with one prompt and one answer.
 agent: JidokaExamples.GettingStarted.Agent
 features:
   - code_first_authoring
+  - local_inspection
   - provider_model_abstraction
+  - provider_free_testing
   - synchronous_execution
 tests:
   - test/getting_started_test.exs

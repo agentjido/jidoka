@@ -26,8 +26,9 @@ Jidoka.Kino.setup_notebook(model: "test:durable-refund-script", check_provider?:
 This Livebook runs one deterministic refund agent through asynchronous
 streaming, cancellation, execution limits, crash recovery, and a safe session
 fork. It also runs two read-only operations together and proves that model
-observation order stays stable. It does not use a provider key or network
-access.
+observation order stays stable. Additional sections record redacted local trace
+data, aggregate usage, and run the same agent under process hosting. It does
+not use a provider key or network access.
 
 ## Inspect The Agent
 
@@ -50,6 +51,31 @@ end
   answer: stream_report.answer,
   thinking: stream_report.thinking,
   event_names: Enum.map(stream_report.events, & &1.event)
+}
+```
+
+## Record Usage And A Redacted Local Trace
+
+```elixir
+{:ok, observability_report} = Scenario.observability()
+
+%{
+  usage: observability_report.usage,
+  trace_entries: length(observability_report.trace),
+  last_trace_entry: List.last(observability_report.trace)
+}
+```
+
+## Run Under Process Hosting
+
+```elixir
+{:ok, host_report} = Scenario.process_host()
+
+%{
+  id: host_report.id,
+  answer: host_report.result.content,
+  terminal_status: host_report.terminal.status,
+  stopped?: Jidoka.whereis(host_report.id) == nil
 }
 ```
 
