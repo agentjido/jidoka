@@ -12,16 +12,13 @@ Mix.install(
   lockfile: Path.join(package_root, "mix.lock")
 )
 
-files = Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))
-{agent_files, support_files} = Enum.split_with(files, &(Path.basename(&1) == "agent.ex"))
-{scenario_files, support_files} = Enum.split_with(support_files, &(Path.basename(&1) == "scenario.ex"))
-
-Enum.each([support_files, agent_files, scenario_files], fn group ->
-  {:ok, _modules, _diagnostics} = Kernel.ParallelCompiler.require(group, return_diagnostics: true)
-end)
+Code.require_file(Path.expand("../loader.exs", __DIR__))
+JidokaExamples.Loader.load!(__DIR__)
 
 alias JidokaExamples.DurableRefund.Agent, as: DurableRefundAgent
 alias JidokaExamples.DurableRefund.Scenario
+
+Jidoka.Kino.setup_notebook(model: "test:durable-refund-script", check_provider?: false)
 ```
 
 ## Run The Demo
@@ -29,10 +26,6 @@ alias JidokaExamples.DurableRefund.Scenario
 This Livebook runs one deterministic refund agent through asynchronous
 streaming, cancellation, execution limits, crash recovery, and a safe session
 fork. It does not use a provider key or network access.
-
-```elixir
-Jidoka.Kino.setup_notebook(model: "test:durable-refund-script", check_provider?: false)
-```
 
 ## Inspect The Agent
 

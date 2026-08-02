@@ -5,15 +5,15 @@ The Support Agent is a complete deterministic Jidoka example. Its one scenario,
 
 ```text
 request
-  -> Mock LLM tool request
+  -> scripted model tool request
   -> operation control
   -> action or interrupt
   -> operation result
-  -> next Mock LLM observation
+  -> next scripted model observation
   -> final result
 ```
 
-The scenario has three deterministic cases:
+The runtime invariant tests have three deterministic cases:
 
 - `allowed_round_trip` verifies tool calling, operation control, and tool
   observation.
@@ -25,6 +25,21 @@ The scenario has three deterministic cases:
 The agent and action are components that these cases use. The cases do not
 claim to prove their complete public contracts.
 
+## Read It In This Order
+
+1. `lib/agent.ex` - the agent instructions, context, tool, and control.
+2. `lib/actions/lookup_order.ex` - the application operation.
+3. `lib/controls/require_order_approval.ex` - the allow-or-review policy.
+4. `lib/scenario.ex` - deterministic demo wiring.
+5. `test/controlled_tool_call_test.exs` - application behavior and runtime
+   guarantees.
+6. `support_agent.livemd` - the complete interactive walkthrough.
+
+The agent, action, and control are application patterns that you can copy.
+`ScriptedLLM`, `scenario.ex`, `example.exs`, the manifest, and the tests are
+demo and verification code. In production, configure a real model on the agent
+instead of passing the scripted `:llm` capability.
+
 ## Run It
 
 Run the command demonstration:
@@ -33,7 +48,7 @@ Run the command demonstration:
 mix run examples/support_agent/example.exs
 ```
 
-Run the three scenario tests with normal ExUnit output:
+Run the example tests with normal ExUnit output:
 
 ```bash
 mix test examples/support_agent/test/controlled_tool_call_test.exs --trace

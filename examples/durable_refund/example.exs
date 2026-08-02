@@ -1,12 +1,80 @@
-files = Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))
-{agent_files, support_files} = Enum.split_with(files, &(Path.basename(&1) == "agent.ex"))
-{scenario_files, support_files} = Enum.split_with(support_files, &(Path.basename(&1) == "scenario.ex"))
+Code.require_file(Path.expand("../loader.exs", __DIR__))
 
-Enum.each([support_files, agent_files, scenario_files], fn group ->
-  {:ok, _modules, _diagnostics} = Kernel.ParallelCompiler.require(group, return_diagnostics: true)
-end)
+IO.puts("[setup] Loading the Durable Refund agent and five deterministic scenarios...")
+JidokaExamples.Loader.load!(__DIR__)
 
-case JidokaExamples.DurableRefund.Scenario.run([]) do
-  {:ok, result} -> IO.inspect(result, pretty: true)
-  {:error, reason} -> raise "Durable Refund example failed: #{inspect(reason)}"
+alias JidokaExamples.DurableRefund.Scenario
+
+run! = fn label, fun ->
+  IO.puts("\n#{label}")
+
+  case fun.() do
+    {:ok, result} -> result
+    {:error, reason} -> raise "Durable Refund example failed: #{inspect(reason)}"
+  end
 end
+
+stream =
+  run!.("[1/5] Stream one asynchronous request and collect its terminal event.", fn ->
+    Scenario.async_streaming()
+  end)
+
+IO.puts("      Thinking: #{stream.thinking}")
+IO.puts("      Streamed answer: #{stream.text}")
+IO.puts("      Terminal events: #{length(stream.terminal_events)}")
+
+cancellation =
+  run!.("[2/5] Cancel active model work and wait for typed cancellation evidence.", fn ->
+    Scenario.typed_cancellation()
+  end)
+
+IO.puts("      Reason: #{cancellation.cancellation.reason}")
+IO.puts("      Forced: #{cancellation.cancellation.forced?}")
+IO.puts("      Model process still alive: #{cancellation.capability_alive?}")
+
+limits =
+  run!.("[3/5] Enforce model-turn, output-token, and capability-time limits.", fn ->
+    Scenario.bounded_execution()
+  end)
+
+IO.puts("      Output-token limit seen by the model: #{limits.max_tokens}")
+IO.puts("      Refund operation calls: #{limits.operation_calls}")
+
+{:error, turn_limit} = limits.turn_result
+{:error, capability_timeout} = limits.timeout_result
+
+IO.puts(
+  "      Turn limit stopped the run: #{turn_limit.details.reason} " <>
+    "(max model turns: #{turn_limit.details.max_model_turns})"
+)
+
+IO.puts(
+  "      Capability limit stopped the run: #{capability_timeout.details.reason} " <>
+    "(timeout: #{capability_timeout.details.timeout_ms} ms)"
+)
+
+recovery =
+  run!.("[4/5] Stop a worker after the refund result is durable, then recover it.", fn ->
+    Scenario.durable_recovery()
+  end)
+
+IO.puts("      Refund operation calls after recovery: #{recovery.operation_calls}")
+IO.puts("      Recovered session status: #{recovery.session.status}")
+IO.puts("      Answer: #{recovery.answer}")
+
+fork =
+  run!.("[5/5] Fork one hibernated session and resume both branches independently.", fn ->
+    Scenario.safe_fork()
+  end)
+
+IO.puts("      Source answer: #{fork.source_answer}")
+IO.puts("      Branch answer: #{fork.branch_answer}")
+IO.puts("      Branch depth: #{fork.branch.lineage.depth}")
+
+IO.puts("""
+
+Next:
+  Read examples/durable_refund/lib/scenarios/ in the README order.
+  Run mix test --only example:durable_refund for the runtime guarantees.
+  Open examples/durable_refund/durable_refund.livemd for the guided walkthrough.
+""")

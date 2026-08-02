@@ -8,8 +8,6 @@ production Jidoka compilation.
 The example is deterministic. It does not use credentials, network access, or
 recorded model responses.
 
-## Setup
-
 ```elixir
 package_root = Path.expand("../..", __DIR__)
 
@@ -18,22 +16,16 @@ Mix.install(
     {:kino, "~> 0.14"},
     {:jidoka, path: package_root}
   ],
-  consolidate_protocols: false
+  consolidate_protocols: false,
+  lockfile: Path.join(package_root, "mix.lock")
 )
 
-files = Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))
-{agent_files, support_files} = Enum.split_with(files, &(Path.basename(&1) == "agent.ex"))
-{scenario_files, support_files} = Enum.split_with(support_files, &(Path.basename(&1) == "scenario.ex"))
-
-Enum.each([support_files, agent_files, scenario_files], fn group ->
-  {:ok, _modules, _diagnostics} = Kernel.ParallelCompiler.require(group, return_diagnostics: true)
-end)
+Code.require_file(Path.expand("../loader.exs", __DIR__))
+JidokaExamples.Loader.load!(__DIR__)
 
 alias JidokaExamples.SupportAgent.Agent, as: SupportAgent
 alias JidokaExamples.SupportAgent.Scenario
-```
 
-```elixir
 Jidoka.Kino.setup_notebook(model: "test:support-example-model", check_provider?: false)
 ```
 
@@ -56,8 +48,8 @@ same files directly.
 
 ## Inspect The First Prompt
 
-Preflight creates the prompt and tool definition. It does not call the Mock LLM
-or run the action.
+Preflight creates the prompt and tool definition. It does not call the scripted
+model or run the action.
 
 ```elixir
 request =
@@ -77,7 +69,7 @@ request =
 
 ## Run The Deterministic Tool Path
 
-The Mock LLM requests `lookup_order`. The control allows normal order access.
+The scripted model requests `lookup_order`. The control allows normal order access.
 The action returns the order, and Jidoka puts that result in the next model
 prompt.
 
@@ -190,7 +182,7 @@ end
 ## Approve And Resume
 
 Approval resumes the same snapshot. Jidoka runs `lookup_order` once and returns
-its result to the Mock LLM.
+its result to the scripted model.
 
 ```elixir
 {:ok, approved_result} =
@@ -213,7 +205,7 @@ receive do
   {:order_observation_seen, %{"order_id" => "A1001", "status" => "in_transit"}} ->
     approved_result.content
 after
-  0 -> raise "approved action result did not reach the Mock LLM"
+  0 -> raise "approved action result did not reach the scripted model"
 end
 ```
 
@@ -223,7 +215,7 @@ end
 
 ## Keep A Not-Found Result Intact
 
-The edge case uses the same controlled tool-call path. The Mock LLM must not
+The edge case uses the same controlled tool-call path. The scripted model must not
 invent carrier or ETA text when the action returns a not-found result.
 
 ```elixir

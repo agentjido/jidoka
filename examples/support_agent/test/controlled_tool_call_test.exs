@@ -10,141 +10,154 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
   @moduletag scenario: :controlled_tool_call
   @moduletag timeout: 5_000
 
-  @tag :tool_calling
-  @tag :operation_control
-  @tag :tool_observation
-  test "returns a tool observation through the controlled operation path" do
-    {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
+  describe "application behavior" do
+    test "answers one order request through the public scenario" do
+      assert {:ok, %{answer: answer, operations: [operation]}} = Scenario.run([])
 
-    assert Agent.spec().id == "support_agent"
-
-    assert {:ok, %Turn.Result{} = result} =
-             Scenario.execute(observer: self(), counter: counter)
-
-    assert_receive {:order_control_called, "lookup_order", control_arguments, false}
-    assert control_arguments == %{"order_id" => "A1001"}
-    assert_receive {:lookup_order_called, "A1001"}
-    assert_receive {:order_observation_seen, observation}
-    assert Elixir.Agent.get(counter, & &1) == 1
-
-    assert observation == expected_order()
-
-    assert result.content ==
-             "Order A1001 is in transit with UPS. ETA: the next business day. " <>
-               "Tell the customer the package is on schedule and ask them to watch for delivery updates."
-
-    assert [%Effect.OperationResult{} = operation_result] = result.agent_state.operation_results
-    assert operation_result.operation == "lookup_order"
-    assert operation_result.arguments == %{"order_id" => "A1001"}
-    assert operation_result.output == observation
-    assert [operation_intent] = journal_intents(result, :operation)
-    assert operation_result.effect_id == operation_intent.id
-    assert operation_result.request_id == result.metadata.debug.request_id
-    assert result.journal.results[operation_intent.id].intent_id == operation_intent.id
-    assert result.journal.results[operation_intent.id].output == observation
-    assert count_results(result.journal, :llm) == 2
-    assert count_results(result.journal, :operation) == 1
-
-    assert_ordered([
-      event_index(result.events, :control_allowed, [
-        {:operation, "lookup_order"},
-        {[:data, :control], "require_order_approval"}
-      ]),
-      event_index(result.events, :capability_call_started,
-        effect_kind: :operation,
-        operation: "lookup_order"
-      ),
-      event_index(result.events, :operation_observed, operation: "lookup_order"),
-      event_index(result.events, :prompt_assembled, loop_index: 1),
-      event_index(result.events, :turn_finished)
-    ])
+      assert answer =~ "Order A1001 is in transit with UPS."
+      assert operation.operation == "lookup_order"
+      assert operation.arguments == %{"order_id" => "A1001"}
+      assert operation.output["status"] == "in_transit"
+    end
   end
 
-  @tag :operation_control
-  @tag :human_review
-  @tag :snapshot_resume
-  test "resumes one interrupted operation after approval" do
-    {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
+  describe "runtime invariants" do
+    @tag :tool_calling
+    @tag :operation_control
+    @tag :tool_observation
+    test "returns a tool observation through the controlled operation path" do
+      {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
 
-    assert {:hibernate, snapshot} =
-             Scenario.execute(
-               observer: self(),
-               counter: counter,
-               credential_ref: "credential:support-demo"
-             )
+      assert Agent.spec().id == "support_agent"
 
-    assert_receive {:order_control_called, "lookup_order", %{"order_id" => "A1001"}, true}
-    assert Elixir.Agent.get(counter, & &1) == 0
-    assert snapshot.turn_state.agent_state.operation_results == []
-    assert count_results(snapshot.turn_state.journal, :operation) == 0
+      assert {:ok, %Turn.Result{} = result} =
+               Scenario.execute(observer: self(), counter: counter)
 
-    assert [pending_operation] =
-             Enum.filter(snapshot.turn_state.pending_effects, &(&1.kind == :operation))
+      assert_receive {:order_control_called, "lookup_order", control_arguments, false}
+      assert control_arguments == %{"order_id" => "A1001"}
+      assert_receive {:lookup_order_called, "A1001"}
+      assert_receive {:order_observation_seen, observation}
+      assert Elixir.Agent.get(counter, & &1) == 1
 
-    assert {:ok, [review]} = Jidoka.pending_reviews(snapshot)
-    assert review.operation == "lookup_order"
-    assert review.arguments == %{"order_id" => "A1001"}
-    assert review.reason == :authenticated_order_access
+      assert observation == expected_order()
 
-    assert {:ok, %Turn.Result{} = result} =
-             Scenario.approve(snapshot, review,
-               observer: self(),
-               counter: counter
-             )
+      assert result.content ==
+               "Order A1001 is in transit with UPS. ETA: the next business day. " <>
+                 "Tell the customer the package is on schedule and ask them to watch for delivery updates."
 
-    assert_receive {:lookup_order_called, "A1001"}
-    assert_receive {:order_observation_seen, observation}
-    assert Elixir.Agent.get(counter, & &1) == 1
-    assert observation == expected_order()
-    assert [operation_result] = result.agent_state.operation_results
-    assert operation_result.output == observation
-    assert operation_result.effect_id == pending_operation.id
-    assert result.journal.results[pending_operation.id].intent_id == pending_operation.id
-    assert count_results(result.journal, :operation) == 1
-    assert String.starts_with?(result.content, "Order A1001 is in transit with UPS.")
+      assert [%Effect.OperationResult{} = operation_result] = result.agent_state.operation_results
+      assert operation_result.operation == "lookup_order"
+      assert operation_result.arguments == %{"order_id" => "A1001"}
+      assert operation_result.output == observation
+      assert [operation_intent] = journal_intents(result, :operation)
+      assert operation_result.effect_id == operation_intent.id
+      assert operation_result.request_id == result.metadata.debug.request_id
+      assert result.journal.results[operation_intent.id].intent_id == operation_intent.id
+      assert result.journal.results[operation_intent.id].output == observation
+      assert count_results(result.journal, :llm) == 2
+      assert count_results(result.journal, :operation) == 1
 
-    assert_ordered([
-      event_index(result.events, :control_interrupted, operation: "lookup_order"),
-      event_index(result.events, :approval_requested, operation: "lookup_order"),
-      event_index(result.events, :turn_hibernated),
-      event_index(result.events, :approval_responded, operation: "lookup_order"),
-      event_index(result.events, :approval_applied, operation: "lookup_order"),
-      event_index(result.events, :capability_call_started,
-        effect_kind: :operation,
-        operation: "lookup_order"
-      ),
-      event_index(result.events, :operation_observed, operation: "lookup_order"),
-      event_index(result.events, :prompt_assembled, loop_index: 1),
-      event_index(result.events, :turn_finished)
-    ])
-  end
+      assert_ordered([
+        event_index(result.events, :control_allowed, [
+          {:operation, "lookup_order"},
+          {[:data, :control], "require_order_approval"}
+        ]),
+        event_index(result.events, :capability_call_started,
+          effect_kind: :operation,
+          operation: "lookup_order"
+        ),
+        event_index(result.events, :operation_observed, operation: "lookup_order"),
+        event_index(result.events, :prompt_assembled, loop_index: 1),
+        event_index(result.events, :turn_finished)
+      ])
+    end
 
-  @tag :tool_observation
-  test "preserves a not-found operation result for the next model input" do
-    {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
+    @tag :operation_control
+    @tag :human_review
+    @tag :snapshot_resume
+    test "resumes one interrupted operation after approval" do
+      {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
 
-    assert {:ok, %Turn.Result{} = result} =
-             Scenario.execute(order_id: " z9999 ", observer: self(), counter: counter)
+      assert {:hibernate, snapshot} =
+               Scenario.execute(
+                 observer: self(),
+                 counter: counter,
+                 credential_ref: "credential:support-demo"
+               )
 
-    assert_receive {:lookup_order_called, "Z9999"}
-    assert_receive {:order_observation_seen, observation}
-    assert Elixir.Agent.get(counter, & &1) == 1
+      assert_receive {:order_control_called, "lookup_order", %{"order_id" => "A1001"}, true}
+      assert Elixir.Agent.get(counter, & &1) == 0
+      assert snapshot.turn_state.agent_state.operation_results == []
+      assert count_results(snapshot.turn_state.journal, :operation) == 0
 
-    assert observation == %{
-             "order_id" => "Z9999",
-             "recommended_action" => "Ask the customer to confirm the order id.",
-             "status" => "not_found",
-             "summary" => "No order matched that id."
-           }
+      assert [pending_operation] =
+               Enum.filter(snapshot.turn_state.pending_effects, &(&1.kind == :operation))
 
-    assert [operation_result] = result.agent_state.operation_results
-    assert operation_result.output == observation
+      assert {:ok, [review]} = Jidoka.pending_reviews(snapshot)
+      assert review.operation == "lookup_order"
+      assert review.arguments == %{"order_id" => "A1001"}
+      assert review.reason == :authenticated_order_access
 
-    assert result.content ==
-             "Order Z9999 was not found. Ask the customer to confirm the order id."
+      assert {:ok, %Turn.Result{} = result} =
+               Scenario.approve(snapshot, review,
+                 observer: self(),
+                 counter: counter
+               )
 
-    refute result.content =~ "with ."
-    refute result.content =~ "ETA: ."
+      assert_receive {:lookup_order_called, "A1001"}
+      assert_receive {:order_observation_seen, observation}
+      assert Elixir.Agent.get(counter, & &1) == 1
+      assert observation == expected_order()
+      assert [operation_result] = result.agent_state.operation_results
+      assert operation_result.output == observation
+      assert operation_result.effect_id == pending_operation.id
+      assert result.journal.results[pending_operation.id].intent_id == pending_operation.id
+      assert count_results(result.journal, :operation) == 1
+      assert String.starts_with?(result.content, "Order A1001 is in transit with UPS.")
+
+      assert_ordered([
+        event_index(result.events, :control_interrupted, operation: "lookup_order"),
+        event_index(result.events, :approval_requested, operation: "lookup_order"),
+        event_index(result.events, :turn_hibernated),
+        event_index(result.events, :approval_responded, operation: "lookup_order"),
+        event_index(result.events, :approval_applied, operation: "lookup_order"),
+        event_index(result.events, :capability_call_started,
+          effect_kind: :operation,
+          operation: "lookup_order"
+        ),
+        event_index(result.events, :operation_observed, operation: "lookup_order"),
+        event_index(result.events, :prompt_assembled, loop_index: 1),
+        event_index(result.events, :turn_finished)
+      ])
+    end
+
+    @tag :tool_observation
+    test "preserves a not-found operation result for the next model input" do
+      {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
+
+      assert {:ok, %Turn.Result{} = result} =
+               Scenario.execute(order_id: " z9999 ", observer: self(), counter: counter)
+
+      assert_receive {:lookup_order_called, "Z9999"}
+      assert_receive {:order_observation_seen, observation}
+      assert Elixir.Agent.get(counter, & &1) == 1
+
+      assert observation == %{
+               "order_id" => "Z9999",
+               "recommended_action" => "Ask the customer to confirm the order id.",
+               "status" => "not_found",
+               "summary" => "No order matched that id."
+             }
+
+      assert [operation_result] = result.agent_state.operation_results
+      assert operation_result.output == observation
+
+      assert result.content ==
+               "Order Z9999 was not found. Ask the customer to confirm the order id."
+
+      refute result.content =~ "with ."
+      refute result.content =~ "ETA: ."
+    end
   end
 
   defp count_results(%Effect.Journal{results: results}, kind) do

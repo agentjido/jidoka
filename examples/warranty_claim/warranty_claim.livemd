@@ -3,8 +3,6 @@
 This Livebook runs a deterministic warranty claim review. It does not use a
 provider key or network access.
 
-## Setup
-
 ```elixir
 package_root = Path.expand("../..", __DIR__)
 
@@ -17,20 +15,13 @@ Mix.install(
   lockfile: Path.join(package_root, "mix.lock")
 )
 
-files = Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))
-{agent_files, support_files} = Enum.split_with(files, &(Path.basename(&1) == "agent.ex"))
-{scenario_files, support_files} = Enum.split_with(support_files, &(Path.basename(&1) == "scenario.ex"))
-
-Enum.each([support_files, agent_files, scenario_files], fn group ->
-  {:ok, _modules, _diagnostics} = Kernel.ParallelCompiler.require(group, return_diagnostics: true)
-end)
+Code.require_file(Path.expand("../loader.exs", __DIR__))
+JidokaExamples.Loader.load!(__DIR__)
 
 alias JidokaExamples.WarrantyClaim.Agent, as: WarrantyAgent
 alias JidokaExamples.WarrantyClaim.Scenario
 alias JidokaExamples.WarrantyClaim.ScriptedLLM
-```
 
-```elixir
 Jidoka.Kino.setup_notebook(model: "test:warranty-static", check_provider?: false)
 ```
 

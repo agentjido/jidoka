@@ -18,6 +18,21 @@ The example proves these behaviors:
 The scripted model makes the failure and repair paths repeatable. It does not
 use a provider key, network request, or recorded provider response.
 
+## Read It In This Order
+
+1. `lib/agent.ex` - the code-first context and result contracts.
+2. `agent.yaml` - the equivalent data-defined agent.
+3. `lib/instructions.ex` - request-time tenant policy.
+4. `lib/scenario.ex` - media input and model-policy wiring.
+5. `test/warranty_claim_triage_test.exs` - application behavior and runtime
+   guarantees.
+6. `warranty_claim.livemd` - the guided contract walkthrough.
+
+The agent, YAML definition, schemas, and instruction provider are application
+patterns. `ScriptedLLM`, `scenario.ex`, `example.exs`, the manifest, and the
+tests are deterministic demo code. A production application supplies real
+provider credentials and keeps the same model-policy and result contracts.
+
 ## Run It
 
 Run the command demo:
