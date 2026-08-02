@@ -346,7 +346,7 @@ defmodule Jidoka.MixProject do
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
-        "xref graph --format cycles --label compile-connected --fail-above 0",
+        "xref graph --format cycles --fail-above 0",
         "cmd env MIX_ENV=test mix test test/architecture/boundaries_test.exs",
         "credo",
         "dialyzer",

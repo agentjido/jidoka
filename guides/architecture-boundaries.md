@@ -49,9 +49,13 @@ The key rules are:
    Its constructor normalizes untrusted input and finishes through schema
    parsing. Its `t()` type, enforced keys, and struct fields come from that
    schema.
+10. Runtime modules receive edge behavior through injected functions or
+    capabilities. They do not call adapters or projections.
+11. The complete source dependency graph stays free of cycles.
 
 The architecture tests in `test/architecture/boundaries_test.exs` enforce these
-rules. The `mix quality` task runs these tests and the compile-cycle check.
+rules. The `mix quality` task runs these tests and the full dependency-cycle
+check.
 
 ## Major Module Map
 
@@ -73,15 +77,18 @@ Jidoka
 │   ├── Jidoka.Agent.Dsl          Spark agent declarations
 │   ├── Jidoka.Agent.ToolSources  tool declaration compiler
 │   ├── Jidoka.Workflow.Dsl       Spark workflow declarations
+│   ├── Jidoka.Workflow.Resolver  workflow definition resolution
 │   ├── Jidoka.Import             JSON and YAML to agent contracts
 │   ├── Jidoka.Export             agent contracts to portable data
 │   └── Jidoka.Instructions       per-request instruction resolution
 │
-├── Application use cases
+├── Application composition and use cases
+│   ├── Jidoka.Agent.RuntimeOptions runtime dependency composition
 │   ├── Jidoka.Turn.Execution     run or resume one turn
 │   ├── Jidoka.Session.Execution  create, run, recover, or fork sessions
 │   ├── Jidoka.Review.Execution   list, approve, or deny reviews
-│   ├── Jidoka.Chat.*             route and control async requests
+│   ├── Jidoka.Chat.Async         async request lifecycle
+│   ├── Jidoka.Chat.RequestController request process ownership
 │   └── Jidoka.Workflow.Scheduler own schedules and trigger runs
 │
 ├── Core contracts and pure changes
@@ -105,8 +112,7 @@ Jidoka
 │   │   ├── Transitions           pure lease and state changes
 │   │   ├── Store                 persistence port
 │   │   ├── Lease                 worker ownership data
-│   │   ├── Lineage               fork history data
-│   │   └── Replay                data-only replay view
+│   │   └── Lineage               fork history data
 │   ├── Jidoka.Snapshot           durable turn checkpoint
 │   ├── Jidoka.Review             interrupt, request, response, and policy
 │   ├── Jidoka.Memory             memory contracts and store port
@@ -131,9 +137,11 @@ Jidoka
 │   ├── Jidoka.Runtime.EffectInterpreter
 │   ├── Jidoka.Runtime.Capabilities
 │   ├── Jidoka.Runtime.Controls
+│   ├── Jidoka.Runtime.EventDispatcher
 │   ├── Jidoka.Runtime.Spine.Steps
 │   ├── Jidoka.Memory.Runtime     recall and capture coordination
-│   └── Jidoka.Workflow.Runtime.* workflow step execution
+│   ├── Jidoka.Workflow.Runtime.* workflow step execution
+│   └── Jidoka.Workflow.Loop      bounded loop execution
 │
 ├── External adapters
 │   ├── Jidoka.Adapter.Jido
@@ -143,8 +151,7 @@ Jidoka
 │   │   ├── RunTurn               Jido signal action
 │   │   ├── Signals               signal construction
 │   │   ├── Browser               jido_browser actions
-│   │   ├── Skill                 jido_ai skills
-│   │   └── Scheduler             Jido scheduler bridge
+│   │   └── Skill                 jido_ai skills
 │   ├── Jidoka.Adapter.ReqLLM     model provider adapter
 │   └── Jidoka.Adapter.Runic
 │       ├── TurnCompiler          turn workflow compiler
@@ -158,6 +165,8 @@ Jidoka
 │   ├── Jidoka.Projection.*       projectors by architecture area
 │   ├── Jidoka.Inspection
 │   ├── Jidoka.Debug
+│   ├── Jidoka.Session.Replay
+│   ├── Jidoka.Workflow.Graph
 │   ├── Jidoka.Trace
 │   ├── Jidoka.AgentView
 │   └── Jidoka.Kino               dev and test only
@@ -166,8 +175,10 @@ Jidoka
 │   ├── Jidoka.Config             package configuration
 │   ├── Jidoka.Schema             common data validation helpers
 │   ├── Jidoka.Error              normalized error data
+│   ├── Jidoka.Error.*            error types, classes, and formatting
 │   ├── Jidoka.Id                 identifier generation boundary
-│   └── Jidoka.Portable           recursive portable-value conversion
+│   ├── Jidoka.Portable           recursive portable-value conversion
+│   └── Jidoka.Snapshot.Codec     authenticated snapshot encoding
 │
 └── Compatibility
     └── Jidoka.Harness            thin delegate for old advanced callers
@@ -182,6 +193,8 @@ must not own.
 | --- | --- | --- |
 | `Jidoka` and public facades | Short developer workflows and stable verbs | Provider protocol details or durable algorithms |
 | `Jidoka.Agent.*` and `Jidoka.Workflow.Dsl.*` | Compile-time authoring and normalization | Turn execution or storage |
+| `Jidoka.Agent.RuntimeOptions` | Default runtime dependency wiring | Runtime execution or provider translation |
+| `Jidoka.Workflow.Resolver` | Workflow module resolution and validation | Runtime execution or adapter translation |
 | `Jidoka.*.Execution` | Application workflow coordination | Provider SDK calls or presentation |
 | Contract modules | Typed data and validation | Processes, network calls, or storage calls |
 | Transition modules | Pure state changes | Clock reads, identifiers, persistence, or adapter calls |
@@ -192,6 +205,7 @@ must not own.
 | Store and sink implementations | One concrete persistence or output method | Use-case coordination |
 | `Jidoka.Projection.*` | Read-only views of contracts | Domain state changes |
 | `Jidoka.Kino.*` | Notebook presentation in development and test | Production runtime behavior |
+| `Jidoka.Snapshot.Codec` | Snapshot encoding, signatures, and portable-value checks | Snapshot contract creation or review policy |
 | `Jidoka.Harness` | Compatibility delegates | New execution logic |
 
 Some small integration modules stay beside the port that they implement. For
@@ -208,13 +222,14 @@ compile-time Jido authoring edges. Large runtime translations use the explicit
 Use these modules in normal application code. They keep the common path short.
 The root `Jidoka` module stays a small set of stable verbs.
 
-### Application Use Cases
+### Application Composition And Use Cases
 
 These modules coordinate work. Each module owns one kind of workflow:
 
 - `Jidoka.Turn.Execution` owns a direct turn and snapshot resume.
 - `Jidoka.Session.Execution` owns durable session work.
 - `Jidoka.Review.Execution` owns human review work.
+- `Jidoka.Chat.Async` owns the async request lifecycle.
 
 This split prevents session storage, review queues, and direct turns from
 sharing one large harness module.
@@ -236,9 +251,9 @@ separate when the schema refers to them with a precise Zoi schema or a
 
 ### Runtime Effect Shell
 
-The runtime plans effects and interprets them through injected capabilities.
-The runtime does not own provider SDK behavior, Jido process behavior, or Runic
-storage behavior.
+The runtime plans effects and interprets them through injected functions and
+capabilities. It does not call adapter or projection modules. It also does not
+own provider SDK behavior, Jido process behavior, or Runic storage behavior.
 
 ### External Adapters
 
@@ -254,6 +269,9 @@ browser tools into one `Jidoka.Operation.Source` contract.
 The root `Jidoka.Projection` module only dispatches. Projection rules are split
 by area, such as Jidoka.Projection.Turn, Jidoka.Projection.Effect, and
 Jidoka.Projection.Session.
+
+`Jidoka.Session.Replay` and `Jidoka.Workflow.Graph` build read models. They do
+not own durable session or workflow state.
 
 Kino is an optional presentation edge. Its source guard prevents Kino modules
 from entering a production build.

@@ -4,16 +4,26 @@ defmodule Jidoka.Architecture.BoundariesTest do
   @root Path.expand("../..", __DIR__)
 
   @core_contract_globs [
+    "lib/jidoka/agent/{message,state}.ex",
     "lib/jidoka/agent/spec.ex",
     "lib/jidoka/agent/spec/**/*.ex",
+    "lib/jidoka/{cancellation,content_part,context,event,snapshot,usage}.ex",
+    "lib/jidoka/cancellation/**/*.ex",
     "lib/jidoka/effect/**/*.ex",
     "lib/jidoka/turn/{cursor,plan,request,result,state,transition}.ex",
     "lib/jidoka/turn/state/**/*.ex",
     "lib/jidoka/session/{data,lease,lineage,transitions}.ex",
-    "lib/jidoka/review/{interrupt,policy,request,response}.ex",
+    "lib/jidoka/review/{approval,interrupt,policy,request,response}.ex",
     "lib/jidoka/memory/{entry,recall_request,recall_result,write_request,write_result}.ex",
-    "lib/jidoka/workflow/{definition,spec,step,snapshot,run,run_event,retry_policy}.ex",
-    "lib/jidoka/workflow/definition/**/*.ex"
+    "lib/jidoka/workflow/{definition,ref,spec,step,snapshot,run,run_event,retry_policy,schedule}.ex",
+    "lib/jidoka/workflow/definition/**/*.ex",
+    "lib/jidoka/workflow/schedule/**/*.ex"
+  ]
+
+  @runtime_shell_globs [
+    "lib/jidoka/memory/runtime.ex",
+    "lib/jidoka/runtime/**/*.ex",
+    "lib/jidoka/workflow/runtime/**/*.ex"
   ]
 
   @outward_namespaces [
@@ -55,17 +65,19 @@ defmodule Jidoka.Architecture.BoundariesTest do
     assert violations == [], format_violations("outward core dependencies", violations)
   end
 
-  test "runtime code has no direct third-party framework calls" do
+  test "runtime shell does not depend on adapters, projections, or external frameworks" do
     violations =
-      Path.wildcard(Path.join(@root, "lib/jidoka/runtime/**/*.ex"))
+      @runtime_shell_globs
+      |> Enum.flat_map(&Path.wildcard(Path.join(@root, &1)))
+      |> Enum.uniq()
       |> Enum.flat_map(fn file ->
         file
         |> module_references()
-        |> Enum.filter(&external_framework?/1)
+        |> Enum.filter(&runtime_outward_reference?/1)
         |> Enum.map(&{relative(file), &1})
       end)
 
-    assert violations == [], format_violations("runtime adapter bypasses", violations)
+    assert violations == [], format_violations("outward runtime dependencies", violations)
   end
 
   test "internal production modules do not call the root facade" do
@@ -243,8 +255,11 @@ defmodule Jidoka.Architecture.BoundariesTest do
 
   defp outward_reference?(reference), do: Enum.any?(@outward_namespaces, &namespace?(reference, &1))
 
-  defp external_framework?(reference) do
-    Enum.any?(["Jido", "ReqLLM", "Runic", "AshJido"], &namespace?(reference, &1))
+  defp runtime_outward_reference?(reference) do
+    Enum.any?(
+      ["Jidoka.Adapter", "Jidoka.Projection", "Jido", "ReqLLM", "Runic", "AshJido"],
+      &namespace?(reference, &1)
+    )
   end
 
   defp namespace?(reference, namespace),
