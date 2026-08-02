@@ -4,7 +4,7 @@ defmodule Jidoka.Cancellation.Token do
   @enforce_keys [:ref, :owner]
   defstruct [:ref, :owner]
 
-  @opaque t :: %__MODULE__{ref: reference(), owner: pid()}
+  @type t :: %__MODULE__{ref: :atomics.atomics_ref(), owner: pid()}
 
   @spec new() :: t()
   def new do

@@ -347,16 +347,20 @@ defmodule Jidoka.Harness do
   defp recover_claimed_session(%Session{} = session, opts) do
     case Session.latest_snapshot(session) do
       %AgentSnapshot{} = snapshot ->
-        opts = runtime_opts(snapshot, opts)
-
-        with {:ok, capabilities} <- normalize_capabilities(opts) do
-          with_session_lease(session, opts, fn leased_opts ->
-            resume_session_snapshot(session, snapshot, capabilities, leased_opts)
-          end)
-        end
+        resume_recovered_snapshot(session, snapshot, opts)
 
       nil ->
         restart_recovered_request(session, opts)
+    end
+  end
+
+  defp resume_recovered_snapshot(session, snapshot, opts) do
+    opts = runtime_opts(snapshot, opts)
+
+    with {:ok, capabilities} <- normalize_capabilities(opts) do
+      with_session_lease(session, opts, fn leased_opts ->
+        resume_session_snapshot(session, snapshot, capabilities, leased_opts)
+      end)
     end
   end
 

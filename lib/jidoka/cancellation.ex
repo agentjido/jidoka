@@ -6,9 +6,9 @@ defmodule Jidoka.Cancellation do
   does not imply that an external side effect was rolled back.
   """
 
+  alias __MODULE__.Token
   alias Jidoka.Context
   alias Jidoka.Schema
-  alias __MODULE__.Token
 
   @schema Zoi.struct(
             __MODULE__,
@@ -22,6 +22,8 @@ defmodule Jidoka.Cancellation do
           )
 
   @type t :: unquote(Zoi.type_spec(@schema))
+  @typedoc "Opaque request-scoped cancellation signal used by the runtime."
+  @opaque token :: %{required(:ref) => :atomics.atomics_ref(), required(:owner) => pid()}
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -38,7 +40,7 @@ defmodule Jidoka.Cancellation do
   def new!(attrs), do: Schema.parse!(@schema, attrs, "cancellation")
 
   @doc "Returns true when a runtime context or token has a cancellation request."
-  @spec requested?(Context.t() | Token.t() | term()) :: boolean()
+  @spec requested?(Context.t() | token()) :: boolean()
   def requested?(%Context{} = context) do
     context
     |> Context.get_runtime(:cancellation)
@@ -49,7 +51,7 @@ defmodule Jidoka.Cancellation do
   def requested?(_value), do: false
 
   @doc false
-  @spec check(keyword() | Token.t() | nil) :: :ok | {:error, :cancelled}
+  @spec check(keyword() | token() | nil) :: :ok | {:error, :cancelled}
   def check(opts) when is_list(opts) do
     opts
     |> Keyword.get(:cancellation)

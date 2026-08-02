@@ -14,7 +14,7 @@ defmodule Jidoka.Chat.Request do
           request_id: String.t(),
           task: Task.t(),
           controller: pid() | nil,
-          cancellation: Cancellation.Token.t() | nil,
+          cancellation: Cancellation.token() | nil,
           target: term(),
           session_id: String.t() | nil,
           stream_to: pid() | nil,

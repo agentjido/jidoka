@@ -88,19 +88,17 @@ defmodule Jidoka.Harness.Store.InMemory do
 
   defp transition(session_id, opts, transition) when is_function(transition, 1) do
     pid = fetch_pid!(opts)
+    Agent.get_and_update(pid, &apply_transition(&1, session_id, transition))
+  end
 
-    Agent.get_and_update(pid, fn sessions ->
-      case Map.get(sessions, session_id) do
-        nil ->
-          {{:error, {:session_not_found, session_id}}, sessions}
-
-        %Session{} = session ->
-          case transition.(session) do
-            {:ok, %Session{} = updated} = ok -> {ok, Map.put(sessions, session_id, updated)}
-            {:error, _reason} = error -> {error, sessions}
-          end
-      end
-    end)
+  defp apply_transition(sessions, session_id, transition) do
+    with %Session{} = session <- Map.get(sessions, session_id),
+         {:ok, %Session{} = updated} = ok <- transition.(session) do
+      {ok, Map.put(sessions, session_id, updated)}
+    else
+      nil -> {{:error, {:session_not_found, session_id}}, sessions}
+      {:error, _reason} = error -> {error, sessions}
+    end
   end
 
   defp fetch_pid!(opts) do

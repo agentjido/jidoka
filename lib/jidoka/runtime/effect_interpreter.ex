@@ -137,19 +137,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     case run_effect_controls(state, intent, opts) do
       {:ok, %Turn.State{} = state} ->
-        state = EffectTrace.append(state, intent, :capability_call_started, [], opts)
-
-        with :ok <- durable_checkpoint(state, intent, :intent, opts),
-             {:ok, result} <- call_capability(state, intent, capabilities, journal, opts) do
-          journal = Effect.Journal.put_result(journal, result)
-          state = %Turn.State{state | journal: journal}
-          state = EffectTrace.append_capability_result(state, intent, result, opts)
-          state = EffectTrace.append_effect_result(state, intent, result, opts)
-
-          with :ok <- durable_checkpoint(state, intent, :result, opts) do
-            {:ok, result, state}
-          end
-        end
+        execute_controlled_effect(state, intent, capabilities, journal, opts)
 
       {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
         {:interrupt, interrupt, state}
@@ -157,6 +145,39 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       {:error, reason} ->
         {:error, reason}
     end
+  end
+
+  defp execute_controlled_effect(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Capabilities{} = capabilities,
+         %Effect.Journal{} = journal,
+         opts
+       ) do
+    state = EffectTrace.append(state, intent, :capability_call_started, [], opts)
+
+    with :ok <- durable_checkpoint(state, intent, :intent, opts),
+         {:ok, result} <- call_capability(state, intent, capabilities, journal, opts),
+         {:ok, state} <- checkpoint_effect_result(state, intent, result, journal, opts) do
+      {:ok, result, state}
+    end
+  end
+
+  defp checkpoint_effect_result(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Effect.Result{} = result,
+         %Effect.Journal{} = journal,
+         opts
+       ) do
+    journal = Effect.Journal.put_result(journal, result)
+
+    state =
+      %Turn.State{state | journal: journal}
+      |> EffectTrace.append_capability_result(intent, result, opts)
+      |> EffectTrace.append_effect_result(intent, result, opts)
+
+    with :ok <- durable_checkpoint(state, intent, :result, opts), do: {:ok, state}
   end
 
   defp run_effect_controls(
