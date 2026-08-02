@@ -192,7 +192,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
     assert "Some unsafe_once effects are not replay-safe." in warnings
 
     assert {:ok, %ReplayDiagnostics{status: :complete, unsafe_effects: [_unsafe]}} =
-             Jidoka.Session.Replay.diagnose(session)
+             Jidoka.Debug.diagnose(session)
   end
 
   defp account_operations do

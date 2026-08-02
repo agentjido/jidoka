@@ -89,7 +89,7 @@ defmodule Jidoka.DebugTest do
     assert request_id == result.metadata.debug.request_id
 
     assert {:ok, %ReplayDiagnostics{status: :complete, intent_count: 3, result_count: 3}} =
-             Jidoka.Session.Replay.diagnose(session)
+             Jidoka.Debug.diagnose(session)
   end
 
   test "snapshot diagnostics flag incomplete pending effects" do

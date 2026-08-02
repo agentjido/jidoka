@@ -213,7 +213,7 @@ defmodule Jidoka.Inspection do
 
   defp replay_view(%Replay{} = replay) do
     diagnostics =
-      case Replay.diagnose(replay) do
+      case Debug.diagnose(replay) do
         {:ok, diagnostics} -> Jidoka.Projection.project(diagnostics)
         {:error, reason} -> %{error: Error.to_map(reason)}
       end

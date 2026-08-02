@@ -15,7 +15,7 @@ defmodule Jidoka.Projection.Workflow do
       steps: Enum.map(workflow.steps, &project/1),
       dependencies: Portable.project(workflow.dependencies),
       output: ref(workflow.output),
-      graph: Workflow.Graph.project(workflow),
+      graph: graph(workflow),
       input_refs: Enum.map(workflow.input_refs, &Portable.project/1),
       context_refs: Enum.map(workflow.context_refs, &Portable.project/1),
       metadata: Portable.project(workflow.metadata)
@@ -42,6 +42,16 @@ defmodule Jidoka.Projection.Workflow do
       metadata: Portable.project(step.metadata)
     }
     |> Map.reject(fn {_key, value} -> is_nil(value) end)
+  end
+
+  @spec graph(Workflow.Spec.t()) :: map()
+  def graph(%Workflow.Spec{} = spec) do
+    %{
+      id: spec.id,
+      nodes: Enum.map(spec.steps, &graph_node(&1, spec)),
+      edges: graph_edges(spec),
+      output: ref(spec.output)
+    }
   end
 
   @spec target(term()) :: term()
@@ -71,4 +81,58 @@ defmodule Jidoka.Projection.Workflow do
   def ref(list) when is_list(list), do: Enum.map(list, &ref/1)
   def ref(nil), do: nil
   def ref(value), do: Portable.project(value)
+
+  defp graph_node(%Workflow.Step{} = step, %Workflow.Spec{} = spec) do
+    %{
+      name: step.name,
+      kind: step.kind,
+      dependencies: Map.get(spec.dependencies, step.name, []),
+      target: target(step.target),
+      condition: ref(step.condition),
+      when: ref(step.condition_when),
+      unless: ref(step.condition_unless),
+      retry: graph_retry(step.retry),
+      fanout: graph_fanout(step),
+      loop: graph_loop(step),
+      input: ref(step.input),
+      output: graph_output(step)
+    }
+    |> Enum.reject(fn {_key, value} -> empty?(value) end)
+    |> Map.new()
+  end
+
+  defp graph_edges(%Workflow.Spec{} = spec) do
+    Enum.flat_map(spec.dependencies, fn {to, froms} ->
+      Enum.map(froms, fn from -> %{from: from, to: to} end)
+    end)
+  end
+
+  defp graph_retry(nil), do: nil
+  defp graph_retry(retry), do: Portable.project(retry)
+
+  defp graph_fanout(%Workflow.Step{kind: :map} = step) do
+    %{over: ref(step.over), target_kind: step.target_kind, max_concurrency: step.max_concurrency}
+  end
+
+  defp graph_fanout(%Workflow.Step{kind: :reduce} = step) do
+    %{over: ref(step.over), using: target(step.target)}
+  end
+
+  defp graph_fanout(_step), do: nil
+
+  defp graph_loop(%Workflow.Step{kind: :loop} = step) do
+    %{initial: ref(step.initial), max_iterations: step.max_iterations}
+  end
+
+  defp graph_loop(_step), do: nil
+
+  defp graph_output(%Workflow.Step{kind: :gate}), do: :boolean
+  defp graph_output(%Workflow.Step{kind: :map}), do: :list
+  defp graph_output(%Workflow.Step{kind: :loop}), do: :loop_result
+  defp graph_output(_step), do: nil
+
+  defp empty?(nil), do: true
+  defp empty?(%{} = map), do: map_size(map) == 0
+  defp empty?([]), do: true
+  defp empty?(_value), do: false
 end
