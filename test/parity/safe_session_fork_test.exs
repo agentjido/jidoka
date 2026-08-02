@@ -15,6 +15,8 @@ defmodule Jidoka.Parity.SafeSessionForkTest do
 
   import Jidoka.TestSupport, only: [count_results: 2, final_llm: 1]
 
+  @moduletag :e08
+
   test "a stored snapshot creates independent runnable branches" do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}
@@ -65,6 +67,12 @@ defmodule Jidoka.Parity.SafeSessionForkTest do
     assert branch_after_resume.session_id == "sess_branch"
     assert source_after_resume.lineage == nil
     assert branch_after_resume.lineage == branch.lineage
+
+    assert {:ok, replay} = Jidoka.Session.replay(source_after_resume)
+    assert replay.session_id == source_after_resume.session_id
+    assert replay.status == :finished
+    assert replay.result.content == "source path"
+    assert replay.timeline != []
   end
 
   test "a fork reuses completed unsafe effect evidence without calling the operation" do

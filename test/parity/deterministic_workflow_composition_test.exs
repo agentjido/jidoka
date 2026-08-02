@@ -8,6 +8,8 @@ defmodule Jidoka.Parity.DeterministicWorkflowCompositionTest do
 
   import Jidoka.TestSupport, only: [count_results: 2, operation_then_final_llm: 3]
 
+  @moduletag :e03
+
   defmodule WorkflowFns do
     @moduledoc false
 

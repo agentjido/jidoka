@@ -11,6 +11,8 @@ defmodule Jidoka.Parity.ResumableToolApprovalTest do
   import Jidoka.TestSupport,
     only: [count_results: 2, event_index: 2, operation_capability_index: 2, timeline: 1]
 
+  @moduletag :e06
+
   defmodule IssueRefund do
     @moduledoc false
 

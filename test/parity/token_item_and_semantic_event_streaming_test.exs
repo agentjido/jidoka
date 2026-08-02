@@ -7,6 +7,8 @@ defmodule Jidoka.Parity.TokenItemAndSemanticEventStreamingTest do
   alias Jidoka.Stream
   alias Jidoka.Turn
 
+  @moduletag :e02
+
   test "mailbox callback and enumerable consumers receive correlated deltas and lifecycle events" do
     request_id = "parity-e02-stream"
     {:ok, callback_events} = Elixir.Agent.start_link(fn -> [] end)

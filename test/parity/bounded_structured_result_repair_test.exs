@@ -28,6 +28,8 @@ defmodule Jidoka.Parity.BoundedStructuredResultRepairTest do
     end
   end
 
+  @tag :a07
+  @tag :a08
   test "validates immediately, repairs once, and fails after the declared bound" do
     {:ok, valid_counter} = Elixir.Agent.start_link(fn -> 0 end)
 

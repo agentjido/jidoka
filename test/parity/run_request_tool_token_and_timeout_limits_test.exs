@@ -10,6 +10,8 @@ defmodule Jidoka.Parity.RunRequestToolTokenAndTimeoutLimitsTest do
 
   import Jidoka.TestSupport, only: [count_results: 2]
 
+  @moduletag :e04
+
   test "input length stops an oversized request before the model runs" do
     spec =
       base_spec(

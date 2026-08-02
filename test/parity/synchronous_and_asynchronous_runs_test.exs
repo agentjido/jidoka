@@ -5,6 +5,8 @@ defmodule Jidoka.Parity.SynchronousAndAsynchronousRunsTest do
   alias Jidoka.Cancellation
   alias Jidoka.Chat.Request
 
+  @moduletag :e01
+
   test "the same agent contract runs synchronously and through an async request handle" do
     llm = fn _intent, _journal, _context ->
       {:ok, %{type: :final, content: "The execution contract is complete."}}

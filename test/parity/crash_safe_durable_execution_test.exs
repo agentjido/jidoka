@@ -16,6 +16,8 @@ defmodule Jidoka.Parity.CrashSafeDurableExecutionTest do
 
   import Jidoka.TestSupport, only: [count_results: 2]
 
+  @moduletag :e07
+
   test "recovery replays a completed unsafe result after the first worker crashes" do
     test_pid = self()
     {:ok, clock} = Elixir.Agent.start_link(fn -> 100 end)
