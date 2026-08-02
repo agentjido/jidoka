@@ -19,9 +19,8 @@ defmodule Jidoka.Snapshot.Codec do
     with {:ok, encoded, given_signature} <- split_signed_payload(signed_payload),
          {:ok, secret} <- signing_secret(),
          :ok <- verify_signature(encoded, given_signature, secret),
-         {:ok, binary} <- Base.url_decode64(encoded, padding: false),
-         {:ok, term} <- safe_binary_to_term(binary) do
-      {:ok, term}
+         {:ok, binary} <- Base.url_decode64(encoded, padding: false) do
+      safe_binary_to_term(binary)
     end
   end
 
