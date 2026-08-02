@@ -27,6 +27,12 @@ alias JidokaExamples.SupportAgent.Agent, as: SupportAgent
 alias JidokaExamples.SupportAgent.Scenario
 
 Jidoka.Kino.setup_notebook(model: "test:support-example-model", check_provider?: false)
+
+Application.put_env(
+  :jidoka,
+  :snapshot_signing_secret,
+  "support livebook snapshot secret is at least thirty-two bytes"
+)
 ```
 
 ## Inspect The Example Files
@@ -166,8 +172,11 @@ review_control_call =
 
 {:ok, [review]} = Jidoka.pending_reviews(snapshot)
 
+{:ok, serialized_snapshot} = Jidoka.Runtime.AgentSnapshot.serialize(snapshot)
+{:ok, restored_snapshot} = Jidoka.Runtime.AgentSnapshot.deserialize(serialized_snapshot)
+
 unless Elixir.Agent.get(action_counter, & &1) == 0 and
-         snapshot.turn_state.agent_state.operation_results == [] do
+         restored_snapshot.turn_state.agent_state.operation_results == [] do
   raise "the action ran before approval"
 end
 
@@ -175,18 +184,21 @@ end
   control: review_control_call,
   operation: review.operation,
   arguments: review.arguments,
-  reason: review.reason
+  reason: review.reason,
+  snapshot_schema: restored_snapshot.schema_version,
+  serialized_bytes: byte_size(serialized_snapshot)
 }
 ```
 
 ## Approve And Resume
 
-Approval resumes the same snapshot. Jidoka runs `lookup_order` once and returns
-its result to the scripted model.
+Approval resumes the serialized snapshot. This simulates storage outside the
+agent process. Jidoka runs `lookup_order` once and returns its result to the
+scripted model.
 
 ```elixir
 {:ok, approved_result} =
-  Scenario.approve(snapshot, review,
+  Scenario.approve(serialized_snapshot, review,
     observer: review_observer,
     counter: action_counter
   )

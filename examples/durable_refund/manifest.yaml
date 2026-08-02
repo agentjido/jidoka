@@ -6,8 +6,10 @@ features:
   - async_execution
   - cancellation
   - crash_recovery
+  - data_only_replay
   - event_streaming
   - execution_budgets
+  - parallel_tool_calling
   - safe_session_fork
 tests:
   - test/execution_and_continuation_test.exs

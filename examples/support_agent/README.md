@@ -17,8 +17,8 @@ The runtime invariant tests have three deterministic cases:
 
 - `allowed_round_trip` verifies tool calling, operation control, and tool
   observation.
-- `interrupted_and_approved` verifies operation control, human review, and
-  snapshot resume.
+- `interrupted_and_approved` verifies operation control, human review,
+  snapshot serialization, and exact resume.
 - `not_found_result` verifies that a sparse action result reaches the next
   model input without malformed answer text.
 
@@ -59,6 +59,7 @@ Run the scenario through its native ExUnit tag:
 ```bash
 mix test --only example:support_agent
 mix test --only tool_calling
+mix test --only serializable_pause_resume
 ```
 
 Open `support_agent.livemd` for the executable walkthrough. Start the Phoenix
@@ -66,3 +67,8 @@ application in `showcase/` and open `/agents/support` for the curated UI.
 
 No path uses a real LLM, provider key, network request, or recorded fixture.
 The local scripted model is in `lib/scripted_llm.ex`.
+
+The command runner and Livebook set a predictable local snapshot signing
+secret so the serialization step runs without application setup. Production
+applications must set their own private `:snapshot_signing_secret` value or
+`JIDOKA_SNAPSHOT_SIGNING_SECRET` environment variable.

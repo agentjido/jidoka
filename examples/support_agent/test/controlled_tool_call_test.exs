@@ -2,6 +2,7 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Effect
+  alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
   alias JidokaExamples.SupportAgent.Agent
   alias JidokaExamples.SupportAgent.Scenario
@@ -75,6 +76,7 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
     @tag :operation_control
     @tag :human_review
     @tag :snapshot_resume
+    @tag :serializable_pause_resume
     test "resumes one interrupted operation after approval" do
       {:ok, counter} = start_supervised({Elixir.Agent, fn -> 0 end})
 
@@ -98,8 +100,12 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
       assert review.arguments == %{"order_id" => "A1001"}
       assert review.reason == :authenticated_order_access
 
+      assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
+      assert {:ok, %AgentSnapshot{} = restored} = AgentSnapshot.deserialize(serialized)
+      assert restored == snapshot
+
       assert {:ok, %Turn.Result{} = result} =
-               Scenario.approve(snapshot, review,
+               Scenario.approve(serialized, review,
                  observer: self(),
                  counter: counter
                )
@@ -129,6 +135,17 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
         event_index(result.events, :prompt_assembled, loop_index: 1),
         event_index(result.events, :turn_finished)
       ])
+    end
+
+    @tag :serializable_pause_resume
+    test "packages the complete serialized review continuation as one scenario" do
+      assert {:ok, report} = Scenario.review_and_resume(observer: self())
+
+      assert report.answer =~ "Order A1001 is in transit with UPS."
+      assert report.operation_calls == 1
+      assert report.review.operation == "lookup_order"
+      assert report.schema_version == AgentSnapshot.schema_version()
+      assert report.serialized_bytes > 0
     end
 
     @tag :tool_observation

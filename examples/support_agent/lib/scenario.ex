@@ -1,6 +1,7 @@
 defmodule JidokaExamples.SupportAgent.Scenario do
   @moduledoc false
 
+  alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Runtime.JidoActions
   alias Jidoka.Schema
   alias JidokaExamples.SupportAgent.Actions.LookupOrder
@@ -65,6 +66,31 @@ defmodule JidokaExamples.SupportAgent.Scenario do
     )
   end
 
+  def review_and_resume(opts \\ []) do
+    observer = Keyword.get(opts, :observer, self())
+    counter = Keyword.get_lazy(opts, :counter, &start_counter!/0)
+
+    with {:hibernate, %AgentSnapshot{} = snapshot} <-
+           execute(
+             observer: observer,
+             counter: counter,
+             credential_ref: Keyword.get(opts, :credential_ref, "credential:support-demo")
+           ),
+         {:ok, serialized} <- AgentSnapshot.serialize(snapshot),
+         {:ok, %AgentSnapshot{} = restored} <- AgentSnapshot.deserialize(serialized),
+         {:ok, [review]} <- Jidoka.pending_reviews(restored),
+         {:ok, result} <- approve(serialized, review, observer: observer, counter: counter) do
+      {:ok,
+       %{
+         answer: result.content,
+         operation_calls: Elixir.Agent.get(counter, & &1),
+         review: review,
+         schema_version: restored.schema_version,
+         serialized_bytes: byte_size(serialized)
+       }}
+    end
+  end
+
   defp mock_llm(order_id, observer) do
     ScriptedLLM.operation_round_trip(
       operation: "lookup_order",
@@ -93,4 +119,9 @@ defmodule JidokaExamples.SupportAgent.Scenario do
 
   defp maybe_put(map, _key, nil), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
+
+  defp start_counter! do
+    {:ok, counter} = Elixir.Agent.start_link(fn -> 0 end)
+    counter
+  end
 end

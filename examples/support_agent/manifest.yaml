@@ -5,6 +5,7 @@ agent: JidokaExamples.SupportAgent.Agent
 features:
   - human_review
   - operation_control
+  - serializable_pause_resume
   - snapshot_resume
   - tool_calling
   - tool_observation

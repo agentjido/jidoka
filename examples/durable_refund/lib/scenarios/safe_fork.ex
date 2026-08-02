@@ -2,6 +2,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.SafeFork do
   @moduledoc false
 
   alias Jidoka.Harness.Session
+  alias Jidoka.Harness.Replay
   alias Jidoka.Harness.Store.InMemory
   alias Jidoka.Runtime.AgentSnapshot
   alias Jidoka.Turn
@@ -35,7 +36,8 @@ defmodule JidokaExamples.DurableRefund.Scenarios.SafeFork do
            Jidoka.Session.resume(branch_id,
              store: store,
              llm: ScriptedLLM.final("automatic refund path")
-           ) do
+           ),
+         {:ok, %Replay{} = replay} <- Jidoka.Session.replay(finished_source) do
       {:ok,
        %{
          branch: finished_branch,
@@ -43,7 +45,8 @@ defmodule JidokaExamples.DurableRefund.Scenarios.SafeFork do
          branch_before_resume: branch,
          source: finished_source,
          source_answer: source_result.content,
-         source_before_fork: source
+         source_before_fork: source,
+         source_replay: replay
        }}
     end
   end

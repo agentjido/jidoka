@@ -25,7 +25,9 @@ Jidoka.Kino.setup_notebook(model: "test:durable-refund-script", check_provider?:
 
 This Livebook runs one deterministic refund agent through asynchronous
 streaming, cancellation, execution limits, crash recovery, and a safe session
-fork. It does not use a provider key or network access.
+fork. It also runs two read-only operations together and proves that model
+observation order stays stable. It does not use a provider key or network
+access.
 
 ## Inspect The Agent
 
@@ -48,6 +50,27 @@ end
   answer: stream_report.answer,
   thinking: stream_report.thinking,
   event_names: Enum.map(stream_report.events, & &1.event)
+}
+```
+
+## Run Parallel Operations In Stable Order
+
+Both policy checks start before either can finish. The scenario releases
+`B2002` first. Jidoka still gives the model the observations in its requested
+order: `A1001`, then `B2002`.
+
+```elixir
+{:ok, parallel_report} = Scenario.parallel_operations(observer: self())
+
+unless parallel_report.completion_order == ["B2002", "A1001"] and
+         parallel_report.observation_order == ["A1001", "B2002"] do
+  raise "parallel operations did not preserve model order"
+end
+
+%{
+  completion_order: parallel_report.completion_order,
+  observation_order: parallel_report.observation_order,
+  answer: parallel_report.answer
 }
 ```
 
@@ -109,12 +132,17 @@ end
 {:ok, fork_report} = Scenario.safe_fork()
 
 unless fork_report.source_answer != fork_report.branch_answer and
-         fork_report.branch.lineage.parent_session_id == fork_report.source.session_id do
+         fork_report.branch.lineage.parent_session_id == fork_report.source.session_id and
+         fork_report.source_replay.status == :finished do
   raise "the safe fork did not create an independent lineage-aware branch"
 end
 
 %{
   source: %{id: fork_report.source.session_id, answer: fork_report.source_answer},
+  replay: %{
+    status: fork_report.source_replay.status,
+    event_count: length(fork_report.source_replay.timeline)
+  },
   branch: %{
     id: fork_report.branch.session_id,
     answer: fork_report.branch_answer,

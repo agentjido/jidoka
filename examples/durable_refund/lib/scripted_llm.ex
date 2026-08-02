@@ -22,6 +22,23 @@ defmodule JidokaExamples.DurableRefund.ScriptedLLM do
     end
   end
 
+  def parallel_policy_checks(order_ids) when is_list(order_ids) do
+    fn _intent, %Effect.Journal{} = journal, _context ->
+      if result_count(journal, :operation) == 0 do
+        {:ok,
+         %{
+           type: :operations,
+           operations:
+             Enum.map(order_ids, fn order_id ->
+               %{name: "check_refund_policy", arguments: %{"order_id" => order_id}}
+             end)
+         }}
+      else
+        {:ok, %{type: :final, content: "Both refund policies are eligible."}}
+      end
+    end
+  end
+
   def final(content) when is_binary(content) do
     fn _intent, _journal, _context -> {:ok, %{type: :final, content: content}} end
   end

@@ -4,13 +4,15 @@ The Durable Refund Agent demonstrates the execution and continuation feature gro
 with one deterministic business flow. It does not use a provider key, network
 request, or recorded model response.
 
-The five deterministic demonstrations show:
+The six deterministic demonstrations show:
 
 - one asynchronous request with thinking and content deltas;
+- two read-only operations that finish in reverse order but stay in model order;
 - typed cooperative cancellation with one terminal event;
 - model-turn, output-token, and capability-time limits;
 - worker crash recovery after an unsafe refund result is durable;
-- an independent runnable fork with root and parent lineage.
+- data-only replay plus an independent runnable fork with root and parent
+  lineage.
 
 The crash case stops the first worker after the refund result reaches the
 session store but before the worker can acknowledge it. A second worker takes
@@ -22,13 +24,16 @@ calling `issue_refund` again.
 1. `lib/agent.ex` - the agent limits and unsafe-once refund operation.
 2. `lib/actions/issue_refund.ex` - the external effect boundary.
 3. `lib/scenarios/async_execution.ex` - streaming and cancellation.
-4. `lib/scenarios/execution_limits.ex` - turn, token, and timeout limits.
-5. `lib/scenarios/durable_recovery.ex` - checkpoint, lease, and recovery
+4. `lib/scenarios/parallel_operations.ex` - bounded parallel tool calls and
+   ordered observations.
+5. `lib/scenarios/execution_limits.ex` - turn, token, and timeout limits.
+6. `lib/scenarios/durable_recovery.ex` - checkpoint, lease, and recovery
    behavior.
-6. `lib/scenarios/safe_fork.ex` - independent session branches.
-7. `test/execution_and_continuation_test.exs` - application behavior and
+7. `lib/scenarios/safe_fork.ex` - data-only replay and independent session
+   branches.
+8. `test/execution_and_continuation_test.exs` - application behavior and
    runtime guarantees.
-8. `durable_refund.livemd` - the guided runtime walkthrough.
+9. `durable_refund.livemd` - the guided runtime walkthrough.
 
 The agent, action, control, limits, and store interfaces are application
 patterns. `ScriptedLLM`, the scenario modules, `example.exs`, the manifest, and
@@ -53,7 +58,7 @@ Open `durable_refund.livemd` for the complete executable walkthrough.
 - `lib/controls/allow_refund.ex` makes the unsafe operation policy explicit.
 - `lib/scripted_llm.ex` provides deterministic stream, cancel, and refund paths.
 - `lib/scenario.ex` gives callers one stable entry point.
-- `lib/scenarios/` separates the five runtime demonstrations by concept.
+- `lib/scenarios/` separates the six runtime demonstrations by concept.
 - `example.exs` is the small command entry point.
 - `test/execution_and_continuation_test.exs` is the behavior authority.
 

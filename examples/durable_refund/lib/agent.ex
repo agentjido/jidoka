@@ -5,7 +5,7 @@ defmodule JidokaExamples.DurableRefund.Agent do
 
   use Jidoka.Agent
 
-  alias JidokaExamples.DurableRefund.Actions.IssueRefund
+  alias JidokaExamples.DurableRefund.Actions.{CheckRefundPolicy, IssueRefund}
   alias JidokaExamples.DurableRefund.Controls.AllowRefund
 
   agent :durable_refund do
@@ -20,6 +20,7 @@ defmodule JidokaExamples.DurableRefund.Agent do
   end
 
   tools do
+    action(CheckRefundPolicy, idempotency: :pure)
     action(IssueRefund, idempotency: :unsafe_once)
   end
 

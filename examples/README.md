@@ -53,6 +53,43 @@ mix test examples/durable_refund/test/execution_and_continuation_test.exs --trac
 The YAML manifest lists the aggregate features for an example. Tags on each
 ExUnit test show the exact features that the scenario verifies.
 
+The first two feature-inventory sections are a closed milestone. Run their
+focused provider-free parity proofs with:
+
+```bash
+mix test --include parity test/parity
+```
+
+## First Two Sections
+
+All 17 features have product code, deterministic tests, public guides, and an
+executable example path.
+
+| ID | Contract | Example coverage |
+| --- | --- | --- |
+| A01 | Code-first agent definition | Getting Started and Warranty Claim: `code_first_authoring` |
+| A02 | Data-defined agent spec and serialization | Warranty Claim: `data_defined_authoring` |
+| A03 | Dynamic instructions | Warranty Claim: `dynamic_instructions` |
+| A04 | Typed context injection | Warranty Claim: `typed_context` |
+| A05 | Provider/model abstraction | Getting Started and Warranty Claim: `provider_model_abstraction` |
+| A06 | Routing, fallback, and model retry | Warranty Claim: `model_routing` |
+| A07 | Typed structured result | Warranty Claim: `structured_results` |
+| A08 | Bounded result repair | Warranty Claim: `result_repair` |
+| A09 | Multimodal input and output | Warranty Claim: `multimodal_content` |
+| E01 | Synchronous and asynchronous runs | Getting Started: `synchronous_execution`; Durable Refund: `async_execution` |
+| E02 | Token and semantic event streaming | Durable Refund: `event_streaming` |
+| E03 | Parallel tools with ordered observations | Durable Refund: `parallel_tool_calling` |
+| E04 | Execution limits | Durable Refund: `execution_budgets` |
+| E05 | Cancellation evidence | Durable Refund: `cancellation` |
+| E06 | Serializable pause and resume | Support Agent: `serializable_pause_resume` |
+| E07 | Crash-safe durable execution | Durable Refund: `crash_recovery` |
+| E08 | Data replay and safe forks | Durable Refund: `data_only_replay`, `safe_session_fork` |
+
+A02 is complete inside the versioned Jidoka document format. E07 is complete
+for the documented single-node durable contract and application-owned store
+extension. E08 means data-only replay and lineage-aware forks from safe
+snapshots; it does not mean arbitrary state editing or effect re-execution.
+
 Run all Livebooks without their standalone `Mix.install` calls:
 
 ```bash
@@ -83,12 +120,12 @@ examples/<name>/
 | Example | Level | Read it to learn |
 | --- | --- | --- |
 | Getting Started | Beginner | Agent definition, preflight, and one text answer |
-| Support Agent | Intermediate | Tools, observations, controls, approval, and resume |
+| Support Agent | Intermediate | Tools, controls, approval, serialized pause, and resume |
 | Warranty Claim | Advanced | Data authoring, typed results, media, fallback, and repair |
-| Durable Refund | Expert | Async work, streams, limits, recovery, and forks |
+| Durable Refund | Expert | Async work, parallel tools, streams, limits, recovery, and forks |
 
 Use Getting Started for the smallest complete agent. Use the Support Agent for
 a controlled tool flow. Use the Warranty Claim for agent authoring, model
 policy, structured results, and multimodal content. Use the Durable Refund
 Agent for asynchronous execution, cancellation, execution limits, durable
-recovery, and safe session forks.
+recovery, parallel tool calls, and safe session forks.
