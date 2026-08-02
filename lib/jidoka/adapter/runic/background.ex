@@ -15,9 +15,9 @@ defmodule Jidoka.Adapter.Runic.Background do
   the current VM.
   """
 
-  alias Jidoka.Workflow
   alias Jidoka.Adapter.Runic.Background.Executor
   alias Jidoka.Workflow.{Run, RunEvent, Spec}
+  alias Jidoka.Workflow.Resolver
   alias Jidoka.Adapter.Runic.Workflow, as: Runtime
   alias Runic.Runner
 
@@ -44,7 +44,7 @@ defmodule Jidoka.Adapter.Runic.Background do
           {:ok, String.t()} | {:error, term()}
   def submit(runner, workflow_module, input, opts \\ [])
       when is_atom(runner) and is_atom(workflow_module) and is_list(opts) do
-    with {:ok, spec} <- Workflow.definition(workflow_module),
+    with {:ok, spec} <- Resolver.definition(workflow_module),
          :ok <- require_dsl_workflow(spec),
          {:ok, run_id} <- run_id(opts),
          {:ok, state, runtime_opts} <- Runtime.prepare(spec, input, opts),

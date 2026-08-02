@@ -13,6 +13,7 @@ defmodule Jidoka.Operation.Source.Workflow do
   alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Schema
+  alias Jidoka.Workflow.Resolver
   alias Jidoka.Workflow.Spec
 
   @result_modes [:output, :structured]
@@ -242,7 +243,7 @@ defmodule Jidoka.Operation.Source.Workflow do
   defp fetch_context(context, key), do: Map.fetch(context, key)
 
   defp normalize_workflow(workflow) when is_atom(workflow),
-    do: Jidoka.Workflow.definition(workflow)
+    do: Resolver.definition(workflow)
 
   defp normalize_workflow(workflow), do: {:error, {:invalid_workflow_module, workflow}}
 

@@ -3,6 +3,7 @@ defmodule Jidoka.Workflow.Schedule do
 
   alias Jidoka.Adapter.Jido.Scheduler
   alias Jidoka.Schema
+  alias Jidoka.Workflow.Resolver
   alias Jidoka.Workflow.RetryPolicy
 
   @overlap_policies [:skip, :allow]
@@ -139,7 +140,7 @@ defmodule Jidoka.Workflow.Schedule do
   defp normalize_trigger(trigger, _timezone, _now), do: {:error, {:invalid_schedule_trigger, trigger}}
 
   defp normalize_workflow(workflow) when is_atom(workflow) do
-    case Jidoka.Workflow.definition(workflow) do
+    case Resolver.definition(workflow) do
       {:ok, %{mode: :dsl}} -> {:ok, workflow}
       {:ok, spec} -> {:error, {:scheduled_workflow_requires_dsl, spec.id}}
       {:error, _reason} = error -> error

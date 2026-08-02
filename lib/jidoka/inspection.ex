@@ -21,6 +21,7 @@ defmodule Jidoka.Inspection do
   alias Jidoka.Turn.Execution, as: TurnExecution
   alias Jidoka.Runtime.Spine.Steps
   alias Jidoka.Workflow
+  alias Jidoka.Workflow.Resolver, as: WorkflowResolver
 
   @type inspectable ::
           module()
@@ -54,8 +55,8 @@ defmodule Jidoka.Inspection do
         {:ok, spec} = agent_spec(agent_module)
         agent_view(spec, Keyword.put(opts, :module, agent_module))
 
-      match?({:ok, _workflow}, Workflow.definition(agent_module)) ->
-        {:ok, workflow} = Workflow.definition(agent_module)
+      match?({:ok, _workflow}, WorkflowResolver.definition(agent_module)) ->
+        {:ok, workflow} = WorkflowResolver.definition(agent_module)
         workflow_view(workflow)
 
       true ->

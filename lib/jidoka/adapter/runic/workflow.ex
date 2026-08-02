@@ -5,6 +5,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
 
   alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Context
+  alias Jidoka.Workflow.Resolver
   alias Jidoka.Workflow.Runtime.{StepRunner, Value}
   alias Jidoka.Workflow.Snapshot
   alias Jidoka.Workflow.Spec
@@ -52,7 +53,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
   @spec resume(Snapshot.t(), keyword()) ::
           {:ok, term()} | {:hibernate, Snapshot.t()} | {:error, term()}
   def resume(%Snapshot{} = snapshot, opts \\ []) when is_list(opts) do
-    with {:ok, spec} <- Jidoka.Workflow.definition(snapshot.workflow),
+    with {:ok, spec} <- Resolver.definition(snapshot.workflow),
          :ok <- validate_snapshot(snapshot, spec),
          {:ok, runtime_opts} <- normalize_opts(Keyword.put_new(opts, :context, snapshot.context)),
          :ok <- validate_context_refs(spec, runtime_opts.context) do
