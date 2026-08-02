@@ -89,7 +89,7 @@ defmodule JidokaExamples.WorkflowComposition.Scenario do
 
   defp run_agent(observer) do
     with_retry_context([observer: observer], fn context ->
-      Agent.run_turn("Fulfill the sample order.",
+      Jidoka.turn(Agent, "Fulfill the sample order.",
         context: Jidoka.Context.data(context),
         operation_context: context,
         llm: ScriptedLLM.capability(@input)

@@ -1,9 +1,11 @@
 # Jidoka Contracts And Runtime
 
-## Section
+## Purpose And Boundary
 
 This notebook shows the Jidoka center of gravity: agent definition data, a compiled
 turn plan, preflight inspection, a deterministic tool loop, and hibernate/resume.
+It uses public APIs for the normal flow. `Jidoka.Kino` is development and test
+support; it is not compiled into a production release.
 
 ```elixir
 Mix.install(
@@ -86,7 +88,7 @@ fake_llm = fn _intent, journal, _context ->
   end
 end
 
-{:ok, result} = ContractAgent.run_turn("Check contract C-100.", llm: fake_llm)
+{:ok, result} = Jidoka.turn(ContractAgent, "Check contract C-100.", llm: fake_llm)
 
 %{
   content: result.content,
@@ -104,7 +106,7 @@ end
 
 ```elixir
 {:hibernate, snapshot} =
-  ContractAgent.run_turn("Check contract C-100.",
+  Jidoka.turn(ContractAgent, "Check contract C-100.",
     llm: fake_llm,
     checkpoint: :after_prompt
   )
@@ -113,6 +115,8 @@ end
 ```
 
 ```elixir
+# Snapshot resume has no agent module to restore the action handler. Supply the
+# retained action adapter as an advanced runtime capability.
 {:ok, resumed} =
   Jidoka.resume(snapshot,
     llm: fake_llm,

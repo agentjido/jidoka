@@ -1,9 +1,11 @@
 # Controls, Sessions, And Human Review
 
-## Section
+## Purpose And Boundary
 
 This notebook demonstrates operation controls, durable session snapshots, pending
 review requests, and approval-based resume.
+It uses the `Jidoka` and `Jidoka.Session` public APIs. `Jidoka.Kino` is
+development and test support; it is not compiled into a production release.
 
 ```elixir
 Mix.install(
@@ -70,7 +72,7 @@ end
 {:ok, store_pid} = Jidoka.Session.Store.InMemory.start_link()
 store = {Jidoka.Session.Store.InMemory, pid: store_pid}
 
-{:ok, session} = Jidoka.Harness.start_session(RefundAgent.spec(), session_id: "refund-demo", store: store)
+{:ok, session} = Jidoka.session(RefundAgent, "refund-demo", store: store)
 {:ok, _inspection} = Jidoka.Kino.debug_agent(RefundAgent)
 session.status
 ```
@@ -94,7 +96,7 @@ fake_llm = fn _intent, journal, _context ->
 end
 
 {:hibernate, waiting, snapshot} =
-  Jidoka.Harness.run_session("refund-demo", "Refund order A1001.",
+  Jidoka.Session.run("refund-demo", "Refund order A1001.",
     store: store,
     llm: fake_llm
   )
@@ -102,18 +104,18 @@ end
 %{
   status: waiting.status,
   cursor: snapshot.cursor.phase,
-  reviews: Jidoka.Harness.pending_reviews(waiting)
+  reviews: Jidoka.pending_reviews(waiting)
 }
 ```
 
 ## Approve And Resume
 
 ```elixir
-{:ok, [review]} = Jidoka.Harness.pending_reviews(store)
+{:ok, [review]} = Jidoka.pending_reviews(store)
 approval = Jidoka.Review.Response.approve(review.interrupt_id)
 
 {:ok, finished, result} =
-  Jidoka.Harness.resume_session("refund-demo",
+  Jidoka.Session.resume("refund-demo",
     store: store,
     approval: approval,
     llm: fake_llm,

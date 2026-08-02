@@ -13,7 +13,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.ParallelOperations do
 
     task =
       Task.async(fn ->
-        Agent.run_turn("Check both refund policies",
+        Jidoka.turn(Agent, "Check both refund policies",
           llm: ScriptedLLM.parallel_policy_checks(@order_ids),
           max_parallel_operations: 2,
           operation_context: %{example_observer: observer}

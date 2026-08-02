@@ -12,7 +12,7 @@ defmodule JidokaExamples.GettingStarted.Scenario do
     observer = Keyword.get(opts, :observer)
 
     with {:ok, preflight} <- Jidoka.preflight(Agent, input),
-         {:ok, answer} <- Agent.chat(input, llm: deterministic_model(observer)) do
+         {:ok, answer} <- Jidoka.chat(Agent, input, llm: deterministic_model(observer)) do
       {:ok,
        %{
          agent_id: preflight.agent.id,

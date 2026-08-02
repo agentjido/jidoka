@@ -1,9 +1,12 @@
 # Import, Eval, And Trace
 
-## Section
+## Purpose And Boundary
 
 This notebook shows a data-authored agent imported from YAML, explicit registries
 for executable references, deterministic evals, and trace recording.
+Imported specs contain definition data, not executable handlers. The notebook
+therefore supplies the retained action adapter as an advanced runtime
+capability. `Jidoka.Kino` is development and test support only.
 
 ```elixir
 Mix.install(

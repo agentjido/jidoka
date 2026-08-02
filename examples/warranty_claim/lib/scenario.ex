@@ -43,7 +43,7 @@ defmodule JidokaExamples.WarrantyClaim.Scenario do
       tenant_id: Keyword.get(opts, :tenant_id, "northwind")
     }
 
-    Agent.run_turn(claim_input(claim_id),
+    Jidoka.turn(Agent, claim_input(claim_id),
       context: context,
       instructions: Instructions,
       llm: ScriptedLLM.capability(claim_id, observer),

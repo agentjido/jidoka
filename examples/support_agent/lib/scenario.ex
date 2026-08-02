@@ -45,7 +45,7 @@ defmodule JidokaExamples.SupportAgent.Scenario do
       example_observer: observer
     }
 
-    Agent.run_turn(request,
+    Jidoka.turn(Agent, request,
       llm: mock_llm(order_id, observer),
       operation_context: operation_context
     )

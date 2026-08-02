@@ -1,9 +1,11 @@
 # Workflows
 
-## Section
+## Purpose And Boundary
 
 This notebook defines a deterministic workflow, inspects the compiled graph,
 runs the workflow directly, then exposes it as one model-callable agent tool.
+It uses public APIs for the normal flow. `Jidoka.Kino` is development and test
+support; it is not compiled into a production release.
 
 ```elixir
 Mix.install(
@@ -135,7 +137,7 @@ request =
   )
 
 {:ok, result} =
-  NotebookRefundAgent.run_turn(request,
+  Jidoka.turn(NotebookRefundAgent, request,
     llm: fake_llm,
     operation_context: %{parent_context: request.context}
   )
