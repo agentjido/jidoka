@@ -7,45 +7,13 @@ defmodule Jidoka.Error do
   return library-native validation details when that is the precise contract.
   """
 
-  defmodule Invalid do
-    @moduledoc "Invalid input error class for Splode."
-    use Splode.ErrorClass, class: :invalid
-  end
-
-  defmodule Execution do
-    @moduledoc "Runtime execution error class for Splode."
-    use Splode.ErrorClass, class: :execution
-  end
-
-  defmodule Config do
-    @moduledoc "Configuration error class for Splode."
-    use Splode.ErrorClass, class: :config
-  end
-
-  defmodule Internal do
-    @moduledoc "Internal error class for Splode."
-    use Splode.ErrorClass, class: :internal
-
-    defmodule UnknownError do
-      @moduledoc false
-      use Splode.Error, class: :internal, fields: [:message, :details, :error]
-
-      @impl true
-      def exception(opts) do
-        opts = if is_map(opts), do: Map.to_list(opts), else: opts
-        message = Keyword.get(opts, :message) || unknown_message(opts[:error])
-
-        opts
-        |> Keyword.put(:message, message)
-        |> Keyword.put_new(:details, %{})
-        |> super()
-      end
-
-      defp unknown_message(nil), do: "Unknown Jidoka error"
-      defp unknown_message(message) when is_binary(message), do: message
-      defp unknown_message(error), do: inspect(error)
-    end
-  end
+  alias Jidoka.Error.Config
+  alias Jidoka.Error.ConfigError
+  alias Jidoka.Error.Execution
+  alias Jidoka.Error.ExecutionError
+  alias Jidoka.Error.Internal
+  alias Jidoka.Error.Invalid
+  alias Jidoka.Error.ValidationError
 
   use Splode,
     error_classes: [
@@ -55,51 +23,6 @@ defmodule Jidoka.Error do
       internal: Internal
     ],
     unknown_error: Internal.UnknownError
-
-  defmodule ValidationError do
-    @moduledoc "Invalid input or schema validation error."
-    use Splode.Error, class: :invalid, fields: [:message, :field, :value, :details]
-
-    @impl true
-    def exception(opts) do
-      opts = if is_map(opts), do: Map.to_list(opts), else: opts
-
-      opts
-      |> Keyword.put_new(:message, "Invalid Jidoka input")
-      |> Keyword.put_new(:details, %{})
-      |> super()
-    end
-  end
-
-  defmodule ConfigError do
-    @moduledoc "Invalid Jidoka configuration error."
-    use Splode.Error, class: :config, fields: [:message, :field, :value, :details]
-
-    @impl true
-    def exception(opts) do
-      opts = if is_map(opts), do: Map.to_list(opts), else: opts
-
-      opts
-      |> Keyword.put_new(:message, "Invalid Jidoka configuration")
-      |> Keyword.put_new(:details, %{})
-      |> super()
-    end
-  end
-
-  defmodule ExecutionError do
-    @moduledoc "Jidoka runtime execution error."
-    use Splode.Error, class: :execution, fields: [:message, :phase, :details]
-
-    @impl true
-    def exception(opts) do
-      opts = if is_map(opts), do: Map.to_list(opts), else: opts
-
-      opts
-      |> Keyword.put_new(:message, "Jidoka execution failed")
-      |> Keyword.put_new(:details, %{})
-      |> super()
-    end
-  end
 
   @type category :: :validation | :configuration | :execution | :internal | :unknown
   @type context :: keyword() | map()

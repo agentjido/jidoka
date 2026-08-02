@@ -3,11 +3,12 @@ defmodule Jidoka.Error.Normalize do
 
   import Jidoka.Error.Normalize.Helpers
 
+  alias Jidoka.Error.Format
   alias Jidoka.Error.Normalize.{Basic, Runtime}
 
   @spec normalize(term(), keyword() | map()) :: Exception.t()
   def normalize(error, context) when is_exception(error) do
-    if Jidoka.Error.normalized?(error) do
+    if Format.category(error) != :unknown do
       error
     else
       execution_error("Jidoka execution failed.",
