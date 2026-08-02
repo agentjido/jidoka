@@ -20,6 +20,14 @@ defmodule Jidoka.Workflow.Dsl.Helpers do
     end
   end
 
+  defmacro loop(name, opts) do
+    opts = rewrite_option(opts, :input, :params)
+
+    quote do
+      loop_step(unquote(name), unquote(opts))
+    end
+  end
+
   defp rewrite_option(opts, from, to) when is_list(opts) do
     Enum.map(opts, fn
       {^from, value} -> {to, value}

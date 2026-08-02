@@ -191,6 +191,11 @@ defmodule Jidoka.Parity.DeterministicWorkflowCompositionTest do
     end
   end
 
+  @tag :w01
+  @tag :w02
+  @tag :w03
+  @tag :w05
+  @tag :w06
   test "composes deterministic workflow behavior directly and as one agent operation" do
     branch_log = start_state([])
     completion_log = start_state([])

@@ -5,25 +5,16 @@ defmodule Jidoka.Workflow.Runtime do
 
   alias Jidoka.Context
   alias Jidoka.Workflow.Runtime.{StepRunner, Value}
+  alias Jidoka.Workflow.Snapshot
   alias Jidoka.Workflow.Spec
   alias Runic.Workflow
 
-  @spec run(Spec.t(), map() | keyword(), keyword()) :: {:ok, term()} | {:error, term()}
-  def run(%Spec{mode: :dsl} = spec, input, opts \\ []) when is_list(opts) do
-    with {:ok, runtime_opts} <- normalize_opts(opts),
-         {:ok, input} <- parse_input(spec, input),
-         :ok <- validate_context_refs(spec, runtime_opts.context) do
-      state = %{
-        input: input,
-        context: runtime_opts.context,
-        steps: %{},
-        outcomes: %{},
-        workflow_id: spec.id,
-        agent_opts: runtime_opts.agent_opts,
-        max_concurrency: runtime_opts.max_concurrency,
-        error: nil
-      }
+  @snapshot_schema_version Snapshot.schema_version()
 
+  @spec run(Spec.t(), map() | keyword(), keyword()) ::
+          {:ok, term()} | {:hibernate, Snapshot.t()} | {:error, term()}
+  def run(%Spec{mode: :dsl} = spec, input, opts \\ []) when is_list(opts) do
+    with {:ok, state, runtime_opts} <- prepare(spec, input, opts) do
       execute_with_timeout(spec, state, runtime_opts)
     end
   rescue
@@ -32,15 +23,65 @@ defmodule Jidoka.Workflow.Runtime do
     kind, reason -> {:error, {kind, reason}}
   end
 
+  @doc false
+  @spec prepare(Spec.t(), map() | keyword(), keyword()) ::
+          {:ok, map(), map()} | {:error, term()}
+  def prepare(%Spec{mode: :dsl} = spec, input, opts) when is_list(opts) do
+    with {:ok, runtime_opts} <- normalize_opts(opts),
+         {:ok, input} <- parse_input(spec, input),
+         :ok <- validate_context_refs(spec, runtime_opts.context) do
+      {:ok,
+       %{
+         input: input,
+         context: runtime_opts.context,
+         steps: %{},
+         outcomes: %{},
+         workflow_id: spec.id,
+         workflow_spec: spec,
+         agent_opts: runtime_opts.agent_opts,
+         max_concurrency: runtime_opts.max_concurrency,
+         suspension: nil,
+         error: nil
+       }, runtime_opts}
+    end
+  end
+
+  @doc false
+  @spec resume(Snapshot.t(), keyword()) ::
+          {:ok, term()} | {:hibernate, Snapshot.t()} | {:error, term()}
+  def resume(%Snapshot{} = snapshot, opts \\ []) when is_list(opts) do
+    with {:ok, spec} <- Jidoka.Workflow.definition(snapshot.workflow),
+         :ok <- validate_snapshot(snapshot, spec),
+         {:ok, runtime_opts} <- normalize_opts(Keyword.put_new(opts, :context, snapshot.context)),
+         :ok <- validate_context_refs(spec, runtime_opts.context) do
+      state = %{
+        input: snapshot.input,
+        context: runtime_opts.context,
+        steps: snapshot.steps,
+        outcomes: snapshot.outcomes,
+        workflow_id: spec.id,
+        workflow_spec: spec,
+        agent_opts: runtime_opts.agent_opts,
+        max_concurrency: runtime_opts.max_concurrency,
+        suspension: snapshot.loop_cursor,
+        error: nil
+      }
+
+      execute_with_timeout(spec, state, runtime_opts)
+    end
+  end
+
   @spec build_workflow(Spec.t()) :: Workflow.t()
   def build_workflow(%Spec{mode: :dsl} = spec) do
     Enum.reduce(spec.steps, Workflow.new(name: spec.id), fn step, workflow ->
+      step_name = step.name
+
       workflow_step =
         Runic.step(
           fn state ->
-            run_workflow_step(state, ^spec, ^step)
+            Jidoka.Workflow.Runtime.run_workflow_step(state, ^spec, ^step)
           end,
-          name: step.name
+          name: step_name
         )
 
       case Map.get(spec.dependencies, step.name, []) do
@@ -50,7 +91,63 @@ defmodule Jidoka.Workflow.Runtime do
     end)
   end
 
-  defp run_workflow_step(state, %Spec{} = spec, step) do
+  @doc false
+  @spec inspect_run(Workflow.t(), String.t(), non_neg_integer()) ::
+          {:ok, Jidoka.Workflow.Run.t()} | {:error, term()}
+  def inspect_run(%Workflow{} = workflow, run_id, event_count) do
+    states = Enum.filter(Workflow.raw_productions(workflow), &workflow_state?/1)
+
+    case states do
+      [] ->
+        status =
+          if Workflow.is_runnable?(workflow) or Workflow.pending_runnables(workflow) != [],
+            do: :running,
+            else: :pending
+
+        {:ok,
+         %Jidoka.Workflow.Run{
+           id: run_id,
+           workflow_id: to_string(workflow.name),
+           status: status,
+           output: nil,
+           error: nil,
+           outcomes: %{},
+           event_count: event_count
+         }}
+
+      states ->
+        state = merge_workflow_states(states)
+        spec = state.workflow_spec
+        {status, output, error} = run_status(state, spec)
+
+        {:ok,
+         %Jidoka.Workflow.Run{
+           id: run_id,
+           workflow_id: state.workflow_id,
+           status: status,
+           output: output,
+           error: error,
+           outcomes: state.outcomes,
+           event_count: event_count
+         }}
+    end
+  end
+
+  @doc false
+  @spec recovery_state(Workflow.t(), keyword()) :: {:ok, map()} | {:error, term()}
+  def recovery_state(%Workflow{} = workflow, opts \\ []) when is_list(opts) do
+    workflow
+    |> Workflow.raw_productions()
+    |> Enum.filter(&workflow_state?/1)
+    |> case do
+      [] -> {:error, :background_run_has_no_checkpoint}
+      states -> refresh_recovery_state(merge_workflow_states(states), opts)
+    end
+  end
+
+  @doc false
+  @spec run_workflow_step(term(), Spec.t(), Jidoka.Workflow.Step.t()) :: map()
+  def run_workflow_step(state, %Spec{} = spec, step) do
     StepRunner.run_step(spec, step, merge_workflow_states(state))
   end
 
@@ -61,6 +158,9 @@ defmodule Jidoka.Workflow.Runtime do
 
       {:ok, %{error: error}} when not is_nil(error) ->
         {:error, error}
+
+      {:ok, %{suspension: %Jidoka.Workflow.Loop.Cursor{}} = state} ->
+        {:hibernate, build_snapshot(spec, state)}
 
       {:ok, state} ->
         case Value.resolve(spec.output, state) do
@@ -109,8 +209,10 @@ defmodule Jidoka.Workflow.Runtime do
           steps: %{},
           outcomes: %{},
           workflow_id: nil,
+          workflow_spec: nil,
           agent_opts: [],
           max_concurrency: nil,
+          suspension: nil,
           error: {:invalid_workflow_state_join, states}
         }
 
@@ -126,19 +228,54 @@ defmodule Jidoka.Workflow.Runtime do
       steps: %{},
       outcomes: %{},
       workflow_id: nil,
+      workflow_spec: nil,
       agent_opts: [],
       max_concurrency: nil,
+      suspension: nil,
       error: {:invalid_workflow_state_join, state}
     }
   end
 
   defp merge_workflow_state(state, acc) do
-    %{
+    merged = %{
       acc
       | steps: Map.merge(acc.steps, state.steps),
         outcomes: Map.merge(Map.get(acc, :outcomes, %{}), Map.get(state, :outcomes, %{})),
+        suspension: Map.get(acc, :suspension) || Map.get(state, :suspension),
         error: acc.error || state.error
     }
+
+    clear_completed_suspension(merged)
+  end
+
+  defp clear_completed_suspension(%{suspension: %Jidoka.Workflow.Loop.Cursor{step: step}} = state) do
+    case get_in(state, [:outcomes, step]) do
+      %{status: :ok} -> %{state | suspension: nil}
+      _outcome -> state
+    end
+  end
+
+  defp clear_completed_suspension(state), do: state
+
+  defp run_status(%{error: error}, _spec) when not is_nil(error), do: {:failed, nil, error}
+
+  defp run_status(%{suspension: %Jidoka.Workflow.Loop.Cursor{}}, _spec),
+    do: {:hibernated, nil, nil}
+
+  defp run_status(state, %Spec{} = spec) do
+    completed? =
+      Enum.all?(spec.steps, fn step ->
+        match?(%{status: status} when status in [:ok, :skipped], Map.get(state.outcomes, step.name))
+      end)
+
+    if completed? do
+      case Value.resolve(spec.output, state) do
+        {:ok, output} -> {:completed, output, nil}
+        {:error, reason} -> {:failed, nil, reason}
+      end
+    else
+      {:running, nil, nil}
+    end
   end
 
   defp workflow_state?(%{input: _input, context: _context, steps: _steps}), do: true
@@ -360,5 +497,71 @@ defmodule Jidoka.Workflow.Runtime do
           )}}
       end
     end)
+  end
+
+  defp build_snapshot(%Spec{} = spec, state) do
+    %Snapshot{
+      schema_version: Snapshot.schema_version(),
+      workflow: spec.module,
+      workflow_id: spec.id,
+      input: state.input,
+      context: Context.data(state.context),
+      steps: state.steps,
+      outcomes: state.outcomes,
+      loop_cursor: state.suspension
+    }
+  end
+
+  defp refresh_recovery_state(state, opts) do
+    context = Keyword.get(opts, :context, state.context)
+    agent_opts = Keyword.get(opts, :agent_opts, state.agent_opts)
+    max_concurrency = Keyword.get(opts, :max_concurrency, state.max_concurrency)
+
+    with {:ok, context} <- normalize_context(context),
+         :ok <- validate_context_refs(state.workflow_spec, context),
+         {:ok, agent_opts} <- normalize_agent_opts(agent_opts),
+         {:ok, max_concurrency} <- normalize_max_concurrency(max_concurrency) do
+      {:ok,
+       %{
+         state
+         | context: context,
+           agent_opts: agent_opts,
+           max_concurrency: max_concurrency
+       }}
+    end
+  end
+
+  defp validate_snapshot(
+         %Snapshot{
+           schema_version: version,
+           workflow: workflow,
+           workflow_id: id,
+           loop_cursor: %Jidoka.Workflow.Loop.Cursor{step: step, max_iterations: max_iterations}
+         },
+         %Spec{module: workflow, id: id, steps: steps}
+       )
+       when version == @snapshot_schema_version do
+    case Enum.find(steps, &(&1.name == step)) do
+      %{kind: :loop, max_iterations: ^max_iterations} -> :ok
+      %{kind: :loop, max_iterations: current} -> {:error, {:workflow_loop_bound_changed, step, max_iterations, current}}
+      _step -> {:error, {:workflow_snapshot_loop_missing, step}}
+    end
+  end
+
+  defp validate_snapshot(%Snapshot{} = snapshot, %Spec{} = spec) do
+    {:error,
+     {:workflow_snapshot_mismatch,
+      %{
+        snapshot: %{
+          schema_version: snapshot.schema_version,
+          workflow: snapshot.workflow,
+          workflow_id: snapshot.workflow_id
+        },
+        current: %{
+          schema_version: Snapshot.schema_version(),
+          workflow: spec.module,
+          workflow_id: spec.id
+        }
+      }}}
   end
 end

@@ -19,6 +19,8 @@ defmodule Jidoka.Workflow.Ref do
           | {:jidoka_workflow_ref, :item}
           | {:jidoka_workflow_ref, :index}
           | {:jidoka_workflow_ref, :items}
+          | {:jidoka_workflow_ref, :loop_state}
+          | {:jidoka_workflow_ref, :iteration}
 
   @doc "References a top-level workflow input field."
   @spec input(atom() | String.t()) :: t()
@@ -64,6 +66,14 @@ defmodule Jidoka.Workflow.Ref do
   @spec items() :: t()
   def items, do: {:jidoka_workflow_ref, :items}
 
+  @doc "References the current loop state. Only valid inside a loop input."
+  @spec loop_state() :: t()
+  def loop_state, do: {:jidoka_workflow_ref, :loop_state}
+
+  @doc "References the zero-based loop iteration. Only valid inside a loop input."
+  @spec iteration() :: t()
+  def iteration, do: {:jidoka_workflow_ref, :iteration}
+
   @doc "References runtime side-band workflow context."
   @spec context(atom() | String.t()) :: t()
   def context(key) when is_atom(key) or is_binary(key), do: {:jidoka_workflow_ref, :context, key}
@@ -85,6 +95,10 @@ defmodule Jidoka.Workflow.Ref do
       do: true
 
   def ref?({:jidoka_workflow_ref, :coalesce, values}) when is_list(values), do: true
-  def ref?({:jidoka_workflow_ref, kind}) when kind in [:item, :index, :items], do: true
+
+  def ref?({:jidoka_workflow_ref, kind})
+      when kind in [:item, :index, :items, :loop_state, :iteration],
+      do: true
+
   def ref?(_other), do: false
 end

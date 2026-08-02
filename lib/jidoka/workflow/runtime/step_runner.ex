@@ -2,6 +2,8 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   @moduledoc false
 
   alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Workflow.Loop
+  alias Jidoka.Workflow.Loop.Cursor
   alias Jidoka.Workflow.Runtime.{Retry, Value}
   alias Jidoka.Workflow.Step
 
@@ -10,26 +12,54 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   @spec run_step(Jidoka.Workflow.Spec.t(), Step.t(), map()) :: map()
   def run_step(_spec, %Step{}, %{error: error} = state) when not is_nil(error), do: state
 
+  def run_step(_spec, %Step{name: name}, %{suspension: %Cursor{step: suspended_step}} = state)
+      when name != suspended_step,
+      do: state
+
   def run_step(spec, %Step{} = step, state) do
     state = ensure_runtime_state(state)
 
-    with {:cont, state} <- maybe_run_step(step, state),
-         {:ok, result} <- execute_step(step, state) do
+    if completed_step?(state, step) do
       state
-      |> put_in([:steps, step.name], result)
-      |> put_in([:outcomes, step.name], %{status: :ok})
     else
-      {:skip, state, reason} ->
-        put_in(state, [:outcomes, step.name], %{status: :skipped, reason: reason})
+      case maybe_run_step(step, state) do
+        {:cont, state} ->
+          apply_step_result(spec, step, state, execute_step(step, state))
 
-      {:error, reason} ->
-        state
-        |> put_in([:outcomes, step.name], %{status: :error, reason: reason})
-        |> Map.put(:error, step_error(spec, step, reason))
+        {:skip, state, reason} ->
+          put_in(state, [:outcomes, step.name], %{status: :skipped, reason: reason})
+
+        {:error, reason} ->
+          fail_step(spec, step, state, reason)
+      end
     end
   end
 
-  @spec execute_step(Step.t(), map()) :: {:ok, term()} | {:error, term()}
+  defp apply_step_result(_spec, step, state, {:ok, result}) do
+    state
+    |> put_in([:steps, step.name], result)
+    |> put_in([:outcomes, step.name], %{status: :ok})
+    |> Map.put(:suspension, nil)
+  end
+
+  defp apply_step_result(_spec, step, state, {:suspend, %Cursor{} = cursor}) do
+    state
+    |> put_in([:outcomes, step.name], %{status: :suspended, cursor: cursor})
+    |> Map.put(:suspension, cursor)
+  end
+
+  defp apply_step_result(spec, step, state, {:error, reason}) do
+    fail_step(spec, step, state, reason)
+  end
+
+  defp fail_step(spec, step, state, reason) do
+    state
+    |> put_in([:outcomes, step.name], %{status: :error, reason: reason})
+    |> Map.put(:error, step_error(spec, step, reason))
+  end
+
+  @spec execute_step(Step.t(), map()) ::
+          {:ok, term()} | {:suspend, Cursor.t()} | {:error, term()}
   def execute_step(%Step{kind: :function, target: {module, function, 2}} = step, state) do
     with {:ok, params} <- resolve_map(step.input, state, :function_input) do
       Retry.call(step, fn ->
@@ -80,6 +110,13 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
         |> apply(function, [params, state.context])
         |> normalize_function_result()
       end)
+    end
+  end
+
+  def execute_step(%Step{kind: :loop} = step, state) do
+    with {:ok, initial} <- loop_initial(step, state) do
+      cursor = loop_cursor(step, state)
+      Loop.run(step, Map.put(state, :loop_state, initial), step.input, cursor)
     end
   end
 
@@ -253,5 +290,31 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
     state
     |> Map.put_new(:outcomes, %{})
     |> Map.put_new(:max_concurrency, nil)
+    |> Map.put_new(:suspension, nil)
+  end
+
+  defp completed_step?(state, %Step{name: name}) do
+    case get_in(state, [:outcomes, name]) do
+      %{status: status} when status in [:ok, :skipped] -> true
+      _outcome -> false
+    end
+  end
+
+  defp loop_initial(%Step{name: name, initial: initial}, state) do
+    case loop_cursor(name, state) do
+      %Cursor{state: loop_state} -> {:ok, loop_state}
+      nil -> Value.resolve(initial, state)
+    end
+  end
+
+  defp loop_cursor(%Step{name: name}, state), do: loop_cursor(name, state)
+
+  defp loop_cursor(name, %{suspension: %Cursor{step: name} = cursor}), do: cursor
+
+  defp loop_cursor(name, state) when is_atom(name) do
+    case get_in(state, [:outcomes, name]) do
+      %{status: :suspended, cursor: %Cursor{} = cursor} -> cursor
+      _outcome -> nil
+    end
   end
 end

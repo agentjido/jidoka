@@ -165,6 +165,7 @@ defmodule Jidoka.Operation.Source.Workflow do
 
     case Task.yield(task, source.timeout) || Task.shutdown(task, :brutal_kill) do
       {:ok, {:ok, output}} -> {:ok, output}
+      {:ok, {:hibernate, snapshot}} -> {:error, {:workflow_hibernated, source.name, snapshot}}
       {:ok, {:error, reason}} -> {:error, {:workflow_failed, source.name, reason}}
       nil -> {:error, {:workflow_timeout, source.name, source.timeout}}
     end

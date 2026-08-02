@@ -116,7 +116,7 @@ defmodule Jidoka.Workflow.Definition.Validation do
           "Workflow special refs are not valid here.",
           path,
           invalid,
-          "Use `item()` and `index()` only inside map input, and `items()` only inside reduce input."
+          "Use map refs inside map input, `items()` inside reduce input, and loop refs inside loop input."
         )
     end
   end

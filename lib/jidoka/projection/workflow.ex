@@ -24,6 +24,8 @@ defmodule Jidoka.Projection.Workflow do
   def ref({:jidoka_workflow_ref, :item}), do: %{ref: :item}
   def ref({:jidoka_workflow_ref, :index}), do: %{ref: :index}
   def ref({:jidoka_workflow_ref, :items}), do: %{ref: :items}
+  def ref({:jidoka_workflow_ref, :loop_state}), do: %{ref: :loop_state}
+  def ref({:jidoka_workflow_ref, :iteration}), do: %{ref: :iteration}
   def ref(%{} = map), do: Map.new(map, fn {key, value} -> {key, ref(value)} end)
   def ref(list) when is_list(list), do: Enum.map(list, &ref/1)
   def ref(nil), do: nil

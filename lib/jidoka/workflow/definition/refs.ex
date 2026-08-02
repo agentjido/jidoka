@@ -24,7 +24,11 @@ defmodule Jidoka.Workflow.Definition.Refs do
 
   defp collect({:jidoka_workflow_ref, :value, _value}, acc), do: acc
   defp collect({:jidoka_workflow_ref, :coalesce, values}, acc), do: collect(values, acc)
-  defp collect({:jidoka_workflow_ref, kind}, acc) when kind in [:item, :index, :items], do: acc
+
+  defp collect({:jidoka_workflow_ref, kind}, acc)
+       when kind in [:item, :index, :items, :loop_state, :iteration],
+       do: acc
+
   defp collect(%{} = map, acc), do: Enum.reduce(Map.values(map), acc, &collect/2)
   defp collect(list, acc) when is_list(list), do: Enum.reduce(list, acc, &collect/2)
 
@@ -52,7 +56,8 @@ defmodule Jidoka.Workflow.Definition.Refs do
     |> Enum.sort()
   end
 
-  defp collect_special({:jidoka_workflow_ref, kind}, acc) when kind in [:item, :index, :items] do
+  defp collect_special({:jidoka_workflow_ref, kind}, acc)
+       when kind in [:item, :index, :items, :loop_state, :iteration] do
     MapSet.put(acc, kind)
   end
 

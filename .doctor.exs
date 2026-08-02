@@ -26,6 +26,7 @@
     ~r/^Jidoka\.Runtime\.ReqLLM\.(PromptAdapter|ResponseAdapter)$/,
     ~r/^Jidoka\.Runtime\.Controls\.Decision$/,
     ~r/^Jidoka\.Turn\.State\.OperationPlanner$/,
+    ~r/^Jidoka\.Workflow\.Background\.Executor$/,
     ~r/^Jidoka\.Workflow\.(Codegen|Definition|Dsl|Graph|ParametersSchema|Runtime|SparkDsl)(?:\.|$)/,
     ~r/^Jidoka\.Workflow\.Lua\.(CallTrace|Plan|Policy)(?:\.|$)/
   ],

@@ -12,9 +12,9 @@ Jidoka/Jido actions, or a bounded agent step.
 - Use a workflow when you need a typed input contract, deterministic data
   wiring, context forwarding, and a stable output shape.
 - Do not use a workflow for one simple tool. Use `Jidoka.Action`.
-- Do not use a workflow for open-ended orchestration. The workflow DSL is
-  deterministic: no loops, scheduling, persisted runs, or dynamic runtime graph
-  mutation. Gates and bounded map/reduce fanout are supported.
+- Do not use a workflow for open-ended orchestration. The static graph remains
+  acyclic. Use an explicit bounded loop for repeated or runtime-created work.
+  Use the background runner and scheduler when work must outlive the caller.
 
 ## Quick Example
 
@@ -188,6 +188,7 @@ Supported step kinds:
 | `gate` | Boolean ref or value | Stores `true` or `false` for conditional steps. |
 | `map` | Function or action target | Runs a bounded fanout over a resolved list and returns ordered results. |
 | `reduce` | `{module, function, 2}` | Runs one deterministic reducer over a resolved list. |
+| `loop` | `{module, function, 2}` | Runs explicit state transitions under an exact iteration bound and returns a `Loop.Result`. |
 
 Agent steps are useful for small bounded drafting or classification tasks.
 They are not subagents. If you want the parent model to decide when to
@@ -257,6 +258,64 @@ runtime `max_concurrency:` option acts as a global cap when supplied.
 `reduce` is one deterministic function call over the resolved list; it is not a
 streaming accumulator.
 
+### Bounded Loops And Dynamic Work
+
+Use `loop` when the amount of work changes at runtime. The static workflow
+graph stays acyclic. The loop owns a serializable state and an exact callback
+limit.
+
+```elixir
+steps do
+  loop(:drain_queue,
+    initial: %{pending: input(:items), completed: value([])},
+    using: {MyApp.Queue, :next, 2},
+    input: %{state: loop_state(), iteration: iteration()},
+    max_iterations: 100
+  )
+end
+
+output from(:drain_queue)
+```
+
+The callback receives the resolved input map and workflow context. It returns
+one of these decisions:
+
+```elixir
+{:cont, next_state}
+{:cont, next_state, created_work}
+{:halt, final_value}
+{:suspend, next_state}
+{:suspend, next_state, created_work}
+{:error, reason}
+```
+
+`created_work` is a list of work records that the callback added to its own
+state or queue. Jidoka records this list as evidence. The loop callback still
+owns the rule that inserts and later processes each item.
+
+A completed loop returns `%Jidoka.Workflow.Loop.Result{}`. Its `value` is the
+final value. Its `iterations` and `created_work` fields make every decision
+inspectable. The runtime fails with `:loop_limit_exceeded` before callback
+execution can exceed `max_iterations`.
+
+A suspended loop returns `{:hibernate, snapshot}` from `Workflow.run/3`.
+Serialize the snapshot or resume it directly:
+
+```elixir
+{:hibernate, snapshot} =
+  Jidoka.Workflow.run(MyApp.QueueWorkflow, %{items: [1, 2]})
+
+{:ok, binary} = Jidoka.Workflow.Snapshot.serialize(snapshot)
+{:ok, result} = Jidoka.Workflow.resume(binary, context: %{tenant: "acme"})
+```
+
+The snapshot stores public context data, completed step outcomes, the loop
+cursor, iteration history, and created work. It does not store runtime-only
+capabilities. Resume validates the workflow identity, schema version, loop
+step, and original safety bound. Earlier completed steps do not run again. The
+workflow snapshot binary is not signed, so keep it in trusted application
+storage.
+
 ### Retry
 
 Add `retry:` to retry target execution. Ref resolution, schema parsing, skipped
@@ -310,6 +369,8 @@ the runtime validates actual values.
 | `item()` | Current map item. | `input: %{lead: item()}` |
 | `index()` | Current map item index. | `input: %{index: index()}` |
 | `items()` | Current reduce item list. | `input: %{scores: items()}` |
+| `loop_state()` | Current loop state. | `input: %{state: loop_state()}` |
+| `iteration()` | Zero-based loop callback index. | `input: %{attempt: iteration()}` |
 | `value(term)` | Explicit static value. | `%{limit: value(100)}` |
 
 Atom and string map keys are treated as equivalent for inputs, context, and
@@ -410,9 +471,115 @@ Do not mix forms. `use Jidoka.Workflow, id: ...` cannot also declare
   parallel and applies their results back into the deterministic workflow graph.
 - Direct `Jidoka.Workflow.run/3` and tool execution both enforce total
   wall-clock timeout.
-- A workflow agent step that hibernates is treated as a workflow error for
-  now. Human-in-the-loop pauses should live at the parent agent operation
-  boundary.
+- A `loop` step can hibernate the workflow with a serializable continuation.
+- A workflow tool returns a typed `:workflow_hibernated` operation error when
+  its loop suspends. Resume that snapshot through the application workflow
+  boundary; parent agent continuation stays a separate contract.
+- An agent step that hibernates is still a workflow error. Human review for an
+  agent tool should live at the parent operation boundary.
+
+## Background Runs
+
+`Jidoka.Workflow.Background` runs a declarative workflow under supervision and
+stores lifecycle events after every execution cycle. Submission returns a
+stable run ID. Later callers need only the runner name and run ID.
+
+Add the runner to an application supervisor:
+
+```elixir
+children = [
+  {Jidoka.Workflow.Background, name: MyApp.WorkflowRunner}
+]
+```
+
+Then submit, reconnect, and read event evidence:
+
+```elixir
+{:ok, run_id} =
+  Jidoka.Workflow.Background.submit(
+    MyApp.WorkflowRunner,
+    MyApp.Workflows.RefundReview,
+    %{"order_id" => "A1001", "amount" => 42.50}
+  )
+
+{:ok, run} = Jidoka.Workflow.Background.get(MyApp.WorkflowRunner, run_id)
+{:ok, run} = Jidoka.Workflow.Background.await(MyApp.WorkflowRunner, run_id)
+{:ok, events} = Jidoka.Workflow.Background.events(MyApp.WorkflowRunner, run_id)
+```
+
+The default ETS store keeps progress through worker and runner restarts in one
+VM. Supervise the Mnesia store separately when the event stream must survive a
+VM restart:
+
+```elixir
+children = [
+  {Runic.Runner.Store.Mnesia, runner_name: MyApp.WorkflowRunner},
+  {Jidoka.Workflow.Background,
+   name: MyApp.WorkflowRunner,
+   store: Runic.Runner.Store.Mnesia,
+   store_opts: []}
+]
+```
+
+After a stopped or crashed worker, `get/2` returns `:recoverable`. Call
+`recover/3` to rebuild the graph from events. Supply fresh context when runtime
+capabilities from the old VM are no longer valid:
+
+```elixir
+{:ok, _worker} =
+  Jidoka.Workflow.Background.recover(
+    MyApp.WorkflowRunner,
+    run_id,
+    context: %{tenant: "acme"}
+  )
+```
+
+Completed steps do not run again. An in-flight step starts again, so its
+external effects must follow the normal idempotency rules. The background API
+supports DSL workflows. Callback compatibility workflows stay synchronous.
+
+## Scheduled Runs
+
+`Jidoka.Workflow.Scheduler` owns one-time and cron schedule definitions,
+timers, trigger history, and explicit policy. Each accepted trigger submits a
+normal background run.
+
+```elixir
+children = [
+  {Jidoka.Workflow.Background, name: MyApp.WorkflowRunner},
+  {Jidoka.Workflow.Scheduler,
+   name: MyApp.WorkflowScheduler,
+   runner: MyApp.WorkflowRunner}
+]
+
+{:ok, schedule} =
+  Jidoka.Workflow.Scheduler.add(MyApp.WorkflowScheduler, %{
+    id: "weekday_refund_review",
+    workflow: MyApp.Workflows.RefundReview,
+    input: %{order_id: "A1001", amount: 42.50},
+    trigger: {:cron, "0 9 * * 1-5"},
+    timezone: "America/Chicago",
+    overlap: :skip,
+    misfire: :run_once,
+    misfire_grace_ms: 1_000,
+    cancellation: :future_only,
+    retry: [max_attempts: 3]
+  })
+```
+
+One-time schedules use `trigger: {:at, datetime}`. Cron schedules resolve the
+next time in the declared timezone, including daylight-saving changes.
+
+- `overlap: :skip | :allow` controls a trigger while an earlier run is active.
+- `misfire: :skip | :run_once` controls a late timer after its grace period.
+- `retry:` applies to background-run submission. Workflow step retry stays in
+  the workflow.
+- `cancellation: :future_only | :future_and_active` controls active runs when
+  the schedule is cancelled.
+
+Use `history/2` for trigger evidence. Use `trigger/3` for a manual run without
+moving the next scheduled time. In deterministic tests, start the scheduler
+with `auto_schedule: false` and call `trigger_due/2` with an explicit time.
 
 ## Inspect Workflows
 
@@ -496,10 +663,13 @@ For the package's own examples, see
 | Spark error: `workflow.id` is required | Missing `id` in `workflow do`. | Add `id :lower_snake_case`. |
 | Spark error: input must be a Zoi object | `input` was omitted or passed a raw map. | Use `input Zoi.object(%{...})`. |
 | Spark error: missing step ref | `from(:step)` or `after: [:step]` targets a nonexistent step. | Rename the ref or add the step. |
-| Spark error: dependency cycle | Steps refer to each other through `from` or `after`. | Break the cycle; workflows do not support loops. |
+| Spark error: dependency cycle | Static steps refer to each other through `from` or `after`. | Break the static cycle and use one bounded `loop` step for repeated work. |
 | `Missing workflow context key` | A `context(:key)` ref was declared but not forwarded/passed. | Pass `context:` to `Workflow.run/3` or configure `forward_context:` in `tools.workflow`. |
 | Workflow step failed with `missing_field` | `from(:step, path)` selected a missing field. | Inspect the prior step output and correct the path. |
-| Workflow timed out | A step blocked past `timeout:`. | Raise timeout or move long work out of the synchronous workflow. |
+| Workflow timed out | A step blocked past `timeout:`. | Raise timeout or submit the workflow through `Workflow.Background`. |
+| Loop limit exceeded | A loop did not halt before its exact safety bound. | Fix the termination rule or raise the declared bound with a new snapshot version. |
+| Background run is `:recoverable` | Its worker stopped while event evidence remains. | Call `Background.recover/3` with fresh runtime context. |
+| Schedule trigger was skipped | Misfire or overlap policy rejected this occurrence. | Inspect `Scheduler.history/2` and the trigger `reason`. |
 | Agent step hibernated | A child agent requested review inside workflow execution. | Move HITL to the parent operation control boundary. |
 
 ## Related Guides
@@ -513,3 +683,6 @@ For the package's own examples, see
   workflow specs and agent prompts.
 - [Idempotency And Safety](idempotency-and-safety.md) - operation
   idempotency and controls.
+- [Workflow Composition Agent](../examples/workflow_composition/README.md) -
+  one executable proof for loops, background runs, schedules, and all earlier
+  graph features.

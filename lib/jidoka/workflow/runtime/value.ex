@@ -37,6 +37,8 @@ defmodule Jidoka.Workflow.Runtime.Value do
   def resolve({:jidoka_workflow_ref, :item}, state), do: fetch_equivalent(state, :item, :item)
   def resolve({:jidoka_workflow_ref, :index}, state), do: fetch_equivalent(state, :index, :index)
   def resolve({:jidoka_workflow_ref, :items}, state), do: fetch_equivalent(state, :items, :items)
+  def resolve({:jidoka_workflow_ref, :loop_state}, state), do: fetch_equivalent(state, :loop_state, :loop_state)
+  def resolve({:jidoka_workflow_ref, :iteration}, state), do: fetch_equivalent(state, :iteration, :iteration)
 
   def resolve(%{} = map, state) do
     Enum.reduce_while(map, {:ok, %{}}, fn {key, value}, {:ok, acc} ->

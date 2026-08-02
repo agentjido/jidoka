@@ -738,7 +738,7 @@ defmodule Jidoka.WorkflowDslTest do
 
     assert {:ok, %Step{kind: :action}} = Step.new(name: :act, kind: :action, target: AddAmount)
     assert {:ok, %Spec{mode: :callback}} = Spec.new(id: "callback_contract", module: __MODULE__)
-    assert [:function, :action, :agent, :gate, :map, :reduce] = Step.kinds()
+    assert [:function, :action, :agent, :gate, :map, :reduce, :loop] = Step.kinds()
     assert [:function, :action] = Step.map_targets()
     assert [:callback, :dsl] = Spec.modes()
     assert %Zoi.Types.Struct{} = Step.schema()

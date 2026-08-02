@@ -36,6 +36,7 @@ defmodule Jidoka.Workflow.Definition.Graph do
   defp step_ref_terms(%Step{kind: :gate} = step), do: [step.condition]
   defp step_ref_terms(%Step{kind: :map} = step), do: condition_ref_terms(step) ++ [step.over, step.input]
   defp step_ref_terms(%Step{kind: :reduce} = step), do: condition_ref_terms(step) ++ [step.over, step.input]
+  defp step_ref_terms(%Step{kind: :loop} = step), do: condition_ref_terms(step) ++ [step.initial, step.input]
 
   defp condition_ref_terms(%Step{} = step), do: [step.condition_when, step.condition_unless]
 

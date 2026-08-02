@@ -191,7 +191,8 @@ defmodule Jidoka.Workflow do
   * `:max_concurrency` - maximum concurrent workflow steps when `:async` is enabled.
   * `:agent_opts` - options forwarded to nested agent steps.
   """
-  @spec run(module(), map() | keyword(), keyword()) :: {:ok, term()} | {:error, term()}
+  @spec run(module(), map() | keyword(), keyword()) ::
+          {:ok, term()} | {:hibernate, Jidoka.Workflow.Snapshot.t()} | {:error, term()}
   def run(workflow_module, input, opts \\ []) when is_atom(workflow_module) and is_list(opts) do
     with {:ok, spec} <- definition(workflow_module) do
       run_spec(spec, input, opts)
@@ -216,6 +217,19 @@ defmodule Jidoka.Workflow do
   catch
     kind, reason -> {:error, {kind, reason}}
   end
+
+  @doc "Resumes a declarative workflow from a serialized or decoded snapshot."
+  @spec resume(Jidoka.Workflow.Snapshot.t() | binary(), keyword()) ::
+          {:ok, term()} | {:hibernate, Jidoka.Workflow.Snapshot.t()} | {:error, term()}
+  def resume(snapshot, opts \\ []) when is_list(opts) do
+    with {:ok, snapshot} <- normalize_snapshot(snapshot) do
+      Jidoka.Workflow.Runtime.resume(snapshot, opts)
+    end
+  end
+
+  defp normalize_snapshot(%Jidoka.Workflow.Snapshot{} = snapshot), do: {:ok, snapshot}
+  defp normalize_snapshot(binary) when is_binary(binary), do: Jidoka.Workflow.Snapshot.deserialize(binary)
+  defp normalize_snapshot(other), do: {:error, {:invalid_workflow_snapshot, other}}
 
   @doc false
   @spec normalize_id(term()) :: {:ok, String.t()} | {:error, term()}

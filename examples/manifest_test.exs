@@ -22,7 +22,15 @@ defmodule JidokaExamples.ManifestTest do
     "E05" => ["cancellation"],
     "E06" => ["serializable_pause_resume"],
     "E07" => ["crash_recovery"],
-    "E08" => ["data_only_replay", "safe_session_fork"]
+    "E08" => ["data_only_replay", "safe_session_fork"],
+    "W01" => ["sequential_typed_steps"],
+    "W02" => ["conditional_routing"],
+    "W03" => ["parallel_fan_out"],
+    "W04" => ["bounded_dynamic_loops"],
+    "W05" => ["bounded_step_retry"],
+    "W06" => ["workflow_tool"],
+    "W07" => ["background_runs"],
+    "W08" => ["scheduled_runs"]
   }
 
   test "each example has valid metadata and required files" do
@@ -36,7 +44,7 @@ defmodule JidokaExamples.ManifestTest do
     assert names == Enum.uniq(names)
   end
 
-  test "examples cover every feature in the first two parity sections" do
+  test "examples cover every feature in the completed parity sections" do
     features =
       "examples/*/manifest.yaml"
       |> Path.wildcard()
@@ -46,7 +54,11 @@ defmodule JidokaExamples.ManifestTest do
       end)
       |> MapSet.new()
 
-    expected_ids = Enum.map(1..9, &"A0#{&1}") ++ Enum.map(1..8, &"E0#{&1}")
+    expected_ids =
+      Enum.map(1..9, &"A0#{&1}") ++
+        Enum.map(1..8, &"E0#{&1}") ++
+        Enum.map(1..8, &"W0#{&1}")
+
     assert @milestone_features |> Map.keys() |> Enum.sort() == expected_ids
 
     for {id, required_features} <- @milestone_features,

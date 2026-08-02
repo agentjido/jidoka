@@ -1,0 +1,139 @@
+# Workflow Composition Agent
+
+This Livebook proves the complete workflow and graph composition section with
+one deterministic fulfillment agent. It does not use a provider key or a
+network request.
+
+```elixir
+package_root = Path.expand("../..", __DIR__)
+
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: package_root}
+  ],
+  consolidate_protocols: false,
+  lockfile: Path.join(package_root, "mix.lock")
+)
+
+Code.require_file(Path.expand("../loader.exs", __DIR__))
+JidokaExamples.Loader.load!(__DIR__)
+
+alias Jidoka.Workflow.{Background, Scheduler}
+alias JidokaExamples.WorkflowComposition.Agent, as: FulfillmentAgent
+alias JidokaExamples.WorkflowComposition.{FulfillmentWorkflow, Scenario}
+
+Jidoka.Kino.setup_notebook(model: "test:workflow-composition-script", check_provider?: false)
+```
+
+## Inspect The Agent And Graph
+
+The agent has one operation named `fulfill_order`. That operation owns the
+whole workflow graph.
+
+```elixir
+agent_view = Jidoka.inspect(FulfillmentAgent)
+{:ok, workflow_spec} = Jidoka.Workflow.definition(FulfillmentWorkflow)
+
+%{
+  agent_operations: Enum.map(agent_view.spec.operations, & &1.name),
+  workflow_id: workflow_spec.id,
+  step_kinds: Enum.map(workflow_spec.steps, &{&1.name, &1.kind})
+}
+```
+
+## Run Directly And Through The Agent
+
+This cell proves that direct execution and the agent tool return the same
+result. The result also shows the selected branch, two inventory attempts,
+bounded loop output, and one dynamically created item.
+
+```elixir
+{:ok, direct_report} = Scenario.direct_and_agent(observer: self())
+
+unless direct_report.parity? and
+         direct_report.direct_output.reservation_attempts == 2 and
+         direct_report.direct_output.shipped == ["starter_kit", "cable", "welcome_card"] do
+  raise "direct and agent workflow results did not match"
+end
+
+%{
+  agent_answer: direct_report.agent_answer,
+  direct_output: direct_report.direct_output,
+  parity?: direct_report.parity?
+}
+```
+
+## Start The Runtime Services
+
+The setup is repeatable. Re-evaluating this cell reuses the named processes
+when they are already running.
+
+```elixir
+runner = JidokaExamples.WorkflowComposition.LivebookRunner
+scheduler = JidokaExamples.WorkflowComposition.LivebookScheduler
+now = ~U[2026-08-01 12:00:00Z]
+
+start_once = fn name, start_fun ->
+  case Process.whereis(name) do
+    nil -> start_fun.()
+    pid -> {:ok, pid}
+  end
+end
+
+{:ok, _runner_pid} = start_once.(runner, fn -> Background.start_link(name: runner) end)
+
+{:ok, _scheduler_pid} =
+  start_once.(scheduler, fn ->
+    Scheduler.start_link(
+      name: scheduler,
+      runner: runner,
+      auto_schedule: false,
+      clock: fn -> now end
+    )
+  end)
+
+%{runner: runner, scheduler: scheduler}
+```
+
+## Run In The Background
+
+The caller receives a stable ID. It can reconnect to the run and read safe
+lifecycle events without the original caller process.
+
+```elixir
+{:ok, background_report} =
+  Scenario.background(runner, run_id: Jidoka.Id.generate!("workflow_livebook"))
+
+unless background_report.run.status == :completed and background_report.events != [] do
+  raise "the background workflow did not complete with event evidence"
+end
+
+%{
+  run: background_report.run,
+  event_types: Enum.map(background_report.events, & &1.type)
+}
+```
+
+## Run From A Schedule
+
+The schedule does not create a separate execution type. It submits the same
+workflow to the background runner and records the trigger result.
+
+```elixir
+{:ok, scheduled_report} =
+  Scenario.scheduled(scheduler, runner, now,
+    schedule_id: Jidoka.Id.generate!("schedule_livebook")
+  )
+
+unless scheduled_report.trigger.status == :started and
+         scheduled_report.run.status == :completed do
+  raise "the scheduled workflow did not complete"
+end
+
+%{
+  schedule: scheduled_report.schedule,
+  trigger: scheduled_report.trigger,
+  run: scheduled_report.run
+}
+```

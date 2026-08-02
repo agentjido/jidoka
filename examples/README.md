@@ -15,6 +15,8 @@ examples in order:
 2. **Support Agent** - add one complete tool call and approval flow.
 3. **Warranty Claim** - add typed context, model policy, media, and results.
 4. **Durable Refund** - add asynchronous and durable runtime behavior.
+5. **Workflow Composition** - add a complete graph, loops, background runs,
+   and schedules.
 
 The agent, action, control, instruction, and YAML files are application
 patterns. The scenario, optional scripted model, command runner, test, and
@@ -37,6 +39,7 @@ mix run examples/getting_started/example.exs
 mix run examples/support_agent/example.exs
 mix run examples/warranty_claim/example.exs
 mix run examples/durable_refund/example.exs
+mix run examples/workflow_composition/example.exs
 ```
 
 ## Test Examples
@@ -53,16 +56,16 @@ mix test examples/durable_refund/test/execution_and_continuation_test.exs --trac
 The YAML manifest lists the aggregate features for an example. Tags on each
 ExUnit test show the exact features that the scenario verifies.
 
-The first two feature-inventory sections are a closed milestone. Run their
+The first three feature-inventory sections are a closed milestone. Run their
 focused provider-free parity proofs with:
 
 ```bash
 mix test --include parity test/parity
 ```
 
-## First Two Sections
+## First Three Sections
 
-All 17 features have product code, deterministic tests, public guides, and an
+All 25 features have product code, deterministic tests, public guides, and an
 executable example path.
 
 | ID | Contract | Example coverage |
@@ -84,6 +87,14 @@ executable example path.
 | E06 | Serializable pause and resume | Support Agent: `serializable_pause_resume` |
 | E07 | Crash-safe durable execution | Durable Refund: `crash_recovery` |
 | E08 | Data replay and safe forks | Durable Refund: `data_only_replay`, `safe_session_fork` |
+| W01 | Sequential typed steps | Workflow Composition: `sequential_typed_steps` |
+| W02 | Conditional routing | Workflow Composition: `conditional_routing` |
+| W03 | Parallel fan-out and ordered fan-in | Workflow Composition: `parallel_fan_out` |
+| W04 | Bounded loops and dynamic work | Workflow Composition: `bounded_dynamic_loops` |
+| W05 | Bounded step retry | Workflow Composition: `bounded_step_retry` |
+| W06 | Workflow exposed as one agent tool | Workflow Composition: `workflow_tool` |
+| W07 | Reconnectable background work | Workflow Composition: `background_runs` |
+| W08 | One-time and cron schedules | Workflow Composition: `scheduled_runs` |
 
 A02 is complete inside the versioned Jidoka document format. E07 is complete
 for the documented single-node durable contract and application-owned store
@@ -123,9 +134,12 @@ examples/<name>/
 | Support Agent | Intermediate | Tools, controls, approval, serialized pause, and resume |
 | Warranty Claim | Advanced | Data authoring, typed results, media, fallback, and repair |
 | Durable Refund | Expert | Async work, parallel tools, streams, limits, recovery, and forks |
+| Workflow Composition | Expert | Typed graphs, branches, fan-out, loops, retry, background work, and schedules |
 
 Use Getting Started for the smallest complete agent. Use the Support Agent for
 a controlled tool flow. Use the Warranty Claim for agent authoring, model
 policy, structured results, and multimodal content. Use the Durable Refund
 Agent for asynchronous execution, cancellation, execution limits, durable
-recovery, parallel tool calls, and safe session forks.
+recovery, parallel tool calls, and safe session forks. Use Workflow Composition
+for deterministic business graphs, runtime-created work, reconnectable jobs,
+and cron triggers.

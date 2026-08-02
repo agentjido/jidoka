@@ -154,3 +154,31 @@ defmodule Jidoka.Workflow.Dsl.ReduceStep do
 
   def schema, do: @schema
 end
+
+defmodule Jidoka.Workflow.Dsl.LoopStep do
+  @moduledoc false
+
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              :name => Zoi.any() |> Zoi.nullish(),
+              :initial => Zoi.any() |> Zoi.nullish(),
+              :using => Zoi.any() |> Zoi.nullish(),
+              :params => Zoi.any() |> Zoi.nullish(),
+              :max_iterations => Zoi.any() |> Zoi.nullish(),
+              :after => Zoi.any() |> Zoi.nullish(),
+              :when => Zoi.any() |> Zoi.nullish(),
+              :unless => Zoi.any() |> Zoi.nullish(),
+              :retry => Zoi.any() |> Zoi.nullish(),
+              :metadata => Zoi.any() |> Zoi.nullish(),
+              :__spark_metadata__ => Zoi.any() |> Zoi.nullish()
+            },
+            coerce: true
+          )
+
+  @type t :: unquote(Zoi.type_spec(@schema))
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  def schema, do: @schema
+end

@@ -1,0 +1,16 @@
+name: workflow_composition
+title: Workflow Composition Agent
+summary: One fulfillment agent that proves every workflow and graph composition contract.
+agent: JidokaExamples.WorkflowComposition.Agent
+features:
+  - sequential_typed_steps
+  - conditional_routing
+  - parallel_fan_out
+  - bounded_dynamic_loops
+  - bounded_step_retry
+  - workflow_tool
+  - background_runs
+  - scheduled_runs
+tests:
+  - test/workflow_composition_test.exs
+livebook: workflow_composition.livemd

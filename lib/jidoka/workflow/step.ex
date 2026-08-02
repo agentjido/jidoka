@@ -4,7 +4,7 @@ defmodule Jidoka.Workflow.Step do
   alias Jidoka.Schema
   alias Jidoka.Workflow.RetryPolicy
 
-  @kinds [:function, :action, :agent, :gate, :map, :reduce]
+  @kinds [:function, :action, :agent, :gate, :map, :reduce, :loop]
   @map_targets [:function, :action]
 
   @schema Zoi.struct(
@@ -21,8 +21,10 @@ defmodule Jidoka.Workflow.Step do
               condition_when: Zoi.any() |> Zoi.nullish(),
               condition_unless: Zoi.any() |> Zoi.nullish(),
               over: Zoi.any() |> Zoi.nullish(),
+              initial: Zoi.any() |> Zoi.nullish(),
               using: Zoi.any() |> Zoi.nullish(),
               max_concurrency: Zoi.integer() |> Zoi.gt(0) |> Zoi.nullish(),
+              max_iterations: Zoi.integer() |> Zoi.gt(0) |> Zoi.nullish(),
               after: Zoi.array(Zoi.atom()) |> Zoi.default([]),
               retry: Zoi.lazy({RetryPolicy, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})

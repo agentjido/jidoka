@@ -153,6 +153,41 @@ defmodule Jidoka.Workflow.Definition.Steps do
     )
   end
 
+  defp normalize_step!(%Dsl.LoopStep{} = step, owner_module) do
+    Validation.validate_step_name!(owner_module, step.name, [:steps, :loop])
+
+    Validation.validate_required!(
+      owner_module,
+      step.initial,
+      [:steps, step.name, :initial],
+      "Workflow loop steps require an initial state."
+    )
+
+    Validation.validate_no_special_refs!(owner_module, [:steps, step.name, :initial], step.initial)
+
+    Validation.validate_allowed_special_refs!(
+      owner_module,
+      [:steps, step.name, :input],
+      step.params,
+      [:loop_state, :iteration]
+    )
+
+    Targets.validate_function!(owner_module, %{name: step.name, mfa: step.using})
+    max_iterations = normalize_max_iterations!(owner_module, step.max_iterations, [:steps, step.name])
+    common = common_attrs!(owner_module, step, [:steps, step.name])
+
+    Step.new!(
+      [
+        kind: :loop,
+        name: step.name,
+        target: step.using,
+        initial: step.initial,
+        input: step.params || %{state: Jidoka.Workflow.Ref.loop_state(), iteration: Jidoka.Workflow.Ref.iteration()},
+        max_iterations: max_iterations
+      ] ++ common
+    )
+  end
+
   defp common_attrs!(owner_module, step, path) do
     condition_when = Map.get(step, :when)
     condition_unless = Map.get(step, :unless)
@@ -227,6 +262,18 @@ defmodule Jidoka.Workflow.Definition.Steps do
       path,
       value,
       "Use a value like `max_concurrency: 8`."
+    )
+  end
+
+  defp normalize_max_iterations!(_owner_module, value, _path) when is_integer(value) and value > 0, do: value
+
+  defp normalize_max_iterations!(owner_module, value, path) do
+    Error.raise!(
+      owner_module,
+      "Workflow loop max_iterations must be a positive integer.",
+      path ++ [:max_iterations],
+      value,
+      "Declare an explicit safety bound such as `max_iterations: 10`."
     )
   end
 end

@@ -27,6 +27,7 @@ defmodule Jidoka.Workflow.Graph do
       unless: WorkflowProjection.ref(step.condition_unless),
       retry: retry(step.retry),
       fanout: fanout(step),
+      loop: loop(step),
       input: WorkflowProjection.ref(step.input),
       output: output(step)
     }
@@ -61,8 +62,18 @@ defmodule Jidoka.Workflow.Graph do
 
   defp fanout(_step), do: nil
 
+  defp loop(%Step{kind: :loop} = step) do
+    %{
+      initial: WorkflowProjection.ref(step.initial),
+      max_iterations: step.max_iterations
+    }
+  end
+
+  defp loop(_step), do: nil
+
   defp output(%Step{kind: :gate}), do: :boolean
   defp output(%Step{kind: :map}), do: :list
+  defp output(%Step{kind: :loop}), do: :loop_result
   defp output(_step), do: nil
 
   defp empty?(nil), do: true

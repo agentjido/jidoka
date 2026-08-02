@@ -1,7 +1,7 @@
 defmodule Jidoka.Workflow.Dsl do
   @moduledoc false
 
-  alias Jidoka.Workflow.Dsl.{ActionStep, AgentStep, FunctionStep, GateStep, MapStep, ReduceStep}
+  alias Jidoka.Workflow.Dsl.{ActionStep, AgentStep, FunctionStep, GateStep, LoopStep, MapStep, ReduceStep}
 
   @condition_options [
     {:when,
@@ -322,6 +322,54 @@ defmodule Jidoka.Workflow.Dsl do
       ] ++ @condition_options ++ @retry_option
   }
 
+  @loop_step_entity %Spark.Dsl.Entity{
+    name: :loop_step,
+    target: LoopStep,
+    imports: [Jidoka.Workflow.Ref],
+    args: [:name],
+    describe: "Repeat explicit state transitions under a strict iteration bound.",
+    schema:
+      [
+        name: [
+          type: :atom,
+          required: true,
+          doc: "Unique lower snake case step name."
+        ],
+        initial: [
+          type: :any,
+          required: true,
+          doc: "Initial loop state. It can contain normal workflow refs."
+        ],
+        using: [
+          type: :any,
+          required: true,
+          doc: "A `{module, function, 2}` loop callback."
+        ],
+        params: [
+          type: :any,
+          required: false,
+          doc: "Iteration input mapping. It can use `loop_state()` and `iteration()`."
+        ],
+        max_iterations: [
+          type: :pos_integer,
+          required: true,
+          doc: "Maximum total callback executions, including resumed execution."
+        ],
+        after: [
+          type: {:list, :atom},
+          required: false,
+          default: [],
+          doc: "Optional control-only dependencies."
+        ],
+        metadata: [
+          type: :map,
+          required: false,
+          default: %{},
+          doc: "Optional step metadata."
+        ]
+      ] ++ @condition_options ++ @retry_option
+  }
+
   @steps_section %Spark.Dsl.Section{
     name: :steps,
     imports: [Jidoka.Workflow.Ref, Jidoka.Workflow.Dsl.Helpers],
@@ -332,7 +380,8 @@ defmodule Jidoka.Workflow.Dsl do
       @agent_step_entity,
       @gate_step_entity,
       @map_step_entity,
-      @reduce_step_entity
+      @reduce_step_entity,
+      @loop_step_entity
     ]
   }
 
