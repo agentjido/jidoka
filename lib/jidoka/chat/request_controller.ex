@@ -6,7 +6,7 @@ defmodule Jidoka.Chat.RequestController do
   alias Jidoka.Cancellation
   alias Jidoka.Cancellation.Token
   alias Jidoka.Event
-  alias Jidoka.Stream
+  alias Jidoka.Runtime.EventDispatcher
 
   @task_supervisor Jidoka.Chat.TaskSupervisor
   @request_supervisor Jidoka.Chat.RequestSupervisor
@@ -189,7 +189,7 @@ defmodule Jidoka.Chat.RequestController do
   defp accept_event(%{terminal?: true} = state, _event), do: state
 
   defp accept_event(%{cancellation_requested?: true} = state, %Event{} = event) do
-    if Stream.terminal?(event) do
+    if EventDispatcher.terminal?(event) do
       state
       |> maybe_forward_cancel_event(event)
       |> Map.put(:terminal?, true)
@@ -205,7 +205,7 @@ defmodule Jidoka.Chat.RequestController do
       Event.cancelled?(event) ->
         %{state | terminal?: true, cancellation_requested?: true}
 
-      Stream.terminal?(event) ->
+      EventDispatcher.terminal?(event) ->
         %{state | terminal?: true}
 
       true ->
@@ -326,7 +326,7 @@ defmodule Jidoka.Chat.RequestController do
   end
 
   defp forward_event(state, %Event{} = event) do
-    :ok = Stream.emit(event, stream_to: state.stream_to, on_event: state.on_event)
+    :ok = EventDispatcher.emit(event, stream_to: state.stream_to, on_event: state.on_event)
 
     %{
       state

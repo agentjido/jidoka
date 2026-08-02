@@ -16,6 +16,7 @@ defmodule Jidoka.SessionTest do
 
   alias Jidoka.Session.Data, as: SessionData
   alias Jidoka.Session.Store.InMemory
+  alias Jidoka.Chat.Async, as: AsyncChat
   alias Jidoka.Chat.Request
   alias Jidoka.Session
   alias Jidoka.SessionTest.Support.DslAgent
@@ -115,7 +116,7 @@ defmodule Jidoka.SessionTest do
       )
 
     assert_receive {:chat_task_started, task_pid}
-    assert {:error, :timeout} = Request.await(request, timeout: 5)
+    assert {:error, :timeout} = AsyncChat.await(request, timeout: 5)
     refute Process.alive?(task_pid)
   end
 

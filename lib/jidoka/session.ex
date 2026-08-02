@@ -10,6 +10,7 @@ defmodule Jidoka.Session do
   alias Jidoka.Agent
   alias Jidoka.Cancellation
   alias Jidoka.Chat
+  alias Jidoka.Chat.Async, as: AsyncChat
   alias Jidoka.Review.Execution, as: ReviewExecution
   alias Jidoka.Session.Data, as: SessionData
   alias Jidoka.Session.Execution, as: SessionExecution
@@ -106,7 +107,7 @@ defmodule Jidoka.Session do
         persist_forced_cancellation(session_or_id, opts, cancellation)
       end)
 
-    Chat.Request.start_fun(session_or_id, input, runtime_opts, fn prepared_opts ->
+    AsyncChat.start_fun(session_or_id, input, runtime_opts, fn prepared_opts ->
       chat(session_or_id, input, prepared_opts)
     end)
   end
@@ -114,13 +115,13 @@ defmodule Jidoka.Session do
   @doc "Waits for a request handle returned by `chat_async/3`."
   @spec await(Chat.Request.t(), opts()) :: chat_result()
   def await(%Chat.Request{} = request, opts \\ []) when is_list(opts) do
-    Chat.Request.await(request, opts)
+    AsyncChat.await(request, opts)
   end
 
   @doc "Cancels an active asynchronous session request."
   @spec cancel(Chat.Request.t(), opts()) :: {:ok, Cancellation.t()} | {:error, term()}
   def cancel(%Chat.Request{} = request, opts \\ []) when is_list(opts) do
-    Chat.Request.cancel(request, opts)
+    AsyncChat.cancel(request, opts)
   end
 
   @doc """

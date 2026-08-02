@@ -3,7 +3,7 @@ defmodule Jidoka.CancellationTest do
 
   alias Jidoka.Agent
   alias Jidoka.Cancellation
-  alias Jidoka.Chat.Request
+  alias Jidoka.Chat.Async, as: AsyncChat
   alias Jidoka.Event
   alias Jidoka.Session.Data, as: SessionData
   alias Jidoka.Session.Store.InMemory
@@ -54,7 +54,7 @@ defmodule Jidoka.CancellationTest do
     parent = self()
 
     assert {:ok, request} =
-             Request.start_fun(
+             AsyncChat.start_fun(
                :forced_cancel_target,
                "Cancel this",
                [stream: true, request_id: "req_forced_cancel"],
@@ -120,7 +120,7 @@ defmodule Jidoka.CancellationTest do
 
   test "a completed request cannot later change to cancelled" do
     assert {:ok, request} =
-             Request.start_fun(
+             AsyncChat.start_fun(
                :completed_target,
                "Complete this",
                [request_id: "req_completed_before_cancel"],
@@ -134,7 +134,7 @@ defmodule Jidoka.CancellationTest do
 
   test "a published terminal event wins a race with cancellation" do
     assert {:ok, request} =
-             Request.start_fun(
+             AsyncChat.start_fun(
                :terminal_race_target,
                "Complete this",
                [stream: true, request_id: "req_terminal_race"],
@@ -159,7 +159,7 @@ defmodule Jidoka.CancellationTest do
 
   test "await timeout cancels the request but keeps timeout as the caller result" do
     assert {:ok, request} =
-             Request.start_fun(
+             AsyncChat.start_fun(
                :timeout_target,
                "Wait",
                [request_id: "req_await_timeout"],

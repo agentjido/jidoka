@@ -17,8 +17,8 @@ defmodule Jidoka.Runtime.TurnRunner do
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
+  alias Jidoka.Runtime.EventDispatcher
   alias Jidoka.Runtime.Review
-  alias Jidoka.Stream, as: EventStream
   alias Jidoka.Turn
 
   @type run_result ::
@@ -301,7 +301,7 @@ defmodule Jidoka.Runtime.TurnRunner do
       request_id: state.request.request_id,
       loop_index: state.loop_index
     )
-    |> EventStream.emit(opts)
+    |> EventDispatcher.emit(opts)
   end
 
   defp append_turn_hibernated(%Turn.State{} = state, %Turn.Cursor{} = cursor) do
@@ -330,7 +330,7 @@ defmodule Jidoka.Runtime.TurnRunner do
       request_id: request.request_id,
       data: failure_data(reason)
     )
-    |> EventStream.emit(opts)
+    |> EventDispatcher.emit(opts)
 
     result
   end
@@ -360,7 +360,7 @@ defmodule Jidoka.Runtime.TurnRunner do
     |> emit_events(opts)
   end
 
-  defp emit_events(events, opts) when is_list(events), do: EventStream.emit_events(events, opts)
+  defp emit_events(events, opts) when is_list(events), do: EventDispatcher.emit_events(events, opts)
 
   defp enforce_timeout(%Turn.State{plan: %{timeout_ms: timeout_ms}} = state, opts)
        when is_integer(timeout_ms) do

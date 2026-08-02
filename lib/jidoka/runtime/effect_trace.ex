@@ -3,7 +3,7 @@ defmodule Jidoka.Runtime.EffectTrace do
 
   alias Jidoka.Effect
   alias Jidoka.Error
-  alias Jidoka.Stream, as: EventStream
+  alias Jidoka.Runtime.EventDispatcher
   alias Jidoka.Turn
 
   @spec append_capability_result(Turn.State.t(), Effect.Intent.t(), Effect.Result.t(), keyword()) ::
@@ -56,13 +56,13 @@ defmodule Jidoka.Runtime.EffectTrace do
 
     state.events
     |> List.last()
-    |> then(&EventStream.emit(&1, opts))
+    |> then(&EventDispatcher.emit(&1, opts))
 
     state
   end
 
   @spec emit_events([Jidoka.Event.t()], keyword()) :: :ok
-  def emit_events(events, opts), do: EventStream.emit_events(events, opts)
+  def emit_events(events, opts), do: EventDispatcher.emit_events(events, opts)
 
   @spec request_id(Turn.State.t(), Effect.Intent.t()) :: String.t() | nil
   def request_id(%Turn.State{} = state, %Effect.Intent{} = intent) do

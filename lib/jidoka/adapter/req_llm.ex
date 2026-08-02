@@ -13,8 +13,8 @@ defmodule Jidoka.Adapter.ReqLLM do
   alias Jidoka.Event
   alias Jidoka.Adapter.ReqLLM.PromptAdapter
   alias Jidoka.Adapter.ReqLLM.ResponseAdapter
+  alias Jidoka.Runtime.EventDispatcher
   alias Jidoka.Schema
-  alias Jidoka.Stream, as: EventStream
 
   @type option ::
           {:model, ReqLLM.model_input()}
@@ -233,7 +233,7 @@ defmodule Jidoka.Adapter.ReqLLM do
       effect_kind: :llm,
       data: %{chunk_type: chunk_type, delta: delta}
     )
-    |> EventStream.emit(opts)
+    |> EventDispatcher.emit(opts)
   end
 
   defp content_prefix(raw) when is_binary(raw) do

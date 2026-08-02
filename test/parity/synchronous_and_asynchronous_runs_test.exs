@@ -3,6 +3,7 @@ defmodule Jidoka.Parity.SynchronousAndAsynchronousRunsTest do
 
   alias Jidoka.Agent
   alias Jidoka.Cancellation
+  alias Jidoka.Chat.Async, as: AsyncChat
   alias Jidoka.Chat.Request
 
   @moduletag :e01
@@ -38,7 +39,7 @@ defmodule Jidoka.Parity.SynchronousAndAsynchronousRunsTest do
 
   test "an await timeout cleans up the request without hiding the timeout" do
     assert {:ok, request} =
-             Request.start_fun(
+             AsyncChat.start_fun(
                :parity_e01_timeout,
                "Wait",
                [request_id: "parity-e01-timeout"],

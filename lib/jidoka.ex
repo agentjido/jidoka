@@ -28,6 +28,7 @@ defmodule Jidoka do
 
   alias Jidoka.Agent
   alias Jidoka.Chat
+  alias Jidoka.Chat.Async, as: AsyncChat
   alias Jidoka.Error
   alias Jidoka.Review.Execution, as: ReviewExecution
   alias Jidoka.Session.Data, as: Session
@@ -242,7 +243,9 @@ defmodule Jidoka do
   end
 
   def chat_async(target, input, opts) when is_binary(input) and is_list(opts) do
-    Chat.Request.start(target, input, opts)
+    AsyncChat.start_fun(target, input, opts, fn prepared_opts ->
+      Chat.run(target, input, prepared_opts)
+    end)
   end
 
   @doc """
@@ -263,13 +266,13 @@ defmodule Jidoka do
   """
   @spec await(Chat.Request.t() | Jidoka.Stream.t(), keyword()) :: term()
   def await(request_or_stream, opts \\ [])
-  def await(%Chat.Request{} = request, opts), do: Chat.Request.await(request, opts)
+  def await(%Chat.Request{} = request, opts), do: AsyncChat.await(request, opts)
   def await(%Jidoka.Stream{} = stream, opts), do: Jidoka.Stream.await(stream, opts)
 
   @doc "Cancels an active asynchronous chat request and returns typed evidence."
   @spec cancel(Chat.Request.t(), keyword()) ::
           {:ok, Jidoka.Cancellation.t()} | {:error, term()}
-  def cancel(%Chat.Request{} = request, opts \\ []), do: Chat.Request.cancel(request, opts)
+  def cancel(%Chat.Request{} = request, opts \\ []), do: AsyncChat.cancel(request, opts)
 
   @doc """
   Runs one agent turn through the Jidoka Runic spine.
