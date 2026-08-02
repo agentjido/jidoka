@@ -19,6 +19,7 @@ defmodule Jidoka.Agent do
   """
 
   alias Jidoka.Agent.ControlCompiler
+  alias Jidoka.Agent.RuntimeOptions
   alias Jidoka.Agent.ServerOptions
   alias Jidoka.Agent.Spec
   alias Jidoka.Agent.Spec.Generation
@@ -27,9 +28,7 @@ defmodule Jidoka.Agent do
   alias Jidoka.Agent.ToolSources
   alias Jidoka.Config
   alias Jidoka.Error
-  alias Jidoka.ModelPolicy
   alias Jidoka.Adapter.Jido.RunTurn
-  alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Adapter.Jido.Signals
   alias Jidoka.Turn.Execution, as: TurnExecution
 
@@ -227,7 +226,7 @@ defmodule Jidoka.Agent do
   def run_turn(agent_module, input, opts \\ []) when is_atom(agent_module) and is_list(opts) do
     spec = spec(agent_module)
 
-    case TurnExecution.run(spec, input, runtime_opts(agent_module, spec, opts)) do
+    case TurnExecution.run(spec, input, RuntimeOptions.resolve(agent_module, spec, opts)) do
       {:ok, _result} = ok -> ok
       {:hibernate, _snapshot} = hibernate -> hibernate
       {:error, reason} -> {:error, Error.normalize(reason, operation: :turn, phase: :harness)}
@@ -244,51 +243,6 @@ defmodule Jidoka.Agent do
       {:ok, content}
     end
   end
-
-  @doc false
-  @spec runtime_opts(module(), Spec.t(), keyword()) :: keyword()
-  def runtime_opts(agent_module, %Spec{} = spec, opts) do
-    opts
-    |> Keyword.put(:operation_context, operation_context(agent_module, spec, opts))
-    |> Keyword.put_new(
-      :operations,
-      default_operation_capability(agent_module)
-    )
-    |> Keyword.put_new(:llm, ReqLLM.llm(default_llm_opts(spec, opts)))
-  end
-
-  defp default_operation_capability(agent_module) do
-    ToolSources.operation_capability(agent_module)
-  end
-
-  defp operation_context(agent_module, %Spec{} = spec, opts) do
-    base = %{
-      agent_module: agent_module,
-      jido_agent: agent_module.new(),
-      jidoka_spec: spec
-    }
-
-    Map.merge(base, normalize_operation_context(Keyword.get(opts, :operation_context, %{})))
-  end
-
-  defp normalize_operation_context(%Jidoka.Context{} = context), do: Jidoka.Context.runtime(context)
-
-  defp normalize_operation_context(context) when is_list(context) do
-    if Keyword.keyword?(context), do: Map.new(context), else: %{}
-  end
-
-  defp normalize_operation_context(context) when is_map(context), do: context
-  defp normalize_operation_context(_context), do: %{}
-
-  defp default_llm_opts(%Spec{} = spec, opts) do
-    spec.generation
-    |> Generation.to_req_llm_opts()
-    |> Keyword.merge(Keyword.get(opts, :llm_opts, []))
-    |> Keyword.merge(stream_opts(opts))
-    |> ModelPolicy.configure_llm_opts(spec.model, opts)
-  end
-
-  defp stream_opts(opts), do: Keyword.take(opts, [:stream, :stream_to, :on_event])
 
   defp fetch_agent!(agent_module) do
     case Spark.Dsl.Extension.get_entities(agent_module, [:jidoka]) do

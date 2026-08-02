@@ -7,6 +7,7 @@ defmodule Jidoka.Turn.Execution do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Agent.RuntimeOptions
   alias Jidoka.Agent.Spec.Generation
   alias Jidoka.Adapter.Runic.OperationBatch
   alias Jidoka.Adapter.Runic.TurnCompiler
@@ -108,7 +109,7 @@ defmodule Jidoka.Turn.Execution do
     opts =
       case dsl_agent_module(spec) do
         nil -> Keyword.put_new(opts, :llm, ReqLLM.llm(default_llm_opts(spec, opts)))
-        agent_module -> Agent.runtime_opts(agent_module, spec, opts)
+        agent_module -> RuntimeOptions.resolve(agent_module, spec, opts)
       end
 
     opts
