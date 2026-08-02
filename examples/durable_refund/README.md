@@ -1,10 +1,10 @@
 # Durable Refund Agent
 
-The Durable Refund Agent proves the execution and continuation feature group
+The Durable Refund Agent demonstrates the execution and continuation feature group
 with one deterministic business flow. It does not use a provider key, network
 request, or recorded model response.
 
-The five proof cases show:
+The five ExUnit scenarios show:
 
 - one asynchronous request with thinking and content deltas;
 - typed cooperative cancellation with one terminal event;
@@ -20,9 +20,10 @@ calling `issue_refund` again.
 ## Run It
 
 ```bash
-mix jidoka.example durable_refund
+mix run examples/durable_refund/example.exs
+mix test --only example:durable_refund
 mix test examples/durable_refund/test/execution_and_continuation_test.exs --trace
-mix jidoka.examples.check --example durable_refund --verbose
+mix run scripts/check_livebooks.exs -- --project examples/durable_refund/durable_refund.livemd
 ```
 
 Open `durable_refund.livemd` for the complete executable walkthrough.
@@ -33,8 +34,9 @@ Open `durable_refund.livemd` for the complete executable walkthrough.
 - `lib/actions/issue_refund.ex` is the unsafe-once operation.
 - `lib/controls/allow_refund.ex` makes the unsafe operation policy explicit.
 - `lib/scripted_llm.ex` provides deterministic stream, cancel, and refund paths.
-- `example.exs` owns the five runnable demonstrations.
-- `test/execution_and_continuation_test.exs` is the proof authority.
+- `lib/scenario.ex` owns the five reusable demonstrations.
+- `example.exs` is the small command entry point.
+- `test/execution_and_continuation_test.exs` is the behavior authority.
 
 For the public contracts, see:
 

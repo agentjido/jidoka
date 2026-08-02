@@ -23,21 +23,20 @@ use a provider key, network request, or recorded provider response.
 Run the command demo:
 
 ```bash
-mix jidoka.example warranty_claim
-mix jidoka.example warranty_claim --json
+mix run examples/warranty_claim/example.exs
+mix test --only example:warranty_claim
 ```
 
-Run the proof cases:
+Run the scenario tests:
 
 ```bash
 mix test examples/warranty_claim/test/warranty_claim_triage_test.exs --trace
 ```
 
-Check all Warranty Claim surfaces:
+Run one feature through its native ExUnit tag:
 
 ```bash
-mix jidoka.examples.check --example warranty_claim
-mix jidoka.examples.check --example warranty_claim --verbose
+mix test --only structured_results
 ```
 
 Open `warranty_claim.livemd` for the executable walkthrough.
@@ -48,8 +47,9 @@ Open `warranty_claim.livemd` for the executable walkthrough.
 - `agent.yaml` defines the equivalent data-authored agent.
 - `lib/instructions.ex` resolves the tenant policy from public context.
 - `lib/scripted_llm.ex` causes deterministic retry, fallback, and repair.
-- `example.exs` builds the multimodal claim and produces a safe report.
-- `test/warranty_claim_triage_test.exs` is the proof authority.
+- `lib/scenario.ex` builds the multimodal claim and produces a safe report.
+- `example.exs` is the small command entry point.
+- `test/warranty_claim_triage_test.exs` is the behavior authority.
 
 For the public contracts, see these guides:
 

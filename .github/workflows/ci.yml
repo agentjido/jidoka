@@ -25,8 +25,8 @@ jobs:
       test_command: mix test --cover && mix test.coverage
       credo_command: mix credo --min-priority higher
 
-  proof:
-    name: Example proof system
+  examples:
+    name: Example Livebooks and showcase
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +35,8 @@ jobs:
           elixir-version: "1.19"
           otp-version: "28"
       - run: mix deps.get
+      - run: mix run scripts/check_livebooks.exs -- --project examples/*/*.livemd guides/livebooks/*.livemd
       - run: mix deps.get
         working-directory: showcase
-      - run: mix jidoka.examples.check
+      - run: mix test --warnings-as-errors
+        working-directory: showcase

@@ -1,27 +1,37 @@
 # Jidoka Examples
 
-Each folder under `examples/` is one complete reference agent. It owns the
-agent code, manifest, proof tests, command runner, README, and Livebook. Example
-modules are not compiled into the production library.
+Each folder under `examples/` is one complete deterministic reference agent.
+It owns the agent code, scenario code, metadata, ExUnit tests, command runner,
+README, and Livebook. Example modules compile only in the test environment and
+are not part of the production Jidoka application.
 
-Reusable proof infrastructure and deterministic helpers stay in `_support/`.
-Standalone documentation Livebooks stay in `guides/livebooks/`.
-
-## Run An Example
+## Run Examples
 
 ```bash
-mix jidoka.example --list
-mix jidoka.example support_agent
-mix jidoka.example warranty_claim
-mix jidoka.example durable_refund
-mix jidoka.examples.check --example support_agent
-mix jidoka.examples.check --example warranty_claim
-mix jidoka.examples.check --example durable_refund
-mix jidoka.examples.check
+mix run examples/support_agent/example.exs
+mix run examples/warranty_claim/example.exs
+mix run examples/durable_refund/example.exs
 ```
 
-All default proof cases are deterministic and offline. They do not use provider
-keys, network calls, or recorded model fixtures.
+## Test Examples
+
+The root `mix test` command runs the example tests with the rest of the suite.
+Use standard ExUnit tags for focused runs:
+
+```bash
+mix test --only example:support_agent
+mix test --only tool_calling
+mix test examples/durable_refund/test/execution_and_continuation_test.exs --trace
+```
+
+The YAML manifest lists the aggregate features for an example. Tags on each
+ExUnit test show the exact features that the scenario verifies.
+
+Run all Livebooks without their standalone `Mix.install` calls:
+
+```bash
+mix run scripts/check_livebooks.exs -- --project examples/*/*.livemd guides/livebooks/*.livemd
+```
 
 ## Example Layout
 
@@ -33,24 +43,15 @@ examples/<name>/
 ├── <name>.livemd
 ├── lib/
 │   ├── agent.ex
+│   ├── scenario.ex
+│   ├── scripted_llm.ex
 │   ├── actions/
 │   └── controls/
 └── test/
     └── <scenario>_test.exs
 ```
 
-The YAML manifest declares scenarios, cases, expected capabilities, and public
-surfaces. Tagged ExUnit tests are the only capability-proof authority. The
-runner demonstrates normal use. The Livebook is an executable walkthrough.
-The optional Showcase surface provides an interactive UI.
-
-Use the Support Agent as the reference for a controlled tool flow. Use the
-Warranty Claim example as the reference for agent authoring, model policy,
-structured results, and multimodal content. Keep one causal Jidoka behavior in
-each proof case. Use the Durable Refund Agent as the reference for asynchronous
-execution, cancellation, execution limits, durable recovery, and safe forks.
-Put stable guarantees under `proves` and required capabilities or components
-under `uses`.
-
-A complete proof run writes verified coverage to the ignored local file
-`docs/PROVEN_FEATURES.md`.
+Use the Support Agent for a controlled tool flow. Use the Warranty Claim for
+agent authoring, model policy, structured results, and multimodal content. Use
+the Durable Refund Agent for asynchronous execution, cancellation, execution
+limits, durable recovery, and safe session forks.

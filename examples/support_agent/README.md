@@ -1,6 +1,6 @@
 # Support Agent
 
-The Support Agent is the first complete Jidoka proof example. Its one scenario,
+The Support Agent is a complete deterministic Jidoka example. Its one scenario,
 `controlled_tool_call`, follows this path:
 
 ```text
@@ -30,25 +30,24 @@ claim to prove their complete public contracts.
 Run the command demonstration:
 
 ```bash
-mix jidoka.example support_agent
+mix run examples/support_agent/example.exs
 ```
 
-Run the three proof cases with normal ExUnit output:
+Run the three scenario tests with normal ExUnit output:
 
 ```bash
 mix test examples/support_agent/test/controlled_tool_call_test.exs --trace
 ```
 
-Check every Support Agent surface:
+Run the scenario through its native ExUnit tag:
 
 ```bash
-mix jidoka.examples.check --example support_agent
-mix jidoka.examples.check --example support_agent --verbose
+mix test --only example:support_agent
+mix test --only tool_calling
 ```
 
 Open `support_agent.livemd` for the executable walkthrough. Start the Phoenix
 application in `showcase/` and open `/agents/support` for the curated UI.
 
 No path uses a real LLM, provider key, network request, or recorded fixture.
-The reusable Mock LLM is in `examples/_support/shared/mock_llm.ex`. This example
-supplies only its operation arguments and order-specific final response.
+The local scripted model is in `lib/scripted_llm.ex`.

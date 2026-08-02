@@ -33,14 +33,14 @@ binary keeps the example insulated from any globally installed `agent-browser`
 version. Set `JIDO_BROWSER_AGENT_BROWSER_BINARY_PATH` only if you need to point
 at a custom binary.
 
-Run the complete example proof from the package root:
+Run the example scenarios and Livebooks from the package root:
 
 ```bash
-mix jidoka.examples.check
+mix test --only example
+mix run scripts/check_livebooks.exs -- --project examples/*/*.livemd
 ```
 
-This command checks the example tests, Livebooks, command runners, and Showcase
-surfaces together.
+Run `mix test` in this directory to verify the Showcase.
 
 ## Current Examples
 

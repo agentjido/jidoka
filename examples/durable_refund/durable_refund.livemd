@@ -2,7 +2,6 @@
 
 ```elixir
 package_root = Path.expand("../..", __DIR__)
-examples_root = Path.expand("..", __DIR__)
 
 Mix.install(
   [
@@ -13,13 +12,16 @@ Mix.install(
   lockfile: Path.join(package_root, "mix.lock")
 )
 
-Code.require_file(Path.join(examples_root, "_support/registry.exs"))
+files = Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))
+{agent_files, support_files} = Enum.split_with(files, &(Path.basename(&1) == "agent.ex"))
+{scenario_files, support_files} = Enum.split_with(support_files, &(Path.basename(&1) == "scenario.ex"))
 
-{:ok, durable_refund_example} = JidokaExamples.fetch(:durable_refund)
-{:ok, _modules} = JidokaExamples.load(durable_refund_example)
+Enum.each([support_files, agent_files, scenario_files], fn group ->
+  {:ok, _modules, _diagnostics} = Kernel.ParallelCompiler.require(group, return_diagnostics: true)
+end)
 
 alias JidokaExamples.DurableRefund.Agent, as: DurableRefundAgent
-alias JidokaExamples.DurableRefund.Example
+alias JidokaExamples.DurableRefund.Scenario
 ```
 
 ## Run The Demo
@@ -42,7 +44,7 @@ Jidoka.Kino.setup_notebook(model: "test:durable-refund-script", check_provider?:
 ## Stream One Async Request
 
 ```elixir
-{:ok, stream_report} = Example.async_streaming(observer: self())
+{:ok, stream_report} = Scenario.async_streaming(observer: self())
 
 unless stream_report.answer == stream_report.text and
          length(stream_report.terminal_events) == 1 do
@@ -59,7 +61,7 @@ end
 ## Cancel Active Work
 
 ```elixir
-{:ok, cancellation_report} = Example.typed_cancellation(observer: self())
+{:ok, cancellation_report} = Scenario.typed_cancellation(observer: self())
 
 unless cancellation_report.cancellation.reason == :cancelled and
          cancellation_report.capability_alive? == false and
@@ -76,7 +78,7 @@ end
 ## Enforce Execution Limits
 
 ```elixir
-{:ok, budget_report} = Example.bounded_execution(observer: self())
+{:ok, budget_report} = Scenario.bounded_execution(observer: self())
 
 %{
   max_output_tokens: budget_report.max_tokens,
@@ -93,7 +95,7 @@ snapshot. The second worker takes the expired lease and finishes from the
 stored result.
 
 ```elixir
-{:ok, recovery_report} = Example.durable_recovery(observer: self())
+{:ok, recovery_report} = Scenario.durable_recovery(observer: self())
 
 unless recovery_report.operation_calls == 1 and
          recovery_report.session.status == :finished do
@@ -111,7 +113,7 @@ end
 ## Fork One Safe Snapshot
 
 ```elixir
-{:ok, fork_report} = Example.safe_fork()
+{:ok, fork_report} = Scenario.safe_fork()
 
 unless fork_report.source_answer != fork_report.branch_answer and
          fork_report.branch.lineage.parent_session_id == fork_report.source.session_id do

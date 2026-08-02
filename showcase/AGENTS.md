@@ -155,16 +155,15 @@ and source-inspection UI. Jido/Jidoka owns the agent process and turn state.
 
 1. Create `examples/<example_name>/` with `manifest.yaml`, code, test, and a Livebook.
 2. Put agent behavior in `examples/<example_name>/lib/`.
-3. Use shared deterministic helpers from `examples/_support/shared/`. Keep
-   example-specific support in `examples/<example_name>/support/` only when it
-   cannot be reused.
+3. Keep deterministic model and scenario support inside
+   `examples/<example_name>/lib/`.
 4. Add `lib/jidoka_showcase_web/live/<example_name>_live/index.ex`.
 5. Add `lib/jidoka_showcase_web/live/<example_name>_live/view.ex`.
 6. Supervise the shared agent in `JidokaShowcase.Application`.
 7. Add the route in `JidokaShowcaseWeb.Router`.
 8. Add the example metadata to the ordered list in `HomeLive`.
 9. Add source-inspection entries inside the example LiveView.
-10. Run the package and showcase proof gates.
+10. Run the package tests, Livebook checks, and Showcase tests.
 
 Keep the first slice small: one agent, one prompt surface, one meaningful tool
 call, one visible activity projection.

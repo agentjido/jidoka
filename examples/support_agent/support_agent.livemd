@@ -2,8 +2,8 @@
 
 This Livebook runs the package-level support-agent example from `examples/`.
 The agent, action, and operation control each have a separate source file. The
-Mock LLM is shared by all examples. None of those modules are part of production
-compilation.
+scripted model belongs to this example. None of these modules are part of the
+production Jidoka compilation.
 
 The example is deterministic. It does not use credentials, network access, or
 recorded model responses.
@@ -12,7 +12,6 @@ recorded model responses.
 
 ```elixir
 package_root = Path.expand("../..", __DIR__)
-examples_root = Path.expand("..", __DIR__)
 
 Mix.install(
   [
@@ -22,13 +21,16 @@ Mix.install(
   consolidate_protocols: false
 )
 
-Code.require_file(Path.join(examples_root, "_support/registry.exs"))
+files = Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))
+{agent_files, support_files} = Enum.split_with(files, &(Path.basename(&1) == "agent.ex"))
+{scenario_files, support_files} = Enum.split_with(support_files, &(Path.basename(&1) == "scenario.ex"))
 
-{:ok, support_example} = JidokaExamples.fetch(:support_agent)
-{:ok, _modules} = JidokaExamples.load(support_example)
+Enum.each([support_files, agent_files, scenario_files], fn group ->
+  {:ok, _modules, _diagnostics} = Kernel.ParallelCompiler.require(group, return_diagnostics: true)
+end)
 
 alias JidokaExamples.SupportAgent.Agent, as: SupportAgent
-alias JidokaExamples.SupportAgent.Example
+alias JidokaExamples.SupportAgent.Scenario
 ```
 
 ```elixir
@@ -38,21 +40,12 @@ Jidoka.Kino.setup_notebook(model: "test:support-example-model", check_provider?:
 ## Inspect The Example Files
 
 ```elixir
-JidokaExamples.Catalog.shared_support_files(examples_root) ++
-  JidokaExamples.Catalog.source_files(support_example) ++
-  JidokaExamples.Catalog.support_files(support_example) ++
-  [Path.join(support_example.root, "example.exs")]
+[Path.join(__DIR__, "example.exs") | Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))]
 |> Enum.map(&Path.relative_to(&1, package_root))
 ```
 
-The registry derives the files from the standard scenario layout. It loads them
-in these phases:
-
-1. Action
-2. Operation control
-3. Agent
-4. Shared Mock LLM
-5. Example runner
+Mix compiles these files for ExUnit. The command runner and Livebook load the
+same files directly.
 
 ## Inspect The Agent
 
@@ -90,7 +83,7 @@ prompt.
 
 ```elixir
 observer = self()
-{:ok, result} = Example.execute(observer: observer)
+{:ok, result} = Scenario.execute(observer: observer)
 
 control_call =
   receive do
@@ -161,7 +154,7 @@ review_observer = self()
 {:ok, action_counter} = Elixir.Agent.start_link(fn -> 0 end)
 
 {:hibernate, snapshot} =
-  Example.execute(
+  Scenario.execute(
     observer: review_observer,
     counter: action_counter,
     credential_ref: "credential:support-demo"
@@ -201,7 +194,7 @@ its result to the Mock LLM.
 
 ```elixir
 {:ok, approved_result} =
-  Example.approve(snapshot, review,
+  Scenario.approve(snapshot, review,
     observer: review_observer,
     counter: action_counter
   )
@@ -235,7 +228,7 @@ invent carrier or ETA text when the action returns a not-found result.
 
 ```elixir
 not_found_observer = self()
-{:ok, not_found_result} = Example.execute(order_id: " z9999 ", observer: not_found_observer)
+{:ok, not_found_result} = Scenario.execute(order_id: " z9999 ", observer: not_found_observer)
 
 not_found_observation =
   receive do

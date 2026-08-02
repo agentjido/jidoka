@@ -291,14 +291,14 @@ Start with [Configuration](guides/configuration.md),
 The package includes deterministic reference agents under `examples/`:
 
 ```bash
-mix jidoka.example --list
-mix jidoka.example support_agent
-mix jidoka.examples.check
+mix run examples/support_agent/example.exs
+mix test --only example:support_agent
+mix test --only tool_calling
 ```
 
-The [Support Agent](examples/support_agent/README.md) proves a controlled tool
+The [Support Agent](examples/support_agent/README.md) demonstrates a controlled tool
 call, human approval with snapshot resume, and operation-result handling. The
-default proof cases do not use provider keys, network calls, or recorded model
+default scenarios do not use provider keys, network calls, or recorded model
 fixtures.
 
 The Phoenix showcase application lives in `showcase/`:
@@ -310,7 +310,7 @@ mix phx.server
 ```
 
 Standalone Livebooks live in `guides/livebooks/`. Complete examples keep their
-Livebook beside their agent code and proof tests.
+Livebook beside their agent code and scenario tests.
 
 ## Documentation
 
@@ -347,10 +347,10 @@ mix docs
 mix doctor --raise
 ```
 
-Run the complete deterministic example proof system with:
+Run all example and guide Livebooks with:
 
 ```bash
-mix jidoka.examples.check
+mix run scripts/check_livebooks.exs -- --project examples/*/*.livemd guides/livebooks/*.livemd
 ```
 
 Live provider tests are opt-in:

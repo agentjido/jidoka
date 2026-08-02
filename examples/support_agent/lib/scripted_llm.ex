@@ -1,4 +1,4 @@
-defmodule JidokaExamples.MockLLM do
+defmodule JidokaExamples.SupportAgent.ScriptedLLM do
   @moduledoc false
 
   alias Jidoka.Effect

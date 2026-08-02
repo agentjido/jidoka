@@ -80,8 +80,15 @@ defmodule Jidoka.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support", "examples/_support"]
+  defp elixirc_paths(:test), do: ["lib", "test/support"] ++ example_paths()
   defp elixirc_paths(_env), do: ["lib"]
+
+  defp example_paths do
+    "examples/*/lib"
+    |> Path.wildcard()
+    |> Enum.filter(&File.dir?/1)
+    |> Enum.sort()
+  end
 
   defp dialyzer do
     [
@@ -343,7 +350,6 @@ defmodule Jidoka.MixProject do
       Path.wildcard("guides/livebooks/*.livemd")
   end
 
-  defp test_paths(_env) do
-    if File.regular?("test/test_helper.exs"), do: ["test"], else: ["examples"]
-  end
+  defp test_paths(:test), do: Enum.filter(["test", "examples"], &File.dir?/1)
+  defp test_paths(_env), do: []
 end

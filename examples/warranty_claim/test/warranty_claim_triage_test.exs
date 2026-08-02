@@ -1,9 +1,3 @@
-Code.require_file("../../_support/test_helper.exs", __DIR__)
-Code.require_file("../../_support/registry.exs", __DIR__)
-
-{:ok, warranty_claim_example} = JidokaExamples.fetch(:warranty_claim)
-{:ok, _modules} = JidokaExamples.load(warranty_claim_example)
-
 defmodule JidokaExamples.WarrantyClaim.WarrantyClaimTriageTest do
   use ExUnit.Case, async: true
 
@@ -11,32 +5,29 @@ defmodule JidokaExamples.WarrantyClaim.WarrantyClaimTriageTest do
   alias Jidoka.Schema
   alias Jidoka.Turn
   alias JidokaExamples.WarrantyClaim.Agent
-  alias JidokaExamples.WarrantyClaim.Example
+  alias JidokaExamples.WarrantyClaim.Scenario
   alias JidokaExamples.WarrantyClaim.ScriptedLLM
 
-  @moduletag proof_example: :warranty_claim
+  @moduletag example: :warranty_claim
+  @moduletag scenario: :warranty_claim_triage
   @moduletag timeout: 5_000
 
-  setup_all do
-    {:ok, manifest} = JidokaExamples.fetch(:warranty_claim)
-    assert manifest.agent == Agent
-    %{manifest: manifest}
-  end
-
-  @tag proof_case: {:warranty_claim_triage, :equivalent_authoring}
+  @tag :code_first_authoring
+  @tag :data_defined_authoring
   test "compiles the DSL and YAML definitions to the same semantic spec" do
-    assert {:ok, imported} = Example.imported_spec()
+    assert {:ok, imported} = Scenario.imported_spec()
 
-    assert Example.semantic_projection(imported) ==
-             Example.semantic_projection(Agent.spec())
+    assert Scenario.semantic_projection(imported) ==
+             Scenario.semantic_projection(Agent.spec())
 
-    assert {:ok, true} = Example.authoring_parity()
+    assert {:ok, true} = Scenario.authoring_parity()
   end
 
-  @tag proof_case: {:warranty_claim_triage, :tenant_policy}
+  @tag :dynamic_instructions
+  @tag :typed_context
   test "validates tenant context and resolves the request policy" do
     assert {:ok, %Turn.Result{} = result} =
-             Example.execute(tenant_id: "northwind", region: "US", plan: :premium)
+             Scenario.execute(tenant_id: "northwind", region: "US", plan: :premium)
 
     instructions = system_instructions(result)
     assert instructions =~ Agent.base_instructions()
@@ -44,13 +35,17 @@ defmodule JidokaExamples.WarrantyClaim.WarrantyClaimTriageTest do
     assert instructions =~ "Apply the United States warranty policy."
     assert instructions =~ "The premium plan covers accidental damage"
 
-    assert {:error, error} = Example.execute(plan: :unknown)
+    assert {:error, error} = Scenario.execute(plan: :unknown)
     assert Jidoka.Error.category(error) == :validation
   end
 
-  @tag proof_case: {:warranty_claim_triage, :resilient_typed_decision}
+  @tag :model_routing
+  @tag :multimodal_content
+  @tag :provider_model_abstraction
+  @tag :result_repair
+  @tag :structured_results
   test "keeps media typed, falls back, repairs once, and returns the typed decision" do
-    assert {:ok, %Turn.Result{} = result} = Example.execute(observer: self())
+    assert {:ok, %Turn.Result{} = result} = Scenario.execute(observer: self())
 
     assert result.value == %{
              claim_id: "CLM-2048",
@@ -118,7 +113,7 @@ defmodule JidokaExamples.WarrantyClaim.WarrantyClaimTriageTest do
     refute Map.has_key?(Enum.at(user_content, 1), :data)
     refute Map.has_key?(Enum.at(user_content, 2), :file_id)
 
-    assert {:ok, report} = Example.run([])
+    assert {:ok, report} = Scenario.run([])
     assert report.evidence.authoring_parity
     assert report.evidence.llm_effects == 2
     assert report.evidence.result_repairs == 1

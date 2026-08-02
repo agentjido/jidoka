@@ -7,7 +7,6 @@ provider key or network access.
 
 ```elixir
 package_root = Path.expand("../..", __DIR__)
-examples_root = Path.expand("..", __DIR__)
 
 Mix.install(
   [
@@ -18,13 +17,16 @@ Mix.install(
   lockfile: Path.join(package_root, "mix.lock")
 )
 
-Code.require_file(Path.join(examples_root, "_support/registry.exs"))
+files = Path.wildcard(Path.join(__DIR__, "lib/**/*.ex"))
+{agent_files, support_files} = Enum.split_with(files, &(Path.basename(&1) == "agent.ex"))
+{scenario_files, support_files} = Enum.split_with(support_files, &(Path.basename(&1) == "scenario.ex"))
 
-{:ok, warranty_example} = JidokaExamples.fetch(:warranty_claim)
-{:ok, _modules} = JidokaExamples.load(warranty_example)
+Enum.each([support_files, agent_files, scenario_files], fn group ->
+  {:ok, _modules, _diagnostics} = Kernel.ParallelCompiler.require(group, return_diagnostics: true)
+end)
 
 alias JidokaExamples.WarrantyClaim.Agent, as: WarrantyAgent
-alias JidokaExamples.WarrantyClaim.Example
+alias JidokaExamples.WarrantyClaim.Scenario
 alias JidokaExamples.WarrantyClaim.ScriptedLLM
 ```
 
@@ -37,10 +39,10 @@ Jidoka.Kino.setup_notebook(model: "test:warranty-static", check_provider?: false
 The code-first agent and the YAML document compile to the same semantic spec.
 
 ```elixir
-{:ok, imported_spec} = Example.imported_spec()
+{:ok, imported_spec} = Scenario.imported_spec()
 
-dsl_projection = Example.semantic_projection(WarrantyAgent.spec())
-yaml_projection = Example.semantic_projection(imported_spec)
+dsl_projection = Scenario.semantic_projection(WarrantyAgent.spec())
+yaml_projection = Scenario.semantic_projection(imported_spec)
 
 unless dsl_projection == yaml_projection do
   raise "the DSL and YAML agent specs differ"
@@ -55,7 +57,7 @@ The public projection shows the part types and safe media data. It does not show
 the photo bytes or receipt file ID.
 
 ```elixir
-Example.claim_input()
+Scenario.claim_input()
 |> Enum.map(&Jidoka.project/1)
 ```
 
@@ -66,7 +68,7 @@ invalid result. Jidoka asks for one repair and validates the next result.
 
 ```elixir
 observer = self()
-{:ok, result} = Example.execute(observer: observer)
+{:ok, result} = Scenario.execute(observer: observer)
 
 model_calls =
   Enum.map(1..6, fn _index ->

@@ -1,4 +1,4 @@
-defmodule Jidoka.CheckLivebook do
+defmodule Jidoka.CheckLivebooks do
   @moduledoc false
 
   @cell_key {__MODULE__, :current_cell}
@@ -7,19 +7,23 @@ defmodule Jidoka.CheckLivebook do
     args = if List.first(args) == "--", do: tl(args), else: args
     {opts, positional, invalid} = OptionParser.parse(args, strict: [project: :boolean])
 
-    if invalid != [] or length(positional) != 1 do
-      raise "Usage: elixir examples/_support/check_livebook.exs [--project] PATH; got #{inspect(args)}"
+    if invalid != [] or positional == [] do
+      raise "Usage: mix run scripts/check_livebooks.exs -- [--project] PATH...; got #{inspect(args)}"
     end
 
-    path = positional |> List.first() |> Path.expand()
+    Enum.each(positional, &check(&1, opts[:project]))
+  end
+
+  defp check(path, project?) do
+    path = Path.expand(path)
     cells = read_cells!(path)
-    quoted = quoted_cells!(cells, path, opts[:project])
+    quoted = quoted_cells!(cells, path, project?)
 
     try do
       Code.eval_quoted(quoted, [], file: path)
     rescue
       exception ->
-        {cell, line} = failure_location(exception, cells)
+        {cell, line} = Process.get(@cell_key, {:unknown, :unknown})
 
         raise RuntimeError,
               "Livebook cell #{cell} at #{path}:#{line} failed: #{Exception.message(exception)}"
@@ -88,25 +92,6 @@ defmodule Jidoka.CheckLivebook do
   defp mix_install?(_expression), do: false
 
   defp count_lines(content), do: length(String.split(content, "\n"))
-
-  defp failure_location(exception, cells) do
-    case Process.get(@cell_key) do
-      nil -> location_from_exception(exception, cells)
-      location -> location
-    end
-  end
-
-  defp location_from_exception(exception, cells) do
-    line = if is_map(exception), do: Map.get(exception, :line), else: nil
-
-    case Enum.find(cells, fn cell ->
-           is_integer(line) and line >= cell.line and
-             line < cell.line + count_lines(cell.source)
-         end) do
-      nil -> {:unknown, line || :unknown}
-      cell -> {cell.index, line}
-    end
-  end
 end
 
-Jidoka.CheckLivebook.run(System.argv())
+Jidoka.CheckLivebooks.run(System.argv())
