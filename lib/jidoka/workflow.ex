@@ -160,11 +160,11 @@ defmodule Jidoka.Workflow do
 
   @doc "Returns the normalized workflow definition for a workflow module."
   @spec definition(module()) :: {:ok, definition()} | {:error, term()}
-  defdelegate definition(workflow_module), to: Resolver
+  def definition(workflow_module), do: Resolver.definition(workflow_module)
 
   @doc "Returns a workflow definition or raises when the workflow module is invalid."
   @spec definition!(module()) :: definition()
-  defdelegate definition!(workflow_module), to: Resolver
+  def definition!(workflow_module), do: Resolver.definition!(workflow_module)
 
   @doc """
   Runs a workflow with normalized map input.
@@ -219,11 +219,11 @@ defmodule Jidoka.Workflow do
 
   @doc false
   @spec normalize_id(term()) :: {:ok, String.t()} | {:error, term()}
-  defdelegate normalize_id(id), to: Resolver
+  def normalize_id(id), do: Resolver.normalize_id(id)
 
   @doc false
   @spec normalize_id!(term()) :: String.t()
-  defdelegate normalize_id!(id), to: Resolver
+  def normalize_id!(id), do: Resolver.normalize_id!(id)
 
   defp normalize_input(input) when is_list(input) do
     if Keyword.keyword?(input) do
