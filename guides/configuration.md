@@ -92,9 +92,9 @@ Three concepts cover the config story:
 2. **Provider env vars.** Jidoka never reads provider keys; ReqLLM does, at
    call time. Setting `OPENAI_API_KEY` (or the equivalent for another
    provider) is enough.
-3. **No dotenv loading.** The package does **not** load `.env` files. Set
-   environment variables through your shell, your supervisor, or your
-   deployment platform.
+3. **ReqLLM dotenv loading.** Jidoka does not implement dotenv loading. ReqLLM
+   loads `.env` by default. Set `config :req_llm, load_dotenv: false` when the
+   host application or deployment platform owns credentials.
 
 ### Security / Trust Boundaries
 

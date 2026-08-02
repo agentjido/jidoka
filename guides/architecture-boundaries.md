@@ -193,8 +193,8 @@ must not own.
 | --- | --- | --- |
 | `Jidoka` and public facades | Short developer workflows and stable verbs | Provider protocol details or durable algorithms |
 | `Jidoka.Agent.*` and `Jidoka.Workflow.Dsl.*` | Compile-time authoring and normalization | Turn execution or storage |
-| `Jidoka.Agent.RuntimeOptions` | Default runtime dependency wiring | Runtime execution or provider translation |
-| `Jidoka.Workflow.Resolver` | Workflow module resolution and validation | Runtime execution or adapter translation |
+| Agent runtime options (internal) | Default runtime dependency wiring | Runtime execution or provider translation |
+| Workflow resolver (internal) | Workflow module resolution and validation | Runtime execution or adapter translation |
 | `Jidoka.*.Execution` | Application workflow coordination | Provider SDK calls or presentation |
 | Contract modules | Typed data and validation | Processes, network calls, or storage calls |
 | Transition modules | Pure state changes | Clock reads, identifiers, persistence, or adapter calls |
@@ -205,7 +205,7 @@ must not own.
 | Store and sink implementations | One concrete persistence or output method | Use-case coordination |
 | `Jidoka.Projection.*` | Read-only views of contracts | Domain state changes |
 | `Jidoka.Kino.*` | Notebook presentation in development and test | Production runtime behavior |
-| `Jidoka.Snapshot.Codec` | Snapshot encoding, signatures, and portable-value checks | Snapshot contract creation or review policy |
+| Snapshot codec (internal) | Snapshot encoding, signatures, and portable-value checks | Snapshot contract creation or review policy |
 | `Jidoka.Harness` | Compatibility delegates | New execution logic |
 
 Some small integration modules stay beside the port that they implement. For
@@ -229,7 +229,7 @@ These modules coordinate work. Each module owns one kind of workflow:
 - `Jidoka.Turn.Execution` owns a direct turn and snapshot resume.
 - `Jidoka.Session.Execution` owns durable session work.
 - `Jidoka.Review.Execution` owns human review work.
-- `Jidoka.Chat.Async` owns the async request lifecycle.
+- The internal async chat module owns the async request lifecycle.
 
 This split prevents session storage, review queues, and direct turns from
 sharing one large harness module.
@@ -270,8 +270,8 @@ The root `Jidoka.Projection` module only dispatches. Projection rules are split
 by area, such as Jidoka.Projection.Turn, Jidoka.Projection.Effect, and
 Jidoka.Projection.Session.
 
-`Jidoka.Session.Replay` and `Jidoka.Workflow.Graph` build read models. They do
-not own durable session or workflow state.
+`Jidoka.Session.Replay` and the internal workflow graph module build read
+models. They do not own durable session or workflow state.
 
 Kino is an optional presentation edge. Its source guard prevents Kino modules
 from entering a production build.

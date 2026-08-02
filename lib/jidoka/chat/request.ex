@@ -4,7 +4,8 @@ defmodule Jidoka.Chat.Request do
 
   The handle is intentionally not part of the durable agent data contract. It is
   caller-owned data for UI processes that stream request-scoped events and await
-  the normalized final chat result. `Jidoka.Chat.Async` owns task control.
+  the normalized final chat result. The internal async chat module owns task
+  control.
   """
 
   alias Jidoka.Cancellation
