@@ -59,12 +59,14 @@ defmodule Jidoka.MixProject do
       {:jido_mcp, "~> 1.0"},
 
       # Runtime support
+      {:crontab, "~> 1.2"},
       {:jason, "~> 1.4"},
       {:lua, "~> 1.0.0-rc.0"},
       {:req_llm, "~> 1.12"},
       {:runic, "~> 0.1.0-alpha.7"},
       {:splode, "~> 0.3.0"},
       {:spark, "~> 2.6"},
+      {:time_zone_info, "~> 0.7"},
       {:yaml_elixir, "~> 2.12"},
       {:ymlr, "~> 5.1.6"},
       {:zoi, "~> 0.18"},
