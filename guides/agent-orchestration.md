@@ -163,12 +163,18 @@ does that:
 def dispatch(conversation_id, input, opts \\ []) do
   case Jidoka.handoff(conversation_id) do
     %{agent: owner_agent, handoff: handoff} ->
-      owner_agent.chat(input,
-        context: Map.merge(handoff.context, %{handoff_summary: handoff.summary})
+      Jidoka.chat(
+        owner_agent,
+        input,
+        Keyword.put(
+          opts,
+          :context,
+          Map.merge(handoff.context, %{handoff_summary: handoff.summary})
+        )
       )
 
     nil ->
-      MyApp.SupportRouter.chat(input, opts)
+      Jidoka.chat(MyApp.SupportRouter, input, opts)
   end
 end
 ```
@@ -206,7 +212,7 @@ request =
     context: %{session_id: "case-123", tenant: "acme"}
   )
 
-MyApp.SupportRouter.run_turn(request,
+Jidoka.turn(MyApp.SupportRouter, request,
   llm: fake_llm
 )
 ```
@@ -232,7 +238,8 @@ and that the parent saw the child result.
 
 ```elixir
 assert {:ok, result} =
-         MyApp.SupportAgent.run_turn(
+         Jidoka.turn(
+           MyApp.SupportAgent,
            Jidoka.Turn.Request.new!(
              input: "Check the evidence.",
              context: %{tenant: "acme", secret: "do-not-forward"}
@@ -258,7 +265,7 @@ request =
   )
 
 assert {:ok, _result} =
-         MyApp.SupportRouter.run_turn(request,
+         Jidoka.turn(MyApp.SupportRouter, request,
            llm: fake_llm
          )
 

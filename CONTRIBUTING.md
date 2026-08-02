@@ -37,8 +37,9 @@ mix hex.build --unpack
 ```
 
 Live provider tests are opt-in and require provider keys in the process
-environment. The package does not load `.env` files itself; use your shell or
-host app config to provide credentials:
+environment. Jidoka does not implement dotenv loading. ReqLLM loads `.env` by
+default, but this source checkout disables that behavior for deterministic
+tests. Use your shell or host app config to provide credentials:
 
 ```bash
 mix test --include live test/jidoka/live_req_llm_test.exs
@@ -54,7 +55,7 @@ publish.
 ## Jidoka-Specific Exceptions
 
 Jidoka intentionally keeps the public package root as `Jidoka`, not
-`Jido.Jidoka`, because this package is a named harness built on top of the Jido
+`Jido.Jidoka`, because this package is an application layer built on the Jido
 ecosystem rather than a Jido core subpackage.
 
 The Phoenix companion app lives in `showcase/`. This name separates UI and

@@ -161,7 +161,7 @@ Jidoka
 │       └── LuaPlan               Lua workflow execution
 │
 ├── Inspection and presentation
-│   ├── Jidoka.Projection         public projection dispatcher
+│   ├── Jidoka.Projection         internal projection dispatcher
 │   ├── Jidoka.Projection.*       projectors by architecture area
 │   ├── Jidoka.Inspection
 │   ├── Jidoka.Debug

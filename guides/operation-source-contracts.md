@@ -52,7 +52,7 @@ compiled.capability
 ```
 
 `compiled.operations` is what the spec stores. `compiled.capability` is what
-the harness invokes when an LLM decides to call an operation.
+the runtime invokes when an LLM decides to call an operation.
 
 ## Concepts
 
@@ -190,7 +190,7 @@ reason}}`. If the operation source timeout expires, it returns
 - **Compile once, reuse everywhere.** Build the source struct at boot or in a
   module attribute; call `Source.compile/1` only when materializing a spec.
 - **Combine sources by listing them.** `Source.compile([local, mcp])`
-  returns one routed capability the harness can call directly.
+  returns one routed capability the runtime can call directly.
 - **Keep capability functions pure-ish.** Capabilities should be deterministic
   given the intent and journal; record any external state through the
   operation's output so the journal stays authoritative.
@@ -199,8 +199,8 @@ reason}}`. If the operation source timeout expires, it returns
 
 ## Testing
 
-A source test only needs the compile output and an `Effect.Intent`. No harness
-is required.
+A source test only needs the compile output and an `Effect.Intent`. No full
+turn run is required.
 
 ```elixir
 test "local source executes its handler" do
@@ -246,7 +246,7 @@ end
   [`Jidoka.Operation.Source.Handoff`](`Jidoka.Operation.Source.Handoff`),
   [`Jidoka.Operation.Source.Workflow`](`Jidoka.Operation.Source.Workflow`).
 - [`Jidoka.Runtime.Capabilities`](`Jidoka.Runtime.Capabilities`) - capability
-  bundle consumed by the harness.
+  bundle consumed by the runtime.
 - [`Jidoka.Effect.OperationRequest`](`Jidoka.Effect.OperationRequest`).
 
 ## Related Guides

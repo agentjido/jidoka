@@ -292,7 +292,7 @@ Jidoka.inspect(MyApp.TimeAgent).spec.operations
 #=> [%{name: "local_time", idempotency: :idempotent, metadata: %{"kind" => "action", ...}}]
 
 {:ok, preflight} = Jidoka.preflight(MyApp.TimeAgent, "What time is it?")
-preflight.prompt.tool_definitions
+preflight.prompt.operations
 ```
 
 `preflight` shows exactly what the prompt assembler will hand the model, so

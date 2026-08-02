@@ -2,7 +2,7 @@
 
 `Jidoka.Agent.Spec` is the immutable definition of a Jidoka agent. Every
 authoring path (Spark DSL, JSON/YAML import, `Jidoka.agent/1`) compiles into
-the same struct, and every downstream layer (`Turn.Plan`, harness, snapshots)
+the same struct, and every downstream layer (`Turn.Plan`, runtime, snapshots)
 consumes that struct as its single source of truth. This guide enumerates each
 field and the constructors that produce a valid spec.
 
@@ -72,7 +72,19 @@ reads anything the spec does not expose.
 ```
 
 The fields below are the entire surface. Anything else (capabilities, stores,
-keys) is supplied at run time through harness options.
+keys) is supplied at run time through facade options.
+
+### Normalization Boundary
+
+`Spec.new/1` and `Spec.from_input/1` accept untrusted keyword lists and maps.
+They normalize aliases, nested input, defaults, and the model value before
+they build the struct. The module `@schema` describes this normalized final
+struct. It does not describe every input form that the constructors accept.
+
+All authoring paths must produce the same final schema. A spec built by the
+DSL, an import, a map, or an existing spec must have the same field types and
+defaults. New input aliases belong only at the constructor boundary. Normalize
+them first, then validate the normalized value against the final schema.
 
 ## Fields
 
@@ -222,7 +234,7 @@ For coverage of the DSL/import to spec contract, see
 | `{:error, {:invalid_context_schema, _}}` | `context_schema` is not a Zoi schema. | Pass a `Zoi.*` value or `nil`. |
 | `{:error, {:unsafe_once_requires_control, name, kind}}` | An `:unsafe_once` operation has no approval policy or matching operation control. | Add `approval: true` or a control entry under `controls.operations`. See [Controls](controls.md). |
 | `{:error, {:invalid_result_schema, _}}` | `result` was given a non-Zoi value. | Wrap the schema with `Zoi.*` constructors before passing it. |
-| Spec inspection shows live processes or keys | You injected a runtime value into a spec field. | Move runtime values to harness options (`llm:`, `operations:`, `memory_store:`). |
+| Spec inspection shows live processes or keys | You injected a runtime value into a spec field. | Move runtime values to facade options (`llm:`, `operations:`, `memory_store:`). |
 
 ## Reference
 

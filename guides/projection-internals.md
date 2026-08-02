@@ -1,7 +1,7 @@
 # Projection Internals
 
-`Jidoka.Projection` is the public projection dispatcher. It converts Jidoka
-contracts into stable, compact Elixir data.
+`Jidoka.Projection` is the internal dispatcher behind `Jidoka.project/1`. It
+converts Jidoka contracts into stable, compact Elixir data.
 
 The dispatcher does not own domain rules. Each architecture area owns one
 projector:

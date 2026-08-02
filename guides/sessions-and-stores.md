@@ -37,15 +37,25 @@ The smallest durable session is a store plus a session id.
 store = {Jidoka.Session.Store.InMemory, pid: pid}
 
 {:ok, session} =
-  Jidoka.Session.start(MyApp.SupportAgent, "support-123", store: store)
+  Jidoka.session(MyApp.SupportAgent, "support-123", store: store)
 
 {:ok, session, text} =
-  Jidoka.Session.chat(session.session_id, "Say hi to Ada.", store: store)
+  Jidoka.chat(session, "Say hi to Ada.", store: store)
 ```
 
 That call ran through the same runtime as `Jidoka.turn/3`, then persisted the
-updated session under id `"support-123"`. A second `Jidoka.Session.chat/3`
-against the same id continues the conversation.
+updated session under id `"support-123"`. A later call can pass the returned
+session struct, or `Jidoka.Session.chat/3` can load the session id from the
+store.
+
+The target determines the result shape:
+
+| Call | Success shape | Caller duty |
+| --- | --- | --- |
+| `Jidoka.chat(agent, input)` | `{:ok, text}` | No session state to retain |
+| `Jidoka.chat(session, input)` | `{:ok, updated_session, text}` | Keep the returned session when no store owns it |
+| `Jidoka.Session.chat(session_id, input, store: store)` | `{:ok, updated_session, text}` | Pass the store on later id-based calls |
+| `Jidoka.Session.run(session_or_id, input, opts)` | `{:ok, updated_session, %Jidoka.Turn.Result{}}` | Handle full result or hibernation data |
 
 ## Concepts
 

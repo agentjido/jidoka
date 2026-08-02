@@ -107,12 +107,12 @@ Deterministic testing in Jidoka uses four building blocks.
 
 `Jidoka.Eval.Run.status` is one of:
 
-- `:passed` - the harness returned `{:ok, %Turn.Result{}}` and every
+- `:passed` - the turn runtime returned `{:ok, %Turn.Result{}}` and every
   evaluated assertion passed.
-- `:failed` - the harness returned `{:ok, _result}` but at least one
+- `:failed` - the turn runtime returned `{:ok, _result}` but at least one
   assertion failed. The `:assertions` list contains `:passed`/`:failed`
   entries with `:expected` and `:actual`.
-- `:error` - the harness did not produce a result. Two subcases live here:
+- `:error` - the turn runtime did not produce a result. Two subcases live here:
   - **Input validation errors** (`{:error, %Jidoka.Error.Invalid{}}` from
     request normalization, context schema mismatch, or spec compilation).
     `run.error` is the projected error map.

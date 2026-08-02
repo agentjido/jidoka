@@ -4,12 +4,12 @@ A Jidoka turn is a pure data pipeline. The runtime compiles a `Jidoka.Agent.Spec
 into a `Jidoka.Turn.Plan`, threads a `Jidoka.Turn.State` through Runic, and
 mediates external work through `Jidoka.Effect.Intent`/`Jidoka.Effect.Result`
 pairs. This guide documents every data contract on that path so that custom
-harnesses, traces, and storage layers can interoperate with the runtime without
+runners, traces, and storage layers can interoperate with the runtime without
 guessing.
 
 ## When To Use This
 
-- Use this guide when you are building a custom harness, sidecar, or trace
+- Use this guide when you are building a custom runner, sidecar, or trace
   exporter and need the on-the-wire shape of turn state and effects.
 - Use this guide when reading a snapshot or journal in tests and needing to
   decode each field.
@@ -26,7 +26,7 @@ guessing.
 A turn round-trip produces every contract this guide describes.
 
 ```elixir
-alias Jidoka.{Agent, Turn, Effect}
+alias Jidoka.Turn
 
 spec = MyApp.TimeAgent.spec()
 {:ok, plan} = Turn.Plan.new(spec)
@@ -36,7 +36,7 @@ llm = fn _intent, _journal, _ctx ->
   {:ok, %{type: :final, content: "Chicago time is 09:30."}}
 end
 
-{:ok, result} = MyApp.TimeAgent.run_turn(request.input, llm: llm)
+{:ok, result} = Jidoka.turn(MyApp.TimeAgent, request.input, llm: llm)
 
 result.content              #=> "Chicago time is 09:30."
 result.journal              #=> %Jidoka.Effect.Journal{intents: %{...}, results: %{...}}
@@ -73,7 +73,7 @@ Three rules anchor the model:
 
 1. The plan is derived from the spec; the state is derived from the plan plus a
    request.
-2. The harness only ever produces effects through `Effect.Intent` and consumes
+2. The runtime only produces effects through `Effect.Intent` and consumes
    them through `Effect.Result`. The journal records both.
 3. The final `Turn.Result` is projected from the terminal `Turn.State`.
 
@@ -386,7 +386,7 @@ test "operation effect is recorded once" do
     end
   end
 
-  {:ok, result} = MyApp.TimeAgent.run_turn("What time is it in Chicago?", llm: llm)
+  {:ok, result} = Jidoka.turn(MyApp.TimeAgent, "What time is it in Chicago?", llm: llm)
 
   operation_results =
     result.journal.results

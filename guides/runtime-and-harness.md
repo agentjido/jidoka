@@ -1,6 +1,19 @@
 # Runtime And Execution Layers
 
+This is a maintainer guide for the internal execution layers. Application code
+must use the `Jidoka` facade and the public data contracts instead of these
+modules.
+
 Jidoka separates authoring, executable data, and effect execution.
+
+## When To Use This
+
+- Use this guide when you maintain the turn runner, session execution, review
+  execution, or an adapter.
+- Use this guide when you must trace dependency direction through an internal
+  execution path.
+- For application development, start with [Getting Started](getting-started.md)
+  and [Public Facade](public-facade.md).
 
 ```text
 Jidoka.Agent DSL
@@ -45,7 +58,7 @@ the owner module. Normal application code uses `Jidoka` and `Jidoka.Session`.
 `Jidoka.Session.Execution`. The underlying data struct is
 `Jidoka.Session.Data`.
 
-`Jidoka.Session.Data` is the durable harness envelope for work that spans
+`Jidoka.Session.Data` is the durable session envelope for work that spans
 requests or process restarts. It contains:
 
 - the canonical agent spec;
@@ -54,7 +67,7 @@ requests or process restarts. It contains:
 - pending review requests;
 - the latest result or error;
 - optional fork lineage;
-- metadata owned by the application/harness.
+- metadata owned by the application.
 
 Sessions are still data. They do not contain runtime clients or processes.
 

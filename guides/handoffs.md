@@ -80,7 +80,7 @@ llm = fn _intent, journal, _ctx ->
   end
 end
 
-{:ok, _result} = MyApp.TriageAgent.run_turn("Why is my bill higher?", llm: llm)
+{:ok, _result} = Jidoka.turn(MyApp.TriageAgent, "Why is my bill higher?", llm: llm)
 
 Jidoka.handoff("conv-1")
 #=> %{agent: MyApp.SpecialistAgent, agent_id: "conv-1:specialist_agent", handoff: %Jidoka.Handoff{...}, updated_at_ms: 1_234}
@@ -209,7 +209,7 @@ llm = fn _intent, journal, _ctx ->
   end
 end
 
-{:ok, result} = MyApp.TriageAgent.run_turn("Why is my bill higher?", llm: llm)
+{:ok, result} = Jidoka.turn(MyApp.TriageAgent, "Why is my bill higher?", llm: llm)
 ```
 
 `result.content` carries the assistant's final message; the operation
@@ -227,7 +227,7 @@ request =
   )
 
 {:ok, result} =
-  MyApp.TriageAgent.run_turn(request, llm: llm)
+  Jidoka.turn(MyApp.TriageAgent, request, llm: llm)
 ```
 
 ### Step 3: Read Ownership From The Store
@@ -260,17 +260,23 @@ first, then falls back to the original agent.
 def dispatch(conversation_id, input, opts \\ []) do
   case Jidoka.handoff(conversation_id) do
     %{agent: agent_module, handoff: handoff} ->
-      agent_module.chat(input,
-        context: Map.merge(handoff.context, %{handoff_summary: handoff.summary})
+      Jidoka.chat(
+        agent_module,
+        input,
+        Keyword.put(
+          opts,
+          :context,
+          Map.merge(handoff.context, %{handoff_summary: handoff.summary})
+        )
       )
 
     nil ->
-      MyApp.TriageAgent.chat(input, opts)
+      Jidoka.chat(MyApp.TriageAgent, input, opts)
   end
 end
 ```
 
-The harness never silently routes for you. This is intentional: the same
+Jidoka never silently routes for you. This is intentional: the same
 data drives logging, audit, and UI presentation.
 
 ### Step 5: Reset Ownership
@@ -370,7 +376,7 @@ defmodule MyApp.TriageHandoffTest do
     end
 
     assert {:ok, _result} =
-             MyApp.TriageAgent.run_turn(request, llm: llm)
+             Jidoka.turn(MyApp.TriageAgent, request, llm: llm)
 
     assert %{
              agent: MyApp.SpecialistAgent,

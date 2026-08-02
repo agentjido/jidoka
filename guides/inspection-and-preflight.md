@@ -23,10 +23,10 @@ mix deps.get
 mix test
 ```
 
-## Inspect An Agent
+## Preflight A Turn
 
-Start with `inspect/2`, then use `preflight/3` to assemble the exact prompt the
-next turn would send.
+Start with `preflight/3` to assemble the exact prompt and operation list for the
+next turn. Use `inspect/2` when you also need the compiled spec and plan.
 
 ```elixir
 defmodule MyApp.TimeAgent do
@@ -42,15 +42,15 @@ defmodule MyApp.TimeAgent do
   end
 end
 
+{:ok, preflight} = Jidoka.preflight(MyApp.TimeAgent, "What time is it?")
+preflight.prompt.messages
+preflight.prompt.operations
+preflight.diagnostics
+
 Jidoka.inspect(MyApp.TimeAgent)
 #=> %{kind: :agent, module: "MyApp.TimeAgent",
 #=>   spec: %{id: "time_agent", operations: [%{name: "local_time", ...}], ...},
 #=>   plan: %{...}}
-
-{:ok, preflight} = Jidoka.preflight(MyApp.TimeAgent, "What time is it?")
-preflight.prompt.messages
-preflight.prompt.tool_definitions
-preflight.diagnostics
 ```
 
 Nothing was sent over the network. The view shows what Jidoka would send if
@@ -60,19 +60,17 @@ the turn ran for real.
 
 The three functions cover three layers of the data-first runtime.
 
-1. **`Jidoka.project/1`** is the low-level projector. It turns Jidoka data
-   contracts (`Agent.Spec`, `Turn.Plan`, `Turn.Result`, `Effect.Journal`,
-   etc.) into JSON-friendly maps. Use it when you need raw
-   compact data for tests, traces, or external rendering.
+1. **`Jidoka.preflight/3`** takes a request and stops before the LLM or any
+   operation runs. The returned `Jidoka.Inspection.Preflight` struct shows the
+   normalized agent, plan, request, prompt, events, timeline, and diagnostics.
 2. **`Jidoka.inspect/2`** is the human-facing wrapper. It dispatches on the
    value's struct and returns a tagged map with a `:kind` key plus the
    most useful fields for that kind. Internally it calls `project/1` and
    often adds a timeline view, a status badge, or related context.
-3. **`Jidoka.preflight/3`** is the only one that takes a request. It runs
-   the workflow up to the point where the prompt is ready, but stops
-   before the LLM intent or any operation intent is interpreted. The
-   returned `Jidoka.Inspection.Preflight` struct shows the normalized
-   agent, plan, request, prompt, events, timeline, and diagnostics.
+3. **`Jidoka.project/1`** is the low-level projector. It turns Jidoka data
+   contracts (`Agent.Spec`, `Turn.Plan`, `Turn.Result`, `Effect.Journal`,
+   etc.) into JSON-friendly maps. Use it when you need compact data for tests,
+   traces, or external rendering.
 
 ```diagram
 ╭───────────────╮   project    ╭───────────────────╮
@@ -184,7 +182,7 @@ and runs `Steps.assemble_prompt/1` to build the final messages.
 Enum.map(preflight.prompt.messages, & &1.role)
 #=> [:system, :user]
 
-preflight.prompt.tool_definitions
+preflight.prompt.operations
 |> Enum.map(& &1.name)
 #=> ["local_time"]
 
@@ -390,7 +388,7 @@ defmodule MyApp.PreflightTest do
       Enum.find(preflight.prompt.messages, &(&1.role == :system))
 
     assert system_message.content =~ "Call local_time"
-    assert Enum.find(preflight.prompt.tool_definitions, &(&1.name == "local_time"))
+    assert Enum.find(preflight.prompt.operations, &(&1.name == "local_time"))
     assert preflight.diagnostics == []
   end
 

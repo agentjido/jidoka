@@ -150,7 +150,7 @@ metadata, for example) is surfaced as `{:error,
 {:ok, result} = Jidoka.resume(payload, llm: llm)
 ```
 
-Resume runs through the same harness boundary as `Jidoka.turn/3`. Supply
+Resume runs through the same runtime boundary as `Jidoka.turn/3`. Supply
 the same runtime capabilities (`llm:`, `operations:`, and optionally
 `memory_store:`) and, when resuming a review pause, an `:approval` option.
 

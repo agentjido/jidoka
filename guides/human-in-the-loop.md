@@ -324,7 +324,7 @@ late = Jidoka.Review.Response.approve(review.interrupt_id,
 ```
 
 Application code should set `responded_at_ms` from the same clock it uses
-for `created_at_ms`; the harness fills it in with the current system clock
+for `created_at_ms`; the runtime fills it in with the current system clock
 if you leave it `nil`.
 
 ### Step 6: List Pending Reviews Across A Store

@@ -13,7 +13,7 @@ guesswork.
   write to build a store, replay tool, or audit query.
 - Use this guide when wiring `Jidoka.Memory.Store.InMemory` into tests.
 - Do not use this guide as a memory tutorial. The high-level workflow lives in
-  [Runtime And Execution Layers](runtime-and-harness.md).
+  [Memory](memory.md).
 
 ## Prerequisites
 
@@ -63,7 +63,7 @@ length(recall.entries)
 ```
 
 `Spec.Memory` is policy (definition data). Stores are supplied per run through
-harness options. The runtime negotiates the conversation by emitting
+facade options. The runtime negotiates the conversation by emitting
 `RecallRequest` and `WriteRequest` structs and reading `RecallResult` /
 `WriteResult` back.
 

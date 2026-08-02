@@ -4,6 +4,15 @@ Structured results make the app-facing output explicit. The assistant text
 stays in `Turn.Result.content`; validated data is returned as
 `Turn.Result.value`.
 
+## Use This When
+
+- Use a result schema when application code must consume validated data, not
+  only assistant text.
+- Use `result.content` when text is the product output and no typed value is
+  required.
+- Keep side effects in tools or workflows. Structured results validate the
+  final model output; they do not perform work.
+
 ## Declare A Result Schema
 
 Use a Zoi schema in the agent block:

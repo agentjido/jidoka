@@ -3,6 +3,44 @@
 Controls are Jidoka's policy layer. They are declared on `Agent.Spec` and run
 while a turn is executing.
 
+## Use This When
+
+- Use a control when input, operation, or output policy must run on every
+  matching turn.
+- Use tool-level `approval:` when the only rule is human approval before an
+  operation.
+- Keep business work in actions and workflows. A control decides whether work
+  can continue; it does not perform the work.
+
+## Quick Example
+
+The smallest control uses a built-in module to require public request context:
+
+```elixir
+defmodule MyApp.SupportAgent do
+  use Jidoka.Agent
+
+  agent :support_agent do
+    instructions "Answer support questions clearly."
+  end
+
+  controls do
+    input Jidoka.Controls.RequireContext,
+      metadata: %{keys: [:tenant_id]}
+  end
+end
+
+llm = fn _intent, _journal, _context ->
+  {:ok, %{type: :final, content: "Ready."}}
+end
+
+{:ok, "Ready."} =
+  Jidoka.chat(MyApp.SupportAgent, "Help me",
+    context: %{tenant_id: "tenant-1"},
+    llm: llm
+  )
+```
+
 ## Boundaries
 
 Jidoka currently supports these control points:

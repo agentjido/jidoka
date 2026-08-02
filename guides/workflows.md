@@ -646,7 +646,7 @@ test "agent calls refund workflow" do
     )
 
   assert {:ok, result} =
-           MyApp.SupportAgent.run_turn(request, llm: llm)
+           Jidoka.turn(MyApp.SupportAgent, request, llm: llm)
 
   assert result.content == "Refund A1001 is approved."
 end

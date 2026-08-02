@@ -140,7 +140,7 @@ Differences worth keeping in mind:
   `definition/1` at compile time to capture the id, description, and
   parameters schema.
 - **Subagent** requires a module that `use Jidoka.Agent`. The child agent is
-  resolved at compile time, but its turn runs through the same harness as the
+  resolved at compile time, but its turn runs through the same runtime as the
   parent's.
 
 ### Security / Trust Boundaries
@@ -270,7 +270,7 @@ end
 ```
 
 The parent's prompt sees one tool, `evidence_specialist`. The child's turn
-runs through the same harness, with its own loop budget and timeout.
+runs through the same runtime, with its own loop budget and timeout.
 
 ### Step 4: Inspect The Compiled Operations
 

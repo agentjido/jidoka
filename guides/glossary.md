@@ -20,7 +20,7 @@ one-line anchor before reading further.
 - A working install of `:jidoka` and the ability to open module docs with
   `h Jidoka.<Module>` in IEx.
 - Familiarity with [Getting Started](getting-started.md) so the term shapes
-  (spec, plan, harness, turn) are not new.
+  (spec, plan, runtime, turn) are not new.
 
 ## Concepts
 
@@ -85,7 +85,7 @@ with `Spec` listed as an alias.
 | Effect.Intent | The durable data description of one external effect (kind, payload, idempotency key). Intents are written to the journal before any capability is called. | [`Jidoka.Effect.Intent`](`Jidoka.Effect.Intent`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Effect.Journal | Intent/result map that makes the loop replayable. The interpreter records an intent before calling a capability and short-circuits any intent that already has a recorded result. | [`Jidoka.Effect.Journal`](`Jidoka.Effect.Journal`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Effect.Result | Normalized result of an interpreted effect (status, output, metadata). One result is written per intent id. | [`Jidoka.Effect.Result`](`Jidoka.Effect.Result`) | [Runtime And Execution Layers](runtime-and-harness.md) |
-| Eval | A small deterministic eval runner that packages an agent, request, and assertions. It runs through `Jidoka.Turn.Execution` and does not add a second runtime. | [`Jidoka.Eval`](`Jidoka.Eval`) | [Runtime And Execution Layers](runtime-and-harness.md) |
+| Eval | A small deterministic eval runner that packages an agent, request, and assertions. It uses the same turn path as `Jidoka.turn/3` and does not add a second runtime. | [`Jidoka.Eval`](`Jidoka.Eval`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Event | Neutral turn data emitted by transitions. Events feed traces, streams, and `AgentView`. | [`Jidoka.Event`](`Jidoka.Event`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Generation | Provider-neutral generation parameters on a spec (temperature, max_tokens, top_p, etc.). Defaults come from `Jidoka.Config.default_generation/0`. | [`Jidoka.Agent.Spec.Generation`](`Jidoka.Agent.Spec.Generation`) | [Agent DSL](agent-dsl.md) |
 | Handoff | Durable routing data that records which agent should own future turns for a conversation. Different from a subagent call, which delegates one bounded task inside a turn. | [`Jidoka.Handoff`](`Jidoka.Handoff`) | [Runtime And Execution Layers](runtime-and-harness.md) |
@@ -104,7 +104,7 @@ with `Spec` listed as an alias.
 | Memory.Store | Behaviour for pluggable memory backends. A store implements `recall/2`, `write/2`, and `list_entries/1`. The store is supplied per run, not baked into the spec. | [`Jidoka.Memory.Store`](`Jidoka.Memory.Store`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Operation | A model-callable unit (name, description, idempotency, metadata, optional parameters schema). Operations are how tools, MCP, browser, workflows, and subagents reach the model in a single shape. | [`Jidoka.Agent.Spec.Operation`](`Jidoka.Agent.Spec.Operation`) | [Agent DSL](agent-dsl.md) |
 | Operation.Source | Behaviour and compiler that normalize executable surfaces (actions, MCP, browser, workflows) into operation data plus one operation capability. | [`Jidoka.Operation.Source`](`Jidoka.Operation.Source`) | [Agent DSL](agent-dsl.md) |
-| Output | A control boundary that runs against the model's final assistant content before it leaves the harness. Used for safety filters, redaction, and post-validation. | [`Jidoka.Agent.Spec.Controls.Output`](`Jidoka.Agent.Spec.Controls.Output`) | [Controls](controls.md) |
+| Output | A control boundary that runs against the model's final assistant content before it leaves the runtime. Used for safety filters, redaction, and post-validation. | [`Jidoka.Agent.Spec.Controls.Output`](`Jidoka.Agent.Spec.Controls.Output`) | [Controls](controls.md) |
 | Plan | Shorthand for `Turn.Plan`. The compiled, executable contract derived from a spec. | [`Jidoka.Turn.Plan`](`Jidoka.Turn.Plan`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Preflight | `Jidoka.preflight/3`. Assembles the prompt, tool metadata, memory contributions, and request normalization without calling an LLM. The cheapest way to validate wiring. | [`Jidoka.Inspection`](`Jidoka.Inspection`) | [Getting Started](getting-started.md) |
 | Projection | Stable inspection map produced by `Jidoka.project/1`. Projections omit Zoi schemas, LLMDB structs, and Spark metadata while keeping the semantic shape useful for traces, golden tests, and UI rendering. | [`Jidoka.project/1`](`Jidoka.project/1`) | [Projection Internals](projection-internals.md) |
