@@ -15,7 +15,10 @@ defmodule Jidoka.Agent do
         end
       end
 
-      {:ok, text} = MyApp.TimeAgent.chat("What time is it in Chicago?")
+      {:ok, text} = Jidoka.chat(MyApp.TimeAgent, "What time is it in Chicago?")
+
+  Agent modules also generate bound `chat/2` and `run_turn/2` convenience
+  functions. Use the root `Jidoka` facade as the main application path.
   """
 
   alias Jidoka.Agent.ControlCompiler
@@ -88,8 +91,10 @@ defmodule Jidoka.Agent do
       def spec, do: Jidoka.Agent.spec(__MODULE__)
 
       @doc "Runs a full turn and returns the typed `Jidoka.Turn.Result`."
-      @spec run_turn(Jidoka.Turn.Execution.request_input(), keyword()) ::
-              Jidoka.Turn.Execution.result()
+      @spec run_turn(Jidoka.Turn.Request.input(), keyword()) ::
+              {:ok, Jidoka.Turn.Result.t()}
+              | {:hibernate, Jidoka.Snapshot.t()}
+              | {:error, term()}
       def run_turn(input, opts \\ []), do: Jidoka.Agent.run_turn(__MODULE__, input, opts)
 
       @doc "Runs a full turn and returns only final assistant text."
@@ -222,7 +227,10 @@ defmodule Jidoka.Agent do
   @doc """
   Runs a DSL agent turn through Jidoka turn execution.
   """
-  @spec run_turn(module(), TurnExecution.request_input(), keyword()) :: TurnExecution.result()
+  @spec run_turn(module(), Jidoka.Turn.Request.input(), keyword()) ::
+          {:ok, Jidoka.Turn.Result.t()}
+          | {:hibernate, Jidoka.Snapshot.t()}
+          | {:error, term()}
   def run_turn(agent_module, input, opts \\ []) when is_atom(agent_module) and is_list(opts) do
     spec = spec(agent_module)
 

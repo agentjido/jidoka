@@ -27,6 +27,7 @@ defmodule Jidoka.Turn.Plan do
           )
 
   @type t :: unquote(Zoi.type_spec(@schema))
+  @type input :: module() | Jidoka.Agent.Spec.t() | t() | keyword() | map()
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 

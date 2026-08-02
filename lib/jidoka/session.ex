@@ -18,14 +18,15 @@ defmodule Jidoka.Session do
   alias Jidoka.Session.Store
   alias Jidoka.Snapshot
   alias Jidoka.Turn
-  alias Jidoka.Turn.Execution, as: TurnExecution
-
   @type t :: SessionData.t()
-  @type agent_input :: module() | TurnExecution.plan_input()
-  @type session_input :: SessionExecution.session_input()
-  @type request_input :: TurnExecution.request_input()
+  @type agent_input :: Turn.Plan.input()
+  @type session_input :: t() | String.t()
+  @type request_input :: Turn.Request.input()
   @type opts :: keyword()
-  @type run_result :: SessionExecution.session_run_result()
+  @type run_result ::
+          {:ok, t(), Turn.Result.t()}
+          | {:hibernate, t(), Snapshot.t()}
+          | {:error, term()}
   @type chat_result ::
           {:ok, t(), String.t()}
           | {:hibernate, t(), Snapshot.t()}

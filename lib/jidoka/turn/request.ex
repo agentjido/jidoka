@@ -22,6 +22,7 @@ defmodule Jidoka.Turn.Request do
           )
 
   @type t :: unquote(Zoi.type_spec(@schema))
+  @type input :: t() | String.t() | [ContentPart.input()] | keyword() | map()
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -47,8 +48,7 @@ defmodule Jidoka.Turn.Request do
   end
 
   @doc "Normalizes a request struct, text, content-part list, keyword list, or map."
-  @spec from_input(t() | String.t() | [ContentPart.input()] | keyword() | map(), keyword()) ::
-          {:ok, t()} | {:error, term()}
+  @spec from_input(input(), keyword()) :: {:ok, t()} | {:error, term()}
   def from_input(input, opts \\ [])
   def from_input(%__MODULE__{} = request, opts), do: new(request, opts)
   def from_input(input, opts) when is_binary(input), do: new([input: input], opts)

@@ -18,7 +18,6 @@ defmodule Jidoka.Inspection do
   alias Jidoka.Session.Replay
   alias Jidoka.Snapshot
   alias Jidoka.Turn
-  alias Jidoka.Turn.Execution, as: TurnExecution
   alias Jidoka.Runtime.Spine.Steps
   alias Jidoka.Workflow
   alias Jidoka.Workflow.Resolver, as: WorkflowResolver
@@ -95,7 +94,7 @@ defmodule Jidoka.Inspection do
   def inspect(value, _opts), do: Jidoka.Projection.project(value)
 
   @doc "Assembles the prompt for a turn without interpreting any effects."
-  @spec preflight(module() | TurnExecution.plan_input(), TurnExecution.request_input(), keyword()) ::
+  @spec preflight(Turn.Plan.input(), Turn.Request.input(), keyword()) ::
           {:ok, Preflight.t()} | {:error, term()}
   def preflight(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- resolve_plan(spec_or_plan),

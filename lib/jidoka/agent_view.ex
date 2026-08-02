@@ -111,8 +111,12 @@ defmodule Jidoka.AgentView do
       def before_turn(view, message), do: Jidoka.AgentView.before_turn(view, message)
 
       @doc false
-      @spec after_turn(Jidoka.AgentView.t(), Jidoka.Turn.Execution.result()) ::
-              Jidoka.AgentView.t()
+      @spec after_turn(
+              Jidoka.AgentView.t(),
+              {:ok, Jidoka.Turn.Result.t()}
+              | {:hibernate, Jidoka.Snapshot.t()}
+              | {:error, term()}
+            ) :: Jidoka.AgentView.t()
       def after_turn(view, result), do: Jidoka.AgentView.after_turn(view, result)
 
       @doc false
@@ -219,7 +223,10 @@ defmodule Jidoka.AgentView do
   @doc """
   Applies a Jidoka runtime result to view data.
   """
-  @spec after_turn(t(), Jidoka.Turn.Execution.result()) :: t()
+  @spec after_turn(
+          t(),
+          {:ok, Turn.Result.t()} | {:hibernate, Jidoka.Snapshot.t()} | {:error, term()}
+        ) :: t()
   def after_turn(%__MODULE__{} = view, {:ok, %Turn.Result{} = result}) do
     %{
       view
