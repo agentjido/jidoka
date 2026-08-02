@@ -78,6 +78,28 @@ result.journal.results
 Both functions accept a DSL module, `Agent.Spec`, `Turn.Plan`, process id, pid,
 or session where appropriate.
 
+Agent modules also generate bound convenience functions, such as
+`MyApp.Assistant.chat/2` and `MyApp.Assistant.run_turn/2`. The facade is the
+canonical documentation path. Use a generated function when the shorter,
+bound-agent form makes local code clearer.
+
+## Result Shapes
+
+The result shape changes when the caller owns a session. Keep the updated
+session from each call.
+
+| Call target | Success or pause shape |
+| --- | --- |
+| Agent, spec, plan, or hosted agent with `chat/3` | `{:ok, text}` |
+| Caller-managed session with `chat/3` | `{:ok, updated_session, text}` |
+| Agent, spec, plan, or hosted agent with `turn/3` | `{:ok, %Jidoka.Turn.Result{}}` |
+| Paused direct turn | `{:hibernate, snapshot}` |
+| Paused caller-managed session | `{:hibernate, updated_session, snapshot}` |
+| Any failed call | `{:error, reason}` |
+
+`await/2` returns the same normalized result shape as the async request that it
+waits for.
+
 ## Stream For UI
 
 Use `chat_async/3` when a UI needs to start work now and collect events while

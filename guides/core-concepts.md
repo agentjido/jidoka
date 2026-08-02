@@ -111,7 +111,11 @@ result.journal.results
 That journal is what makes debugging, replay, pause/resume, and idempotency
 possible.
 
-## Tools Are Operations
+## Tools Normalize To Operations
+
+A tool is work declared in the agent DSL. An action is one implementation type
+for a tool. Jidoka normalizes every tool source to an operation contract for
+the model and runtime.
 
 Tools compile to `Jidoka.Agent.Spec.Operation` data:
 

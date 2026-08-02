@@ -2,6 +2,10 @@
 
 The Jidoka DSL is small. It compiles agent modules to `Jidoka.Agent.Spec`.
 
+Run compiled agents through `Jidoka.chat/3` or `Jidoka.turn/3`. Agent modules
+also generate bound convenience functions, but the root facade is the main
+application path.
+
 ## Minimal Agent
 
 ```elixir

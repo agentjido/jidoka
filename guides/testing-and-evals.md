@@ -28,56 +28,30 @@ mix test
 
 ## Quick Example
 
-A minimal eval pins both capabilities, declares one assertion, and runs
-the case through the same harness as production.
+A minimal agent test pins one model response and runs through the same public
+facade as production.
 
 ```elixir
-defmodule MyApp.TimeAgent do
+defmodule MyApp.PingAgent do
   use Jidoka.Agent
 
-  agent :time_agent do
+  agent :ping_agent do
     model "openai:gpt-4o-mini"
-    instructions "Call local_time when asked for the time."
-  end
-
-  tools do
-    action MyApp.Tools.LocalTime
+    instructions "Reply to a health check."
   end
 end
 
-operations =
-  Jidoka.Runtime.LocalOperations.operations(%{
-    "local_time" => fn _args -> {:ok, %{city: "Chicago", time: "09:30"}} end
-  })
-
-llm = fn _intent, journal, _ctx ->
-  case map_size(journal.results) do
-    0 -> {:ok, %{type: :operation, name: "local_time", arguments: %{}}}
-    _ -> {:ok, %{type: :final, content: "Chicago time is 09:30."}}
-  end
+llm = fn _intent, _journal, _context ->
+  {:ok, %{type: :final, content: "pong"}}
 end
 
-{:ok, run} =
-  Jidoka.Eval.run_case(
-    %{
-      id: "time_basic",
-      agent: MyApp.TimeAgent.spec(),
-      input: "What time is it?",
-      assertions: %{
-        contains: "09:30",
-        operation_called: "local_time"
-      }
-    },
-    llm: llm,
-    operations: operations
-  )
-
-run.status
-#=> :passed
+assert {:ok, "pong"} =
+         Jidoka.chat(MyApp.PingAgent, "ping", llm: llm)
 ```
 
-The run is reproducible. The same inputs always produce the same
-`Jidoka.Eval.Run`, so this example doubles as a regression test.
+No provider key or network request is used. Tool tests add a deterministic
+`operations:` capability. Evals package the same agent, request, capabilities,
+and assertions as data.
 
 ## Concepts
 

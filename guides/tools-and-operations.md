@@ -4,6 +4,12 @@ Tools are model-callable work. Jidoka gives the model one operation contract:
 name, description, parameters, and metadata. Actions, Ash resources, browser
 tools, MCP tools, workflows, and subagents all compile to that shape.
 
+Use these terms consistently:
+
+- a **tool** is an item declared in the agent `tools` block;
+- an **action** is one Elixir implementation type for a tool;
+- an **operation** is the normalized contract used by the model and runtime.
+
 ## Use This When
 
 - authoring a new tool for an agent;
@@ -55,7 +61,8 @@ defmodule MyApp.TimeAgent do
   end
 end
 
-{:ok, text} = MyApp.TimeAgent.chat("What time is it in Chicago?")
+{:ok, text} =
+  Jidoka.chat(MyApp.TimeAgent, "What time is it in Chicago?")
 ```
 
 The model sees an operation named `"local_time"`. If it calls the operation,

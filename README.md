@@ -96,10 +96,11 @@ export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 ```
 
-ReqLLM is a Jidoka runtime dependency. By default, ReqLLM loads `.env` from the
-current working directory when the application starts. Existing system
-environment values take priority. For production, disable this behavior and
-provide credentials through the deployment environment or a secret manager:
+Jidoka does not implement dotenv loading. ReqLLM is a Jidoka runtime
+dependency, and it loads `.env` from the current working directory by default
+when the application starts. Existing system environment values take priority.
+For production, disable this behavior and provide credentials through the
+deployment environment or a secret manager:
 
 ```elixir
 # config/runtime.exs
@@ -111,7 +112,7 @@ config :req_llm, load_dotenv: false
 Call `chat/3` when you need only the final text:
 
 ```elixir
-{:ok, text} = MyApp.Assistant.chat("What can you help me with?")
+{:ok, text} = Jidoka.chat(MyApp.Assistant, "What can you help me with?")
 ```
 
 Call `turn/3` when you also need usage, events, and the effect journal:
@@ -128,7 +129,9 @@ result.journal.results
 
 ## Add A Tool
 
-Tools are Jido actions that Jidoka exposes to the model as operations.
+A **tool** is work declared in an agent's `tools` block. An **action** is one
+Elixir implementation type for a tool. Jidoka normalizes each tool into an
+**operation**, which is the contract that the model and runtime use.
 
 ```elixir
 defmodule MyApp.LocalTime do
@@ -157,7 +160,13 @@ defmodule MyApp.TimeAgent do
   end
 end
 
-{:ok, text} = MyApp.TimeAgent.chat("What time is it in Chicago?")
+{:ok, preflight} =
+  Jidoka.preflight(MyApp.TimeAgent, "What time is it in Chicago?")
+
+preflight.prompt.operations
+
+{:ok, text} =
+  Jidoka.chat(MyApp.TimeAgent, "What time is it in Chicago?")
 ```
 
 The model can request `local_time`. Jidoka validates the arguments, runs the
@@ -180,6 +189,16 @@ action, adds the result to agent state, and asks the model for the final answer.
 
 Prefer the `Jidoka` facade in application code. Use the public contract modules
 when you build stores, adapters, integrations, or inspection tools.
+
+The main success shapes are:
+
+| Call target | Success shape |
+| --- | --- |
+| Agent, spec, plan, or hosted agent with `chat/3` | `{:ok, text}` |
+| Caller-managed session with `chat/3` | `{:ok, updated_session, text}` |
+| Agent, spec, plan, or hosted agent with `turn/3` | `{:ok, %Jidoka.Turn.Result{}}` |
+| Paused direct turn | `{:hibernate, snapshot}` |
+| Paused caller-managed session | `{:hibernate, updated_session, snapshot}` |
 
 ## Inspect Before A Live Call
 

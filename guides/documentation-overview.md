@@ -8,7 +8,7 @@ You do not have to read the guides in sidebar order.
 | Goal | Read first | Read next |
 | --- | --- | --- |
 | Build your first agent | [Getting Started](getting-started.md) | [Agent DSL](agent-dsl.md) |
-| Understand the runtime model | [Core Concepts](core-concepts.md) | [Runtime And Execution Layers](runtime-and-harness.md) |
+| Understand the data and execution model | [Core Concepts](core-concepts.md) | [Public Facade](public-facade.md) |
 | Use the stable application API | [Public Facade](public-facade.md) | [Sessions And Stores](sessions-and-stores.md) |
 | Prepare a production deployment | [Configuration](configuration.md) | [Idempotency And Safety](idempotency-and-safety.md) |
 | Diagnose a failure | [Troubleshooting](troubleshooting.md) | [Inspection And Preflight](inspection-and-preflight.md) |
@@ -22,16 +22,16 @@ Use this path when you build an application with Jidoka:
 2. [Agent DSL](agent-dsl.md) - define the model, instructions, tools, and
    controls.
 3. [Tools And Operations](tools-and-operations.md) - expose work to the model.
-4. [Structured Results](structured-results.md) - validate application output.
-5. [Sessions And Stores](sessions-and-stores.md) - keep durable multi-turn
-   state.
-6. [Testing And Evals](testing-and-evals.md) - use deterministic capabilities
+4. [Testing And Evals](testing-and-evals.md) - use deterministic capabilities
    in tests.
 
 Add these guides when the product needs the related feature:
 
 - [Controls](controls.md) and [Human In The Loop](human-in-the-loop.md) for
   policy and human review.
+- [Structured Results](structured-results.md) for validated application
+  output.
+- [Sessions And Stores](sessions-and-stores.md) for durable multi-turn state.
 - [Memory](memory.md) for prompt recall and durable writes.
 - [Streaming](streaming.md) and [Agent View](agent-view.md) for interactive
   user interfaces.
@@ -45,17 +45,15 @@ Use this path when you deploy or operate Jidoka:
 
 1. [Configuration](configuration.md) - configure defaults, credentials, and
    runtime services.
-2. [Runtime And Execution Layers](runtime-and-harness.md) - understand the execution
-   boundary.
-3. [Sessions And Stores](sessions-and-stores.md) - select durable store
+2. [Sessions And Stores](sessions-and-stores.md) - select durable store
    implementations.
-4. [Snapshots And Resume](snapshots-and-resume.md) - persist and resume paused
+3. [Snapshots And Resume](snapshots-and-resume.md) - persist and resume paused
    turns.
-5. [Idempotency And Safety](idempotency-and-safety.md) - control replay and
+4. [Idempotency And Safety](idempotency-and-safety.md) - control replay and
    side effects.
-6. [Tracing And Events](tracing-and-events.md) - collect safe operational
+5. [Tracing And Events](tracing-and-events.md) - collect safe operational
    evidence.
-7. [Troubleshooting](troubleshooting.md) - diagnose common failures.
+6. [Troubleshooting](troubleshooting.md) - diagnose common failures.
 
 The in-memory stores are suitable for tests, examples, and one-node
 development. Use application-owned durable stores when session state, memory,

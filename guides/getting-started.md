@@ -42,9 +42,9 @@ export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 ```
 
-ReqLLM is a Jidoka runtime dependency. By default, ReqLLM loads `.env` from the
-current working directory when the application starts. Existing system
-environment values take priority.
+Jidoka does not implement dotenv loading. ReqLLM is a Jidoka runtime
+dependency, and it loads `.env` from the current working directory by default
+when the application starts. Existing system environment values take priority.
 
 Disable automatic loading when your application or deployment platform owns
 credential loading:
@@ -82,14 +82,12 @@ Generation settings are optional. Jidoka uses
 Use `chat/3` when you only need the assistant's final text:
 
 ```elixir
-{:ok, text} = MyApp.Assistant.chat("What can you help me with?")
-```
-
-The same call can go through the facade:
-
-```elixir
 {:ok, text} = Jidoka.chat(MyApp.Assistant, "What can you help me with?")
 ```
+
+Agent modules also generate convenience functions such as
+`MyApp.Assistant.chat/2`. Use the `Jidoka` facade in shared application code so
+the main execution path stays visible.
 
 ## Inspect The Prompt
 
@@ -170,7 +168,9 @@ Neither call contacts a provider.
 
 ## Add A Tool
 
-Tools are Jido actions exposed to the model as operations.
+A **tool** is work declared in an agent's `tools` block. An **action** is one
+Elixir implementation type for a tool. Jidoka normalizes each tool into an
+**operation**, which is the contract that the model and runtime use.
 
 ```elixir
 defmodule MyApp.LocalTime do
@@ -203,7 +203,13 @@ end
 Run it with the same `chat/3` call:
 
 ```elixir
-{:ok, text} = MyApp.TimeAgent.chat("What time is it in Chicago?")
+{:ok, preflight} =
+  Jidoka.preflight(MyApp.TimeAgent, "What time is it in Chicago?")
+
+preflight.prompt.operations
+
+{:ok, text} =
+  Jidoka.chat(MyApp.TimeAgent, "What time is it in Chicago?")
 ```
 
 The model decides whether to call `local_time`. Jidoka runs the action, feeds
@@ -227,6 +233,16 @@ result.journal.results
 Product code usually starts with `chat/3`. Tests, traces, and UIs often need
 `turn/3`.
 
+The main result shapes are:
+
+| Call target | Success or pause shape |
+| --- | --- |
+| Agent, spec, plan, or hosted agent with `chat/3` | `{:ok, text}` |
+| Caller-managed session with `chat/3` | `{:ok, updated_session, text}` |
+| Agent, spec, plan, or hosted agent with `turn/3` | `{:ok, %Jidoka.Turn.Result{}}` |
+| Paused direct turn | `{:hibernate, snapshot}` |
+| Paused caller-managed session | `{:hibernate, updated_session, snapshot}` |
+
 ## Keep A Conversation
 
 Use `Jidoka.Session` for multi-turn state:
@@ -248,8 +264,19 @@ production.
 
 User-facing docs use real models. Tests should not.
 
-For deterministic tests, inject fake `llm:` and `operations:` capabilities.
-See [Testing And Evals](testing-and-evals.md) for the full pattern.
+The smallest deterministic test injects one fixed model function:
+
+```elixir
+llm = fn _intent, _journal, _context ->
+  {:ok, %{type: :final, content: "pong"}}
+end
+
+assert {:ok, "pong"} =
+         Jidoka.chat(MyApp.Assistant, "ping", llm: llm)
+```
+
+Tool tests also inject an `operations:` capability. See
+[Testing And Evals](testing-and-evals.md) for the current complete pattern.
 
 ## Common Mistakes
 
@@ -263,11 +290,10 @@ See [Testing And Evals](testing-and-evals.md) for the full pattern.
 
 ## Next
 
-- [Getting Started Example](../examples/getting_started/README.md) - the
-  deterministic command runner, test, and Livebook for this guide.
 - [Agent DSL](agent-dsl.md) - the full agent DSL.
 - [Tools And Operations](tools-and-operations.md) - actions, browsers, MCP,
   workflows, and subagents.
-- [Sessions And Stores](sessions-and-stores.md) - durable conversations.
-- [Controls](controls.md) - input, operation, output, and human review.
-- [Core Concepts](core-concepts.md) - the data model behind Jidoka.
+- [Testing And Evals](testing-and-evals.md) - deterministic agent and tool
+  tests.
+- [Documentation Overview](documentation-overview.md) - select an optional
+  feature or operator path.
