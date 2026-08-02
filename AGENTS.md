@@ -1,16 +1,13 @@
-# AGENTS.md - Jidoka V2
+# AGENTS.md - Jidoka
 
 ## Intent
 
-This directory contains the Jidoka V2 package. The public module namespace
-remains `Jidoka`. The current public architecture is documented in `guides/`.
-
-The old implementation was moved to `../jidoka_v1` and should be treated as the
-V1 reference.
+This directory contains the official Jidoka package. The public module
+namespace is `Jidoka`. The public architecture is documented in `guides/`.
 
 ## Working Rules
 
-- Keep this package focused on the V2 architecture.
+- Keep this package focused on the documented Jidoka architecture.
 - Preserve the functional-core/effect-shell boundary:
   - pure data transitions in `Jidoka.Workflow.Steps`;
   - external effects through `Jidoka.Effect.Intent`;
