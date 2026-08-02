@@ -8,7 +8,7 @@ defmodule Jidoka.Schema do
 
   @type parse_result(t) :: {:ok, t} | {:error, term()}
 
-  @doc "Parses keyword or map attributes through a Zoi schema."
+  @doc "Parses normalized attributes through the final Zoi struct schema."
   @spec parse(Zoi.schema(), keyword() | map()) :: parse_result(struct())
   def parse(schema, attrs) do
     Zoi.parse(schema, normalize_attrs(attrs))
@@ -36,10 +36,30 @@ defmodule Jidoka.Schema do
   @doc "Returns a schema that accepts atoms or matching atom-name strings."
   @spec atom_enum([atom()]) :: Zoi.schema()
   def atom_enum(values) when is_list(values) do
-    Zoi.union([
-      Zoi.enum(values),
-      Zoi.string() |> Zoi.transform({__MODULE__, :parse_atom_enum, [values]})
-    ])
+    Zoi.union(
+      [
+        Zoi.enum(values),
+        Zoi.string() |> Zoi.transform({__MODULE__, :parse_atom_enum, [values]})
+      ],
+      typespec: atom_enum_typespec(values)
+    )
+  end
+
+  @doc "Returns a typed schema for an existing struct without embedding its fields."
+  @spec typed_struct(module(), Macro.t()) :: Zoi.schema()
+  def typed_struct(module, typespec) when is_atom(module) do
+    Zoi.any(typespec: typespec)
+    |> Zoi.refine({__MODULE__, :validate_struct, [module]})
+  end
+
+  @doc false
+  @spec validate_struct(term(), module(), keyword()) :: :ok | {:error, String.t()}
+  def validate_struct(value, module, _opts) do
+    if is_struct(value, module) do
+      :ok
+    else
+      {:error, "expected #{inspect(module)} struct"}
+    end
   end
 
   @doc false
@@ -81,5 +101,13 @@ defmodule Jidoka.Schema do
       {:ok, value} -> value
       :error -> default
     end
+  end
+
+  defp atom_enum_typespec([value]), do: value
+
+  defp atom_enum_typespec([value | values]) do
+    Enum.reduce(values, value, fn next, spec ->
+      quote(do: unquote(spec) | unquote(next))
+    end)
   end
 end

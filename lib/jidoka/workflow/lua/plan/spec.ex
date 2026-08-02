@@ -5,44 +5,138 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec do
   import Jidoka.Workflow.Lua.Plan.Spec.Helpers
 
   alias Jido.Action.Catalog.Entry
+  alias Jidoka.Schema
   alias Jidoka.Workflow.Lua.Plan.Ref
   alias Jidoka.Workflow.Lua.Policy
+
+  @non_negative_integer_schema Zoi.integer(typespec: quote(do: non_neg_integer()))
+                               |> Zoi.gte(0)
+  @positive_integer_schema Zoi.integer(typespec: quote(do: pos_integer())) |> Zoi.positive()
+  @entry_schema Schema.typed_struct(Entry, quote(do: Entry.t()))
+
+  @action_step_schema Zoi.map(
+                        %{
+                          id: Zoi.string(),
+                          kind: Zoi.literal(:action),
+                          after: Zoi.array(Zoi.string()),
+                          explicit_after: Zoi.array(Zoi.string()),
+                          condition: Zoi.any() |> Zoi.nullable(),
+                          retries: @non_negative_integer_schema,
+                          entry: @entry_schema,
+                          arguments: Zoi.map()
+                        },
+                        unrecognized_keys: :error
+                      )
+
+  @map_step_schema Zoi.map(
+                     %{
+                       id: Zoi.string(),
+                       kind: Zoi.literal(:map),
+                       after: Zoi.array(Zoi.string()),
+                       explicit_after: Zoi.array(Zoi.string()),
+                       condition: Zoi.any() |> Zoi.nullable(),
+                       retries: @non_negative_integer_schema,
+                       map:
+                         Zoi.map(
+                           %{
+                             over: Zoi.any(),
+                             as: Zoi.string(),
+                             entry: @entry_schema,
+                             arguments: Zoi.map(),
+                             max_items: @positive_integer_schema,
+                             max_concurrency: @positive_integer_schema,
+                             retries: @non_negative_integer_schema
+                           },
+                           unrecognized_keys: :error
+                         )
+                     },
+                     unrecognized_keys: :error
+                   )
+
+  @reduce_step_schema Zoi.map(
+                        %{
+                          id: Zoi.string(),
+                          kind: Zoi.literal(:reduce),
+                          after: Zoi.array(Zoi.string()),
+                          explicit_after: Zoi.array(Zoi.string()),
+                          condition: Zoi.any() |> Zoi.nullable(),
+                          retries: @non_negative_integer_schema,
+                          reduce:
+                            Zoi.map(
+                              %{
+                                over: Zoi.any(),
+                                mode: Zoi.enum(["collect", "count", "sum", "first"]),
+                                path: Zoi.any() |> Zoi.nullable()
+                              },
+                              unrecognized_keys: :error
+                            )
+                        },
+                        unrecognized_keys: :error
+                      )
+
+  @gate_step_schema Zoi.map(
+                      %{
+                        id: Zoi.string(),
+                        kind: Zoi.literal(:gate),
+                        after: Zoi.array(Zoi.string()),
+                        explicit_after: Zoi.array(Zoi.string()),
+                        condition: Zoi.any() |> Zoi.nullable(),
+                        retries: @non_negative_integer_schema,
+                        gate:
+                          Zoi.map(
+                            %{
+                              op:
+                                Zoi.enum([
+                                  "exists",
+                                  "empty",
+                                  "not_empty",
+                                  "eq",
+                                  "neq",
+                                  "gt",
+                                  "gte",
+                                  "lt",
+                                  "lte",
+                                  "contains"
+                                ]),
+                              left: Zoi.any(),
+                              right: Zoi.any() |> Zoi.nullable()
+                            },
+                            unrecognized_keys: :error
+                          )
+                      },
+                      unrecognized_keys: :error
+                    )
+
+  @step_schema Zoi.discriminated_union(
+                 :kind,
+                 [
+                   @action_step_schema,
+                   @map_step_schema,
+                   @reduce_step_schema,
+                   @gate_step_schema
+                 ]
+               )
+
+  @type step :: unquote(Zoi.type_spec(@step_schema))
 
   @schema Zoi.struct(
             __MODULE__,
             %{
               id: Zoi.string(),
-              steps: Zoi.array(Zoi.map()),
+              steps: Zoi.array(@step_schema, typespec: quote(do: [step()])),
               output: Zoi.any()
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
   @doc false
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
-
-  @type step :: %{
-          required(:id) => String.t(),
-          required(:kind) => :action | :map | :reduce | :gate,
-          required(:after) => [String.t()],
-          required(:condition) => term() | nil,
-          required(:retries) => non_neg_integer(),
-          optional(:entry) => Entry.t(),
-          optional(:arguments) => map(),
-          optional(:map) => map(),
-          optional(:reduce) => map(),
-          optional(:gate) => map()
-        }
-
-  @type t :: %__MODULE__{
-          id: String.t(),
-          steps: [step()],
-          output: term()
-        }
 
   @spec new(map(), Policy.t()) :: {:ok, t()} | {:error, term()}
   def new(raw_spec, %Policy{} = policy) when is_map(raw_spec) do
@@ -59,7 +153,7 @@ defmodule Jidoka.Workflow.Lua.Plan.Spec do
          :ok <- validate_acyclic_dependencies(steps),
          {:ok, output} <- normalize_output(known_value(raw_spec, "output", nil), steps),
          :ok <- validate_output_refs(output, steps) do
-      {:ok, %__MODULE__{id: id, steps: steps, output: output}}
+      Schema.parse(@schema, %{id: id, steps: steps, output: output})
     end
   end
 

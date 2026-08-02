@@ -9,24 +9,26 @@ defmodule Jidoka.Stream do
   """
 
   alias Jidoka.Event
+  alias Jidoka.Schema
 
   @message_tag :jidoka_turn_event
   @terminal_events [:turn_finished, :turn_failed, :turn_hibernated]
 
-  @type t :: %__MODULE__{
-          request: Jidoka.Chat.Request.t(),
-          events: Enumerable.t()
-        }
-
   @schema Zoi.struct(
             __MODULE__,
             %{
-              request: Zoi.any() |> Zoi.nullish(),
-              events: Zoi.any() |> Zoi.nullish()
+              request:
+                Schema.typed_struct(
+                  :"Elixir.Jidoka.Chat.Request",
+                  quote(do: Jidoka.Chat.Request.t())
+                ),
+              events: Zoi.any(typespec: quote(do: Enumerable.t()))
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -37,7 +39,7 @@ defmodule Jidoka.Stream do
   @doc "Builds a stream wrapper for an async chat request."
   @spec new(Jidoka.Chat.Request.t(), keyword()) :: t()
   def new(%Jidoka.Chat.Request{} = request, opts \\ []) when is_list(opts) do
-    %__MODULE__{request: request, events: events(request.request_id, opts)}
+    Schema.parse!(@schema, %{request: request, events: events(request.request_id, opts)}, "stream")
   end
 
   @doc "Waits for the final normalized result for a stream wrapper."

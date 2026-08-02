@@ -18,48 +18,45 @@ defmodule Jidoka.Operation.Source.MCP do
 
   @type tool_spec :: %{
           required(:name) => String.t(),
-          optional(:description) => String.t(),
-          optional(:input_schema) => map()
+          required(:description) => String.t() | nil,
+          required(:input_schema) => map() | nil
         }
 
-  @type t :: %__MODULE__{
-          endpoint: atom() | String.t(),
-          prefix: String.t() | nil,
-          tools: [tool_spec()],
-          required: boolean(),
-          transport: term(),
-          client_info: map(),
-          protocol_version: String.t() | nil,
-          capabilities: map(),
-          timeouts: map(),
-          timeout: pos_integer() | nil,
-          description: String.t() | nil,
-          idempotency: Operation.idempotency(),
-          metadata: map(),
-          client: module()
-        }
+  @tool_schema Zoi.map(
+                 %{
+                   name: Zoi.string(),
+                   description: Zoi.string() |> Zoi.nullable(),
+                   input_schema: Zoi.map() |> Zoi.nullable()
+                 },
+                 unrecognized_keys: :error
+               )
+  @positive_integer_schema Zoi.integer(typespec: quote(do: pos_integer())) |> Zoi.positive()
 
   @schema Zoi.struct(
             __MODULE__,
             %{
-              endpoint: Zoi.any() |> Zoi.nullish(),
-              prefix: Zoi.string() |> Zoi.nullish(),
-              tools: Zoi.array(Zoi.map()) |> Zoi.default([]),
+              endpoint: Zoi.union([Zoi.atom(), Zoi.string()]),
+              prefix: Zoi.string() |> Zoi.nullable(),
+              tools:
+                Zoi.array(@tool_schema, typespec: quote(do: [tool_spec()]))
+                |> Zoi.default([]),
               required: Zoi.boolean() |> Zoi.default(false),
-              transport: Zoi.any() |> Zoi.nullish(),
+              transport: Zoi.any() |> Zoi.nullable(),
               client_info: Zoi.map() |> Zoi.default(%{"name" => "jidoka"}),
-              protocol_version: Zoi.string() |> Zoi.nullish(),
+              protocol_version: Zoi.string() |> Zoi.nullable(),
               capabilities: Zoi.map() |> Zoi.default(%{}),
               timeouts: Zoi.map() |> Zoi.default(%{}),
-              timeout: Zoi.integer() |> Zoi.nullish(),
-              description: Zoi.string() |> Zoi.nullish(),
+              timeout: @positive_integer_schema |> Zoi.nullable(),
+              description: Zoi.string() |> Zoi.nullable(),
               idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
               metadata: Zoi.map() |> Zoi.default(%{}),
-              client: Zoi.atom() |> Zoi.default(Jido.MCP)
+              client: Zoi.module() |> Zoi.default(Jido.MCP)
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -89,23 +86,22 @@ defmodule Jidoka.Operation.Source.MCP do
            normalize_idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
          {:ok, metadata} <- normalize_metadata(Schema.get_key(attrs, :metadata, %{})),
          {:ok, client} <- normalize_client(Schema.get_key(attrs, :client, Jido.MCP)) do
-      {:ok,
-       %__MODULE__{
-         endpoint: endpoint,
-         prefix: prefix,
-         tools: tools,
-         required: required,
-         transport: transport,
-         client_info: client_info,
-         protocol_version: protocol_version,
-         capabilities: capabilities,
-         timeouts: timeouts,
-         timeout: timeout,
-         description: Schema.get_key(attrs, :description),
-         idempotency: idempotency,
-         metadata: metadata,
-         client: client
-       }}
+      Schema.parse(@schema, %{
+        endpoint: endpoint,
+        prefix: prefix,
+        tools: tools,
+        required: required,
+        transport: transport,
+        client_info: client_info,
+        protocol_version: protocol_version,
+        capabilities: capabilities,
+        timeouts: timeouts,
+        timeout: timeout,
+        description: Schema.get_key(attrs, :description),
+        idempotency: idempotency,
+        metadata: metadata,
+        client: client
+      })
     end
   end
 

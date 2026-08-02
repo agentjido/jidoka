@@ -3,45 +3,42 @@ defmodule Jidoka.Workflow.Lua.Policy do
 
   alias Jido.Action.Catalog
   alias Jido.Action.Catalog.Entry
+  alias Jidoka.Schema
 
   @default_timeout_ms 1_500
   @default_max_calls 12
   @default_max_parallel_calls 8
   @default_max_call_depth 64
   @default_max_script_bytes 6_000
+  @positive_integer_schema Zoi.integer(typespec: quote(do: pos_integer())) |> Zoi.positive()
 
   @schema Zoi.struct(
             __MODULE__,
             %{
               allowed_tools: Zoi.array(Zoi.string()),
-              entries: Zoi.array(Zoi.any()),
-              max_calls: Zoi.integer(),
-              max_parallel_calls: Zoi.integer(),
-              max_call_depth: Zoi.integer(),
-              max_script_bytes: Zoi.integer(),
-              timeout_ms: Zoi.integer(),
+              entries:
+                Zoi.array(
+                  Schema.typed_struct(Entry, quote(do: Entry.t())),
+                  typespec: quote(do: [Entry.t()])
+                ),
+              max_calls: @positive_integer_schema,
+              max_parallel_calls: @positive_integer_schema,
+              max_call_depth: @positive_integer_schema,
+              max_script_bytes: @positive_integer_schema,
+              timeout_ms: @positive_integer_schema,
               require_read_only?: Zoi.boolean()
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
   @doc false
   @spec schema() :: Zoi.schema()
   def schema, do: @schema
-
-  @type t :: %__MODULE__{
-          allowed_tools: [String.t()],
-          entries: [Entry.t()],
-          max_calls: pos_integer(),
-          max_parallel_calls: pos_integer(),
-          max_call_depth: pos_integer(),
-          max_script_bytes: pos_integer(),
-          timeout_ms: pos_integer(),
-          require_read_only?: boolean()
-        }
 
   @spec build(String.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def build(script, opts) when is_binary(script) and is_list(opts) do
@@ -50,7 +47,7 @@ defmodule Jidoka.Workflow.Lua.Policy do
       default_ids = default_allowed_ids(available_entries, require_read_only?)
       allowed_tools = normalize_allowed_tools(Keyword.get(opts, :allowed_tools), default_ids)
 
-      policy = %__MODULE__{
+      attrs = %{
         allowed_tools: allowed_tools,
         entries: [],
         max_calls: opts |> Keyword.get(:max_calls, @default_max_calls) |> clamp_max_calls(),
@@ -64,9 +61,10 @@ defmodule Jidoka.Workflow.Lua.Policy do
         require_read_only?: require_read_only?
       }
 
-      with :ok <- validate_script(script, policy),
+      with {:ok, policy} <- Schema.parse(@schema, attrs),
+           :ok <- validate_script(script, policy),
            {:ok, entries} <- allowed_entries(available_entries, allowed_tools, policy) do
-        {:ok, %{policy | entries: entries}}
+        Schema.parse(@schema, %{attrs | entries: entries})
       end
     end
   end

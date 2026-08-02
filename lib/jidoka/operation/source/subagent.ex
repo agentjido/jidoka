@@ -20,30 +20,34 @@ defmodule Jidoka.Operation.Source.Subagent do
           :public | :none | {:only, [atom() | String.t()]} | {:except, [atom() | String.t()]}
   @type result_mode :: :text | :structured
 
-  @type t :: %__MODULE__{
-          agent: module(),
-          name: String.t(),
-          description: String.t() | nil,
-          timeout: pos_integer(),
-          forward_context: forward_context(),
-          result: result_mode(),
-          metadata: map()
-        }
+  @context_key_schema Zoi.union([Zoi.atom(), Zoi.string()])
+  @forward_context_schema Zoi.union(
+                            [
+                              Zoi.enum([:public, :none]),
+                              Zoi.tuple({Zoi.enum([:only, :except]), Zoi.array(@context_key_schema)})
+                            ],
+                            typespec: quote(do: forward_context())
+                          )
 
   @schema Zoi.struct(
             __MODULE__,
             %{
-              agent: Zoi.atom() |> Zoi.nullish(),
-              name: Zoi.string() |> Zoi.nullish(),
-              description: Zoi.string() |> Zoi.nullish(),
-              timeout: Zoi.integer() |> Zoi.default(30_000),
-              forward_context: Zoi.any() |> Zoi.default(:public),
+              agent: Zoi.module(),
+              name: Zoi.string(),
+              description: Zoi.string() |> Zoi.nullable(),
+              timeout:
+                Zoi.integer(typespec: quote(do: pos_integer()))
+                |> Zoi.positive()
+                |> Zoi.default(30_000),
+              forward_context: @forward_context_schema |> Zoi.default(:public),
               result: Schema.atom_enum(@result_modes) |> Zoi.default(:structured),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -64,16 +68,15 @@ defmodule Jidoka.Operation.Source.Subagent do
            normalize_forward_context(Schema.get_key(attrs, :forward_context, :public)),
          {:ok, result} <- normalize_result(Schema.get_key(attrs, :result, :structured)),
          {:ok, metadata} <- normalize_metadata(Schema.get_key(attrs, :metadata, %{})) do
-      {:ok,
-       %__MODULE__{
-         agent: agent,
-         name: name,
-         description: Schema.get_key(attrs, :description),
-         timeout: timeout,
-         forward_context: forward_context,
-         result: result,
-         metadata: metadata
-       }}
+      Schema.parse(@schema, %{
+        agent: agent,
+        name: name,
+        description: Schema.get_key(attrs, :description),
+        timeout: timeout,
+        forward_context: forward_context,
+        result: result,
+        metadata: metadata
+      })
     end
   end
 

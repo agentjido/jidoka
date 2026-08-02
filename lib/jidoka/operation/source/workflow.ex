@@ -21,38 +21,36 @@ defmodule Jidoka.Operation.Source.Workflow do
           :public | :none | {:only, [atom() | String.t()]} | {:except, [atom() | String.t()]}
   @type result_mode :: :output | :structured
 
-  @type t :: %__MODULE__{
-          workflow: module(),
-          name: String.t(),
-          description: String.t() | nil,
-          timeout: pos_integer(),
-          async: boolean(),
-          max_concurrency: pos_integer() | nil,
-          forward_context: forward_context(),
-          result: result_mode(),
-          idempotency: Operation.idempotency(),
-          metadata: map(),
-          definition: Spec.t()
-        }
+  @context_key_schema Zoi.union([Zoi.atom(), Zoi.string()])
+  @forward_context_schema Zoi.union(
+                            [
+                              Zoi.enum([:public, :none]),
+                              Zoi.tuple({Zoi.enum([:only, :except]), Zoi.array(@context_key_schema)})
+                            ],
+                            typespec: quote(do: forward_context())
+                          )
+  @positive_integer_schema Zoi.integer(typespec: quote(do: pos_integer())) |> Zoi.positive()
 
   @schema Zoi.struct(
             __MODULE__,
             %{
-              workflow: Zoi.atom() |> Zoi.nullish(),
-              name: Zoi.string() |> Zoi.nullish(),
-              description: Zoi.string() |> Zoi.nullish(),
-              timeout: Zoi.integer() |> Zoi.default(30_000),
+              workflow: Zoi.module(),
+              name: Zoi.string(),
+              description: Zoi.string() |> Zoi.nullable(),
+              timeout: @positive_integer_schema |> Zoi.default(30_000),
               async: Zoi.boolean() |> Zoi.default(false),
-              max_concurrency: Zoi.integer() |> Zoi.nullish(),
-              forward_context: Zoi.any() |> Zoi.default(:public),
+              max_concurrency: @positive_integer_schema |> Zoi.nullable(),
+              forward_context: @forward_context_schema |> Zoi.default(:public),
               result: Schema.atom_enum(@result_modes) |> Zoi.default(:output),
               idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
               metadata: Zoi.map() |> Zoi.default(%{}),
-              definition: Zoi.any() |> Zoi.nullish()
+              definition: Schema.typed_struct(Spec, quote(do: Spec.t()))
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -79,20 +77,19 @@ defmodule Jidoka.Operation.Source.Workflow do
          {:ok, result} <- normalize_result(Schema.get_key(attrs, :result, :output)),
          {:ok, idempotency} <- normalize_idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
          {:ok, metadata} <- normalize_metadata(Schema.get_key(attrs, :metadata, %{})) do
-      {:ok,
-       %__MODULE__{
-         workflow: definition.module,
-         name: name,
-         description: Schema.get_key(attrs, :description) || definition.description,
-         timeout: timeout,
-         async: async,
-         max_concurrency: max_concurrency,
-         forward_context: forward_context,
-         result: result,
-         idempotency: idempotency,
-         metadata: metadata,
-         definition: definition
-       }}
+      Schema.parse(@schema, %{
+        workflow: definition.module,
+        name: name,
+        description: Schema.get_key(attrs, :description) || definition.description,
+        timeout: timeout,
+        async: async,
+        max_concurrency: max_concurrency,
+        forward_context: forward_context,
+        result: result,
+        idempotency: idempotency,
+        metadata: metadata,
+        definition: definition
+      })
     end
   end
 

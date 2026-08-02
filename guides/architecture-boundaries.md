@@ -45,6 +45,10 @@ The key rules are:
 7. Internal modules do not call the root `Jidoka` facade. They call the owner
    module for the use case.
 8. `Jidoka.Kino` compiles only in the `:dev` and `:test` environments.
+9. A Zoi-backed struct uses `@schema` as its normalized final data contract.
+   Its constructor normalizes untrusted input and finishes through schema
+   parsing. Its `t()` type, enforced keys, and struct fields come from that
+   schema.
 
 The architecture tests in `test/architecture/boundaries_test.exs` enforce these
 rules. The `mix quality` task runs these tests and the compile-cycle check.
@@ -222,6 +226,13 @@ DSL, runtime, stores, adapters, tests, and presentation modules.
 
 `Jidoka.Turn.Transition` and `Jidoka.Session.Transitions` are the functional
 core. They do not perform external work.
+
+For a Zoi-backed contract, `@schema` describes the final struct after input
+normalization. A constructor can accept aliases and external input forms, but
+it must convert them before the final schema parse. Code must not maintain a
+separate manual `t()` definition for the same struct. Supporting types can stay
+separate when the schema refers to them with a precise Zoi schema or a
+`typespec:` override.
 
 ### Runtime Effect Shell
 

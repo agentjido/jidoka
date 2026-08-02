@@ -30,40 +30,29 @@ defmodule Jidoka.Operation.Source.Catalog do
   @default_timeout 1_500
   @default_max_calls 12
   @default_max_parallel_calls 8
-  @type t :: %__MODULE__{
-          catalog: module(),
-          prefix: String.t(),
-          description: String.t() | nil,
-          timeout: pos_integer(),
-          max_calls: pos_integer(),
-          max_parallel_calls: pos_integer(),
-          require_read_only?: boolean(),
-          result: :structured,
-          idempotency: Operation.idempotency(),
-          metadata: map(),
-          catalog_value: ActionCatalog.t(),
-          templates: map()
-        }
+  @positive_integer_schema Zoi.integer(typespec: quote(do: pos_integer())) |> Zoi.positive()
 
   @schema Zoi.struct(
             __MODULE__,
             %{
-              catalog: Zoi.atom() |> Zoi.nullish(),
+              catalog: Zoi.module(),
               prefix: Zoi.string() |> Zoi.default(@default_prefix),
-              description: Zoi.string() |> Zoi.nullish(),
-              timeout: Zoi.integer() |> Zoi.default(@default_timeout),
-              max_calls: Zoi.integer() |> Zoi.default(@default_max_calls),
-              max_parallel_calls: Zoi.integer() |> Zoi.default(@default_max_parallel_calls),
+              description: Zoi.string() |> Zoi.nullable(),
+              timeout: @positive_integer_schema |> Zoi.default(@default_timeout),
+              max_calls: @positive_integer_schema |> Zoi.default(@default_max_calls),
+              max_parallel_calls: @positive_integer_schema |> Zoi.default(@default_max_parallel_calls),
               require_read_only?: Zoi.boolean() |> Zoi.default(true),
               result: Schema.atom_enum([:structured]) |> Zoi.default(:structured),
               idempotency: Schema.atom_enum(Operation.valid_idempotencies()) |> Zoi.default(:idempotent),
               metadata: Zoi.map() |> Zoi.default(%{}),
-              catalog_value: Zoi.any() |> Zoi.nullish(),
+              catalog_value: Schema.typed_struct(ActionCatalog, quote(do: ActionCatalog.t())),
               templates: Zoi.map() |> Zoi.default(%{})
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -93,21 +82,20 @@ defmodule Jidoka.Operation.Source.Catalog do
          {:ok, idempotency} <- Normalize.idempotency(Schema.get_key(attrs, :idempotency, :idempotent)),
          {:ok, metadata} <- Normalize.metadata(Schema.get_key(attrs, :metadata, %{})),
          {:ok, templates} <- Normalize.templates(catalog_module) do
-      {:ok,
-       %__MODULE__{
-         catalog: catalog_module,
-         catalog_value: catalog_value,
-         prefix: prefix,
-         description: Schema.get_key(attrs, :description),
-         timeout: timeout,
-         max_calls: max_calls,
-         max_parallel_calls: max_parallel_calls,
-         require_read_only?: require_read_only?,
-         result: result,
-         idempotency: idempotency,
-         metadata: metadata,
-         templates: templates
-       }}
+      Schema.parse(@schema, %{
+        catalog: catalog_module,
+        catalog_value: catalog_value,
+        prefix: prefix,
+        description: Schema.get_key(attrs, :description),
+        timeout: timeout,
+        max_calls: max_calls,
+        max_parallel_calls: max_parallel_calls,
+        require_read_only?: require_read_only?,
+        result: result,
+        idempotency: idempotency,
+        metadata: metadata,
+        templates: templates
+      })
     end
   end
 

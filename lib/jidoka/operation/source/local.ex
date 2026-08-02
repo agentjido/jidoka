@@ -17,21 +17,41 @@ defmodule Jidoka.Operation.Source.Local do
   @type operation_def :: %{
           required(:name) => String.t(),
           required(:handler) => handler(),
-          optional(:description) => String.t(),
-          optional(:idempotency) => Operation.idempotency(),
-          optional(:kind) => atom(),
-          optional(:metadata) => map()
+          required(:description) => String.t() | nil,
+          required(:idempotency) => Operation.idempotency(),
+          required(:kind) => atom(),
+          required(:metadata) => map()
         }
-  @type t :: %__MODULE__{operations: [operation_def()]}
+
+  @handler_schema Zoi.union(
+                    [Zoi.function(arity: 2), Zoi.function(arity: 3)],
+                    typespec: quote(do: handler())
+                  )
+
+  @operation_schema Zoi.map(
+                      %{
+                        name: Zoi.string(),
+                        handler: @handler_schema,
+                        description: Zoi.string() |> Zoi.nullable(),
+                        idempotency: Schema.atom_enum(Operation.valid_idempotencies()),
+                        kind: Zoi.atom(),
+                        metadata: Zoi.map()
+                      },
+                      unrecognized_keys: :error
+                    )
 
   @schema Zoi.struct(
             __MODULE__,
             %{
-              operations: Zoi.array(Zoi.map()) |> Zoi.default([])
+              operations:
+                Zoi.array(@operation_schema, typespec: quote(do: [operation_def()]))
+                |> Zoi.default([])
             },
-            coerce: true
+            coerce: true,
+            unrecognized_keys: :error
           )
 
+  @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -45,7 +65,7 @@ defmodule Jidoka.Operation.Source.Local do
     attrs = Schema.normalize_attrs(attrs)
 
     with {:ok, operations} <- normalize_operations(Schema.get_key(attrs, :operations, [])) do
-      {:ok, %__MODULE__{operations: operations}}
+      Schema.parse(@schema, %{operations: operations})
     end
   end
 

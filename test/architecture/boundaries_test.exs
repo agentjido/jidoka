@@ -27,6 +27,19 @@ defmodule Jidoka.Architecture.BoundariesTest do
     "AshJido"
   ]
 
+  @normalized_final_schema_files [
+    "lib/jidoka/chat/request.ex",
+    "lib/jidoka/stream.ex",
+    "lib/jidoka/operation/source/catalog.ex",
+    "lib/jidoka/operation/source/handoff.ex",
+    "lib/jidoka/operation/source/local.ex",
+    "lib/jidoka/operation/source/mcp.ex",
+    "lib/jidoka/operation/source/subagent.ex",
+    "lib/jidoka/operation/source/workflow.ex",
+    "lib/jidoka/workflow/lua/plan/spec.ex",
+    "lib/jidoka/workflow/lua/policy.ex"
+  ]
+
   test "core contracts do not depend on execution, adapters, or presentation" do
     violations =
       @core_contract_globs
@@ -102,6 +115,50 @@ defmodule Jidoka.Architecture.BoundariesTest do
       |> Enum.map(&relative/1)
 
     assert violations == [], "unguarded Kino sources: #{inspect(violations)}"
+  end
+
+  test "Zoi-backed structs derive their type and layout from the final schema" do
+    violations =
+      Path.wildcard(Path.join(@root, "lib/**/*.ex"))
+      |> Enum.flat_map(fn file ->
+        source = File.read!(file)
+        schema_count = source_count(source, ~r/@schema\s+Zoi\.struct\(/)
+
+        if schema_count == 0 do
+          []
+        else
+          generated = source_count(source, ~r/@type t\s*::\s*unquote\(Zoi\.type_spec\(@schema\)\)/)
+          enforce_keys = source_count(source, ~r/@enforce_keys\s+Zoi\.Struct\.enforce_keys\(@schema\)/)
+          struct_fields = source_count(source, ~r/defstruct\s+Zoi\.Struct\.struct_fields\(@schema\)/)
+
+          if generated == schema_count and enforce_keys == schema_count and struct_fields == schema_count do
+            []
+          else
+            [
+              {relative(file),
+               "schemas=#{schema_count}, generated_types=#{generated}, enforce_keys=#{enforce_keys}, struct_fields=#{struct_fields}"}
+            ]
+          end
+        end
+      end)
+
+    assert violations == [], format_violations("Zoi schema ownership mismatches", violations)
+  end
+
+  test "normalized final-schema constructors finish through schema parsing" do
+    violations =
+      Enum.flat_map(@normalized_final_schema_files, fn relative_file ->
+        source = @root |> Path.join(relative_file) |> File.read!()
+
+        if String.contains?(source, "Schema.parse(@schema") or
+             String.contains?(source, "Schema.parse!(@schema") do
+          []
+        else
+          [{relative_file, "missing final Schema.parse/2 or Schema.parse!/3 step"}]
+        end
+      end)
+
+    assert violations == [], format_violations("normalized schema constructor bypasses", violations)
   end
 
   defp module_references(file) do
@@ -199,4 +256,6 @@ defmodule Jidoka.Architecture.BoundariesTest do
     details = Enum.map_join(violations, "\n", fn {file, reference} -> "  #{file}: #{reference}" end)
     "#{label}:\n#{details}"
   end
+
+  defp source_count(source, pattern), do: pattern |> Regex.scan(source) |> length()
 end
