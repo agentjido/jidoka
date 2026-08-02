@@ -2,8 +2,8 @@ defmodule Jidoka.Workflow.Background do
   @moduledoc """
   Runs durable declarative workflows in the background.
 
-  This module is the Jidoka use-case facade. The Runic process and event-store
-  details stay in `Jidoka.Adapter.Runic.Background`.
+  This module is the Jidoka use-case facade. A private adapter owns the Runic
+  process and event-store details.
   """
 
   alias Jidoka.Adapter.Runic.Background, as: RunicBackground

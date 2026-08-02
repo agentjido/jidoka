@@ -139,6 +139,10 @@ defmodule Jidoka.MixProject do
         ] ++ guide_extras() ++ example_extras(),
       groups_for_extras: groups_for_extras(),
       groups_for_modules: groups_for_modules(),
+      groups_for_docs: groups_for_docs(),
+      filter_modules: fn module, _metadata -> include_module_in_docs?(module) end,
+      skip_code_autolink_to: &internal_documentation_reference?/1,
+      skip_undefined_reference_warnings_on: &internal_documentation_reference?/1,
       nest_modules_by_prefix: nested_module_prefixes()
     ]
   end
@@ -150,24 +154,24 @@ defmodule Jidoka.MixProject do
       "guides/getting-started.md",
       "guides/documentation-overview.md",
       "guides/core-concepts.md",
-      "guides/public-facade.md",
-      "guides/configuration.md",
 
-      # ── Building Agents ──────────────────────────────────────────────────
+      # ── Build Agents ─────────────────────────────────────────────────────
       "guides/agent-dsl.md",
       "guides/tools-and-operations.md",
-      "guides/agent-orchestration.md",
-      "guides/workflows.md",
       "guides/structured-results.md",
       "guides/controls.md",
       "guides/memory.md",
-      "guides/handoffs.md",
       "guides/import-json-yaml.md",
       "guides/inspection-and-preflight.md",
       "guides/testing-and-evals.md",
 
-      # ── Operating Agents ─────────────────────────────────────────────────
-      "guides/runtime-and-harness.md",
+      # ── Compose Work ─────────────────────────────────────────────────────
+      "guides/workflows.md",
+      "guides/agent-orchestration.md",
+      "guides/handoffs.md",
+
+      # ── Operate Agents ───────────────────────────────────────────────────
+      "guides/configuration.md",
       "guides/sessions-and-stores.md",
       "guides/snapshots-and-resume.md",
       "guides/human-in-the-loop.md",
@@ -185,7 +189,8 @@ defmodule Jidoka.MixProject do
       "guides/skill-workflow-subagent-tools.md",
       "guides/kino-notebooks.md",
 
-      # ── Reference / Data Contracts ───────────────────────────────────────
+      # ── Public Contract Reference ────────────────────────────────────────
+      "guides/public-facade.md",
       "guides/agent-spec-contract.md",
       "guides/turn-and-effect-contracts.md",
       "guides/operation-source-contracts.md",
@@ -195,6 +200,7 @@ defmodule Jidoka.MixProject do
 
       # ── Architecture / Internals ─────────────────────────────────────────
       "guides/architecture-boundaries.md",
+      "guides/runtime-and-harness.md",
       "guides/runic-spine-internals.md",
       "guides/turn-runner-and-effect-interpreter.md",
       "guides/runtime-capabilities-internals.md",
@@ -209,17 +215,18 @@ defmodule Jidoka.MixProject do
 
   defp groups_for_extras do
     [
-      "Start Here": ~r{guides/(getting-started|documentation-overview|core-concepts|public-facade|configuration)\.md},
-      "Building Agents":
-        ~r{guides/(agent-dsl|tools-and-operations|agent-orchestration|workflows|structured-results|controls|memory|handoffs|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
-      "Operating Agents":
-        ~r{guides/(runtime-and-harness|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety)\.md},
+      "Start Here": ~r{guides/(getting-started|documentation-overview|core-concepts)\.md},
+      "Build Agents":
+        ~r{guides/(agent-dsl|tools-and-operations|structured-results|controls|memory|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
+      "Compose Work": ~r{guides/(workflows|agent-orchestration|handoffs)\.md},
+      "Operate Agents":
+        ~r{guides/(configuration|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety)\.md},
       Integrations:
         ~r{guides/(live-llm-tool-loop|jido-process-integration|ash-jido|browser-tools|mcp-tools|skill-workflow-subagent-tools|kino-notebooks)\.md},
-      Reference:
-        ~r{guides/(agent-spec-contract|turn-and-effect-contracts|operation-source-contracts|memory-contracts|import-and-snapshot-contracts|errors-and-config-reference)\.md},
+      "Public Contract Reference":
+        ~r{guides/(public-facade|agent-spec-contract|turn-and-effect-contracts|operation-source-contracts|memory-contracts|import-and-snapshot-contracts|errors-and-config-reference)\.md},
       "Architecture And Internals":
-        ~r{guides/(architecture-boundaries|runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
+        ~r{guides/(architecture-boundaries|runtime-and-harness|runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
       Help: ~r{guides/(glossary|troubleshooting)\.md},
       Examples: ~r{examples/(?:README|[^/]+/README)\.md},
       Livebooks: ~r{(?:examples/.+|guides/livebooks)/.*\.livemd},
@@ -229,83 +236,145 @@ defmodule Jidoka.MixProject do
 
   defp groups_for_modules do
     [
-      "Main API": [
+      "Primary Application API": [
         Jidoka,
         Jidoka.Agent,
         Jidoka.Action,
-        Jidoka.Control,
-        Jidoka.ApprovalPredicate,
         Jidoka.Context,
+        Jidoka.Control,
         Jidoka.Session,
         Jidoka.Stream,
-        Jidoka.AgentView
+        Jidoka.Workflow,
+        Jidoka.Config
       ],
-      "Agent Data": [
+      "Optional Feature APIs": [
+        Jidoka.AgentView,
+        Jidoka.ApprovalPredicate,
+        Jidoka.Browser,
+        Jidoka.Debug,
+        Jidoka.Eval,
+        Jidoka.Export,
+        Jidoka.Import,
+        Jidoka.Inspection,
+        Jidoka.Instructions,
+        Jidoka.Jido,
+        Jidoka.Memory,
+        Jidoka.ModelPolicy,
+        Jidoka.Skill,
+        Jidoka.Trace
+      ],
+      "Agent And Turn Contracts": [
+        Jidoka.Cancellation,
         Jidoka.ContentPart,
+        Jidoka.Chat.Request,
         Jidoka.Agent.Message,
         Jidoka.Agent.State,
-        ~r/^Jidoka\.Agent\.Spec(\.|$)/
-      ],
-      Controls: [
-        ~r/^Jidoka\.Controls\./
-      ],
-      "Application Use Cases": [
-        Jidoka.Turn.Execution,
-        Jidoka.Session.Execution,
-        Jidoka.Review.Execution
-      ],
-      "Turns And Effects": [
-        ~r/^Jidoka\.Chat\./,
+        ~r/^Jidoka\.Agent\.Spec(\.|$)/,
         ~r/^Jidoka\.Turn\./,
         ~r/^Jidoka\.Effect\./,
-        Jidoka.Operation.Capability,
         Jidoka.Event,
         Jidoka.Usage
       ],
-      "Sessions, Reviews, And Handoffs": [
+      "State And Policy Contracts": [
         Jidoka.Snapshot,
+        ~r/^Jidoka\.Controls\./,
         ~r/^Jidoka\.Session\.(Data|Store|Lease|Lineage|Replay|Transitions)(\.|$)/,
         ~r/^Jidoka\.Review(\.|$)/,
-        ~r/^Jidoka\.Handoff(\.|$)/
+        ~r/^Jidoka\.Handoff(\.|$)/,
+        ~r/^Jidoka\.Memory\./,
+        ~r/^Jidoka\.Trace\./,
+        ~r/^Jidoka\.Error(\.|$)/,
+        Jidoka.Id
       ],
-      "Tools And Operation Sources": [
-        Jidoka.Browser,
+      "Tool And Workflow Contracts": [
+        Jidoka.Operation.Capability,
         ~r/^Jidoka\.Operation\.Source(\.|$)/,
-        Jidoka.Skill,
         ~r/^Jidoka\.Workflow(\.|$)/
       ],
-      "Import, Export, And Inspection": [
-        Jidoka.Import,
+      "Feature Data Contracts": [
         Jidoka.Import.AgentDocument,
-        Jidoka.Export,
-        Jidoka.Debug,
         ~r/^Jidoka\.Debug\./,
-        Jidoka.Inspection,
         Jidoka.Inspection.Preflight,
-        ~r/^Jidoka\.Projection(\.|$)/
+        ~r/^Jidoka\.Eval\./
       ],
-      "Memory, Trace, And Eval": [
-        ~r/^Jidoka\.Memory(\.|$)/,
-        ~r/^Jidoka\.Trace(\.|$)/,
-        ~r/^Jidoka\.Eval(\.|$)/
+      "Advanced Extension Support": [
+        Jidoka.Adapter.Jido.Actions,
+        Jidoka.Adapter.Jido.AgentServerState,
+        Jidoka.Adapter.ReqLLM,
+        Jidoka.Runtime.Capabilities,
+        Jidoka.Runtime.Controls.OperationContext,
+        Jidoka.Runtime.LocalOperations
       ],
-      "External Adapters": [
-        Jidoka.Jido,
-        ~r/^Jidoka\.Adapter\./
-      ],
-      Livebook: [
+      "Development And Test": [
         Jidoka.Kino
-      ],
-      "Runtime Internals": [
-        Jidoka.Harness,
-        ~r/^Jidoka\.Runtime\./
-      ],
-      "Configuration And Errors": [
-        Jidoka.Config,
-        Jidoka.Error,
-        Jidoka.Id,
-        Jidoka.Schema
       ]
+    ]
+  end
+
+  defp groups_for_docs do
+    [
+      Build: root_docs([:agent, :agent!, :plan, :plan!, :import, :export]),
+      Run: root_docs([:chat, :turn, :resume]),
+      Async: root_docs([:chat_async, :stream, :await, :cancel]),
+      Sessions: root_docs([:session, :fork_session, :recover_session]),
+      Review: root_docs([:pending_reviews, :approve, :deny]),
+      "Process Host": root_docs([:start_agent, :whereis, :await_agent, :stop_agent]),
+      Inspect: root_docs([:preflight, :inspect, :project]),
+      Handoff: root_docs([:handoff, :reset_handoff]),
+      Errors: root_docs([:normalize_error, :format_error, :error_to_map])
+    ]
+  end
+
+  defp root_docs(names) do
+    fn metadata -> metadata[:module] == Jidoka and metadata[:name] in names end
+  end
+
+  defp include_module_in_docs?(module), do: module not in internal_documentation_modules()
+
+  defp internal_documentation_reference?(reference) when is_binary(reference) do
+    reference = String.trim_leading(reference, "t:")
+
+    Enum.any?(internal_documentation_modules(), fn module ->
+      module_name = inspect(module)
+
+      case String.split_at(reference, String.length(module_name)) do
+        {^module_name, ""} ->
+          true
+
+        {^module_name, "." <> suffix} ->
+          suffix != "" and String.first(suffix) == String.downcase(String.first(suffix))
+
+        _other ->
+          false
+      end
+    end)
+  end
+
+  defp internal_documentation_reference?(_reference), do: false
+
+  defp internal_documentation_modules do
+    [
+      Jidoka.Adapter.Jido.Browser.Tools.ReadPage,
+      Jidoka.Adapter.Jido.Browser.Tools.SearchWeb,
+      Jidoka.Adapter.Jido.Browser.Tools.SnapshotUrl,
+      Jidoka.Adapter.Jido.RunTurn,
+      Jidoka.Adapter.Jido.Signals,
+      Jidoka.Adapter.Jido.Skill,
+      Jidoka.Adapter.ReqLLM.Decision,
+      Jidoka.Adapter.Runic.Background,
+      Jidoka.Adapter.Runic.TurnCompiler,
+      Jidoka.Harness,
+      Jidoka.Projection,
+      Jidoka.Review.Execution,
+      Jidoka.Runtime.Controls,
+      Jidoka.Runtime.Controls.Operation,
+      Jidoka.Runtime.EffectInterpreter,
+      Jidoka.Runtime.Review,
+      Jidoka.Runtime.Spine.Steps,
+      Jidoka.Runtime.TurnRunner,
+      Jidoka.Schema,
+      Jidoka.Session.Execution,
+      Jidoka.Turn.Execution
     ]
   end
 

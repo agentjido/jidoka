@@ -2,6 +2,9 @@ defmodule Jidoka.Adapter.Jido.AgentServerState do
   @moduledoc """
   Formal Jidoka state contract stored inside a process-hosted Jido agent.
 
+  This is advanced integration support for applications that inspect or extend
+  the Jido process-hosting boundary. Direct and session chat do not need it.
+
   `Jido.AgentServer` expects conventional top-level fields like `:status`,
   `:last_answer`, and `:error`. Jidoka keeps those fields for Jido
   compatibility and stores its typed turn/runtime state under `:jidoka`.

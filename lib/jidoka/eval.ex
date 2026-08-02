@@ -2,9 +2,9 @@ defmodule Jidoka.Eval do
   @moduledoc """
   Small deterministic eval runner for Jidoka turn flows.
 
-  The runner delegates execution to `Jidoka.Turn.Execution`. It adds no
-  new runtime path; it only packages an agent/request pair with assertions that
-  are useful for examples, regression tests, and optional live smoke checks.
+  The runner uses the same turn path as `Jidoka.turn/3`. It adds no new runtime
+  path; it only packages an agent/request pair with assertions that are useful
+  for examples, regression tests, and optional live smoke checks.
   """
 
   alias Jidoka.Effect

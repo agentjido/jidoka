@@ -349,7 +349,7 @@ For tests that need to inspect the full run shape, project it with
   `operations/1` helper that wraps a handler map.
 - [`Jidoka.Operation.Source.Local`](`Jidoka.Operation.Source.Local`) -
   source-shaped wrapper around the same handlers.
-- [`Jidoka.Projection`](`Jidoka.Projection`) - data projector used by
+- [`Jidoka.project/1`](`Jidoka.project/1`) - data projector used by
   golden tests.
 - [`Jidoka`](`Jidoka`) - public facade: `turn/3`, `chat/3`, `resume/2`,
   `inspect/2`, `project/1`.

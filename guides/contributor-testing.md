@@ -405,7 +405,7 @@ mix q
   `operation_capability/0` types are the test contract.
 - [`Jidoka.Effect.Journal`](`Jidoka.Effect.Journal`) - the journal the fake
   LLM inspects to branch on iteration.
-- [`Jidoka.Projection`](`Jidoka.Projection`) - target of golden assertions.
+- [`Jidoka.project/1`](`Jidoka.project/1`) - target of golden assertions.
 - [`Jidoka.Trace`](`Jidoka.Trace`) - source of the
   `timeline/1` helper used in event assertions.
 

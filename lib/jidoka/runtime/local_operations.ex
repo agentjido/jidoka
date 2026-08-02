@@ -2,9 +2,9 @@ defmodule Jidoka.Runtime.LocalOperations do
   @moduledoc """
   Runtime support for executing local Elixir functions as Jidoka operations.
 
-  This is mainly useful for deterministic tests, examples, and simple in-process
-  operations. Production tool authoring should normally use `Jidoka.Action`,
-  which is backed by `Jido.Action`.
+  This is the current supported helper for deterministic tool tests, examples,
+  and simple in-process operations. Production tool authoring should normally
+  use `Jidoka.Action`, which is backed by `Jido.Action`.
   """
 
   alias Jidoka.Effect

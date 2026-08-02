@@ -426,8 +426,8 @@ Key modules touched in this guide:
   and `deny/3`.
 - [`Jidoka.Runtime.Controls.OperationContext`](`Jidoka.Runtime.Controls.OperationContext`) -
   what the operation control receives.
-- [`Jidoka.Review.Execution`](`Jidoka.Review.Execution`) - approval and denial coordination
-  via `:approval` / `:approval_ttl_ms` options.
+- [`Jidoka.approve/3`](`Jidoka.approve/3`) and
+  [`Jidoka.deny/3`](`Jidoka.deny/3`) - public approval and denial coordination.
 
 ## Related Guides
 

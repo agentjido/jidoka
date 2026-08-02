@@ -170,7 +170,7 @@ end
 2. Resolves the model spec through `Jidoka.Config.normalize_model_spec/1`.
 3. Calls `ReqLLM.Generation.generate_text/3` (or `stream_text/3`).
 4. Extracts the text and pipes it through
-   [`Jidoka.Adapter.ReqLLM.Decision.parse_text/1`](`Jidoka.Adapter.ReqLLM.Decision`).
+   `Jidoka.Adapter.ReqLLM.Decision.parse_text/1`.
 5. Returns `{:ok, %Effect.LLMDecision{}}` or `{:error, term}`.
 
 `Decision.parse_text/1` is the JSON parsing surface. It accepts:
@@ -243,7 +243,7 @@ declaring local operations on a DSL agent.
 
 ### Step 4: Wire Controls Into The Capability Path
 
-[`Jidoka.Runtime.Controls`](`Jidoka.Runtime.Controls`) is a separate module,
+`Jidoka.Runtime.Controls` is a separate module,
 not a capability. The interpreter calls it explicitly for operation intents
 and uses its decisions to either proceed, interrupt, or fail:
 
@@ -282,7 +282,7 @@ Operation controls are the only ones that may produce `:interrupt`.
 
 ### Step 5: Apply A Review Response On Resume
 
-[`Jidoka.Runtime.Review`](`Jidoka.Runtime.Review`) bridges operation controls
+`Jidoka.Runtime.Review` bridges operation controls
 and the snapshot. Three functions matter:
 
 - `Review.approval_response/1` reads either `:approval` or
@@ -371,7 +371,7 @@ that keeps the conventional top-level fields (`:status`, `:last_request_id`,
 
 ### Step 8: Route Signals Into The Runtime
 
-[`Jidoka.Adapter.Jido.Signals`](`Jidoka.Adapter.Jido.Signals`) defines the single
+`Jidoka.Adapter.Jido.Signals` defines the single
 turn-run signal:
 
 ```elixir
@@ -390,7 +390,7 @@ end
 
 `Jidoka.turn/3` builds this signal and sends it via
 `Jido.AgentServer.call/3`. The signal is routed to
-[`Jidoka.Adapter.Jido.RunTurn`](`Jidoka.Adapter.Jido.RunTurn`), which
+`Jidoka.Adapter.Jido.RunTurn`, which
 unwraps the data, calls `agent_module.run_turn/2`, and writes the outcome back
 through `AgentServerState`.
 
@@ -420,7 +420,7 @@ Adding a new signal type (for example, `"jidoka.session.resume"`) requires:
   the Zoi schema, adding a default for tests, and adding a
   `call_capability/3` clause in `Jidoka.Runtime.EffectInterpreter`. Steps that
   produce the new effect kind belong in
-  [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`).
+  `Jidoka.Runtime.Spine.Steps`.
 - **New LLM adapters.** Implement the
   `(Effect.Intent.t(), Effect.Journal.t() -> {:ok, %Effect.LLMDecision{}} | {:error, term})`
   contract. Return `Effect.LLMDecision.final/2`,
@@ -507,21 +507,21 @@ for the round-trip through `Jidoka.Adapter.Jido.Signals.turn_run/2` and
   capability bundle.
 - [`Jidoka.Adapter.ReqLLM`](`Jidoka.Adapter.ReqLLM`) - ReqLLM-based LLM
   adapter with streaming and decision parsing.
-- [`Jidoka.Adapter.ReqLLM.Decision`](`Jidoka.Adapter.ReqLLM.Decision`) - JSON
+- `Jidoka.Adapter.ReqLLM.Decision` - JSON
   decision parser used by the ReqLLM adapter.
 - [`Jidoka.Adapter.Jido.Actions`](`Jidoka.Adapter.Jido.Actions`) - operation
   adapter for Jido actions.
 - [`Jidoka.Runtime.LocalOperations`](`Jidoka.Runtime.LocalOperations`) -
   function-backed operation adapter for tests and examples.
-- [`Jidoka.Runtime.Controls`](`Jidoka.Runtime.Controls`) - control runtime
+- `Jidoka.Runtime.Controls` - control runtime
   with input, operation, and output boundaries.
-- [`Jidoka.Runtime.Review`](`Jidoka.Runtime.Review`) - approval normalization,
+- `Jidoka.Runtime.Review` - approval normalization,
   validation, and application.
 - [`Jidoka.Snapshot`](`Jidoka.Snapshot`) -
   versioned serializable snapshot.
 - [`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`) -
   `:jidoka` slot inside Jido state.
-- [`Jidoka.Adapter.Jido.Signals`](`Jidoka.Adapter.Jido.Signals`) - constructors for
+- `Jidoka.Adapter.Jido.Signals` - constructors for
   signals routed into the runtime.
 
 ## Related Guides

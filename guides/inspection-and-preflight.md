@@ -426,7 +426,7 @@ less between releases.
 - [`Jidoka.Inspection.Preflight`](`Jidoka.Inspection.Preflight`) - struct
   returned by `Jidoka.preflight/3` with fields `agent`, `plan`, `request`,
   `prompt`, `events`, `timeline`, `diagnostics`.
-- [`Jidoka.Projection`](`Jidoka.Projection`) - the data-facing companion
+- [`Jidoka.project/1`](`Jidoka.project/1`) - the data-facing companion
   used by `Jidoka.project/1`.
 - [`Jidoka.Debug`](`Jidoka.Debug`) - request-level summaries and replay
   diagnostics.

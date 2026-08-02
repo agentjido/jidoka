@@ -297,7 +297,12 @@ projection modules are implementation modules. Applications must not depend on
 their internal details unless they accept a higher change risk.
 
 `Jidoka.Harness` is a compatibility facade at this level. New code must use the
-owner use-case modules or the public facades.
+public facades.
+
+HexDocs keeps only the current extension seams visible from these namespaces:
+the capability types, local operation helper, operation-control context, Jido
+action support, hosted-agent state, and ReqLLM support. They appear under
+**Advanced Extension Support**, not under the primary application API.
 
 ### Level 4: Development And Test
 

@@ -2,8 +2,8 @@ defmodule Jidoka.Skill do
   @moduledoc """
   Public helpers for Jido AI skills used by the Jidoka DSL.
 
-  The public API stays stable here. The Jido-specific implementation is in
-  `Jidoka.Adapter.Jido.Skill`.
+  The public API stays stable here. A private adapter owns the Jido-specific
+  implementation.
   """
 
   alias Jidoka.Adapter.Jido.Skill, as: JidoSkill

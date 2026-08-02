@@ -323,8 +323,8 @@ Key modules touched in this guide:
 - [`Jidoka.Effect.Journal`](`Jidoka.Effect.Journal`) - `put_intent/2`,
   `put_result/2`, `result_for/2`, `intent_recorded?/2`,
   `incomplete_intent?/2`.
-- [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`) -
-  effect shell that enforces the per-policy resume rules.
+- `Jidoka.Runtime.EffectInterpreter` - internal effect shell that enforces the
+  per-policy resume rules.
 - [`Jidoka.Review.Response`](`Jidoka.Review.Response`) - the approval
   path that lets `:unsafe_once` operations execute exactly once.
 

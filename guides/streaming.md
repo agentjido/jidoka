@@ -322,8 +322,7 @@ Key modules touched in this guide:
   waits for bounded cleanup.
 - [`Jidoka.Cancellation`](`Jidoka.Cancellation`) - typed terminal
   cancellation evidence and cooperative token inspection.
-- [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) - emits
-  lifecycle events that consumers observe.
+- [`Jidoka.Event`](`Jidoka.Event`) - lifecycle data that consumers observe.
 
 ## Related Guides
 

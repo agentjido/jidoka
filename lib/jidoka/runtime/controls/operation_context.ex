@@ -2,6 +2,9 @@ defmodule Jidoka.Runtime.Controls.OperationContext do
   @moduledoc """
   Runtime context passed to controls at the operation boundary.
 
+  Although the module is in the Runtime namespace, this data type is a
+  supported input contract for custom operation controls.
+
   This is deliberately data-only. Operation controls can inspect the pending
   operation request and turn state, but they do not execute the operation.
   """

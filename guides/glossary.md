@@ -89,7 +89,7 @@ with `Spec` listed as an alias.
 | Event | Neutral turn data emitted by transitions. Events feed traces, streams, and `AgentView`. | [`Jidoka.Event`](`Jidoka.Event`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Generation | Provider-neutral generation parameters on a spec (temperature, max_tokens, top_p, etc.). Defaults come from `Jidoka.Config.default_generation/0`. | [`Jidoka.Agent.Spec.Generation`](`Jidoka.Agent.Spec.Generation`) | [Agent DSL](agent-dsl.md) |
 | Handoff | Durable routing data that records which agent should own future turns for a conversation. Different from a subagent call, which delegates one bounded task inside a turn. | [`Jidoka.Handoff`](`Jidoka.Handoff`) | [Runtime And Execution Layers](runtime-and-harness.md) |
-| Harness | Compatibility facade for advanced callers of the old combined execution boundary. New code uses `Turn.Execution`, `Session.Execution`, or `Review.Execution`. | [`Jidoka.Harness`](`Jidoka.Harness`) | [Architecture Boundaries](architecture-boundaries.md) |
+| Harness | Internal compatibility facade for callers of the old combined execution boundary. New application code uses the `Jidoka` facade. | [`Jidoka`](`Jidoka`) | [Architecture Boundaries](architecture-boundaries.md) |
 | Hibernate | The act of pausing a turn at a checkpoint and emitting an `Snapshot` instead of a `Turn.Result`. Used for human review pauses and externally driven resumes. | [`Jidoka.Snapshot`](`Jidoka.Snapshot`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Idempotency | Per-operation policy that tells the runtime how to treat repeated effects. Valid values: `:pure`, `:idempotent`, `:dedupe`, `:reconcile`, `:unsafe_once`. `:unsafe_once` requires approval or a matching operation control. | [`Jidoka.Agent.Spec.Operation`](`Jidoka.Agent.Spec.Operation`) | [Controls](controls.md) |
 | Import | The runtime that parses JSON/YAML into an `Agent.Spec`. Imports never call `String.to_atom/1` on input; module and schema refs are resolved through caller-provided registries. | [`Jidoka.Import`](`Jidoka.Import`) | [Agent DSL](agent-dsl.md) |
@@ -107,14 +107,14 @@ with `Spec` listed as an alias.
 | Output | A control boundary that runs against the model's final assistant content before it leaves the harness. Used for safety filters, redaction, and post-validation. | [`Jidoka.Agent.Spec.Controls.Output`](`Jidoka.Agent.Spec.Controls.Output`) | [Controls](controls.md) |
 | Plan | Shorthand for `Turn.Plan`. The compiled, executable contract derived from a spec. | [`Jidoka.Turn.Plan`](`Jidoka.Turn.Plan`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Preflight | `Jidoka.preflight/3`. Assembles the prompt, tool metadata, memory contributions, and request normalization without calling an LLM. The cheapest way to validate wiring. | [`Jidoka.Inspection`](`Jidoka.Inspection`) | [Getting Started](getting-started.md) |
-| Projection | Stable inspection map produced by `Jidoka.project/1`. Projections omit Zoi schemas, LLMDB structs, and Spark metadata while keeping the semantic shape useful for traces, golden tests, and UI rendering. | [`Jidoka.Projection`](`Jidoka.Projection`) | [Runtime And Execution Layers](runtime-and-harness.md) |
+| Projection | Stable inspection map produced by `Jidoka.project/1`. Projections omit Zoi schemas, LLMDB structs, and Spark metadata while keeping the semantic shape useful for traces, golden tests, and UI rendering. | [`Jidoka.project/1`](`Jidoka.project/1`) | [Projection Internals](projection-internals.md) |
 | Request | Shorthand for `Turn.Request`. Input for one agent turn: input string, request id, agent state, context, and metadata. | [`Jidoka.Turn.Request`](`Jidoka.Turn.Request`) | [Getting Started](getting-started.md) |
 | Result | Shorthand for `Turn.Result`. The value `turn/3` returns on success: content, optional structured `value`, agent state, journal, and events. | [`Jidoka.Turn.Result`](`Jidoka.Turn.Result`) | [Structured Results](structured-results.md) |
-| Resume | The act of continuing from a `Snapshot`. `Turn.Execution` uses the same capabilities plus any required approval response. | [`Jidoka.Turn.Execution`](`Jidoka.Turn.Execution`) | [Runtime And Execution Layers](runtime-and-harness.md) |
+| Resume | The act of continuing from a `Snapshot` with the same capabilities plus any required approval response. | [`Jidoka.resume/2`](`Jidoka.resume/2`) | [Snapshots And Resume](snapshots-and-resume.md) |
 | ReqLLM | The third-party provider client used to make live model calls. Jidoka wraps ReqLLM behind a small adapter that emits typed `LLMDecision` values. | [`Jidoka.Adapter.ReqLLM`](`Jidoka.Adapter.ReqLLM`) | [Live LLM Tool Loop](live-llm-tool-loop.md) |
 | Review | The collection of structs and runtime helpers that model human-in-the-loop pauses (`Review.Request`, `Review.Response`, `Review.Interrupt`). | [`Jidoka.Review`](`Jidoka.Review`) | [Controls](controls.md) |
 | Runic | The pure workflow engine that owns the turn spine. Jidoka compiles its phases into a Runic workflow so transitions stay deterministic and inspectable. | [`Runic.Workflow`](`Runic.Workflow`) | [Runtime And Execution Layers](runtime-and-harness.md) |
-| Runtime | The effect shell under `Jidoka.Runtime.*`. It contains capabilities, controls, the effect interpreter, and the turn runner. External library code stays in `Jidoka.Adapter.*`. | [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) | [Runtime And Execution Layers](runtime-and-harness.md) |
+| Runtime | The internal effect shell under `Jidoka.Runtime.*`. It contains capabilities, controls, the effect interpreter, and the turn runner. External library code stays in `Jidoka.Adapter.*`. | [`Jidoka`](`Jidoka`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Session | The ergonomic facade for durable multi-turn state. Delegates to `Jidoka.Session.Data` for the underlying data shape. | [`Jidoka.Session`](`Jidoka.Session`) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Skill | A Jido.AI skill referenced by an agent. Skills contribute prompt instructions and any actions published by the skill manifest; those actions are executed through the standard Jido action operation path. | [`Jidoka.Skill`](`Jidoka.Skill`) | [Agent DSL](agent-dsl.md) |
 | Snapshot | See `Snapshot`. | [`Jidoka.Snapshot`](`Jidoka.Snapshot`) | [Runtime And Execution Layers](runtime-and-harness.md) |
@@ -159,8 +159,11 @@ Top-level modules referenced throughout this glossary:
 - [`Jidoka.Agent`](`Jidoka.Agent`) and [`Jidoka.Agent.Spec`](`Jidoka.Agent.Spec`) - authoring and spec data.
 - [`Jidoka.Turn.Plan`](`Jidoka.Turn.Plan`), [`Jidoka.Turn.Request`](`Jidoka.Turn.Request`), [`Jidoka.Turn.Result`](`Jidoka.Turn.Result`), [`Jidoka.Turn.State`](`Jidoka.Turn.State`) - turn data contracts.
 - [`Jidoka.Effect.Intent`](`Jidoka.Effect.Intent`), [`Jidoka.Effect.Journal`](`Jidoka.Effect.Journal`), [`Jidoka.Effect.Result`](`Jidoka.Effect.Result`), [`Jidoka.Effect.LLMDecision`](`Jidoka.Effect.LLMDecision`) - effect boundary.
-- [`Jidoka.Turn.Execution`](`Jidoka.Turn.Execution`), [`Jidoka.Session.Execution`](`Jidoka.Session.Execution`), and [`Jidoka.Review.Execution`](`Jidoka.Review.Execution`) - application use cases.
-- [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) and [`Jidoka.Runtime.Capabilities`](`Jidoka.Runtime.Capabilities`) - effect shell.
+- `Jidoka.Turn.Execution`, `Jidoka.Session.Execution`, and
+  `Jidoka.Review.Execution` - internal application use cases.
+- `Jidoka.Runtime.TurnRunner` and
+  [`Jidoka.Runtime.Capabilities`](`Jidoka.Runtime.Capabilities`) - effect shell
+  and its advanced extension contract.
 - [`Jidoka.Snapshot`](`Jidoka.Snapshot`), [`Jidoka.Review`](`Jidoka.Review`) - hibernation and review.
 
 ## Related Guides

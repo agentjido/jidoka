@@ -12,9 +12,9 @@ written for people maintaining `Jidoka.Runtime.TurnRunner` and
 ## When To Use This
 
 - Use this guide before reordering, adding, or removing a phase in
-  [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`).
+  `Jidoka.Runtime.TurnRunner`.
 - Use this guide when changing how
-  [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`)
+  `Jidoka.Runtime.EffectInterpreter`
   records intents, replays results, or decides between calling a capability
   and surfacing a review interrupt.
 - Use this guide when introducing a new checkpoint policy or a new failure
@@ -143,8 +143,7 @@ Three ideas explain the runner's shape.
 ```
 
 Everything below grounds those three ideas in the actual functions in
-[`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) and
-[`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`).
+`Jidoka.Runtime.TurnRunner` and `Jidoka.Runtime.EffectInterpreter`.
 
 ## How To
 
@@ -528,15 +527,15 @@ do not break unrelated assertions.
 
 ## Reference
 
-- [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) - phase loop,
+- `Jidoka.Runtime.TurnRunner` - phase loop,
   checkpoints, timeout enforcement, resume.
-- [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`) -
+- `Jidoka.Runtime.EffectInterpreter` -
   journal-aware capability dispatch.
 - [`Jidoka.Runtime.Capabilities`](`Jidoka.Runtime.Capabilities`) - typed
   capability bundle the runner consumes.
-- [`Jidoka.Runtime.Controls`](`Jidoka.Runtime.Controls`) - control runtime
+- `Jidoka.Runtime.Controls` - control runtime
   used at input, operation, and output boundaries.
-- [`Jidoka.Runtime.Review`](`Jidoka.Runtime.Review`) - approval validation and
+- `Jidoka.Runtime.Review` - approval validation and
   application during resume.
 - [`Jidoka.Effect.Journal`](`Jidoka.Effect.Journal`) - append-only intent/result
   store keyed by intent id.

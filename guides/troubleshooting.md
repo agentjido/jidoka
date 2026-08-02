@@ -250,13 +250,13 @@ needed once you have the categories above as a reference.
   call.
 - [`Jidoka.Error`](`Jidoka.Error`) - Splode-backed error type and
   `normalize/2`, `format/1`, `to_map/1`.
-- [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) - emits
+- `Jidoka.Runtime.TurnRunner` - emits
   `:turn_failed` for every failed turn.
-- [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`) -
+- `Jidoka.Runtime.EffectInterpreter` -
   source of unsafe-replay and capability errors.
 - [`Jidoka.Runtime.Capabilities`](`Jidoka.Runtime.Capabilities`) - rejects
   invalid LLM/operations options at construction.
-- [`Jidoka.Runtime.Review`](`Jidoka.Runtime.Review`) - validates approval
+- `Jidoka.Runtime.Review` - validates approval
   responses and produces approval-related errors.
 - [`Jidoka.Snapshot`](`Jidoka.Snapshot`) -
   serialization and version validation.

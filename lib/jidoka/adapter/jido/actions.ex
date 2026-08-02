@@ -2,6 +2,10 @@ defmodule Jidoka.Adapter.Jido.Actions do
   @moduledoc """
   Runtime support for executing Jido actions as Jidoka operations.
 
+  This is an advanced extension seam. A DSL agent installs the capability for
+  its declared actions automatically. Call this module only when runtime data
+  supplies the action list.
+
   Jido actions are the canonical tool implementation for Jidoka. This module
   converts action modules into `Agent.Spec.Operation` data and builds the
   operation function used by the effect interpreter.

@@ -198,12 +198,10 @@ failure must not hide a deterministic Jidoka regression.
 ## Reference
 
 - [`Jidoka.Adapter.ReqLLM`](`Jidoka.Adapter.ReqLLM`) - live LLM capability.
-- [`Jidoka.Adapter.ReqLLM.Decision`](`Jidoka.Adapter.ReqLLM.Decision`) -
-  decision parser.
+- `Jidoka.Adapter.ReqLLM.Decision` - internal decision parser.
 - [`Jidoka.Effect.LLMDecision`](`Jidoka.Effect.LLMDecision`) - normalized model
   decision data.
-- [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`) -
-  external effect boundary.
+- `Jidoka.Runtime.EffectInterpreter` - internal external-effect boundary.
 - [Testing And Evals](testing-and-evals.md) - deterministic test patterns.
 - [Turn And Effect Contracts](turn-and-effect-contracts.md) - effect and journal
   data.

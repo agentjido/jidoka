@@ -2,6 +2,9 @@ defmodule Jidoka.Adapter.ReqLLM do
   @moduledoc """
   ReqLLM runtime support for Jidoka's LLM effect boundary.
 
+  This is an advanced extension seam. Normal application calls use the default
+  ReqLLM capability through `Jidoka.chat/3` or `Jidoka.turn/3`.
+
   The runtime uses a constrained JSON protocol instead of native provider
   tool-calling. That keeps Jidoka's Runic spine provider-neutral while still
   letting a real model choose between final answers and operation calls.

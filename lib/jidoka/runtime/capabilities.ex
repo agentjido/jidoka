@@ -1,5 +1,11 @@
 defmodule Jidoka.Runtime.Capabilities do
-  @moduledoc "Runtime dependency bundle for interpreting effects."
+  @moduledoc """
+  Advanced extension contract for injected LLM and operation capabilities.
+
+  Application code normally passes `llm:` and `operations:` options to the
+  `Jidoka` facade. Use this typed bundle when you build runtime integrations or
+  low-level deterministic tests.
+  """
 
   alias Jidoka.Schema
   alias Jidoka.Operation.Capability, as: OperationCapability

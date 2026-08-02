@@ -284,8 +284,7 @@ Key modules touched in this guide:
   on a snapshot (`:after_prompt`, `:before_effect`, `:review`).
 - [`Jidoka.Turn.State`](`Jidoka.Turn.State`) - the inner runtime state a
   snapshot wraps.
-- [`Jidoka.Turn.Execution`](`Jidoka.Turn.Execution`) - `resume/2` boundary that
-  `Jidoka.resume/2` delegates to.
+- [`Jidoka.resume/2`](`Jidoka.resume/2`) - public continuation boundary.
 - [`Jidoka.Effect.Journal`](`Jidoka.Effect.Journal`) - replay-safe record
   of effect intents and results inside the snapshot.
 

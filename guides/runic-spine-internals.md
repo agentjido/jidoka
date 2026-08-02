@@ -10,8 +10,8 @@ authors.
 ## When To Use This
 
 - Use this guide when you are about to add, reorder, or rewrite a workflow
-  step in [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) or change how
-  [`Jidoka.Adapter.Runic.TurnCompiler`](`Jidoka.Adapter.Runic.TurnCompiler`) wires steps together.
+  step in `Jidoka.Runtime.Spine.Steps` or change how
+  `Jidoka.Adapter.Runic.TurnCompiler` wires steps together.
 - Use this guide before introducing any new "framework" that wraps the turn
   loop; the answer is usually to add a narrowly scoped workflow step, not to
   replace the spine.
@@ -76,10 +76,9 @@ Three ideas explain why the spine looks the way it does.
    `Turn.Plan` contract and runs it with Runic so the loop is deterministic,
    inspectable, and free of provider-specific control flow.
 2. **Functional core, effect shell.**
-   [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) is pure. It returns the
+   `Jidoka.Runtime.Spine.Steps` is pure. It returns the
    next `Turn.State` plus declared `Effect.Intent` values. The runtime shell
-   ([`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) and
-   [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`))
+   (`Jidoka.Runtime.TurnRunner` and `Jidoka.Runtime.EffectInterpreter`)
    is the only place that performs IO.
 3. **Spec is immutable, Plan is data, and execution is an explicit use case.**
    `Jidoka.Agent.Spec` never changes after compilation. `Jidoka.Turn.Plan` is
@@ -126,8 +125,8 @@ def model_turn_workflow(%Turn.Plan{} = _plan) do
 end
 ```
 
-Read both step functions in
-[`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) before you change anything.
+Read both step functions in `Jidoka.Runtime.Spine.Steps` before you change
+anything.
 The combination of `Turn.Transition.new!/1 -> event/3 -> commit/1` is the only
 way new events should enter `Turn.State.events`.
 
@@ -200,7 +199,7 @@ intents being declared before any IO happens.
 ### Step 5: Verify Step Ordering
 
 Phase ordering is not a comment, it is a contract.
-[`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) expects this order
+`Jidoka.Runtime.TurnRunner` expects this order
 per loop iteration:
 
 1. `Controls.run_input_controls/1` (once, at the start of the turn).
@@ -212,8 +211,7 @@ per loop iteration:
 7. Either loop again (status `:running`) or run output controls and finish.
 
 If a new step changes ordering, it must be reflected in the runner and in the
-phase list on `Turn.Plan` (see `plan.phases` in
-[`Jidoka.Projection`](`Jidoka.Projection`)).
+phase list on `Turn.Plan` (see `plan.phases` in `Jidoka.project/1`).
 
 ## Common Patterns
 
@@ -312,11 +310,11 @@ stable across event metadata churn.
 
 ## Reference
 
-- [`Jidoka.Adapter.Runic.TurnCompiler`](`Jidoka.Adapter.Runic.TurnCompiler`) - builds the Runic
+- `Jidoka.Adapter.Runic.TurnCompiler` - builds the Runic
   workflow used by the runner.
-- [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) - pure phase functions
+- `Jidoka.Runtime.Spine.Steps` - pure phase functions
   (`assemble_prompt/1`, `plan_model_effect/1`).
-- [`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) - effect shell
+- `Jidoka.Runtime.TurnRunner` - effect shell
   that runs the workflow and interprets intents.
 - [`Jidoka.Turn.Plan`](`Jidoka.Turn.Plan`) - executable data compiled from a
   spec; carries `phases`, `max_model_turns`, `timeout_ms`.

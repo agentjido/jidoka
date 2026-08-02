@@ -336,10 +336,10 @@ Key modules touched in this guide:
   `await_agent/2`, `turn/3`, `chat/3`.
 - [`Jidoka.Agent`](`Jidoka.Agent`) - DSL module that injects `start/1` and
   `child_spec/1` for hosted agents.
-- [`Jidoka.Adapter.Jido.Signals`](`Jidoka.Adapter.Jido.Signals`) - constructor for the
+- `Jidoka.Adapter.Jido.Signals` - internal constructor for the
   `"jidoka.turn.run"` signal.
-- [`Jidoka.Adapter.Jido.RunTurn`](`Jidoka.Adapter.Jido.RunTurn`) - Jido
-  action that runs the harness inside the agent server.
+- `Jidoka.Adapter.Jido.RunTurn` - internal Jido action that runs the turn
+  inside the agent server.
 - [`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`) -
   typed Jidoka state stored under `agent.state[:jidoka]`.
 

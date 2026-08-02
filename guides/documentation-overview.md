@@ -113,9 +113,11 @@ Prefer the `Jidoka` facade and the documented DSL in application code. Public
 data contracts, behaviours, and adapter boundaries are also documented in the
 module reference.
 
-Modules in the **Runtime Internals** group are published for maintainers and
-adapter authors. Their documentation explains current architecture, but the
-top-level facade is the primary compatibility boundary for applications.
+Implementation-only Runtime, Adapter, Execution, Projection, Harness, and
+Schema module pages are filtered from the normal module index. Maintainers can
+use the internals guides and source. The **Advanced Extension Support** group
+contains the small set of current runtime and adapter seams that application
+guides still require.
 
 ## Verify The Documentation
 
