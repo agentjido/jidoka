@@ -319,6 +319,9 @@ The `mix quality` alias (also aliased as `mix q`) runs the gates defined in
 quality: [
   "format --check-formatted",
   "compile --warnings-as-errors",
+  "xref graph --format cycles --fail-above 0",
+  "cmd env MIX_ENV=test mix test test/architecture/boundaries_test.exs",
+  "docs.check",
   "credo",
   "dialyzer",
   "doctor --raise"
@@ -331,6 +334,9 @@ Each step is non-negotiable:
 | --- | --- |
 | `format --check-formatted` | Keeps diffs minimal; `mix format` should be run before commit. |
 | `compile --warnings-as-errors` | Warnings are real bugs; treat them like failing tests. |
+| `xref graph --format cycles --fail-above 0` | Keeps compile-time dependency cycles out of the package. |
+| Architecture boundary test | Enforces the allowed layer dependency direction. |
+| `docs.check` | Builds ExDoc, checks links and public paths, tests manifests, and runs all Livebooks. |
 | `credo` | Style and idiom enforcement. Refactor; do not add `# credo:disable` lightly. |
 | `dialyzer` | Catches contract drift in the Zoi-backed structs and capability functions. |
 | `doctor --raise` | Documentation coverage. New public functions need `@spec` and `@doc`. |
@@ -366,6 +372,9 @@ mix test --include live
 
 # Full quality bar.
 mix quality
+
+# Documentation, examples, and Livebooks.
+mix docs.check
 ```
 
 For a single contributor change, the loop is usually:

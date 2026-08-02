@@ -11,7 +11,16 @@ defmodule Jidoka.CheckLivebooks do
       raise "Usage: mix run scripts/check_livebooks.exs -- [--project] PATH...; got #{inspect(args)}"
     end
 
-    Enum.each(positional, &check(&1, opts[:project]))
+    positional
+    |> Enum.flat_map(&expand_paths/1)
+    |> Enum.each(&check(&1, opts[:project]))
+  end
+
+  defp expand_paths(pattern) do
+    case Path.wildcard(pattern) do
+      [] -> [pattern]
+      paths -> paths
+    end
   end
 
   defp check(path, project?) do

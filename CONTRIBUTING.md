@@ -32,6 +32,7 @@ Run the package gate before opening a PR:
 
 ```bash
 mix quality
+mix docs.check
 mix test --cover
 mix hex.build --unpack
 ```

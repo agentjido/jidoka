@@ -362,8 +362,7 @@ mix format --check-formatted
 mix compile --warnings-as-errors
 mix test
 mix quality
-mix docs
-mix doctor --raise
+mix docs.check
 ```
 
 Run all example and guide Livebooks with:

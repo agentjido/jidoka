@@ -411,12 +411,19 @@ defmodule Jidoka.MixProject do
     [
       setup: ["deps.get"],
       install_hooks: ["git_hooks.install"],
+      "docs.check": [
+        "docs --warnings-as-errors",
+        "run scripts/check_docs.exs",
+        "cmd env MIX_ENV=test mix test examples/manifest_test.exs",
+        "run scripts/check_livebooks.exs -- --project examples/*/*.livemd guides/livebooks/*.livemd"
+      ],
       q: ["quality"],
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
         "xref graph --format cycles --fail-above 0",
         "cmd env MIX_ENV=test mix test test/architecture/boundaries_test.exs",
+        "docs.check",
         "credo",
         "dialyzer",
         "doctor --raise"
