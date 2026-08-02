@@ -2,8 +2,24 @@
 
 Date: 2026-08-02
 
-Status: Proposed plan. This document does not change the public API or define
-a compatibility contract.
+Status: Implemented on 2026-08-02. This document does not define a
+compatibility contract.
+
+## Implementation Result
+
+- The root `Jidoka` facade is the canonical invocation path in application
+  guides and examples.
+- ExDoc separates application APIs, optional features, public contracts,
+  advanced extension support, and development-only modules.
+- Implementation-only module pages are hidden from the normal module index.
+  The visible Jidoka module count decreased from 150 to 129.
+- Feature, contract, integration, and maintainer guides state their owners and
+  boundaries.
+- Five example applications and nine Livebooks use the aligned public path and
+  pass deterministic execution checks.
+- `mix docs.check` now enforces ExDoc warnings, local links, package versions,
+  credential guidance, public invocation rules, example manifests, and
+  executable Livebooks.
 
 ## Outcome
 
