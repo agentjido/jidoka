@@ -6,7 +6,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Local
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   import Jidoka.TestSupport, only: [count_results: 2]
@@ -213,7 +213,7 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
         context: %{test_pid: test_pid}
       )
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(spec, request,
                llm:
                  llm(

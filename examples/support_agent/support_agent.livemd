@@ -172,8 +172,8 @@ review_control_call =
 
 {:ok, [review]} = Jidoka.pending_reviews(snapshot)
 
-{:ok, serialized_snapshot} = Jidoka.Runtime.AgentSnapshot.serialize(snapshot)
-{:ok, restored_snapshot} = Jidoka.Runtime.AgentSnapshot.deserialize(serialized_snapshot)
+{:ok, serialized_snapshot} = Jidoka.Snapshot.serialize(snapshot)
+{:ok, restored_snapshot} = Jidoka.Snapshot.deserialize(serialized_snapshot)
 
 unless Elixir.Agent.get(action_counter, & &1) == 0 and
          restored_snapshot.turn_state.agent_state.operation_results == [] do

@@ -5,6 +5,7 @@ defmodule Jidoka.Turn.Result do
   alias Jidoka.Config
   alias Jidoka.ContentPart
   alias Jidoka.Effect
+  alias Jidoka.Portable
   alias Jidoka.Schema
   alias Jidoka.Turn
 
@@ -80,7 +81,7 @@ defmodule Jidoka.Turn.Result do
       messages:
         prompt
         |> Map.get(:messages, Map.get(prompt, "messages", []))
-        |> Jidoka.project(),
+        |> Portable.project(),
       message_count: length(Map.get(prompt, :messages, Map.get(prompt, "messages", []))),
       operations: operations,
       operation_names: Enum.map(operations, &operation_name/1),

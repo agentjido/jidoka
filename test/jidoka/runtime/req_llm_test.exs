@@ -1,7 +1,7 @@
-defmodule Jidoka.Runtime.ReqLLMTest do
+defmodule Jidoka.Adapter.ReqLLMTest do
   use ExUnit.Case, async: true
 
-  alias Jidoka.Runtime.ReqLLM
+  alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Effect
 
   test "returns an error for unsupported effect kinds" do

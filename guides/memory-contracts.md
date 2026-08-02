@@ -13,7 +13,7 @@ guesswork.
   write to build a store, replay tool, or audit query.
 - Use this guide when wiring `Jidoka.Memory.Store.InMemory` into tests.
 - Do not use this guide as a memory tutorial. The high-level workflow lives in
-  [Runtime And Harness](runtime-and-harness.md).
+  [Runtime And Execution Layers](runtime-and-harness.md).
 
 ## Prerequisites
 
@@ -210,7 +210,7 @@ end
 
 - [Agent Spec Contract](agent-spec-contract.md) - memory policy lives on the
   spec.
-- [Runtime And Harness](runtime-and-harness.md) - how memory is wired into a
+- [Runtime And Execution Layers](runtime-and-harness.md) - how memory is wired into a
   turn.
 - [Turn And Effect Contracts](turn-and-effect-contracts.md) - where recall
   results land on `Turn.State`.

@@ -6,10 +6,10 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.Store.InMemory
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Store.InMemory
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
@@ -34,7 +34,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
 
     llm = final_llm("stored hello")
 
-    assert {:hibernate, %Session{status: :hibernated} = hibernated, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Session{status: :hibernated} = hibernated, %Snapshot{} = snapshot} =
              Harness.run_session("sess_chat", "Say hello",
                store: store,
                llm: llm,
@@ -42,7 +42,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
              )
 
     assert snapshot.cursor.phase == :after_prompt
-    assert [%AgentSnapshot{}] = hibernated.snapshots
+    assert [%Snapshot{}] = hibernated.snapshots
 
     assert {:ok, %Session{status: :finished} = finished, %Turn.Result{content: "stored hello"}} =
              Harness.resume_session("sess_chat", store: store, llm: llm)
@@ -130,7 +130,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
         end
       })
 
-    assert {:hibernate, %Session{status: :waiting} = waiting, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Session{status: :waiting} = waiting, %Snapshot{} = snapshot} =
              Harness.run_session("sess_review", "Refund order_123",
                store: store,
                llm: llm,
@@ -158,7 +158,7 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
     assert_receive {:refund_called, %{"order_id" => "order_123"}}
 
     assert {:ok,
-            %Harness.Replay{
+            %Jidoka.Session.Replay{
               session_id: "sess_review",
               status: :finished,
               pending_reviews: [],

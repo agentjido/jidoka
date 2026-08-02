@@ -14,7 +14,7 @@ guessing.
 - Use this guide when reading a snapshot or journal in tests and needing to
   decode each field.
 - Do not use this guide as a runtime walkthrough. See
-  [Runtime And Harness](runtime-and-harness.md) for the execution model.
+  [Runtime And Execution Layers](runtime-and-harness.md) for the execution model.
 
 ## Prerequisites
 
@@ -429,7 +429,7 @@ end
 - [Agent Spec Contract](agent-spec-contract.md) - the input to the plan.
 - [Operation Source Contracts](operation-source-contracts.md) - where
   operation capabilities come from.
-- [Runtime And Harness](runtime-and-harness.md) - the executor of these
+- [Runtime And Execution Layers](runtime-and-harness.md) - the executor of these
   contracts.
 - [Import And Snapshot Contracts](import-and-snapshot-contracts.md) - durable
   shapes built on top of `Turn.State` and `Turn.Cursor`.

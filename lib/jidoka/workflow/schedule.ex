@@ -1,9 +1,9 @@
 defmodule Jidoka.Workflow.Schedule do
   @moduledoc "One-time or recurring background workflow schedule contract."
 
-  alias Jidoka.Workflow.RetryPolicy
-  alias Jido.Scheduler.Job
+  alias Jidoka.Adapter.Jido.Scheduler
   alias Jidoka.Schema
+  alias Jidoka.Workflow.RetryPolicy
 
   @overlap_policies [:skip, :allow]
   @misfire_policies [:skip, :run_once]
@@ -109,7 +109,7 @@ defmodule Jidoka.Workflow.Schedule do
   end
 
   def advance(%__MODULE__{trigger: {:cron, _expression}} = schedule, from) do
-    with {:ok, next_at} <- Job.next_scheduled_at(schedule.cron, schedule.timezone, from) do
+    with {:ok, next_at} <- Scheduler.next_at(schedule.cron, schedule.timezone, from) do
       {:ok, %{schedule | next_at: next_at}}
     end
   end
@@ -129,9 +129,9 @@ defmodule Jidoka.Workflow.Schedule do
   defp normalize_trigger({:at, %DateTime{} = at}, _timezone, _now), do: {:ok, {:at, at}, nil, at}
 
   defp normalize_trigger({:cron, expression}, timezone, now) when is_binary(expression) do
-    with {:ok, prepared} <- Job.prepare_schedule(expression, timezone),
+    with {:ok, prepared} <- Scheduler.prepare(expression, timezone),
          {:ok, local_now} <- DateTime.shift_zone(now, timezone, time_zone_database()),
-         {:ok, next_at} <- Job.next_scheduled_at(prepared.cron, timezone, local_now) do
+         {:ok, next_at} <- Scheduler.next_at(prepared.cron, timezone, local_now) do
       {:ok, {:cron, expression}, prepared.cron, next_at}
     end
   end

@@ -14,9 +14,8 @@ defmodule Jidoka.SessionTest do
 
   @chat_uuid7_regex ~r/\Achat_[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/
 
-  alias Jidoka.Harness
-  alias Jidoka.Harness.Session, as: HarnessSession
-  alias Jidoka.Harness.Store.InMemory
+  alias Jidoka.Session.Data, as: SessionData
+  alias Jidoka.Session.Store.InMemory
   alias Jidoka.Chat.Request
   alias Jidoka.Session
   alias Jidoka.SessionTest.Support.DslAgent
@@ -27,7 +26,7 @@ defmodule Jidoka.SessionTest do
     store = {InMemory, pid: pid}
 
     assert {:ok,
-            %HarnessSession{
+            %SessionData{
               session_id: "support-123",
               status: :new,
               spec: %{id: "session_facade_agent"}
@@ -44,12 +43,12 @@ defmodule Jidoka.SessionTest do
       {:ok, %{type: :final, content: "session facade ok"}}
     end
 
-    assert {:ok, %HarnessSession{status: :finished} = updated, "session facade ok"} =
+    assert {:ok, %SessionData{status: :finished} = updated, "session facade ok"} =
              Session.chat(session, "Hello", llm: llm)
 
     assert %Turn.Result{content: "session facade ok"} = updated.result
 
-    assert {:ok, %HarnessSession{} = root_updated, "session facade ok"} =
+    assert {:ok, %SessionData{} = root_updated, "session facade ok"} =
              Jidoka.chat(session, "Hello again", llm: llm)
 
     assert root_updated.status == :finished
@@ -68,7 +67,7 @@ defmodule Jidoka.SessionTest do
 
     stream = Jidoka.stream(request, stream_event_timeout_ms: 100)
 
-    assert {:ok, %HarnessSession{status: :finished} = updated, "async session ok"} =
+    assert {:ok, %SessionData{status: :finished} = updated, "async session ok"} =
              Jidoka.await(stream, timeout: 1_000)
 
     assert updated.session_id == "async-chat-123"
@@ -80,7 +79,7 @@ defmodule Jidoka.SessionTest do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}
 
-    assert {:ok, %HarnessSession{session_id: "async-stored-123"}} =
+    assert {:ok, %SessionData{session_id: "async-stored-123"}} =
              Session.start(spec(), "async-stored-123", store: store)
 
     llm = fn _intent, _journal, _ctx ->
@@ -90,7 +89,7 @@ defmodule Jidoka.SessionTest do
     assert {:ok, request} =
              Session.chat_async("async-stored-123", "Hello", store: store, llm: llm)
 
-    assert {:ok, %HarnessSession{session_id: "async-stored-123"}, "async stored ok"} =
+    assert {:ok, %SessionData{session_id: "async-stored-123"}, "async stored ok"} =
              Session.await(request, timeout: 1_000)
   end
 
@@ -124,20 +123,20 @@ defmodule Jidoka.SessionTest do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}
 
-    assert {:ok, %HarnessSession{session_id: "stored-123"}} =
+    assert {:ok, %SessionData{session_id: "stored-123"}} =
              Session.start(spec(), id: "stored-123", store: store)
 
     llm = fn _intent, _journal, _ctx ->
       {:ok, %{type: :final, content: "stored session ok"}}
     end
 
-    assert {:ok, %HarnessSession{status: :finished} = session, %Turn.Result{content: "stored session ok"}} =
+    assert {:ok, %SessionData{status: :finished} = session, %Turn.Result{content: "stored session ok"}} =
              Session.run("stored-123", "Hello", store: store, llm: llm)
 
-    assert {:ok, %HarnessSession{status: :finished, result: %Turn.Result{}}} =
+    assert {:ok, %SessionData{status: :finished, result: %Turn.Result{}}} =
              Session.get(store, "stored-123")
 
-    assert {:ok, %Harness.Replay{session_id: "stored-123"}} = Session.replay(session)
+    assert {:ok, %Jidoka.Session.Replay{session_id: "stored-123"}} = Session.replay(session)
   end
 
   test "session start rejects conflicting id aliases" do

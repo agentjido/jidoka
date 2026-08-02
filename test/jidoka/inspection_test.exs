@@ -15,7 +15,7 @@ defmodule Jidoka.InspectionTest do
   alias Jidoka.Effect
   alias Jidoka.InspectionTest.Support.Agent
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
+  alias Jidoka.Session.Data, as: Session
   alias Jidoka.Review
 
   test "Jidoka.inspect returns an agent inspection view" do

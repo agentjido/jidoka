@@ -22,7 +22,7 @@ defmodule Jidoka.Runtime.LocalOperations do
         })
   """
   @spec operations(%{required(String.t() | atom()) => handler()}) ::
-          Jidoka.Runtime.Capabilities.operation_capability()
+          Jidoka.Operation.Capability.t()
   def operations(handlers) when is_map(handlers) do
     handlers = Map.new(handlers, fn {name, fun} -> {to_string(name), fun} end)
 

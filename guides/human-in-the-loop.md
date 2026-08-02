@@ -426,7 +426,7 @@ Key modules touched in this guide:
   and `deny/3`.
 - [`Jidoka.Runtime.Controls.OperationContext`](`Jidoka.Runtime.Controls.OperationContext`) -
   what the operation control receives.
-- [`Jidoka.Harness`](`Jidoka.Harness`) - resume and approval normalization
+- [`Jidoka.Review.Execution`](`Jidoka.Review.Execution`) - approval and denial coordination
   via `:approval` / `:approval_ttl_ms` options.
 
 ## Related Guides

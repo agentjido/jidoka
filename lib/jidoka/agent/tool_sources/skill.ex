@@ -1,12 +1,19 @@
 defmodule Jidoka.Agent.ToolSources.Skill do
   @moduledoc false
 
+  alias Jidoka.Adapter.Jido.Skill, as: JidoSkill
   alias Jidoka.Agent.Dsl.{SkillPath, SkillRef}
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Agent.ToolSources.Common
+  alias Jidoka.Operation.Source.JidoAction
 
   @spec action_modules(term()) :: [module()]
   def action_modules(%SkillRef{skill: skill}), do: Jidoka.Skill.action_modules([skill])
+
+  @spec source!(term(), [String.t()]) :: JidoAction.t()
+  def source!(%SkillRef{} = skill_ref, load_paths) do
+    JidoAction.new!(action_modules(skill_ref), operations!(skill_ref), metadata: metadata!(skill_ref, load_paths))
+  end
 
   @spec operations!(term()) :: [Jidoka.Agent.Spec.Operation.t()]
   def operations!(%SkillRef{skill: skill}) do
@@ -62,9 +69,7 @@ defmodule Jidoka.Agent.ToolSources.Skill do
   end
 
   defp skill_name(skill) when is_atom(skill) do
-    skill
-    |> Jido.AI.Skill.manifest()
-    |> Map.get(:name)
+    JidoSkill.name(skill)
   rescue
     _exception -> inspect(skill)
   end

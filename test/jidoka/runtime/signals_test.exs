@@ -1,7 +1,7 @@
-defmodule Jidoka.Runtime.SignalsTest do
+defmodule Jidoka.Adapter.Jido.SignalsTest do
   use ExUnit.Case, async: true
 
-  alias Jidoka.Runtime.Signals
+  alias Jidoka.Adapter.Jido.Signals
 
   test "builds turn run signals for AgentServer routing" do
     signal =

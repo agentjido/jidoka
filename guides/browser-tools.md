@@ -68,7 +68,7 @@ mode and allowlist that the runtime enforces.
 ╰───────────────────────────╯                │ expand mode
                                               ▼
               ╭──────────────────────────────────────────╮
-              │ Jidoka.Browser.Tools.{SearchWeb,         │
+              │ Jidoka.Adapter.Jido.Browser.Tools.{SearchWeb,         │
               │                       ReadPage,          │
               │                       SnapshotUrl}       │
               ╰────────────────────┬─────────────────────╯

@@ -4,10 +4,16 @@ defmodule Jidoka.Agent.ToolSources.AshResource do
   alias Jidoka.Agent.Dsl.AshResource
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Agent.ToolSources.Common
+  alias Jidoka.Operation.Source.JidoAction
   alias Jidoka.Review.Approval
 
   @spec action_modules(term()) :: [module()]
   def action_modules(%AshResource{} = ash_resource), do: ash_jido_actions(ash_resource)
+
+  @spec source!(term()) :: JidoAction.t()
+  def source!(%AshResource{} = ash_resource) do
+    JidoAction.new!(action_modules(ash_resource), operations!(ash_resource), metadata: metadata!(ash_resource))
+  end
 
   @spec operations!(term()) :: [Operation.t()]
   def operations!(%AshResource{} = ash_resource) do

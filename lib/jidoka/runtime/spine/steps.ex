@@ -174,7 +174,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
 
   defp memory_contract(memory) do
     %{
-      entries: Enum.map(memory.entries, &Jidoka.project/1),
+      entries: Enum.map(memory.entries, &Jidoka.Projection.Memory.project/1),
       count: length(memory.entries)
     }
   end

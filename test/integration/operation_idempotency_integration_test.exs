@@ -6,7 +6,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.IntegrationSupport.ApprovalControl
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
@@ -159,14 +159,14 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
       flunk("operation should not be called when the journal already has its result")
     end
 
-    assert {:hibernate, %AgentSnapshot{} = prompt_snapshot} =
+    assert {:hibernate, %Snapshot{} = prompt_snapshot} =
              Jidoka.turn(spec, "Weather in Paris?",
                llm: llm,
                operations: operations,
                checkpoint: :after_each_phase
              )
 
-    assert {:hibernate, %AgentSnapshot{} = operation_snapshot} =
+    assert {:hibernate, %Snapshot{} = operation_snapshot} =
              Jidoka.resume(prompt_snapshot,
                llm: llm,
                operations: operations,
@@ -184,7 +184,7 @@ defmodule Jidoka.OperationIdempotencyIntegrationTest do
     %Turn.State{} = operation_state = operation_snapshot.turn_state
 
     replay_snapshot =
-      %AgentSnapshot{
+      %Snapshot{
         operation_snapshot
         | turn_state: %Turn.State{operation_state | journal: journal}
       }

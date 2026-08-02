@@ -2,14 +2,13 @@ defmodule Jidoka do
   @moduledoc """
   Public facade for Jidoka.
 
-  This module exposes the stable application-facing surface for the Jidoka agent
-  harness:
+  This module exposes the stable application-facing surface for Jidoka:
 
   * an immutable `Jidoka.Agent.Spec`;
   * a compiled `Jidoka.Turn.Plan`;
   * a Runic-backed pure planning workflow;
   * an `Effect.Intent` / `Effect.Result` interpreter boundary;
-  * a thin `Jidoka.Harness` execution boundary;
+  * explicit turn, session, and review use cases;
   * hibernate/resume from a phase-boundary snapshot.
 
   The facade intentionally uses short, stable verbs for the main workflow:
@@ -30,12 +29,14 @@ defmodule Jidoka do
   alias Jidoka.Agent
   alias Jidoka.Chat
   alias Jidoka.Error
-  alias Jidoka.Harness
-  alias Jidoka.Harness.Session
+  alias Jidoka.Review.Execution, as: ReviewExecution
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Store
   alias Jidoka.Inspection
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
+  alias Jidoka.Turn.Execution, as: TurnExecution
 
   @type agent_input :: module() | Agent.Spec.t() | keyword() | map()
   @type plan_input :: module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
@@ -48,7 +49,7 @@ defmodule Jidoka do
 
   @type run_result ::
           {:ok, Turn.Result.t()}
-          | {:hibernate, AgentSnapshot.t()}
+          | {:hibernate, Snapshot.t()}
           | {:error, term()}
 
   defguardp is_server_ref(server)
@@ -102,7 +103,7 @@ defmodule Jidoka do
   Starts a Jidoka DSL agent under the default `Jidoka.Jido` process tree.
 
   The started process is a `Jido.AgentServer`; incoming Jidoka turn signals are
-  routed to the Runic harness and the result is written back to Jido agent state.
+  routed to turn execution and the result is written back to Jido agent state.
   """
   @spec start_agent(module() | Jido.Agent.t(), keyword()) :: DynamicSupervisor.on_start_child()
   def start_agent(agent, opts \\ []) when is_atom(agent) or is_struct(agent) do
@@ -219,31 +220,10 @@ defmodule Jidoka do
   @spec chat(chat_input(), String.t(), runtime_opts()) ::
           {:ok, String.t()}
           | {:ok, Jidoka.Session.t(), String.t()}
-          | {:hibernate, AgentSnapshot.t()}
-          | {:hibernate, Jidoka.Session.t(), AgentSnapshot.t()}
+          | {:hibernate, Snapshot.t()}
+          | {:hibernate, Jidoka.Session.t(), Snapshot.t()}
           | {:error, term()}
-  def chat(spec_or_server, input, opts \\ [])
-
-  def chat(%Session{} = session, input, opts) when is_binary(input) and is_list(opts) do
-    case Jidoka.Session.chat(session, input, opts) do
-      {:ok, session, content} -> {:ok, session, content}
-      {:hibernate, session, snapshot} -> {:hibernate, session, snapshot}
-      {:error, reason} -> {:error, Error.normalize(reason, operation: :chat, phase: :session)}
-    end
-  end
-
-  def chat(server, input, opts)
-      when is_binary(input) and is_server_ref(server) and is_list(opts) do
-    with {:ok, %Turn.Result{content: content}} <- turn(server, input, opts) do
-      {:ok, content}
-    end
-  end
-
-  def chat(spec_input, input, opts) when is_binary(input) do
-    with {:ok, %Turn.Result{content: content}} <- turn(spec_input, input, opts) do
-      {:ok, content}
-    end
-  end
+  def chat(spec_or_server, input, opts \\ []), do: Chat.run(spec_or_server, input, opts)
 
   @doc """
   Starts one chat request asynchronously and returns a request handle.
@@ -310,11 +290,11 @@ defmodule Jidoka do
 
   def turn(server, input, opts)
       when (is_binary(input) or is_list(input)) and is_server_ref(server) and is_list(opts) do
-    Jidoka.Facade.AgentServer.turn(server, input, opts)
+    Jidoka.Adapter.Jido.AgentServer.turn(server, input, opts)
   end
 
   def turn(spec_or_plan, request_input, opts) do
-    case Harness.run_turn(spec_or_plan, request_input, opts) do
+    case TurnExecution.run(spec_or_plan, request_input, opts) do
       {:ok, _result} = ok ->
         ok
 
@@ -333,19 +313,19 @@ defmodule Jidoka do
   needed for direct `turn/3` or `chat/3` calls.
   """
   @spec await_agent(server_ref(), keyword()) :: {:ok, map()} | {:error, term()}
-  def await_agent(server, opts \\ []), do: Jidoka.Facade.AgentServer.await(server, opts)
+  def await_agent(server, opts \\ []), do: Jidoka.Adapter.Jido.AgentServer.await(server, opts)
 
   @doc """
   Resumes from a durable agent snapshot.
 
-  The snapshot may be an `AgentSnapshot` struct or the authenticated opaque
-  string returned by `Jidoka.Runtime.AgentSnapshot.serialize/1`.
-  Resume continues through the same harness boundary as `turn/3`, so callers
+  The snapshot may be an `Snapshot` struct or the authenticated opaque
+  string returned by `Jidoka.Snapshot.serialize/1`.
+  Resume continues through the same turn execution boundary as `turn/3`, so callers
   provide the same runtime capabilities plus any required approval response.
   """
-  @spec resume(AgentSnapshot.t() | String.t(), runtime_opts()) :: run_result()
+  @spec resume(Snapshot.t() | String.t(), runtime_opts()) :: run_result()
   def resume(snapshot_input, opts \\ []) do
-    case Harness.resume(snapshot_input, opts) do
+    case TurnExecution.resume(snapshot_input, opts) do
       {:ok, _result} = ok ->
         ok
 
@@ -361,22 +341,11 @@ defmodule Jidoka do
   Lists pending human-review requests from a snapshot, session, or session store.
 
   For snapshots, this reads the review request embedded in snapshot metadata.
-  For sessions and stores, it delegates to the harness session store.
+  For sessions and stores, it uses the session store port.
   """
-  @spec pending_reviews(AgentSnapshot.t() | Session.t() | Harness.Store.store() | String.t()) ::
+  @spec pending_reviews(Snapshot.t() | Session.t() | Store.store() | String.t()) ::
           {:ok, [Review.Request.t()]} | {:error, term()}
-  def pending_reviews(%Session{} = session), do: Harness.pending_reviews(session)
-
-  def pending_reviews(%AgentSnapshot{} = snapshot), do: pending_reviews_from_snapshot(snapshot)
-
-  def pending_reviews(snapshot_input) when is_binary(snapshot_input) do
-    case AgentSnapshot.from_input(snapshot_input) do
-      {:ok, snapshot} -> pending_reviews(snapshot)
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  def pending_reviews(store), do: Harness.pending_reviews(store)
+  def pending_reviews(target), do: ReviewExecution.pending(target)
 
   @doc """
   Approves a pending review and resumes the target.
@@ -385,11 +354,10 @@ defmodule Jidoka do
   convenience wrapper around `Jidoka.Review.Response.approve/2` plus
   `resume/2`.
   """
-  @spec approve(AgentSnapshot.t() | Session.t() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
-          run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), AgentSnapshot.t()}
+  @spec approve(Snapshot.t() | Session.t() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
+          run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), Snapshot.t()}
   def approve(snapshot_or_session, review_or_id, opts \\ []) do
-    response = Review.Response.approve(review_or_id, review_response_opts(opts))
-    resume_review_target(snapshot_or_session, response, opts)
+    ReviewExecution.approve(snapshot_or_session, review_or_id, opts)
   end
 
   @doc """
@@ -399,11 +367,10 @@ defmodule Jidoka do
   when the application wants a single facade call instead of manually building a
   `Jidoka.Review.Response`.
   """
-  @spec deny(AgentSnapshot.t() | Session.t() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
-          run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), AgentSnapshot.t()}
+  @spec deny(Snapshot.t() | Session.t() | String.t(), Review.Request.t() | String.t(), runtime_opts()) ::
+          run_result() | {:ok, Session.t(), Turn.Result.t()} | {:hibernate, Session.t(), Snapshot.t()}
   def deny(snapshot_or_session, review_or_id, opts \\ []) do
-    response = Review.Response.deny(review_or_id, review_response_opts(opts))
-    resume_review_target(snapshot_or_session, response, opts)
+    ReviewExecution.deny(snapshot_or_session, review_or_id, opts)
   end
 
   @doc """
@@ -449,36 +416,6 @@ defmodule Jidoka do
       {:error, reason} ->
         {:error, Error.normalize(reason, operation: :preflight)}
     end
-  end
-
-  defp pending_reviews_from_snapshot(%AgentSnapshot{metadata: metadata}) when is_map(metadata) do
-    case Map.get(metadata, "pending_review", Map.get(metadata, :pending_review)) do
-      nil ->
-        {:ok, []}
-
-      review ->
-        with {:ok, review} <- Review.Request.from_input(review) do
-          {:ok, [review]}
-        end
-    end
-  end
-
-  defp resume_review_target(%Session{} = session, %Review.Response{} = response, opts) do
-    Harness.resume_session(session, resume_review_opts(opts, response))
-  end
-
-  defp resume_review_target(snapshot_input, %Review.Response{} = response, opts) do
-    resume(snapshot_input, resume_review_opts(opts, response))
-  end
-
-  defp review_response_opts(opts) do
-    Keyword.take(opts, [:reason, :responded_at_ms, :metadata])
-  end
-
-  defp resume_review_opts(opts, %Review.Response{} = response) do
-    opts
-    |> Keyword.drop([:reason, :responded_at_ms, :metadata])
-    |> Keyword.put(:approval, response)
   end
 
   @doc """

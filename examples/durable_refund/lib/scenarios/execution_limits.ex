@@ -3,7 +3,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.ExecutionLimits do
 
   alias Jidoka.Agent.Spec
   alias Jidoka.Agent.Spec.Controls
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Schema
   alias JidokaExamples.DurableRefund.Actions.IssueRefund
   alias JidokaExamples.DurableRefund.Agent
@@ -28,7 +28,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.ExecutionLimits do
     turn_result =
       Jidoka.turn(spec, "Issue the refund",
         llm: operation_llm,
-        operations: JidoActions.operations([IssueRefund]),
+        operations: Actions.operations([IssueRefund]),
         operation_context: %{refund_counter: counter}
       )
 

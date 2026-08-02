@@ -47,7 +47,7 @@ defmodule JidokaTest do
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Effect
   alias Jidoka.Turn
   alias JidokaTest.Support.TimeAgent
@@ -321,7 +321,7 @@ defmodule JidokaTest do
       {:error, :unexpected_operation}
     end
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(spec, Turn.Request.new!(input: "Say hello"),
                llm: llm,
                operations: operations,
@@ -331,10 +331,10 @@ defmodule JidokaTest do
     assert snapshot.cursor.phase == :after_prompt
     assert Turn.State.current_pending_effect(snapshot.turn_state).kind == :llm
 
-    assert {:ok, %AgentSnapshot{} = restored_snapshot} =
+    assert {:ok, %Snapshot{} = restored_snapshot} =
              snapshot
              |> portable_map()
-             |> AgentSnapshot.new()
+             |> Snapshot.new()
 
     assert {:ok, %Turn.Result{content: "hello"} = result} =
              Jidoka.resume(restored_snapshot, llm: llm, operations: operations)
@@ -372,7 +372,7 @@ defmodule JidokaTest do
         end
       })
 
-    assert {:hibernate, %AgentSnapshot{} = prompt_snapshot} =
+    assert {:hibernate, %Snapshot{} = prompt_snapshot} =
              Jidoka.turn(spec, Turn.Request.new!(input: "Weather in Paris?"),
                llm: llm,
                operations: operations,
@@ -382,7 +382,7 @@ defmodule JidokaTest do
     assert prompt_snapshot.cursor.phase == :after_prompt
     assert Turn.State.current_pending_effect(prompt_snapshot.turn_state).kind == :llm
 
-    assert {:hibernate, %AgentSnapshot{} = operation_snapshot} =
+    assert {:hibernate, %Snapshot{} = operation_snapshot} =
              Jidoka.resume(prompt_snapshot,
                llm: llm,
                operations: operations,
@@ -393,10 +393,10 @@ defmodule JidokaTest do
     assert operation_snapshot.cursor.metadata["effect_kind"] == :operation
     assert Turn.State.current_pending_effect(operation_snapshot.turn_state).kind == :operation
 
-    assert {:ok, %AgentSnapshot{} = restored_operation_snapshot} =
+    assert {:ok, %Snapshot{} = restored_operation_snapshot} =
              operation_snapshot
              |> portable_map()
-             |> AgentSnapshot.new()
+             |> Snapshot.new()
 
     assert {:ok, %Turn.Result{content: "Paris is sunny."}} =
              Jidoka.resume(restored_operation_snapshot, llm: llm, operations: operations)

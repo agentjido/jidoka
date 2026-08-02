@@ -4,7 +4,7 @@ defmodule JidokaExamples.DurableRefund.ExecutionAndContinuationTest do
   alias Jidoka.Cancellation
   alias Jidoka.Error.ExecutionError
   alias Jidoka.Event
-  alias Jidoka.Harness.SessionLineage
+  alias Jidoka.Session.Lineage
   alias Jidoka.Stream
   alias JidokaExamples.DurableRefund.Scenario
 
@@ -115,7 +115,7 @@ defmodule JidokaExamples.DurableRefund.ExecutionAndContinuationTest do
       assert report.source.session_id != report.branch.session_id
       assert report.source.lineage == nil
 
-      assert %SessionLineage{
+      assert %Lineage{
                root_session_id: root_id,
                parent_session_id: parent_id,
                depth: 1

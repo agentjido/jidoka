@@ -3,8 +3,8 @@ defmodule Jidoka.Parity.ResumableToolApprovalTest do
 
   alias Jidoka.Effect
   alias Jidoka.Error.ExecutionError
-  alias Jidoka.Runtime.AgentSnapshot
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Snapshot
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Schema
   alias Jidoka.Turn
 
@@ -86,7 +86,7 @@ defmodule Jidoka.Parity.ResumableToolApprovalTest do
     on_exit(fn -> if Process.alive?(call_counter), do: Elixir.Agent.stop(call_counter) end)
 
     llm = scripted_llm()
-    operations = JidoActions.operations([IssueRefund])
+    operations = Actions.operations([IssueRefund])
     reviewed_arguments = reviewed_arguments()
 
     assert {:hibernate, snapshot} = start_review(llm, call_counter, 1_000)
@@ -122,14 +122,14 @@ defmodule Jidoka.Parity.ResumableToolApprovalTest do
 
     assert call_count(call_counter) == 0
 
-    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
-    assert {:ok, ^snapshot} = AgentSnapshot.deserialize(serialized)
-    assert snapshot.schema_version == AgentSnapshot.schema_version()
+    assert {:ok, serialized} = Snapshot.serialize(snapshot)
+    assert {:ok, ^snapshot} = Snapshot.deserialize(serialized)
+    assert snapshot.schema_version == Snapshot.schema_version()
 
     tampered_serialized = tamper_payload(serialized)
 
     assert {:error, :invalid_snapshot_signature} =
-             AgentSnapshot.deserialize(tampered_serialized)
+             Snapshot.deserialize(tampered_serialized)
 
     assert {:error,
             %ExecutionError{
@@ -262,7 +262,7 @@ defmodule Jidoka.Parity.ResumableToolApprovalTest do
 
     assert {:hibernate, denied_snapshot} = start_review(llm, call_counter, 2_000)
     assert {:ok, [denied_review]} = Jidoka.pending_reviews(denied_snapshot)
-    assert {:ok, denied_serialized} = AgentSnapshot.serialize(denied_snapshot)
+    assert {:ok, denied_serialized} = Snapshot.serialize(denied_snapshot)
 
     assert {:error,
             %ExecutionError{

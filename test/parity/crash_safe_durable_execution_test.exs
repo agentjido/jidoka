@@ -6,11 +6,11 @@ defmodule Jidoka.Parity.CrashSafeDurableExecutionTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Error.ExecutionError
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.Store
-  alias Jidoka.Harness.Store.InMemory
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Store
+  alias Jidoka.Session.Store.InMemory
   alias Jidoka.IntegrationSupport.ApprovalControl
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
@@ -37,7 +37,7 @@ defmodule Jidoka.Parity.CrashSafeDurableExecutionTest do
         end
       })
 
-    checkpoint_hook = fn stage, %AgentSnapshot{} = snapshot, _stored ->
+    checkpoint_hook = fn stage, %Snapshot{} = snapshot, _stored ->
       if stage == :result and snapshot.cursor.metadata["effect_kind"] == :operation do
         send(test_pid, {:operation_result_durable, snapshot})
 
@@ -63,7 +63,7 @@ defmodule Jidoka.Parity.CrashSafeDurableExecutionTest do
         )
       end)
 
-    assert_receive {:operation_result_durable, %AgentSnapshot{} = durable_snapshot}, 1_000
+    assert_receive {:operation_result_durable, %Snapshot{} = durable_snapshot}, 1_000
     assert operation_result_recorded?(durable_snapshot)
     assert Elixir.Agent.get(calls, & &1) == 1
 
@@ -253,11 +253,11 @@ defmodule Jidoka.Parity.CrashSafeDurableExecutionTest do
     end
   end
 
-  defp operation_result_recorded?(%AgentSnapshot{turn_state: %{journal: journal}}) do
+  defp operation_result_recorded?(%Snapshot{turn_state: %{journal: journal}}) do
     Enum.any?(journal.results, fn {_id, result} -> result.kind == :operation end)
   end
 
-  defp incomplete_unsafe_intent?(%AgentSnapshot{turn_state: %{journal: journal}}) do
+  defp incomplete_unsafe_intent?(%Snapshot{turn_state: %{journal: journal}}) do
     Enum.any?(journal.intents, fn {id, intent} ->
       intent.kind == :operation and intent.idempotency == :unsafe_once and
         not Map.has_key?(journal.results, id)

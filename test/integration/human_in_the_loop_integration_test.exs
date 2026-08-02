@@ -4,14 +4,14 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
   import Jidoka.TestSupport, only: [count_results: 2, event_index: 2, operation_capability_index: 2, timeline: 1]
 
   test "operation interrupt hibernates with a durable approval request" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              run_interrupted_turn(:approval_required,
                approval_ttl_ms: 30_000,
                clock: clock(1_000)
@@ -47,21 +47,21 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
              &match?(%{event: :capability_call_started, operation: "review_lookup"}, &1)
            )
 
-    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
+    assert {:ok, serialized} = Snapshot.serialize(snapshot)
 
-    assert {:ok, %AgentSnapshot{cursor: %{phase: :review}}} =
-             AgentSnapshot.deserialize(serialized)
+    assert {:ok, %Snapshot{cursor: %{phase: :review}}} =
+             Snapshot.deserialize(serialized)
 
     refute_received {:review_lookup_called, _id}
   end
 
   test "approval resumes a serialized snapshot and executes the pending operation once" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              run_interrupted_turn(:approval_required, clock: clock(2_000))
 
     interrupt = snapshot.turn_state.pending_interrupt
     approval = Review.Response.approve(interrupt, responded_at_ms: 2_001)
-    serialized = AgentSnapshot.serialize!(snapshot)
+    serialized = Snapshot.serialize!(snapshot)
 
     assert {:ok, %Turn.Result{content: "reviewed is approved."} = result} =
              Jidoka.resume(serialized,
@@ -86,10 +86,10 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   test "resume without approval keeps the review snapshot hibernated" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              run_interrupted_turn(:approval_required, clock: clock(3_000))
 
-    assert {:hibernate, %AgentSnapshot{} = same_snapshot} =
+    assert {:hibernate, %Snapshot{} = same_snapshot} =
              Jidoka.resume(snapshot, llm: llm(), operations: operations())
 
     assert same_snapshot.snapshot_id == snapshot.snapshot_id
@@ -102,7 +102,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   test "denial resumes to a deterministic approval error without running the operation" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              run_interrupted_turn(:approval_required, clock: clock(4_000))
 
     interrupt = snapshot.turn_state.pending_interrupt
@@ -124,7 +124,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   test "expired approval fails without running the pending operation" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              run_interrupted_turn(:approval_required, approval_ttl_ms: 10, clock: clock(5_000))
 
     interrupt = snapshot.turn_state.pending_interrupt
@@ -163,7 +163,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   test "malformed approval response is rejected before resume" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              run_interrupted_turn(:approval_required, clock: clock(6_000))
 
     approval = %{interrupt_id: snapshot.turn_state.pending_interrupt.id, decision: :maybe}
@@ -178,7 +178,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
   end
 
   test "approval response must target the pending interrupt" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              run_interrupted_turn(:approval_required, clock: clock(7_000))
 
     approval = Review.Response.approve("intr:other", responded_at_ms: 7_001)

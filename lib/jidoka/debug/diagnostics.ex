@@ -3,9 +3,9 @@ defmodule Jidoka.Debug.Diagnostics do
 
   alias Jidoka.Debug.ReplayDiagnostics
   alias Jidoka.Effect
-  alias Jidoka.Harness
-  alias Jidoka.Harness.{Replay, Session}
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Replay
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   @spec diagnose(term()) :: {:ok, ReplayDiagnostics.t()} | {:error, term()}
@@ -18,7 +18,7 @@ defmodule Jidoka.Debug.Diagnostics do
     )
   end
 
-  def diagnose(%AgentSnapshot{} = snapshot) do
+  def diagnose(%Snapshot{} = snapshot) do
     diagnostics_from_parts(
       journal: snapshot.turn_state.journal,
       events: snapshot.turn_state.events,
@@ -29,7 +29,7 @@ defmodule Jidoka.Debug.Diagnostics do
   end
 
   def diagnose(%Session{} = session) do
-    with {:ok, replay} <- Harness.replay(session), do: diagnose(replay)
+    with {:ok, replay} <- Replay.from_session(session), do: diagnose(replay)
   end
 
   def diagnose(%Replay{} = replay) do
@@ -73,11 +73,11 @@ defmodule Jidoka.Debug.Diagnostics do
       intent_count: length(intents),
       result_count: length(results),
       event_count: length(events),
-      missing_effect_results: Enum.map(missing, &Jidoka.project/1),
-      failed_effect_results: Enum.map(failed_results, &Jidoka.project/1),
-      unsafe_effects: Enum.map(unsafe, &Jidoka.project/1),
-      pending_reviews: Enum.map(pending_reviews, &Jidoka.project/1),
-      failed_events: Enum.map(failed_events, &Jidoka.project/1),
+      missing_effect_results: Enum.map(missing, &Jidoka.Projection.project/1),
+      failed_effect_results: Enum.map(failed_results, &Jidoka.Projection.project/1),
+      unsafe_effects: Enum.map(unsafe, &Jidoka.Projection.project/1),
+      pending_reviews: Enum.map(pending_reviews, &Jidoka.Projection.project/1),
+      failed_events: Enum.map(failed_events, &Jidoka.Projection.project/1),
       warnings: warnings(missing, failed_results, unsafe, pending_reviews, failed_events),
       metadata: Keyword.get(parts, :metadata, %{})
     )
@@ -121,7 +121,7 @@ defmodule Jidoka.Debug.Diagnostics do
     |> Map.values()
   end
 
-  defp pending_reviews(%AgentSnapshot{metadata: metadata}) do
+  defp pending_reviews(%Snapshot{metadata: metadata}) do
     metadata
     |> map_get(:pending_review)
     |> List.wrap()

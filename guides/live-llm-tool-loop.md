@@ -114,7 +114,7 @@ the final text.
 
 ## Decision Protocol
 
-`Jidoka.Runtime.ReqLLM` currently uses a constrained JSON decision protocol.
+`Jidoka.Adapter.ReqLLM` currently uses a constrained JSON decision protocol.
 The system prompt tells the model to return one of these shapes.
 
 A final answer has this shape:
@@ -141,7 +141,7 @@ A parallel operation request has this shape:
 }
 ```
 
-`Jidoka.Runtime.ReqLLM.Decision` parses the provider text into
+`Jidoka.Adapter.ReqLLM.Decision` parses the provider text into
 `Jidoka.Effect.LLMDecision`. The turn runner then plans effect intents. The
 effect interpreter executes them through injected runtime capabilities.
 
@@ -197,8 +197,8 @@ failure must not hide a deterministic Jidoka regression.
 
 ## Reference
 
-- [`Jidoka.Runtime.ReqLLM`](`Jidoka.Runtime.ReqLLM`) - live LLM capability.
-- [`Jidoka.Runtime.ReqLLM.Decision`](`Jidoka.Runtime.ReqLLM.Decision`) -
+- [`Jidoka.Adapter.ReqLLM`](`Jidoka.Adapter.ReqLLM`) - live LLM capability.
+- [`Jidoka.Adapter.ReqLLM.Decision`](`Jidoka.Adapter.ReqLLM.Decision`) -
   decision parser.
 - [`Jidoka.Effect.LLMDecision`](`Jidoka.Effect.LLMDecision`) - normalized model
   decision data.

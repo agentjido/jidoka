@@ -141,7 +141,7 @@ Every operation declares one of:
   compiling the plan.
 
 This guide covers the authoring path. Full idempotency, pause/resume, and replay
-behavior live in [Runtime And Harness](runtime-and-harness.md).
+behavior live in [Runtime And Execution Layers](runtime-and-harness.md).
 
 ## How To
 

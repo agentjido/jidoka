@@ -9,7 +9,7 @@ defmodule Jidoka.Workflow.Lua do
   """
 
   alias Jidoka.Workflow.Lua.CallTrace
-  alias Jidoka.Workflow.Lua.Plan
+  alias Jidoka.Adapter.Runic.LuaPlan, as: Plan
   alias Jidoka.Workflow.Lua.Policy
 
   @doc """

@@ -116,7 +116,7 @@ end
 {:ok, resumed} =
   Jidoka.resume(snapshot,
     llm: fake_llm,
-    operations: Jidoka.Runtime.JidoActions.operations([ContractLookup])
+    operations: Jidoka.Adapter.Jido.Actions.operations([ContractLookup])
   )
 
 resumed.content

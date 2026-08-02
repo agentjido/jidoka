@@ -2,7 +2,7 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Effect
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
   alias JidokaExamples.SupportAgent.Agent
   alias JidokaExamples.SupportAgent.Scenario
@@ -100,8 +100,8 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
       assert review.arguments == %{"order_id" => "A1001"}
       assert review.reason == :authenticated_order_access
 
-      assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
-      assert {:ok, %AgentSnapshot{} = restored} = AgentSnapshot.deserialize(serialized)
+      assert {:ok, serialized} = Snapshot.serialize(snapshot)
+      assert {:ok, %Snapshot{} = restored} = Snapshot.deserialize(serialized)
       assert restored == snapshot
 
       assert {:ok, %Turn.Result{} = result} =
@@ -144,7 +144,7 @@ defmodule JidokaExamples.SupportAgent.ControlledToolCallTest do
       assert report.answer =~ "Order A1001 is in transit with UPS."
       assert report.operation_calls == 1
       assert report.review.operation == "lookup_order"
-      assert report.schema_version == AgentSnapshot.schema_version()
+      assert report.schema_version == Snapshot.schema_version()
       assert report.serialized_bytes > 0
     end
 

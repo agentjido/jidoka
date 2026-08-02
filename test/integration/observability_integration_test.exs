@@ -4,7 +4,7 @@ defmodule Jidoka.ObservabilityIntegrationTest do
   alias Jidoka.Agent
   alias Jidoka.Eval
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
+  alias Jidoka.Session.Data, as: Session
   alias Jidoka.Trace
   alias Jidoka.Trace.Policy
   alias Jidoka.Trace.Sink.InMemory

@@ -383,5 +383,5 @@ assistant content.
   by tools that also write memory.
 - [Inspection And Preflight](inspection-and-preflight.md) - how to see
   exactly what memory contributes to the assembled prompt.
-- [Runtime And Harness](runtime-and-harness.md) - sessions, snapshots, and
+- [Runtime And Execution Layers](runtime-and-harness.md) - sessions, snapshots, and
   how capture interacts with hibernation.

@@ -8,6 +8,7 @@ defmodule Jidoka.Chat.Request do
   """
 
   alias Jidoka.Cancellation
+  alias Jidoka.Chat
   alias Jidoka.Chat.RequestController
 
   @type t :: %__MODULE__{
@@ -53,7 +54,7 @@ defmodule Jidoka.Chat.Request do
   @spec start(term(), String.t(), keyword()) :: {:ok, t()} | {:error, term()}
   def start(target, input, opts) when is_binary(input) and is_list(opts) do
     start_fun(target, input, opts, fn prepared_opts ->
-      Jidoka.chat(target, input, prepared_opts)
+      Chat.run(target, input, prepared_opts)
     end)
   end
 
@@ -198,6 +199,6 @@ defmodule Jidoka.Chat.Request do
     end
   end
 
-  defp session_id(%Jidoka.Harness.Session{session_id: session_id}), do: session_id
+  defp session_id(%Jidoka.Session.Data{session_id: session_id}), do: session_id
   defp session_id(_target), do: nil
 end

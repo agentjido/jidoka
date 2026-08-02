@@ -192,6 +192,7 @@ defmodule Jidoka.MixProject do
       "guides/errors-and-config-reference.md",
 
       # ── Architecture / Internals ─────────────────────────────────────────
+      "guides/architecture-boundaries.md",
       "guides/runic-spine-internals.md",
       "guides/turn-runner-and-effect-interpreter.md",
       "guides/runtime-capabilities-internals.md",
@@ -216,7 +217,7 @@ defmodule Jidoka.MixProject do
       Reference:
         ~r{guides/(agent-spec-contract|turn-and-effect-contracts|operation-source-contracts|memory-contracts|import-and-snapshot-contracts|errors-and-config-reference)\.md},
       "Architecture And Internals":
-        ~r{guides/(runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
+        ~r{guides/(architecture-boundaries|runic-spine-internals|turn-runner-and-effect-interpreter|runtime-capabilities-internals|projection-internals|contributor-testing)\.md},
       Help: ~r{guides/(glossary|troubleshooting)\.md},
       Examples: ~r{examples/(?:README|[^/]+/README)\.md},
       Livebooks: ~r{(?:examples/.+|guides/livebooks)/.*\.livemd},
@@ -246,22 +247,27 @@ defmodule Jidoka.MixProject do
       Controls: [
         ~r/^Jidoka\.Controls\./
       ],
+      "Application Use Cases": [
+        Jidoka.Turn.Execution,
+        Jidoka.Session.Execution,
+        Jidoka.Review.Execution
+      ],
       "Turns And Effects": [
         ~r/^Jidoka\.Chat\./,
         ~r/^Jidoka\.Turn\./,
         ~r/^Jidoka\.Effect\./,
+        Jidoka.Operation.Capability,
         Jidoka.Event,
         Jidoka.Usage
       ],
       "Sessions, Reviews, And Handoffs": [
-        Jidoka.Runtime.AgentSnapshot,
-        ~r/^Jidoka\.Harness\.(Session|Store)(\.|$)/,
+        Jidoka.Snapshot,
+        ~r/^Jidoka\.Session\.(Data|Store|Lease|Lineage|Replay|Transitions)(\.|$)/,
         ~r/^Jidoka\.Review(\.|$)/,
         ~r/^Jidoka\.Handoff(\.|$)/
       ],
       "Tools And Operation Sources": [
         Jidoka.Browser,
-        ~r/^Jidoka\.Browser\.Tools\./,
         ~r/^Jidoka\.Operation\.Source(\.|$)/,
         Jidoka.Skill,
         ~r/^Jidoka\.Workflow(\.|$)/
@@ -274,25 +280,22 @@ defmodule Jidoka.MixProject do
         ~r/^Jidoka\.Debug\./,
         Jidoka.Inspection,
         Jidoka.Inspection.Preflight,
-        Jidoka.Projection
+        ~r/^Jidoka\.Projection(\.|$)/
       ],
       "Memory, Trace, And Eval": [
         ~r/^Jidoka\.Memory(\.|$)/,
         ~r/^Jidoka\.Trace(\.|$)/,
         ~r/^Jidoka\.Eval(\.|$)/
       ],
-      "Jido Integration": [
+      "External Adapters": [
         Jidoka.Jido,
-        ~r/^Jidoka\.Runtime\.Actions\./,
-        Jidoka.Runtime.AgentServerState,
-        Jidoka.Runtime.Signals
+        ~r/^Jidoka\.Adapter\./
       ],
       Livebook: [
         Jidoka.Kino
       ],
       "Runtime Internals": [
         Jidoka.Harness,
-        Jidoka.Harness.Replay,
         ~r/^Jidoka\.Runtime\./
       ],
       "Configuration And Errors": [
@@ -307,7 +310,11 @@ defmodule Jidoka.MixProject do
   defp nested_module_prefixes do
     [
       Jidoka.Agent.Spec,
-      Jidoka.Browser.Tools,
+      Jidoka.Adapter,
+      Jidoka.Adapter.Jido,
+      Jidoka.Adapter.ReqLLM,
+      Jidoka.Adapter.Runic,
+      Jidoka.Adapter.Jido.Browser.Tools,
       Jidoka.Chat,
       Jidoka.Controls,
       Jidoka.Effect,
@@ -322,6 +329,7 @@ defmodule Jidoka.MixProject do
       Jidoka.Operation.Source,
       Jidoka.Review,
       Jidoka.Runtime,
+      Jidoka.Session,
       Jidoka.Trace,
       Jidoka.Turn,
       Jidoka.Workflow
@@ -336,6 +344,8 @@ defmodule Jidoka.MixProject do
       quality: [
         "format --check-formatted",
         "compile --warnings-as-errors",
+        "xref graph --format cycles --label compile-connected --fail-above 0",
+        "cmd env MIX_ENV=test mix test test/architecture/boundaries_test.exs",
         "credo",
         "dialyzer",
         "doctor --raise"

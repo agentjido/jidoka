@@ -9,11 +9,13 @@ defmodule Jidoka.Operation.Source do
 
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
+  alias Jidoka.Operation.Capability
 
   @type source :: struct()
   @type compiled :: %{
           operations: [Operation.t()],
-          capability: Jidoka.Runtime.Capabilities.operation_capability()
+          capability: Capability.t(),
+          metadata: [map()]
         }
 
   @doc "Returns the model-visible operations exposed by a source."
@@ -21,7 +23,12 @@ defmodule Jidoka.Operation.Source do
 
   @doc "Returns the runtime capability that executes operations from a source."
   @callback capability(source(), keyword()) ::
-              {:ok, Jidoka.Runtime.Capabilities.operation_capability()} | {:error, term()}
+              {:ok, Capability.t()} | {:error, term()}
+
+  @doc "Returns portable source metadata when the source supports it."
+  @callback metadata(source(), keyword()) :: {:ok, [map()]} | {:error, term()}
+
+  @optional_callbacks metadata: 2
 
   @doc "Loads model-visible operations from one operation source."
   @spec operations(source(), keyword()) :: {:ok, [Operation.t()]} | {:error, term()}
@@ -31,9 +38,19 @@ defmodule Jidoka.Operation.Source do
 
   @doc "Loads the runtime capability from one operation source."
   @spec capability(source(), keyword()) ::
-          {:ok, Jidoka.Runtime.Capabilities.operation_capability()} | {:error, term()}
+          {:ok, Capability.t()} | {:error, term()}
   def capability(%module{} = source, opts \\ []) do
     module.capability(source, opts)
+  end
+
+  @doc "Loads portable metadata from one operation source."
+  @spec metadata(source(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def metadata(%module{} = source, opts \\ []) do
+    if function_exported?(module, :metadata, 2) do
+      module.metadata(source, opts)
+    else
+      {:ok, []}
+    end
   end
 
   @doc "Compiles one or more sources into operation data and one routed capability."
@@ -46,7 +63,8 @@ defmodule Jidoka.Operation.Source do
       {:ok,
        %{
          operations: Enum.flat_map(entries, & &1.operations),
-         capability: routed_capability(entries)
+         capability: routed_capability(entries),
+         metadata: Enum.flat_map(entries, & &1.metadata)
        }}
     end
   end
@@ -54,8 +72,9 @@ defmodule Jidoka.Operation.Source do
   defp compile_sources(sources, opts) do
     Enum.reduce_while(sources, {:ok, []}, fn source, {:ok, entries} ->
       with {:ok, operations} <- operations(source, opts),
-           {:ok, capability} <- capability(source, opts) do
-        entry = %{source: source, operations: operations, capability: capability}
+           {:ok, capability} <- capability(source, opts),
+           {:ok, metadata} <- metadata(source, opts) do
+        entry = %{source: source, operations: operations, capability: capability, metadata: metadata}
         {:cont, {:ok, entries ++ [entry]}}
       else
         {:error, reason} -> {:halt, {:error, reason}}

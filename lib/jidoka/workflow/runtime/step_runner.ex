@@ -1,7 +1,7 @@
 defmodule Jidoka.Workflow.Runtime.StepRunner do
   @moduledoc false
 
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Workflow.Loop
   alias Jidoka.Workflow.Loop.Cursor
   alias Jidoka.Workflow.Runtime.{Retry, Value}
@@ -73,7 +73,7 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   def execute_step(%Step{kind: :action} = step, state) do
     with {:ok, params} <- resolve_map(step.input, state, :action_input),
          {:ok, tool} <- action_tool(step.target) do
-      Retry.call(step, fn -> JidoActions.invoke_tool(tool, params, state.context) end)
+      Retry.call(step, fn -> Actions.invoke_tool(tool, params, state.context) end)
     end
   end
 
@@ -228,7 +228,7 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
 
   defp execute_map_target(%Step{target_kind: :action} = step, params, context) do
     with {:ok, tool} <- action_tool(step.target) do
-      Retry.call(step, fn -> JidoActions.invoke_tool(tool, params, context) end)
+      Retry.call(step, fn -> Actions.invoke_tool(tool, params, context) end)
     end
   end
 

@@ -205,5 +205,5 @@ end
   `Jidoka.Config` defaults.
 - [Turn And Effect Contracts](turn-and-effect-contracts.md) - the runtime
   phases that produce execution errors.
-- [Runtime And Harness](runtime-and-harness.md) - where harness-side errors
+- [Runtime And Execution Layers](runtime-and-harness.md) - where harness-side errors
   originate.

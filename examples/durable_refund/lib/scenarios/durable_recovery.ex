@@ -1,10 +1,10 @@
 defmodule JidokaExamples.DurableRefund.Scenarios.DurableRecovery do
   @moduledoc false
 
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.Store.InMemory
-  alias Jidoka.Runtime.AgentSnapshot
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Store.InMemory
+  alias Jidoka.Snapshot
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Turn
   alias JidokaExamples.DurableRefund.Actions.IssueRefund
   alias JidokaExamples.DurableRefund.Agent
@@ -19,7 +19,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.DurableRecovery do
     llm = ScriptedLLM.refund_round_trip()
 
     with {:ok, %Session{}} <- Jidoka.Session.start(Agent, session_id, store: store) do
-      checkpoint_hook = fn stage, %AgentSnapshot{} = snapshot, _stored ->
+      checkpoint_hook = fn stage, %Snapshot{} = snapshot, _stored ->
         if stage == :result and snapshot.cursor.metadata["effect_kind"] == :operation do
           send(observer, {:durable_refund_result_saved, snapshot})
 
@@ -53,7 +53,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.DurableRecovery do
              Jidoka.Session.recover(session_id,
                store: store,
                llm: llm,
-               operations: JidoActions.operations([IssueRefund]),
+               operations: Actions.operations([IssueRefund]),
                operation_context: %{example_observer: observer, refund_counter: counter},
                clock: current_clock(clock),
                lease_ttl_ms: 100,
@@ -78,7 +78,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.DurableRecovery do
 
   defp await_durable_result(session_id) do
     receive do
-      {:durable_refund_result_saved, %AgentSnapshot{} = snapshot} -> {:ok, snapshot}
+      {:durable_refund_result_saved, %Snapshot{} = snapshot} -> {:ok, snapshot}
     after
       1_000 -> {:error, {:durable_refund_result_not_saved, session_id}}
     end

@@ -295,5 +295,5 @@ Key modules touched in this guide:
 - [Agent View](agent-view.md) - the UI projection that consumes events.
 - [Sessions And Stores](sessions-and-stores.md) - how `replay/1` projects
   a session timeline.
-- [Runtime And Harness](runtime-and-harness.md) - where event emission
+- [Runtime And Execution Layers](runtime-and-harness.md) - where event emission
   fits in the runtime loop.

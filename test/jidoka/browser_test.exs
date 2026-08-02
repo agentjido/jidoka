@@ -3,8 +3,8 @@ defmodule Jidoka.BrowserTest do
 
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Browser
-  alias Jidoka.Browser.Runtime
-  alias Jidoka.Browser.Tools.{ReadPage, SearchWeb, SnapshotUrl}
+  alias Jidoka.Adapter.Jido.Browser, as: Runtime
+  alias Jidoka.Adapter.Jido.Browser.Tools.{ReadPage, SearchWeb, SnapshotUrl}
 
   defmodule FakeBrowserAction do
     @moduledoc false

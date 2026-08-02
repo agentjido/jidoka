@@ -39,7 +39,7 @@ The smallest hibernate/resume cycle uses the `:after_prompt` checkpoint.
     checkpoint: :after_prompt
   )
 
-{:ok, serialized} = Jidoka.Runtime.AgentSnapshot.serialize(snapshot)
+{:ok, serialized} = Jidoka.Snapshot.serialize(snapshot)
 String.starts_with?(serialized, "jidoka:snapshot:v1:")
 #=> true
 
@@ -57,7 +57,7 @@ A snapshot is data. The runtime treats it as an inert payload until
 
 ```diagram
 ╭──────────────────╮     ╭──────────────────────╮     ╭──────────────╮
-│ Jidoka.turn/3    │────▶│   Turn.State + Cursor │────▶│ AgentSnapshot│
+│ Jidoka.turn/3    │────▶│   Turn.State + Cursor │────▶│ Snapshot│
 │ checkpoint: ...  │     ╰──────────────────────╯     ╰──────┬───────╯
 ╰──────────────────╯                                          │
                                                               ▼
@@ -75,7 +75,7 @@ A snapshot is data. The runtime treats it as an inert payload until
 
 Key facts:
 
-- [`Jidoka.Runtime.AgentSnapshot`](`Jidoka.Runtime.AgentSnapshot`) has a
+- [`Jidoka.Snapshot`](`Jidoka.Snapshot`) has a
   `schema_version/0` of `1`. Unknown versions fail at normalization.
 - `serialize/1` returns `"jidoka:snapshot:v1:" <> base64`. The body is
   `:erlang.term_to_binary/1` over the validated struct.
@@ -125,7 +125,7 @@ the contract is the `"jidoka:snapshot:v1:"` prefix and the `schema_version`
 field.
 
 ```elixir
-{:ok, payload} = Jidoka.Runtime.AgentSnapshot.serialize(snapshot)
+{:ok, payload} = Jidoka.Snapshot.serialize(snapshot)
 
 :ok = MyApp.Queue.enqueue(job_id, payload)
 ```
@@ -137,7 +137,7 @@ metadata, for example) is surfaced as `{:error,
 
 ### Step 3: Resume From Any Snapshot Input
 
-`Jidoka.resume/2` accepts every shape `AgentSnapshot.from_input/1` accepts:
+`Jidoka.resume/2` accepts every shape `Snapshot.from_input/1` accepts:
 
 ```elixir
 # A struct.
@@ -163,7 +163,7 @@ case Jidoka.resume(snapshot, llm: llm, operations: operations) do
   {:ok, %Jidoka.Turn.Result{} = result} ->
     handle_result(result)
 
-  {:hibernate, %Jidoka.Runtime.AgentSnapshot{} = snapshot} ->
+  {:hibernate, %Jidoka.Snapshot{} = snapshot} ->
     persist_again(snapshot)
 
   {:error, reason} ->
@@ -180,7 +180,7 @@ _}` or `{:error, _}`.
 The struct carries `schema_version: 1`. Anything else fails up front:
 
 ```elixir
-Jidoka.Runtime.AgentSnapshot.new(%{
+Jidoka.Snapshot.new(%{
   schema_version: 99,
   snapshot_id: "snap_x",
   agent_id: "support",
@@ -193,7 +193,7 @@ Jidoka.Runtime.AgentSnapshot.new(%{
 Likewise, `deserialize/1` only accepts the `"jidoka:snapshot:v1:"` prefix:
 
 ```elixir
-Jidoka.Runtime.AgentSnapshot.deserialize("v0:garbage")
+Jidoka.Snapshot.deserialize("v0:garbage")
 #=> {:error, :invalid_snapshot_serialization}
 ```
 
@@ -214,7 +214,7 @@ The session keeps snapshots in order. The latest snapshot is what
     checkpoint: :after_prompt
   )
 
-{:ok, ^snapshot} = Jidoka.Session.get(store, session_id) |> then(&{:ok, Jidoka.Harness.Session.latest_snapshot(elem(&1, 1))})
+{:ok, ^snapshot} = Jidoka.Session.get(store, session_id) |> then(&{:ok, Jidoka.Session.Data.latest_snapshot(elem(&1, 1))})
 ```
 
 Use sessions when you want lifecycle, pending reviews, and metadata for
@@ -252,10 +252,10 @@ test "snapshot round-trips through opaque serialization" do
       checkpoint: :after_prompt
     )
 
-  assert {:ok, serialized} = Jidoka.Runtime.AgentSnapshot.serialize(snapshot)
+  assert {:ok, serialized} = Jidoka.Snapshot.serialize(snapshot)
   assert String.starts_with?(serialized, "jidoka:snapshot:v1:")
 
-  assert {:ok, ^snapshot} = Jidoka.Runtime.AgentSnapshot.deserialize(serialized)
+  assert {:ok, ^snapshot} = Jidoka.Snapshot.deserialize(serialized)
   assert {:ok, %Jidoka.Turn.Result{content: "ok"}} = Jidoka.resume(serialized, llm: llm)
 end
 ```
@@ -267,7 +267,7 @@ For approval flows, see the resume-with-`:approval` examples in
 
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
-| `{:error, :invalid_snapshot_serialization}` | Payload does not start with `"jidoka:snapshot:v1:"`. | Re-serialize from the source `AgentSnapshot` or migrate the persisted row. |
+| `{:error, :invalid_snapshot_serialization}` | Payload does not start with `"jidoka:snapshot:v1:"`. | Re-serialize from the source `Snapshot` or migrate the persisted row. |
 | `{:error, {:non_serializable_snapshot_value, path, :pid}}` | A pid was placed in snapshot metadata or context. | Remove runtime references before persisting; keep only data. |
 | `{:error, {:unsupported_snapshot_schema_version, n, 1}}` | Persisted snapshot was written under a different schema. | Migrate the persisted payload or discard the older snapshot. |
 | `Jidoka.resume/2` returns `{:hibernate, _}` again | Checkpoint policy or review interrupt still in effect. | Loop until `{:ok, _}` or `{:error, _}`; supply `:approval` if waiting on review. |
@@ -277,14 +277,14 @@ For approval flows, see the resume-with-`:approval` examples in
 
 Key modules touched in this guide:
 
-- [`Jidoka.Runtime.AgentSnapshot`](`Jidoka.Runtime.AgentSnapshot`) -
+- [`Jidoka.Snapshot`](`Jidoka.Snapshot`) -
   `new/1`, `from_input/1`, `serialize/1`, `deserialize/1`,
   `schema_version/0`, `from_turn_state/3`.
 - [`Jidoka.Turn.Cursor`](`Jidoka.Turn.Cursor`) - the `cursor.phase` field
   on a snapshot (`:after_prompt`, `:before_effect`, `:review`).
 - [`Jidoka.Turn.State`](`Jidoka.Turn.State`) - the inner runtime state a
   snapshot wraps.
-- [`Jidoka.Harness`](`Jidoka.Harness`) - `resume/2` boundary that
+- [`Jidoka.Turn.Execution`](`Jidoka.Turn.Execution`) - `resume/2` boundary that
   `Jidoka.resume/2` delegates to.
 - [`Jidoka.Effect.Journal`](`Jidoka.Effect.Journal`) - replay-safe record
   of effect intents and results inside the snapshot.
@@ -297,4 +297,4 @@ Key modules touched in this guide:
   `:approval` response.
 - [Idempotency And Safety](idempotency-and-safety.md) - how the journal
   decides which effects re-run on resume.
-- [Runtime And Harness](runtime-and-harness.md) - architectural overview.
+- [Runtime And Execution Layers](runtime-and-harness.md) - architectural overview.

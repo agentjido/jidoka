@@ -1,8 +1,8 @@
 defmodule JidokaExamples.SupportAgent.Scenario do
   @moduledoc false
 
-  alias Jidoka.Runtime.AgentSnapshot
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Snapshot
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Schema
   alias JidokaExamples.SupportAgent.Actions.LookupOrder
   alias JidokaExamples.SupportAgent.Agent
@@ -58,7 +58,7 @@ defmodule JidokaExamples.SupportAgent.Scenario do
     Jidoka.approve(snapshot, review,
       reason: Keyword.get(opts, :reason, :operator_approved),
       llm: mock_llm(order_id, observer),
-      operations: JidoActions.operations([LookupOrder]),
+      operations: Actions.operations([LookupOrder]),
       operation_context: %{
         example_counter: Keyword.get(opts, :counter),
         example_observer: observer
@@ -70,14 +70,14 @@ defmodule JidokaExamples.SupportAgent.Scenario do
     observer = Keyword.get(opts, :observer, self())
     counter = Keyword.get_lazy(opts, :counter, &start_counter!/0)
 
-    with {:hibernate, %AgentSnapshot{} = snapshot} <-
+    with {:hibernate, %Snapshot{} = snapshot} <-
            execute(
              observer: observer,
              counter: counter,
              credential_ref: Keyword.get(opts, :credential_ref, "credential:support-demo")
            ),
-         {:ok, serialized} <- AgentSnapshot.serialize(snapshot),
-         {:ok, %AgentSnapshot{} = restored} <- AgentSnapshot.deserialize(serialized),
+         {:ok, serialized} <- Snapshot.serialize(snapshot),
+         {:ok, %Snapshot{} = restored} <- Snapshot.deserialize(serialized),
          {:ok, [review]} <- Jidoka.pending_reviews(restored),
          {:ok, result} <- approve(serialized, review, observer: observer, counter: counter) do
       {:ok,

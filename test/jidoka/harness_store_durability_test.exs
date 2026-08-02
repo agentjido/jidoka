@@ -3,13 +3,13 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
 
   alias Jidoka.Agent
   alias Jidoka.Cancellation
-  alias Jidoka.Harness.LeaseHeartbeat
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.SessionLease
-  alias Jidoka.Harness.Store
-  alias Jidoka.Harness.Store.Dets
-  alias Jidoka.Harness.Store.InMemory
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Session.LeaseHeartbeat
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Lease
+  alias Jidoka.Session.Store
+  alias Jidoka.Session.Store.Dets
+  alias Jidoka.Session.Store.InMemory
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   test "lease transitions reject stale workers and expose expired recovery work" do
@@ -23,7 +23,7 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
             %Session{
               revision: 1,
               status: :running,
-              lease: %SessionLease{
+              lease: %Lease{
                 lease_id: "lease_first",
                 owner_id: "worker_first",
                 expires_at_ms: 150
@@ -43,7 +43,7 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
     assert {:ok,
             %Session{
               revision: 2,
-              lease: %SessionLease{lease_id: "lease_first", expires_at_ms: 160}
+              lease: %Lease{lease_id: "lease_first", expires_at_ms: 160}
             }} =
              Store.checkpoint_session(store, "sess_lease", "lease_first", snapshot,
                clock: fn -> 110 end,
@@ -64,7 +64,7 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
     assert {:ok,
             %Session{
               revision: 3,
-              lease: %SessionLease{lease_id: "lease_second", owner_id: "worker_second"}
+              lease: %Lease{lease_id: "lease_second", owner_id: "worker_second"}
             } = recovered} =
              Store.recover_session(store, "sess_lease",
                clock: fn -> 160 end,
@@ -104,7 +104,7 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
 
     assert {:ok, ^source} = Store.put_session(first_store, source)
 
-    assert {:ok, %Session{lease: %SessionLease{lease_id: "lease_dets"}} = claimed} =
+    assert {:ok, %Session{lease: %Lease{lease_id: "lease_dets"}} = claimed} =
              Store.claim_session(first_store, "sess_dets", request,
                clock: fn -> 1_000 end,
                lease_ttl_ms: 100,
@@ -129,13 +129,13 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
             %Session{
               revision: 2,
               status: :running,
-              snapshots: [%AgentSnapshot{snapshot_id: "snap_dets"}]
+              snapshots: [%Snapshot{snapshot_id: "snap_dets"}]
             }} = Store.get_session(second_store, "sess_dets")
 
     assert {:ok, [%Session{session_id: "sess_dets"}]} =
              Store.list_recoverable(second_store, clock: fn -> 1_110 end)
 
-    assert {:ok, %Session{lease: %SessionLease{owner_id: "worker_recovery"}}} =
+    assert {:ok, %Session{lease: %Lease{owner_id: "worker_recovery"}}} =
              Store.recover_session(second_store, "sess_dets",
                clock: fn -> 1_110 end,
                lease_ttl_ms: 100,
@@ -154,7 +154,7 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
     request = Turn.Request.new!(input: "Wait", request_id: "turn_heartbeat")
     assert {:ok, ^source} = Store.put_session(store, source)
 
-    assert {:ok, %Session{lease: %SessionLease{lease_id: "lease_heartbeat"}}} =
+    assert {:ok, %Session{lease: %Lease{lease_id: "lease_heartbeat"}}} =
              Store.claim_session(store, "sess_heartbeat", request,
                clock: current_clock(clock),
                lease_ttl_ms: 50,
@@ -178,7 +178,7 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
     assert {:ok,
             %Session{
               revision: 2,
-              lease: %SessionLease{lease_id: "lease_heartbeat", expires_at_ms: 190}
+              lease: %Lease{lease_id: "lease_heartbeat", expires_at_ms: 190}
             }} = Store.get_session(store, "sess_heartbeat")
 
     refute Cancellation.requested?(cancellation)
@@ -195,7 +195,7 @@ defmodule Jidoka.HarnessStoreDurabilityTest do
       request: request,
       agent_state: request.agent_state
     )
-    |> AgentSnapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: snapshot_id)
+    |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: snapshot_id)
   end
 
   defp spec do

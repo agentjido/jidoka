@@ -26,10 +26,12 @@ defmodule Jidoka.Agent do
   alias Jidoka.Agent.Spec.Result
   alias Jidoka.Agent.ToolSources
   alias Jidoka.Config
+  alias Jidoka.Error
   alias Jidoka.ModelPolicy
-  alias Jidoka.Runtime.Actions.RunTurn
-  alias Jidoka.Runtime.ReqLLM
-  alias Jidoka.Runtime.Signals
+  alias Jidoka.Adapter.Jido.RunTurn
+  alias Jidoka.Adapter.ReqLLM
+  alias Jidoka.Adapter.Jido.Signals
+  alias Jidoka.Turn.Execution, as: TurnExecution
 
   @default_instructions "You are a helpful assistant."
 
@@ -87,17 +89,18 @@ defmodule Jidoka.Agent do
       def spec, do: Jidoka.Agent.spec(__MODULE__)
 
       @doc "Runs a full turn and returns the typed `Jidoka.Turn.Result`."
-      @spec run_turn(Jidoka.request_input(), keyword()) :: Jidoka.run_result()
+      @spec run_turn(Jidoka.Turn.Execution.request_input(), keyword()) ::
+              Jidoka.Turn.Execution.result()
       def run_turn(input, opts \\ []), do: Jidoka.Agent.run_turn(__MODULE__, input, opts)
 
       @doc "Runs a full turn and returns only final assistant text."
       @spec chat(String.t(), keyword()) ::
-              {:ok, String.t()} | {:hibernate, Jidoka.Runtime.AgentSnapshot.t()} | {:error, term()}
+              {:ok, String.t()} | {:hibernate, Jidoka.Snapshot.t()} | {:error, term()}
       def chat(input, opts \\ []), do: Jidoka.Agent.chat(__MODULE__, input, opts)
 
       @doc "Starts this agent under the default `Jidoka.Jido` process tree."
       @spec start(keyword()) :: DynamicSupervisor.on_start_child()
-      def start(opts \\ []), do: Jidoka.start_agent(__MODULE__, opts)
+      def start(opts \\ []), do: Jidoka.Jido.start_agent(__MODULE__, opts)
 
       @doc "Returns a `Jido.AgentServer` child spec for supervising this agent."
       @spec child_spec(keyword()) :: Supervisor.child_spec()
@@ -218,19 +221,24 @@ defmodule Jidoka.Agent do
   end
 
   @doc """
-  Runs a DSL agent turn through Jidoka's harness.
+  Runs a DSL agent turn through Jidoka turn execution.
   """
-  @spec run_turn(module(), Jidoka.request_input(), keyword()) :: Jidoka.run_result()
+  @spec run_turn(module(), TurnExecution.request_input(), keyword()) :: TurnExecution.result()
   def run_turn(agent_module, input, opts \\ []) when is_atom(agent_module) and is_list(opts) do
     spec = spec(agent_module)
-    Jidoka.turn(spec, input, runtime_opts(agent_module, spec, opts))
+
+    case TurnExecution.run(spec, input, runtime_opts(agent_module, spec, opts)) do
+      {:ok, _result} = ok -> ok
+      {:hibernate, _snapshot} = hibernate -> hibernate
+      {:error, reason} -> {:error, Error.normalize(reason, operation: :turn, phase: :harness)}
+    end
   end
 
   @doc """
   Runs a DSL agent turn and returns final assistant text.
   """
   @spec chat(module(), String.t(), keyword()) ::
-          {:ok, String.t()} | {:hibernate, Jidoka.Runtime.AgentSnapshot.t()} | {:error, term()}
+          {:ok, String.t()} | {:hibernate, Jidoka.Snapshot.t()} | {:error, term()}
   def chat(agent_module, input, opts \\ []) when is_binary(input) and is_list(opts) do
     with {:ok, %{content: content}} <- run_turn(agent_module, input, opts) do
       {:ok, content}

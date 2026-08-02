@@ -2,7 +2,7 @@ defmodule Jidoka.Event do
   @moduledoc """
   Core event emitted by Jidoka turn transitions.
 
-  Events are neutral harness data. Runtime, trace, streaming, and UI modules
+  Events are neutral turn data. Runtime, trace, streaming, and UI modules
   may project or consume them, but workflow/state modules should only emit the
   event data itself.
   """

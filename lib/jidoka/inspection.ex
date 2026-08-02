@@ -12,11 +12,13 @@ defmodule Jidoka.Inspection do
   alias Jidoka.Error
   alias Jidoka.Inspection.Preflight
   alias Jidoka.Instructions
-  alias Jidoka.Harness
   alias Jidoka.Memory
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Session.Data
+  alias Jidoka.Session.Replay
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
+  alias Jidoka.Turn.Execution, as: TurnExecution
   alias Jidoka.Runtime.Spine.Steps
   alias Jidoka.Workflow
 
@@ -29,9 +31,9 @@ defmodule Jidoka.Inspection do
           | Turn.State.t()
           | Turn.Result.t()
           | Turn.Cursor.t()
-          | AgentSnapshot.t()
-          | Harness.Session.t()
-          | Harness.Replay.t()
+          | Snapshot.t()
+          | Data.t()
+          | Replay.t()
           | Debug.RequestSummary.t()
           | Debug.ReplayDiagnostics.t()
           | Effect.Journal.t()
@@ -57,7 +59,7 @@ defmodule Jidoka.Inspection do
         workflow_view(workflow)
 
       true ->
-        Jidoka.project(agent_module)
+        Jidoka.Projection.project(agent_module)
     end
   end
 
@@ -71,9 +73,9 @@ defmodule Jidoka.Inspection do
 
   def inspect(%Turn.Result{} = result, opts), do: turn_result_view(result, opts)
   def inspect(%Turn.State{} = state, opts), do: turn_state_view(state, opts)
-  def inspect(%AgentSnapshot{} = snapshot, opts), do: snapshot_view(snapshot, opts)
-  def inspect(%Harness.Session{} = session, _opts), do: session_view(session)
-  def inspect(%Harness.Replay{} = replay, _opts), do: replay_view(replay)
+  def inspect(%Snapshot{} = snapshot, opts), do: snapshot_view(snapshot, opts)
+  def inspect(%Data{} = session, _opts), do: session_view(session)
+  def inspect(%Replay{} = replay, _opts), do: replay_view(replay)
   def inspect(%Debug.RequestSummary{} = summary, _opts), do: request_summary_view(summary)
   def inspect(%Debug.ReplayDiagnostics{} = diagnostics, _opts), do: replay_diagnostics_view(diagnostics)
   def inspect(%Effect.Journal{} = journal, opts), do: journal_view(journal, opts)
@@ -89,10 +91,10 @@ defmodule Jidoka.Inspection do
   def inspect(%Memory.WriteResult{} = result, _opts), do: memory_view(:memory_write, result)
   def inspect(%Jidoka.Eval.Run{} = run, _opts), do: eval_run_view(run)
   def inspect(%Workflow.Spec{} = workflow, _opts), do: workflow_view(workflow)
-  def inspect(value, _opts), do: Jidoka.project(value)
+  def inspect(value, _opts), do: Jidoka.Projection.project(value)
 
   @doc "Assembles the prompt for a turn without interpreting any effects."
-  @spec preflight(module() | Jidoka.plan_input(), Jidoka.request_input(), keyword()) ::
+  @spec preflight(module() | TurnExecution.plan_input(), TurnExecution.request_input(), keyword()) ::
           {:ok, Preflight.t()} | {:error, term()}
   def preflight(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- resolve_plan(spec_or_plan),
@@ -114,8 +116,8 @@ defmodule Jidoka.Inspection do
     %{
       kind: :agent,
       module: module_name(opts),
-      spec: Jidoka.project(plan.spec),
-      plan: Jidoka.project(plan)
+      spec: Jidoka.Projection.project(plan.spec),
+      plan: Jidoka.Projection.project(plan)
     }
   end
 
@@ -128,8 +130,8 @@ defmodule Jidoka.Inspection do
         %{
           kind: :agent,
           module: module_name(opts),
-          spec: Jidoka.project(spec),
-          error: Jidoka.error_to_map(reason)
+          spec: Jidoka.Projection.project(spec),
+          error: Error.to_map(reason)
         }
     end
   end
@@ -138,7 +140,7 @@ defmodule Jidoka.Inspection do
     %{
       kind: :workflow,
       graph: Workflow.Graph.project(workflow),
-      workflow: Jidoka.project(workflow)
+      workflow: Jidoka.Projection.project(workflow)
     }
   end
 
@@ -161,34 +163,36 @@ defmodule Jidoka.Inspection do
       timeline: timeline(state.events),
       journal: journal_view(state.journal, opts),
       pending_effects: Enum.map(state.pending_effects, &intent_view(&1, opts)),
-      pending_interrupt: Jidoka.project(state.pending_interrupt)
+      pending_interrupt: Jidoka.Projection.project(state.pending_interrupt)
     }
     |> maybe_put_full(:state, state, opts)
   end
 
-  defp snapshot_view(%AgentSnapshot{} = snapshot, opts) do
+  defp snapshot_view(%Snapshot{} = snapshot, opts) do
     %{
       kind: :snapshot,
       snapshot_id: snapshot.snapshot_id,
       agent_id: snapshot.agent_id,
-      cursor: Jidoka.project(snapshot.cursor),
+      cursor: Jidoka.Projection.project(snapshot.cursor),
       status: snapshot.turn_state.status,
       loop_index: snapshot.turn_state.loop_index,
       timeline: timeline(snapshot.turn_state.events),
       journal: journal_view(snapshot.turn_state.journal, opts),
       pending_effects: Enum.map(snapshot.turn_state.pending_effects, &intent_view(&1, opts)),
       pending_review:
-        Jidoka.project(Map.get(snapshot.metadata, "pending_review", Map.get(snapshot.metadata, :pending_review))),
-      metadata: Jidoka.project(snapshot.metadata)
+        Jidoka.Projection.project(
+          Map.get(snapshot.metadata, "pending_review", Map.get(snapshot.metadata, :pending_review))
+        ),
+      metadata: Jidoka.Projection.project(snapshot.metadata)
     }
     |> maybe_put_full(:snapshot, snapshot, opts)
   end
 
-  defp session_view(%Harness.Session{} = session) do
+  defp session_view(%Data{} = session) do
     replay =
-      case Harness.replay(session) do
+      case Replay.from_session(session) do
         {:ok, replay} -> replay_view(replay)
-        {:error, reason} -> %{error: Jidoka.error_to_map(reason)}
+        {:error, reason} -> %{error: Error.to_map(reason)}
       end
 
     %{
@@ -198,19 +202,19 @@ defmodule Jidoka.Inspection do
       status: session.status,
       request_count: length(session.requests),
       snapshot_count: length(session.snapshots),
-      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.project/1),
+      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.Projection.project/1),
       latest_cursor: latest_cursor(session),
       replay: replay,
-      result: Jidoka.project(session.result),
-      error: Jidoka.project(session.error)
+      result: Jidoka.Projection.project(session.result),
+      error: Jidoka.Projection.project(session.error)
     }
   end
 
-  defp replay_view(%Harness.Replay{} = replay) do
+  defp replay_view(%Replay{} = replay) do
     diagnostics =
-      case Harness.Replay.diagnose(replay) do
-        {:ok, diagnostics} -> Jidoka.project(diagnostics)
-        {:error, reason} -> %{error: Jidoka.error_to_map(reason)}
+      case Replay.diagnose(replay) do
+        {:ok, diagnostics} -> Jidoka.Projection.project(diagnostics)
+        {:error, reason} -> %{error: Error.to_map(reason)}
       end
 
     %{
@@ -230,13 +234,13 @@ defmodule Jidoka.Inspection do
 
   defp request_summary_view(%Debug.RequestSummary{} = summary) do
     summary
-    |> Jidoka.project()
+    |> Jidoka.Projection.project()
     |> Map.put(:kind, :request_debug)
   end
 
   defp replay_diagnostics_view(%Debug.ReplayDiagnostics{} = diagnostics) do
     diagnostics
-    |> Jidoka.project()
+    |> Jidoka.Projection.project()
     |> Map.put(:kind, :replay_diagnostics)
   end
 
@@ -266,7 +270,7 @@ defmodule Jidoka.Inspection do
       idempotency: intent.idempotency,
       idempotency_key: intent.idempotency_key,
       payload_keys: payload_keys(intent.payload),
-      metadata: Jidoka.project(intent.metadata)
+      metadata: Jidoka.Projection.project(intent.metadata)
     }
     |> maybe_put_full(:payload, intent.payload, opts)
   end
@@ -277,14 +281,14 @@ defmodule Jidoka.Inspection do
       intent_id: result.intent_id,
       effect_kind: result.kind,
       status: result.status,
-      metadata: Jidoka.project(result.metadata)
+      metadata: Jidoka.Projection.project(result.metadata)
     }
     |> maybe_put_full(:output, result.output, opts)
   end
 
-  defp review_view(kind, review), do: Map.put(Jidoka.project(review), :kind, kind)
+  defp review_view(kind, review), do: Map.put(Jidoka.Projection.project(review), :kind, kind)
 
-  defp memory_view(kind, result), do: Map.put(Jidoka.project(result), :kind, kind)
+  defp memory_view(kind, result), do: Map.put(Jidoka.Projection.project(result), :kind, kind)
 
   defp eval_run_view(%Jidoka.Eval.Run{} = run) do
     %{
@@ -294,8 +298,8 @@ defmodule Jidoka.Inspection do
       assertion_count: length(run.assertions),
       failed_assertions: Enum.filter(run.assertions, &(&1.status == :failed)),
       observations: run.observations,
-      result: Jidoka.project(run.result),
-      error: Jidoka.project(run.error)
+      result: Jidoka.Projection.project(run.result),
+      error: Jidoka.Projection.project(run.error)
     }
   end
 
@@ -303,7 +307,7 @@ defmodule Jidoka.Inspection do
 
   defp maybe_put_full(map, key, value, opts) do
     if Keyword.get(opts, :full?, false) do
-      Map.put(map, key, Jidoka.project(value))
+      Map.put(map, key, Jidoka.Projection.project(value))
     else
       map
     end
@@ -312,9 +316,9 @@ defmodule Jidoka.Inspection do
   defp payload_keys(%{} = payload), do: payload |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
   defp payload_keys(_payload), do: []
 
-  defp latest_cursor(%Harness.Session{} = session) do
-    case Harness.Session.latest_snapshot(session) do
-      %AgentSnapshot{} = snapshot -> Jidoka.project(snapshot.cursor)
+  defp latest_cursor(%Data{} = session) do
+    case Data.latest_snapshot(session) do
+      %Snapshot{} = snapshot -> Jidoka.Projection.project(snapshot.cursor)
       nil -> nil
     end
   end
@@ -330,7 +334,9 @@ defmodule Jidoka.Inspection do
     end
   end
 
-  defp resolve_plan(input), do: Jidoka.plan(input)
+  defp resolve_plan(input) do
+    with {:ok, spec} <- Agent.Spec.from_input(input), do: Turn.Plan.new(spec)
+  end
 
   defp request(%Turn.Request{} = request, opts),
     do: Turn.Request.from_input(request, request_opts(opts))
@@ -370,13 +376,13 @@ defmodule Jidoka.Inspection do
 
   defp preflight_from_state(%Turn.State{} = state) do
     Preflight.new(
-      agent: Jidoka.project(state.spec),
-      plan: Jidoka.project(state.plan),
-      request: Jidoka.project(state.request),
-      prompt: Jidoka.project(state.prompt),
-      events: Jidoka.project(state.events),
+      agent: Jidoka.Projection.project(state.spec),
+      plan: Jidoka.Projection.project(state.plan),
+      request: Jidoka.Projection.project(state.request),
+      prompt: Jidoka.Projection.project(state.prompt),
+      events: Jidoka.Projection.project(state.events),
       timeline: timeline(state.events),
-      diagnostics: Jidoka.project(state.diagnostics)
+      diagnostics: Jidoka.Projection.project(state.diagnostics)
     )
   end
 

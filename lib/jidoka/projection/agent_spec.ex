@@ -2,7 +2,8 @@ defmodule Jidoka.Projection.AgentSpec do
   @moduledoc false
 
   alias Jidoka.Agent
-  alias Jidoka.Projection.{Metadata, Value}
+  alias Jidoka.Portable
+  alias Jidoka.Projection.Metadata
 
   @spec project(
           Agent.Spec.t()
@@ -30,16 +31,16 @@ defmodule Jidoka.Projection.AgentSpec do
       memory: project(spec.memory),
       operations: Enum.map(spec.operations, &project/1),
       controls: project(spec.controls),
-      runtime_defaults: Value.project(spec.runtime_defaults),
+      runtime_defaults: Portable.project(spec.runtime_defaults),
       metadata: Metadata.agent(spec.metadata)
     }
   end
 
   def project(%Agent.Spec.Generation{} = generation) do
     %{
-      params: Value.project(generation.params),
-      provider_options: Value.project(generation.provider_options),
-      extra: Value.project(generation.extra)
+      params: Portable.project(generation.params),
+      provider_options: Portable.project(generation.provider_options),
+      extra: Portable.project(generation.extra)
     }
   end
 
@@ -47,7 +48,7 @@ defmodule Jidoka.Projection.AgentSpec do
     %{
       schema?: not is_nil(result.schema),
       max_repairs: result.max_repairs,
-      metadata: Value.project(result.metadata)
+      metadata: Portable.project(result.metadata)
     }
   end
 
@@ -55,11 +56,11 @@ defmodule Jidoka.Projection.AgentSpec do
     %{
       enabled: memory.enabled,
       scope: memory.scope,
-      namespace: Value.project(memory.namespace),
+      namespace: Portable.project(memory.namespace),
       capture: memory.capture,
       inject: memory.inject,
       max_entries: memory.max_entries,
-      metadata: Value.project(memory.metadata)
+      metadata: Portable.project(memory.metadata)
     }
   end
 
@@ -78,10 +79,10 @@ defmodule Jidoka.Projection.AgentSpec do
     %{
       required: policy.required,
       mode: policy.mode,
-      reason: Value.project(policy.reason),
+      reason: Portable.project(policy.reason),
       message: policy.message,
       ttl_ms: policy.ttl_ms,
-      metadata: Value.project(policy.metadata)
+      metadata: Portable.project(policy.metadata)
     }
   end
 
@@ -92,7 +93,7 @@ defmodule Jidoka.Projection.AgentSpec do
       inputs: Enum.map(controls.inputs, &project/1),
       operations: Enum.map(controls.operations, &project/1),
       outputs: Enum.map(controls.outputs, &project/1),
-      metadata: Value.project(controls.metadata)
+      metadata: Portable.project(controls.metadata)
     }
   end
 
@@ -100,7 +101,7 @@ defmodule Jidoka.Projection.AgentSpec do
     %{
       control: Metadata.control_name(input.control),
       module: inspect(input.control),
-      metadata: Value.project(input.metadata)
+      metadata: Portable.project(input.metadata)
     }
   end
 
@@ -108,7 +109,7 @@ defmodule Jidoka.Projection.AgentSpec do
     %{
       control: Metadata.control_name(output.control),
       module: inspect(output.control),
-      metadata: Value.project(output.metadata)
+      metadata: Portable.project(output.metadata)
     }
   end
 
@@ -116,8 +117,8 @@ defmodule Jidoka.Projection.AgentSpec do
     %{
       control: Metadata.control_name(operation_control.control),
       module: inspect(operation_control.control),
-      match: Value.project(operation_control.match),
-      metadata: Value.project(operation_control.metadata)
+      match: Portable.project(operation_control.match),
+      metadata: Portable.project(operation_control.metadata)
     }
   end
 

@@ -19,9 +19,9 @@ own provider clients or long-running processes.
 - A working Jidoka agent. The smallest one is enough; see
   [Getting Started](getting-started.md).
 - A provider key in scope for live examples.
-- For persistence: a started [`Jidoka.Harness.Store.InMemory`](`Jidoka.Harness.Store.InMemory`)
-  or [`Jidoka.Harness.Store.Dets`](`Jidoka.Harness.Store.Dets`) process, or a
-  module that implements [`Jidoka.Harness.Store`](`Jidoka.Harness.Store`).
+- For persistence: a started [`Jidoka.Session.Store.InMemory`](`Jidoka.Session.Store.InMemory`)
+  or [`Jidoka.Session.Store.Dets`](`Jidoka.Session.Store.Dets`) process, or a
+  module that implements [`Jidoka.Session.Store`](`Jidoka.Session.Store`).
 
 ```bash
 mix deps.get
@@ -33,8 +33,8 @@ mix test
 The smallest durable session is a store plus a session id.
 
 ```elixir
-{:ok, pid} = Jidoka.Harness.Store.InMemory.start_link()
-store = {Jidoka.Harness.Store.InMemory, pid: pid}
+{:ok, pid} = Jidoka.Session.Store.InMemory.start_link()
+store = {Jidoka.Session.Store.InMemory, pid: pid}
 
 {:ok, session} =
   Jidoka.Session.start(MyApp.SupportAgent, "support-123", store: store)
@@ -78,10 +78,10 @@ session data between turns.
 
 - [`Jidoka.Session`](`Jidoka.Session`) is the developer-facing facade. It
   wraps `start/run/chat/resume` and derives sensible defaults.
-- [`Jidoka.Harness.Session`](`Jidoka.Harness.Session`) is the durable data
+- [`Jidoka.Session.Data`](`Jidoka.Session.Data`) is the durable data
   struct. Its `schema_version/0` is `1`; older or newer payloads fail at
   normalization rather than silently loading a half-valid session.
-- [`Jidoka.Harness.Store`](`Jidoka.Harness.Store`) is the persistence
+- [`Jidoka.Session.Store`](`Jidoka.Session.Store`) is the persistence
   behaviour. Its base callbacks store and read session data. Lease-aware
   callbacks provide atomic claim, checkpoint, commit, renewal, and recovery.
 
@@ -272,11 +272,11 @@ For disk persistence on one BEAM node, use the DETS adapter:
 
 ```elixir
 {:ok, pid} =
-  Jidoka.Harness.Store.Dets.start_link(
+  Jidoka.Session.Store.Dets.start_link(
     path: "/var/lib/my_app/jidoka_sessions.dets"
   )
 
-store = {Jidoka.Harness.Store.Dets, pid: pid}
+store = {Jidoka.Session.Store.Dets, pid: pid}
 ```
 
 The DETS adapter serializes transitions through one process and calls
@@ -292,14 +292,14 @@ external service should honor the stable idempotency key. If it cannot, use
 
 ### Step 7: Implement A Custom Store
 
-A store is a module implementing `Jidoka.Harness.Store`. The required
+A store is a module implementing `Jidoka.Session.Store`. The required
 callbacks are small.
 
 ```elixir
 defmodule MyApp.PostgresSessionStore do
-  @behaviour Jidoka.Harness.Store
+  @behaviour Jidoka.Session.Store
 
-  alias Jidoka.Harness.Session
+  alias Jidoka.Session.Data
 
   @impl true
   def put_session(%Session{} = session, _opts) do
@@ -336,12 +336,12 @@ transitions:
 - `renew_session/3` to extend ownership;
 - `commit_session/4` to save final state and release ownership.
 
-Use the helpers in `Jidoka.Harness.Store` to apply the standard transition
+Use the helpers in `Jidoka.Session.Store` to apply the standard transition
 rules. A backend transaction, row lock, compare-and-set, or single-owner
 process must make each transition atomic.
 
 Callers reference a store as either `Module` or `{Module, opts}`. The
-in-memory store is `{Jidoka.Harness.Store.InMemory, pid: pid}` so the same
+in-memory store is `{Jidoka.Session.Store.InMemory, pid: pid}` so the same
 shape works for stores that need configuration (database, namespace, region).
 
 ### Step 8: Inspect Sessions
@@ -384,8 +384,8 @@ deterministic LLM and the in-memory store are usually enough.
 
 ```elixir
 test "session keeps history across turns" do
-  {:ok, pid} = Jidoka.Harness.Store.InMemory.start_link()
-  store = {Jidoka.Harness.Store.InMemory, pid: pid}
+  {:ok, pid} = Jidoka.Session.Store.InMemory.start_link()
+  store = {Jidoka.Session.Store.InMemory, pid: pid}
 
   llm = fn _intent, journal, _ctx ->
     case map_size(journal.results) do
@@ -424,10 +424,10 @@ Key modules touched in this guide:
 
 - [`Jidoka.Session`](`Jidoka.Session`) - public facade for `start/2`,
   `run/3`, `chat/3`, `resume/2`, `pending_reviews/1`, `replay/1`.
-- [`Jidoka.Harness.Session`](`Jidoka.Harness.Session`) - durable session
+- [`Jidoka.Session.Data`](`Jidoka.Session.Data`) - durable session
   struct with `schema_version/0 == 1`.
-- [`Jidoka.Harness.Store`](`Jidoka.Harness.Store`) - persistence behaviour.
-- [`Jidoka.Harness.Store.InMemory`](`Jidoka.Harness.Store.InMemory`) -
+- [`Jidoka.Session.Store`](`Jidoka.Session.Store`) - persistence behaviour.
+- [`Jidoka.Session.Store.InMemory`](`Jidoka.Session.Store.InMemory`) -
   reference store for tests and examples.
 - [`Jidoka.Review.Request`](`Jidoka.Review.Request`) - shape returned by
   `pending_reviews/1`.
@@ -440,5 +440,5 @@ Key modules touched in this guide:
   approve/deny resume path.
 - [Tracing And Events](tracing-and-events.md) - what
   `Jidoka.Session.replay/1` projects under the hood.
-- [Runtime And Harness](runtime-and-harness.md) - internals for sessions,
+- [Runtime And Execution Layers](runtime-and-harness.md) - internals for sessions,
   stores, and replay.

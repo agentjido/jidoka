@@ -85,7 +85,7 @@ end
 {:ok, result} =
   Jidoka.turn(spec, "Echo Ada.",
     llm: fake_llm,
-    operations: Jidoka.Runtime.JidoActions.operations([NotebookEcho])
+    operations: Jidoka.Adapter.Jido.Actions.operations([NotebookEcho])
   )
 
 {:ok, trace_pid} = Jidoka.Trace.Sink.InMemory.start_link()
@@ -119,7 +119,7 @@ Jidoka.Trace.Sink.InMemory.list(trace_pid)
       }
     ],
     llm: fake_llm,
-    operations: Jidoka.Runtime.JidoActions.operations([NotebookEcho])
+    operations: Jidoka.Adapter.Jido.Actions.operations([NotebookEcho])
   )
 
 Jidoka.inspect(eval_run)

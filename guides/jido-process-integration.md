@@ -16,7 +16,7 @@ status.
   agent into a Phoenix `application.ex`.
 - Do **not** use this guide for single-shot deterministic runs. For unit tests
   and one-off invocations, `MyAgent.run_turn/2` and `Jidoka.turn/3` against the
-  spec are simpler and faster. See [Runtime And Harness](runtime-and-harness.md).
+  spec are simpler and faster. See [Runtime And Execution Layers](runtime-and-harness.md).
 
 ## Prerequisites
 
@@ -134,12 +134,12 @@ through [`Jidoka.whereis/2`](`Jidoka`) and sends a signal to the
 ╭───────────────────╮  "jidoka.turn.run"           ▼
 │ Jido.AgentServer  │◀────────── signal ─── Jidoka.turn(id, ...)
 │  state[:jidoka] = │
-│  AgentServerState │──── routes to ────▶ Jidoka.Runtime.Actions.RunTurn
+│  AgentServerState │──── routes to ────▶ Jidoka.Adapter.Jido.RunTurn
 ╰─────────┬─────────╯                            │
           │                                      ▼
           │                            ╭──────────────────────╮
-          │                            │ Jidoka.Harness       │
-          │                            │ (Runic + Effects)    │
+          │                            │ Turn.Execution       │
+          │                            │ (runtime use case)   │
           │                            ╰──────────┬───────────╯
           ▼                                       ▼
    to_jido_state/1                         Turn.Result / Snapshot
@@ -152,9 +152,9 @@ Three pieces define this boundary:
    runtime store. Applications may host their own instance instead.
 2. **The DSL module's `child_spec/1`** wraps `Jido.AgentServer.child_spec/1`
    with `jido: Jidoka.Jido` and a default id derived from the agent module.
-   The compiled signal route `{"jidoka.turn.run", Jidoka.Runtime.Actions.RunTurn}`
+   The compiled signal route `{"jidoka.turn.run", Jidoka.Adapter.Jido.RunTurn}`
    is attached at compile time.
-3. **[`Jidoka.Runtime.AgentServerState`](`Jidoka.Runtime.AgentServerState`)**
+3. **[`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`)**
    is the typed Jidoka state stored under `agent.state[:jidoka]`. Conventional
    top-level Jido fields (`:status`, `:last_answer`, `:error`) are kept for
    `Jido.AgentServer` compatibility.
@@ -209,11 +209,11 @@ result.content
 
 Under the hood [`Jidoka`](`Jidoka`):
 
-1. Builds a signal with `Jidoka.Runtime.Signals.turn_run/2` (type
+1. Builds a signal with `Jidoka.Adapter.Jido.Signals.turn_run/2` (type
    `"jidoka.turn.run"`).
 2. Resolves the binary id through `Jidoka.whereis/2`.
 3. Calls `Jido.AgentServer.call(pid, signal, timeout)` which routes to
-   `Jidoka.Runtime.Actions.RunTurn`.
+   `Jidoka.Adapter.Jido.RunTurn`.
 4. Reads the typed result back out of `agent.state[:jidoka]` and returns
    `{:ok, Turn.Result.t()}`, `{:hibernate, snapshot}`, or `{:error, reason}`.
 
@@ -225,7 +225,7 @@ The current Jidoka state can be inspected directly:
 agent = :sys.get_state(Jidoka.whereis("time-agent-1")).agent
 
 {:ok, jidoka_state} =
-  Jidoka.Runtime.AgentServerState.from_jido_state(agent.state)
+  Jidoka.Adapter.Jido.AgentServerState.from_jido_state(agent.state)
 
 jidoka_state.status        #=> :completed
 jidoka_state.result.content
@@ -336,17 +336,17 @@ Key modules touched in this guide:
   `await_agent/2`, `turn/3`, `chat/3`.
 - [`Jidoka.Agent`](`Jidoka.Agent`) - DSL module that injects `start/1` and
   `child_spec/1` for hosted agents.
-- [`Jidoka.Runtime.Signals`](`Jidoka.Runtime.Signals`) - constructor for the
+- [`Jidoka.Adapter.Jido.Signals`](`Jidoka.Adapter.Jido.Signals`) - constructor for the
   `"jidoka.turn.run"` signal.
-- [`Jidoka.Runtime.Actions.RunTurn`](`Jidoka.Runtime.Actions.RunTurn`) - Jido
+- [`Jidoka.Adapter.Jido.RunTurn`](`Jidoka.Adapter.Jido.RunTurn`) - Jido
   action that runs the harness inside the agent server.
-- [`Jidoka.Runtime.AgentServerState`](`Jidoka.Runtime.AgentServerState`) -
+- [`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`) -
   typed Jidoka state stored under `agent.state[:jidoka]`.
 
 ## Related Guides
 
 - [Getting Started](getting-started.md) - the smallest DSL agent end to end.
-- [Runtime And Harness](runtime-and-harness.md) - sessions, snapshots,
+- [Runtime And Execution Layers](runtime-and-harness.md) - sessions, snapshots,
   effects, and memory.
 - [Live LLM Tool Loop](live-llm-tool-loop.md) - running a hosted agent
   against a real provider.

@@ -1,7 +1,7 @@
-defmodule Jidoka.Runtime.ReqLLM.DecisionTest do
+defmodule Jidoka.Adapter.ReqLLM.DecisionTest do
   use ExUnit.Case, async: true
 
-  alias Jidoka.Runtime.ReqLLM.Decision
+  alias Jidoka.Adapter.ReqLLM.Decision
 
   test "parses final decisions from JSON text" do
     assert {:ok, %{type: :final, content: "hello"}} =

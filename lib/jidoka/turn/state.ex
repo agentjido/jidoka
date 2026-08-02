@@ -49,7 +49,7 @@ defmodule Jidoka.Turn.State do
   def new!(attrs), do: Schema.parse!(@schema, prepare_attrs(attrs), "turn state")
 
   @doc "Restores turn state from a compatible agent snapshot."
-  @spec from_snapshot(Jidoka.Runtime.AgentSnapshot.t()) :: {:ok, t()} | {:error, term()}
+  @spec from_snapshot(Jidoka.Snapshot.t()) :: {:ok, t()} | {:error, term()}
   def from_snapshot(%{turn_state: %__MODULE__{} = state}), do: new(state)
 
   defp prepare_attrs(attrs) do

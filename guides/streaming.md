@@ -333,5 +333,5 @@ Key modules touched in this guide:
   events to a `Jidoka.AgentView`.
 - [Sessions And Stores](sessions-and-stores.md) - streaming through a
   session call.
-- [Runtime And Harness](runtime-and-harness.md) - where lifecycle events
+- [Runtime And Execution Layers](runtime-and-harness.md) - where lifecycle events
   are emitted from.

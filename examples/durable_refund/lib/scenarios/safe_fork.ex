@@ -1,10 +1,10 @@
 defmodule JidokaExamples.DurableRefund.Scenarios.SafeFork do
   @moduledoc false
 
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.Replay
-  alias Jidoka.Harness.Store.InMemory
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Replay
+  alias Jidoka.Session.Store.InMemory
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
   alias JidokaExamples.DurableRefund.Agent
   alias JidokaExamples.DurableRefund.ScriptedLLM
@@ -15,7 +15,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.SafeFork do
     branch_id = Keyword.get(opts, :branch_session_id, "durable-refund-branch")
 
     with {:ok, %Session{}} <- Jidoka.Session.start(Agent, source_id, store: store),
-         {:hibernate, %Session{} = source, %AgentSnapshot{} = snapshot} <-
+         {:hibernate, %Session{} = source, %Snapshot{} = snapshot} <-
            Jidoka.Session.run(source_id, "Choose a refund path",
              store: store,
              llm: ScriptedLLM.final("unused"),

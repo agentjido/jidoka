@@ -67,8 +67,8 @@ end
 ## Start A Durable Session
 
 ```elixir
-{:ok, store_pid} = Jidoka.Harness.Store.InMemory.start_link()
-store = {Jidoka.Harness.Store.InMemory, pid: store_pid}
+{:ok, store_pid} = Jidoka.Session.Store.InMemory.start_link()
+store = {Jidoka.Session.Store.InMemory, pid: store_pid}
 
 {:ok, session} = Jidoka.Harness.start_session(RefundAgent.spec(), session_id: "refund-demo", store: store)
 {:ok, _inspection} = Jidoka.Kino.debug_agent(RefundAgent)
@@ -117,7 +117,7 @@ approval = Jidoka.Review.Response.approve(review.interrupt_id)
     store: store,
     approval: approval,
     llm: fake_llm,
-    operations: Jidoka.Runtime.JidoActions.operations([IssueRefund])
+    operations: Jidoka.Adapter.Jido.Actions.operations([IssueRefund])
   )
 
 %{

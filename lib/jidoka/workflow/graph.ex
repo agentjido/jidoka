@@ -2,7 +2,7 @@ defmodule Jidoka.Workflow.Graph do
   @moduledoc false
 
   alias Jidoka.Projection.Workflow, as: WorkflowProjection
-  alias Jidoka.Projection.Value
+  alias Jidoka.Portable
   alias Jidoka.Workflow.Spec
   alias Jidoka.Workflow.Step
 
@@ -43,7 +43,7 @@ defmodule Jidoka.Workflow.Graph do
   end
 
   defp retry(nil), do: nil
-  defp retry(retry), do: Value.project(retry)
+  defp retry(retry), do: Portable.project(retry)
 
   defp fanout(%Step{kind: :map} = step) do
     %{

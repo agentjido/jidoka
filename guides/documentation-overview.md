@@ -8,7 +8,7 @@ You do not have to read the guides in sidebar order.
 | Goal | Read first | Read next |
 | --- | --- | --- |
 | Build your first agent | [Getting Started](getting-started.md) | [Agent DSL](agent-dsl.md) |
-| Understand the runtime model | [Core Concepts](core-concepts.md) | [Runtime And Harness](runtime-and-harness.md) |
+| Understand the runtime model | [Core Concepts](core-concepts.md) | [Runtime And Execution Layers](runtime-and-harness.md) |
 | Use the stable application API | [Public Facade](public-facade.md) | [Sessions And Stores](sessions-and-stores.md) |
 | Prepare a production deployment | [Configuration](configuration.md) | [Idempotency And Safety](idempotency-and-safety.md) |
 | Diagnose a failure | [Troubleshooting](troubleshooting.md) | [Inspection And Preflight](inspection-and-preflight.md) |
@@ -45,7 +45,7 @@ Use this path when you deploy or operate Jidoka:
 
 1. [Configuration](configuration.md) - configure defaults, credentials, and
    runtime services.
-2. [Runtime And Harness](runtime-and-harness.md) - understand the execution
+2. [Runtime And Execution Layers](runtime-and-harness.md) - understand the execution
    boundary.
 3. [Sessions And Stores](sessions-and-stores.md) - select durable store
    implementations.

@@ -210,6 +210,6 @@ defmodule Jidoka.AgentViewTest do
         agent_state: request.agent_state
       )
 
-    Jidoka.Runtime.AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+    Jidoka.Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
   end
 end

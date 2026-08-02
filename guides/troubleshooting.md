@@ -147,9 +147,9 @@ trace.
 
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
-| `{:error, :missing_provider_credentials}` | Live turn without a provider key | Export `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` or pass `llm: Jidoka.Runtime.ReqLLM.llm(model: ..., ...)` with explicit options. |
+| `{:error, :missing_provider_credentials}` | Live turn without a provider key | Export `OPENAI_API_KEY`/`ANTHROPIC_API_KEY` or pass `llm: Jidoka.Adapter.ReqLLM.llm(model: ..., ...)` with explicit options. |
 | `{:error, :empty_llm_response}` | Provider returned no text | Check provider/network; lower temperature; verify the prompt is not blocked. |
-| `{:error, {:invalid_llm_decision_type, type}}` | Model emitted `"type"` Jidoka does not recognize | Tighten the prompt; or, if the new type is reasonable, extend `Jidoka.Runtime.ReqLLM.Decision.parse_object/1`. |
+| `{:error, {:invalid_llm_decision_type, type}}` | Model emitted `"type"` Jidoka does not recognize | Tighten the prompt; or, if the new type is reasonable, extend `Jidoka.Adapter.ReqLLM.Decision.parse_object/1`. |
 | `{:error, {:invalid_final_content, _}}` | Model emitted `"type": "final"` without a `"content"` string | Strengthen the prompt; consider lowering `max_repairs` to fail fast while iterating. |
 | `{:error, {:invalid_operation_name, _}}` | Decision had a non-string operation name | The runtime cannot dispatch; fix prompt to force a string name. |
 | `result.value` is `nil` after a `result` schema was declared | Model returned no structured `result` and `content` was not JSON | Read `Structured Results` guide; lower `max_repairs` to surface early; tighten prompt. |
@@ -163,7 +163,7 @@ trace.
 
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
-| `{:error, :missing_operations_capability}` | Data-built agent has operations but call omitted `operations:` | Pass `operations: Jidoka.Runtime.JidoActions.operations(actions)` or `Jidoka.Runtime.LocalOperations.operations(handlers)`. DSL agents install their declared tool capability by default. |
+| `{:error, :missing_operations_capability}` | Data-built agent has operations but call omitted `operations:` | Pass `operations: Jidoka.Adapter.Jido.Actions.operations(actions)` or `Jidoka.Runtime.LocalOperations.operations(handlers)`. DSL agents install their declared tool capability by default. |
 | `{:error, {:missing_jido_action, name}}` | Decision asked for an action not registered in `Jido.Action` list | Add the action to the operations capability or rename in the prompt. |
 | `{:error, {:missing_operation_handler, name}}` | Decision asked for a local operation not in the handler map | Add the handler or update the prompt. |
 | `{:error, {:unsupported_effect_kind, kind}}` | Adapter was called with an intent kind it does not handle | Route only `:operation` intents to the operation adapter; route `:llm` intents to the LLM adapter. |
@@ -176,7 +176,7 @@ trace.
 
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
-| `{:error, :invalid_snapshot_serialization}` | Deserialize received a non-prefixed string | Confirm the value came from `Jidoka.Runtime.AgentSnapshot.serialize/1`; do not hand-craft snapshot strings. |
+| `{:error, :invalid_snapshot_serialization}` | Deserialize received a non-prefixed string | Confirm the value came from `Jidoka.Snapshot.serialize/1`; do not hand-craft snapshot strings. |
 | `{:error, {:unsupported_snapshot_schema_version, version, expected}}` | Snapshot version drift between writer and reader | Bump the schema and add a migration, or refuse the snapshot. |
 | `{:error, {:non_serializable_snapshot_value, path, type}}` | A function, pid, port, or ref leaked into `Turn.State` | Move the value into a runtime capability; reference it by id. |
 | `{:error, {:approval_interrupt_mismatch, expected, actual}}` | `Review.Response.interrupt_id` does not match the pending interrupt | Read `pending_review` metadata from the snapshot to look up the correct `interrupt_id`. |
@@ -193,7 +193,7 @@ trace.
 | `{:error, :timeout}` from `Jido.AgentServer.call` | Turn took longer than the `:timeout` option (default 30s) | Raise `timeout:` on `Jidoka.turn/3` or shorten the capability path. |
 | `{:error, {:unexpected_jidoka_agent_state, _}}` | `AgentServerState.to_run_result/1` got a status it does not map | Add a `to_run_result/1` clause and a `jido_status/1` mapping for the new status. |
 | Jido status stuck at `:working` | Agent crashed mid-turn before `Runtime.Actions.RunTurn` completed | Inspect supervisor logs; restart the agent process; re-run the turn. |
-| Signal not routed to `Jidoka.Runtime.Actions.RunTurn` | Custom signal type registered without matching action | Use `Jidoka.Runtime.Signals.turn_run/2`; do not invent new types without adding actions. |
+| Signal not routed to `Jidoka.Adapter.Jido.RunTurn` | Custom signal type registered without matching action | Use `Jidoka.Adapter.Jido.Signals.turn_run/2`; do not invent new types without adding actions. |
 | `{:error, :missing_input}` from `RunTurn` | Signal carried an empty or non-string `input` | Ensure the signal data has `:input` set to a non-empty binary. |
 | Agent never reaches `:completed` after a successful capability call | `RunTurn` returned a tuple instead of `{:ok, jido_state}` | The action must always return `{:ok, jido_state_map}`; failures are encoded in the map. |
 
@@ -258,9 +258,9 @@ needed once you have the categories above as a reference.
   invalid LLM/operations options at construction.
 - [`Jidoka.Runtime.Review`](`Jidoka.Runtime.Review`) - validates approval
   responses and produces approval-related errors.
-- [`Jidoka.Runtime.AgentSnapshot`](`Jidoka.Runtime.AgentSnapshot`) -
+- [`Jidoka.Snapshot`](`Jidoka.Snapshot`) -
   serialization and version validation.
-- [`Jidoka.Runtime.AgentServerState`](`Jidoka.Runtime.AgentServerState`) -
+- [`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`) -
   maps `Jido.AgentServer` state back to `{:ok, _}`/`{:hibernate, _}`/`{:error, _}`.
 - [`Jidoka.Trace`](`Jidoka.Trace`) - timeline
   projection used in the diagnostic workflow.

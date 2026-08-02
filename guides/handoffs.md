@@ -416,5 +416,5 @@ public `Jidoka.handoff/1` and `Jidoka.reset_handoff/1` calls do not change.
   approval flow recommended for `:unsafe_once` handoffs.
 - [Agent DSL](agent-dsl.md) - the `tools` block and how `handoff` is
   authored.
-- [Runtime And Harness](runtime-and-harness.md) - sessions, snapshots, and
+- [Runtime And Execution Layers](runtime-and-harness.md) - sessions, snapshots, and
   how an application dispatcher reads ownership between turns.

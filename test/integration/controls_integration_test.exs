@@ -257,7 +257,7 @@ defmodule Jidoka.ControlsIntegrationTest do
   end
 
   test "operation controls can interrupt into a review snapshot before execution" do
-    assert {:hibernate, %Jidoka.Runtime.AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Jidoka.Snapshot{} = snapshot} =
              OperationDecisionAgent.run_turn(
                operation_request("approval", {:interrupt, :approval_required}),
                llm: operation_llm("approval"),

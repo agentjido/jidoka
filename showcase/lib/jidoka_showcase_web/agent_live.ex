@@ -333,21 +333,21 @@ defmodule JidokaShowcaseWeb.AgentLive do
   defp live_ready(fun) when is_function(fun, 0), do: fun.()
   defp live_ready(value) when is_boolean(value), do: value
 
-  defp pending_snapshot(%{outcome: {:hibernate, %Jidoka.Runtime.AgentSnapshot{} = snapshot}}),
+  defp pending_snapshot(%{outcome: {:hibernate, %Jidoka.Snapshot{} = snapshot}}),
     do: {:ok, snapshot}
 
   defp pending_snapshot(_agent_view), do: {:error, :missing_pending_review}
 
-  defp review_response(%Jidoka.Runtime.AgentSnapshot{} = snapshot, :approved) do
+  defp review_response(%Jidoka.Snapshot{} = snapshot, :approved) do
     Jidoka.Review.Response.approve(snapshot.turn_state.pending_interrupt)
   end
 
-  defp review_response(%Jidoka.Runtime.AgentSnapshot{} = snapshot, :denied) do
+  defp review_response(%Jidoka.Snapshot{} = snapshot, :denied) do
     Jidoka.Review.Response.deny(snapshot.turn_state.pending_interrupt, reason: :human_rejected)
   end
 
   defp resume_llm(model, parent) do
-    Jidoka.Runtime.ReqLLM.llm(model: model, stream: true, stream_to: parent)
+    Jidoka.Adapter.ReqLLM.llm(model: model, stream: true, stream_to: parent)
   end
 
   defp operation_capability(agent_module) do

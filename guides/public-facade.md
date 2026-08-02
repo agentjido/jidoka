@@ -129,7 +129,7 @@ Use `session/3` when passing a store or runtime options:
 ```elixir
 {:ok, session} =
   Jidoka.session(MyApp.Assistant, "conversation-123",
-    store: {Jidoka.Harness.Store.InMemory, pid: store_pid}
+    store: {Jidoka.Session.Store.InMemory, pid: store_pid}
   )
 ```
 

@@ -36,7 +36,8 @@ defmodule Jidoka.Workflow.Codegen do
 
       @doc "Runs this workflow through Jidoka's workflow runtime."
       @spec run(map() | keyword(), map()) :: {:ok, term()} | {:error, term()}
-      def run(input, context), do: Jidoka.Workflow.Runtime.run(__jidoka_workflow__(), input, context: context)
+      def run(input, context),
+        do: Jidoka.Adapter.Runic.Workflow.run(__jidoka_workflow__(), input, context: context)
     end
   end
 end

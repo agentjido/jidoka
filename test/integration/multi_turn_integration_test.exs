@@ -7,7 +7,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
   alias Jidoka.Effect
   alias Jidoka.IntegrationSupport.AccountAgent
   alias Jidoka.IntegrationSupport.ApprovalControl
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
@@ -340,9 +340,9 @@ defmodule Jidoka.MultiTurnIntegrationTest do
   defp drain_snapshots({:ok, %Turn.Result{} = result}, _opts, cursors, _remaining),
     do: {:ok, result, cursors}
 
-  defp drain_snapshots({:hibernate, %AgentSnapshot{} = snapshot}, opts, cursors, remaining)
+  defp drain_snapshots({:hibernate, %Snapshot{} = snapshot}, opts, cursors, remaining)
        when remaining > 0 do
-    serialized_snapshot = AgentSnapshot.serialize!(snapshot)
+    serialized_snapshot = Snapshot.serialize!(snapshot)
 
     serialized_snapshot
     |> Jidoka.resume(opts)
@@ -351,7 +351,7 @@ defmodule Jidoka.MultiTurnIntegrationTest do
 
   defp drain_snapshots({:error, reason}, _opts, _cursors, _remaining), do: {:error, reason}
 
-  defp drain_snapshots({:hibernate, %AgentSnapshot{}}, _opts, _cursors, 0),
+  defp drain_snapshots({:hibernate, %Snapshot{}}, _opts, _cursors, 0),
     do: flunk("snapshot drain exceeded the maximum number of resume steps")
 
   defp prompt_messages(%Effect.Intent{payload: payload}) do

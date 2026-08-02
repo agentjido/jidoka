@@ -132,7 +132,7 @@ defmodule JidokaTest.KinoTest do
   defp runtime_opts do
     [
       llm: &fake_llm/3,
-      operations: Jidoka.Runtime.JidoActions.operations([LookupAction])
+      operations: Jidoka.Adapter.Jido.Actions.operations([LookupAction])
     ]
   end
 end

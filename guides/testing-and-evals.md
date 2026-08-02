@@ -388,5 +388,5 @@ For tests that need to inspect the full run shape, project it with
 - [Handoffs](handoffs.md) - testing ownership transitions.
 - [Inspection And Preflight](inspection-and-preflight.md) - debugging
   failures before adding assertions.
-- [Runtime And Harness](runtime-and-harness.md) - hibernation and resume
+- [Runtime And Execution Layers](runtime-and-harness.md) - hibernation and resume
   flows referenced by error-status cases.

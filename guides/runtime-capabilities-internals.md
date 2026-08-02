@@ -14,10 +14,10 @@ adapters under `lib/jidoka/runtime/`, not for agent authors.
   new adapter (memory store, vector store, MCP client) that participates in
   the effect shell.
 - Use this guide when changing how
-  [`Jidoka.Runtime.ReqLLM`](`Jidoka.Runtime.ReqLLM`) parses provider output or
+  [`Jidoka.Adapter.ReqLLM`](`Jidoka.Adapter.ReqLLM`) parses provider output or
   when adjusting the JSON decision protocol.
 - Use this guide when touching the `:jidoka` slot inside the Jido agent
-  state via [`Jidoka.Runtime.AgentServerState`](`Jidoka.Runtime.AgentServerState`).
+  state via [`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`).
 - Do not use this guide as a tutorial on writing agents. Authors should read
   [Tools And Operations](tools-and-operations.md) and
   [Live LLM Tool Loop](live-llm-tool-loop.md).
@@ -58,8 +58,8 @@ operations =
 ```
 
 The bundle is three-arity functions all the way down. Tests pass anonymous
-functions directly; live runs pass the adapters in `Jidoka.Runtime.ReqLLM`
-and `Jidoka.Runtime.JidoActions`. The runner does not care which.
+functions directly; live runs pass the adapters in `Jidoka.Adapter.ReqLLM`
+and `Jidoka.Adapter.Jido.Actions`. The runner does not care which.
 
 ## Concepts
 
@@ -152,7 +152,7 @@ Two properties are load-bearing:
 
 ### Step 2: Implement An LLM Capability (ReqLLM Adapter Shape)
 
-The reference LLM adapter is [`Jidoka.Runtime.ReqLLM`](`Jidoka.Runtime.ReqLLM`).
+The reference LLM adapter is [`Jidoka.Adapter.ReqLLM`](`Jidoka.Adapter.ReqLLM`).
 Its public entrypoint is `llm/1`, which returns the three-arity function the
 runner expects:
 
@@ -170,7 +170,7 @@ end
 2. Resolves the model spec through `Jidoka.Config.normalize_model_spec/1`.
 3. Calls `ReqLLM.Generation.generate_text/3` (or `stream_text/3`).
 4. Extracts the text and pipes it through
-   [`Jidoka.Runtime.ReqLLM.Decision.parse_text/1`](`Jidoka.Runtime.ReqLLM.Decision`).
+   [`Jidoka.Adapter.ReqLLM.Decision.parse_text/1`](`Jidoka.Adapter.ReqLLM.Decision`).
 5. Returns `{:ok, %Effect.LLMDecision{}}` or `{:error, term}`.
 
 `Decision.parse_text/1` is the JSON parsing surface. It accepts:
@@ -189,9 +189,9 @@ wants to share Jidoka's runtime system prompt. A native function-calling
 adapter could skip parsing and return `Effect.LLMDecision.operation/2`
 directly.
 
-### Step 3: Implement An Operation Capability (JidoActions And LocalOperations)
+### Step 3: Implement An Operation Capability (Jidoka.Adapter.Jido.Actions And LocalOperations)
 
-[`Jidoka.Runtime.JidoActions`](`Jidoka.Runtime.JidoActions`) is the canonical
+[`Jidoka.Adapter.Jido.Actions`](`Jidoka.Adapter.Jido.Actions`) is the canonical
 operation adapter. It converts a list of `Jido.Action` modules into a function
 that dispatches by operation name:
 
@@ -309,12 +309,12 @@ build approval interfaces.
 
 ### Step 6: Serialize And Restore Agent Snapshots
 
-[`Jidoka.Runtime.AgentSnapshot`](`Jidoka.Runtime.AgentSnapshot`) is the
+[`Jidoka.Snapshot`](`Jidoka.Snapshot`) is the
 durable form of `Turn.State` plus a cursor. Three details matter to
 contributors:
 
 - **Schema version is part of the snapshot.**
-  `Jidoka.Runtime.AgentSnapshot.schema_version/0` returns `1`. Bumping it
+  `Jidoka.Snapshot.schema_version/0` returns `1`. Bumping it
   requires migration logic in `from_input/1`.
 - **Serialize is opaque.** `serialize/1` produces a string with the prefix
   `"jidoka:snapshot:v1:"` followed by base64-encoded `:erlang.term_to_binary`.
@@ -324,8 +324,8 @@ contributors:
   `serialize/1` with `{:non_serializable_snapshot_value, path, type}`.
 
 ```elixir
-{:ok, serialized} = Jidoka.Runtime.AgentSnapshot.serialize(snapshot)
-{:ok, ^snapshot} = Jidoka.Runtime.AgentSnapshot.deserialize(serialized)
+{:ok, serialized} = Jidoka.Snapshot.serialize(snapshot)
+{:ok, ^snapshot} = Jidoka.Snapshot.deserialize(serialized)
 ```
 
 A new field that needs to round-trip must be plain Elixir data, a Zoi-backed
@@ -334,7 +334,7 @@ struct that flattens to plain data, or a binary.
 ### Step 7: Live Inside The Jido Agent Process
 
 When a turn runs through `Jido.AgentServer`, the snapshot/result lives under
-the `:jidoka` key of Jido state. [`Jidoka.Runtime.AgentServerState`](`Jidoka.Runtime.AgentServerState`)
+the `:jidoka` key of Jido state. [`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`)
 is the typed wrapper.
 
 ```elixir
@@ -343,7 +343,7 @@ is the typed wrapper.
   request_id: Schema.non_empty_string() |> Zoi.nullish(),
   agent_state: Zoi.lazy({Agent.State, :schema, []}),
   result: Zoi.lazy({Turn.Result, :schema, []}) |> Zoi.nullish(),
-  snapshot: Zoi.lazy({AgentSnapshot, :schema, []}) |> Zoi.nullish(),
+  snapshot: Zoi.lazy({Snapshot, :schema, []}) |> Zoi.nullish(),
   error: Zoi.any() |> Zoi.nullish(),
   metadata: Zoi.map() |> Zoi.default(%{})
 })
@@ -371,7 +371,7 @@ that keeps the conventional top-level fields (`:status`, `:last_request_id`,
 
 ### Step 8: Route Signals Into The Runtime
 
-[`Jidoka.Runtime.Signals`](`Jidoka.Runtime.Signals`) defines the single
+[`Jidoka.Adapter.Jido.Signals`](`Jidoka.Adapter.Jido.Signals`) defines the single
 turn-run signal:
 
 ```elixir
@@ -390,13 +390,13 @@ end
 
 `Jidoka.turn/3` builds this signal and sends it via
 `Jido.AgentServer.call/3`. The signal is routed to
-[`Jidoka.Runtime.Actions.RunTurn`](`Jidoka.Runtime.Actions.RunTurn`), which
+[`Jidoka.Adapter.Jido.RunTurn`](`Jidoka.Adapter.Jido.RunTurn`), which
 unwraps the data, calls `agent_module.run_turn/2`, and writes the outcome back
 through `AgentServerState`.
 
 Adding a new signal type (for example, `"jidoka.session.resume"`) requires:
 
-1. A constructor in `Jidoka.Runtime.Signals`.
+1. A constructor in `Jidoka.Adapter.Jido.Signals`.
 2. A new action under `lib/jidoka/runtime/actions/`.
 3. A route registration so the agent dispatches the signal to the action.
 
@@ -442,7 +442,7 @@ Adding a new signal type (for example, `"jidoka.session.resume"`) requires:
    a raw map from an adapter is allowed (the interpreter accepts maps that
    match the `LLMDecision` shape) but adapters should prefer the typed
    struct.
-4. **`AgentSnapshot.schema_version` is the public migration boundary.** Code
+4. **`Snapshot.schema_version` is the public migration boundary.** Code
    that reads old snapshots must check `schema_version` and migrate, not
    silently coerce.
 5. **`AgentServerState` keeps Jido top-level fields stable.** Renaming
@@ -485,14 +485,14 @@ shapes (markdown-fenced JSON, OpenAI `tool_calls`, plain text fallback).
 
 For process-hosted tests, see
 `test/jidoka/jido_agent_server_test.exs`
-for the round-trip through `Jidoka.Runtime.Signals.turn_run/2` and
+for the round-trip through `Jidoka.Adapter.Jido.Signals.turn_run/2` and
 `AgentServerState.to_run_result/1`.
 
 ## Troubleshooting
 
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
-| `{:error, %Splode.Error{}}` mentioning `missing_operations_capability` | Agent declares operations but no `operations:` was passed to `turn/3` | Pass `operations: Jidoka.Runtime.LocalOperations.operations(...)` or `Jidoka.Runtime.JidoActions.operations(...)`. |
+| `{:error, %Splode.Error{}}` mentioning `missing_operations_capability` | Agent declares operations but no `operations:` was passed to `turn/3` | Pass `operations: Jidoka.Runtime.LocalOperations.operations(...)` or `Jidoka.Adapter.Jido.Actions.operations(...)`. |
 | `{:error, {:invalid_capability_result, other}}` | Adapter returned something other than `{:ok, _}` or `{:error, _}` | Wrap raw values in `{:ok, value}`; never return bare maps. |
 | LLM call returns `{:error, :empty_llm_response}` | Provider returned empty text and no JSON | Check provider key/network; lower temperature; consider stricter prompt. |
 | `{:error, {:invalid_llm_decision_type, type}}` | Model returned `"type": "something_unknown"` | Update prompt to use the runtime decision shape, or extend `Decision.parse_object/1` clauses. |
@@ -505,11 +505,11 @@ for the round-trip through `Jidoka.Runtime.Signals.turn_run/2` and
 
 - [`Jidoka.Runtime.Capabilities`](`Jidoka.Runtime.Capabilities`) - typed
   capability bundle.
-- [`Jidoka.Runtime.ReqLLM`](`Jidoka.Runtime.ReqLLM`) - ReqLLM-based LLM
+- [`Jidoka.Adapter.ReqLLM`](`Jidoka.Adapter.ReqLLM`) - ReqLLM-based LLM
   adapter with streaming and decision parsing.
-- [`Jidoka.Runtime.ReqLLM.Decision`](`Jidoka.Runtime.ReqLLM.Decision`) - JSON
+- [`Jidoka.Adapter.ReqLLM.Decision`](`Jidoka.Adapter.ReqLLM.Decision`) - JSON
   decision parser used by the ReqLLM adapter.
-- [`Jidoka.Runtime.JidoActions`](`Jidoka.Runtime.JidoActions`) - operation
+- [`Jidoka.Adapter.Jido.Actions`](`Jidoka.Adapter.Jido.Actions`) - operation
   adapter for Jido actions.
 - [`Jidoka.Runtime.LocalOperations`](`Jidoka.Runtime.LocalOperations`) -
   function-backed operation adapter for tests and examples.
@@ -517,11 +517,11 @@ for the round-trip through `Jidoka.Runtime.Signals.turn_run/2` and
   with input, operation, and output boundaries.
 - [`Jidoka.Runtime.Review`](`Jidoka.Runtime.Review`) - approval normalization,
   validation, and application.
-- [`Jidoka.Runtime.AgentSnapshot`](`Jidoka.Runtime.AgentSnapshot`) -
+- [`Jidoka.Snapshot`](`Jidoka.Snapshot`) -
   versioned serializable snapshot.
-- [`Jidoka.Runtime.AgentServerState`](`Jidoka.Runtime.AgentServerState`) -
+- [`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`) -
   `:jidoka` slot inside Jido state.
-- [`Jidoka.Runtime.Signals`](`Jidoka.Runtime.Signals`) - constructors for
+- [`Jidoka.Adapter.Jido.Signals`](`Jidoka.Adapter.Jido.Signals`) - constructors for
   signals routed into the runtime.
 
 ## Related Guides

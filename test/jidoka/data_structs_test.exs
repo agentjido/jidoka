@@ -34,7 +34,7 @@ defmodule Jidoka.DataStructsTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
   alias Jidoka.DataStructsTest.Support.{AllowControl, AmountPredicate, CallerData}
 
@@ -601,38 +601,36 @@ defmodule Jidoka.DataStructsTest do
 
   test "agent snapshots reject unsigned serializable maps" do
     state = base_state()
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
 
-    assert snapshot.schema_version == AgentSnapshot.schema_version()
+    assert snapshot.schema_version == Snapshot.schema_version()
 
-    assert {:ok, ^snapshot} = AgentSnapshot.from_input(snapshot)
+    assert {:ok, ^snapshot} = Snapshot.from_input(snapshot)
 
     assert {:error, :unsafe_snapshot_input} =
              snapshot
              |> portable_map()
-             |> AgentSnapshot.from_input()
+             |> Snapshot.from_input()
   end
 
   test "agent snapshot id generation can be explicit or injected" do
     state = base_state()
 
-    assert {:ok, %AgentSnapshot{snapshot_id: "snap_explicit"}} =
-             AgentSnapshot.from_turn_state(state, Turn.Cursor.after_prompt(), snapshot_id: "snap_explicit")
+    assert {:ok, %Snapshot{snapshot_id: "snap_explicit"}} =
+             Snapshot.from_turn_state(state, Turn.Cursor.after_prompt(), snapshot_id: "snap_explicit")
 
-    assert {:ok, %AgentSnapshot{snapshot_id: "snap_injected"}} =
-             AgentSnapshot.from_turn_state(state, Turn.Cursor.after_prompt(),
-               id_generator: fn "snap" -> "snap_injected" end
-             )
+    assert {:ok, %Snapshot{snapshot_id: "snap_injected"}} =
+             Snapshot.from_turn_state(state, Turn.Cursor.after_prompt(), id_generator: fn "snap" -> "snap_injected" end)
   end
 
   test "agent snapshots serialize and deserialize through the hibernate contract" do
     state = base_state()
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
 
-    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
+    assert {:ok, serialized} = Snapshot.serialize(snapshot)
     assert serialized =~ "jidoka:snapshot:v1:"
 
-    assert {:ok, %AgentSnapshot{} = restored} = AgentSnapshot.deserialize(serialized)
+    assert {:ok, %Snapshot{} = restored} = Snapshot.deserialize(serialized)
     assert restored.snapshot_id == snapshot.snapshot_id
     assert restored.cursor.phase == :after_prompt
     assert restored.turn_state.spec.id == "snapshot_agent"
@@ -640,17 +638,17 @@ defmodule Jidoka.DataStructsTest do
 
   test "snapshot serialization rejects non-portable runtime values" do
     state = base_state()
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
     snapshot = %{snapshot | metadata: %{callback: fn -> :ok end}}
 
     assert {:error, {:non_serializable_snapshot_value, [:metadata, :callback], :function}} =
-             AgentSnapshot.serialize(snapshot)
+             Snapshot.serialize(snapshot)
 
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
     snapshot = %{snapshot | metadata: %{wrapped: {:ok, fn -> :ok end}}}
 
     assert {:error, {:non_serializable_snapshot_value, [:metadata, :wrapped, 1], :function}} =
-             AgentSnapshot.serialize(snapshot)
+             Snapshot.serialize(snapshot)
   end
 
   test "turn results require a finished state" do

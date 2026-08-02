@@ -3,13 +3,13 @@ defmodule Jidoka.HarnessSessionTest do
 
   alias Jidoka.Agent
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.SessionLineage
-  alias Jidoka.Harness.SessionLease
-  alias Jidoka.Harness.Store
-  alias Jidoka.Harness.Store.InMemory
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Lineage
+  alias Jidoka.Session.Lease
+  alias Jidoka.Session.Store
+  alias Jidoka.Session.Store.InMemory
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   defmodule FallbackStore do
@@ -72,7 +72,7 @@ defmodule Jidoka.HarnessSessionTest do
               revision: 1,
               status: :running,
               requests: [%Turn.Request{request_id: "turn_claim_1"}],
-              lease: %SessionLease{request_id: "turn_claim_1"}
+              lease: %Lease{request_id: "turn_claim_1"}
             }} = Store.claim_session(store, "sess_claim", request)
 
     assert {:error, {:session_already_running, "sess_claim"}} =
@@ -114,7 +114,7 @@ defmodule Jidoka.HarnessSessionTest do
       base_state()
       |> Turn.State.put_pending_interrupt(interrupt)
 
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.review(interrupt))
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.review(interrupt))
     session = Session.put_snapshot(session, snapshot)
 
     assert session.status == :waiting
@@ -132,11 +132,11 @@ defmodule Jidoka.HarnessSessionTest do
 
   test "replay projects session snapshots without calling runtime capabilities" do
     session = Session.start(spec(), session_id: "sess_replay") |> elem(1)
-    snapshot = AgentSnapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
     session = Session.put_snapshot(session, snapshot)
 
     assert {:ok,
-            %Harness.Replay{
+            %Jidoka.Session.Replay{
               session_id: "sess_replay",
               agent_id: "harness_session_agent",
               status: :hibernated,
@@ -153,19 +153,19 @@ defmodule Jidoka.HarnessSessionTest do
 
     snapshot =
       base_state(request)
-      |> AgentSnapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "snap_source")
+      |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "snap_source")
 
     source = source |> Session.put_request(request) |> Session.put_snapshot(snapshot)
     assert {:ok, ^source} = Store.put_session(store, source)
-    assert {:ok, signed_snapshot} = AgentSnapshot.serialize(snapshot)
+    assert {:ok, signed_snapshot} = Snapshot.serialize(snapshot)
 
     assert {:ok,
             %Session{
               session_id: "sess_fork",
               status: :hibernated,
               requests: [%Turn.Request{request_id: "turn_source"}],
-              snapshots: [%AgentSnapshot{snapshot_id: "snap_fork"}],
-              lineage: %SessionLineage{
+              snapshots: [%Snapshot{snapshot_id: "snap_fork"}],
+              lineage: %Lineage{
                 root_session_id: "sess_source",
                 parent_session_id: "sess_source",
                 source_snapshot_id: "snap_source",
@@ -188,7 +188,7 @@ defmodule Jidoka.HarnessSessionTest do
     assert {:ok, ^source} = Store.get_session(store, "sess_source")
     assert {:ok, ^fork} = Store.get_session(store, "sess_fork")
 
-    assert {:ok, %Harness.Replay{lineage: %{parent_session_id: "sess_source", depth: 1}}} =
+    assert {:ok, %Jidoka.Session.Replay{lineage: %{parent_session_id: "sess_source", depth: 1}}} =
              Harness.replay(fork)
   end
 
@@ -196,11 +196,11 @@ defmodule Jidoka.HarnessSessionTest do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}
     source = Session.start(spec(), session_id: "sess_source") |> elem(1)
-    snapshot = AgentSnapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
     source = Session.put_snapshot(source, snapshot)
     assert {:ok, ^source} = Store.put_session(store, source)
 
-    changed = %AgentSnapshot{snapshot | metadata: %{"changed" => true}}
+    changed = %Snapshot{snapshot | metadata: %{"changed" => true}}
 
     assert {:error, {:session_snapshot_mismatch, snapshot_id}} =
              Harness.fork_session(source, snapshot: changed, session_id: "sess_changed")
@@ -221,7 +221,7 @@ defmodule Jidoka.HarnessSessionTest do
 
   test "nested forks keep the root session and increase lineage depth" do
     source = Session.start(spec(), session_id: "sess_root") |> elem(1)
-    snapshot = AgentSnapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
     source = Session.put_snapshot(source, snapshot)
 
     assert {:ok, first} =
@@ -238,7 +238,7 @@ defmodule Jidoka.HarnessSessionTest do
                clock: fn -> 20 end
              )
 
-    assert %SessionLineage{
+    assert %Lineage{
              root_session_id: "sess_root",
              parent_session_id: "sess_child",
              source_snapshot_id: "snap_child",

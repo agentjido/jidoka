@@ -4,8 +4,8 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
-  alias Jidoka.Harness.Session, as: HarnessSession
-  alias Jidoka.Harness.Store.InMemory, as: SessionStore
+  alias Jidoka.Session.Data, as: SessionData
+  alias Jidoka.Session.Store.InMemory, as: SessionStore
   alias Jidoka.Memory.Store.InMemory, as: MemoryStore
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Schema
@@ -36,10 +36,10 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
         end
       })
 
-    assert {:ok, %HarnessSession{session_id: "parity-session-a"} = session_a} =
+    assert {:ok, %SessionData{session_id: "parity-session-a"} = session_a} =
              Session.start(spec(), "parity-session-a", store: session_store)
 
-    assert {:ok, %HarnessSession{session_id: "parity-session-b"}} =
+    assert {:ok, %SessionData{session_id: "parity-session-b"}} =
              Session.start(spec(), "parity-session-b", store: session_store)
 
     assert {:ok, write_result} =
@@ -78,7 +78,7 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
       end
     end
 
-    assert {:ok, %HarnessSession{} = after_a1, %Turn.Result{} = first_result} =
+    assert {:ok, %SessionData{} = after_a1, %Turn.Result{} = first_result} =
              Session.run(
                "parity-session-a",
                Turn.Request.new!(input: "A1 user request", request_id: "parity-a1"),
@@ -124,7 +124,7 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
       {:ok, %{type: :final, content: "A2 fresh assistant evidence"}}
     end
 
-    assert {:ok, %HarnessSession{} = after_a2, %Turn.Result{} = ordinary_second_result} =
+    assert {:ok, %SessionData{} = after_a2, %Turn.Result{} = ordinary_second_result} =
              Session.run(
                "parity-session-a",
                Turn.Request.new!(input: "A2 user request", request_id: "parity-a2"),
@@ -168,7 +168,7 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
         agent_state: first_result.agent_state
       )
 
-    assert {:ok, %HarnessSession{} = after_a3, %Turn.Result{} = explicit_result} =
+    assert {:ok, %SessionData{} = after_a3, %Turn.Result{} = explicit_result} =
              Session.run("parity-session-a", explicit_request,
                store: session_store,
                memory_store: memory_store,
@@ -203,7 +203,7 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
 
     assert memory_event_count(explicit_result) == 1
 
-    assert {:ok, %HarnessSession{result: ^explicit_result} = stored_after_a3} =
+    assert {:ok, %SessionData{result: ^explicit_result} = stored_after_a3} =
              Session.get(session_store, "parity-session-a")
 
     assert stored_after_a3 == after_a3
@@ -220,7 +220,7 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
       {:ok, %{type: :final, content: "B isolated assistant evidence"}}
     end
 
-    assert {:ok, %HarnessSession{} = after_b1, %Turn.Result{} = b_result} =
+    assert {:ok, %SessionData{} = after_b1, %Turn.Result{} = b_result} =
              Session.run(
                "parity-session-b",
                Turn.Request.new!(input: "B1 user request", request_id: "parity-b1"),

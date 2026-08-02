@@ -317,14 +317,14 @@ end
 
 For sessions, `Jidoka.inspect(session)` adds replay metadata, snapshot
 count, pending reviews, and the latest cursor. Sessions are documented in
-[Runtime And Harness](runtime-and-harness.md); the inspection view is the
+[Runtime And Execution Layers](runtime-and-harness.md); the inspection view is the
 debugging entry point for them.
 
 Replay diagnostics explain whether recorded effect data is complete:
 
 ```elixir
 {:ok, replay} = Jidoka.Session.replay(session)
-{:ok, diagnostics} = Jidoka.Harness.Replay.diagnose(replay)
+{:ok, diagnostics} = Jidoka.Session.Replay.diagnose(replay)
 
 diagnostics.status
 #=> :complete | :waiting | :failed | :incomplete

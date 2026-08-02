@@ -4,10 +4,10 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
   import JidokaShowcase.KitchenSinkSupport
 
   alias Jidoka.Effect
-  alias Jidoka.Harness.Session
+  alias Jidoka.Session.Data, as: Session
   alias Jidoka.Memory.Store
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
   alias JidokaShowcase.KitchenSinkAgent.Agent
   alias JidokaShowcaseWeb.KitchenSinkAgentLive.View
@@ -147,7 +147,7 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
   } do
     llm = refund_llm()
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              "Refund order B2002 for $25."
              |> request(context)
              |> Agent.run_turn(agent_run_opts(llm, context, memory_store))
@@ -182,7 +182,7 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
     assert get(operations["issue_refund"], :order_id) == "B2002"
     assert get(approved_result.value, :summary) =~ "approved"
 
-    assert {:hibernate, %AgentSnapshot{} = denied_snapshot} =
+    assert {:hibernate, %Snapshot{} = denied_snapshot} =
              "Refund order B2002 for $25."
              |> request(context)
              |> Agent.run_turn(agent_run_opts(llm, context, memory_store))
@@ -372,7 +372,7 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
 
     refund_llm = refund_llm()
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              "Refund order B2002 for $25."
              |> request(context)
              |> Agent.run_turn(agent_run_opts(refund_llm, context, memory_store))

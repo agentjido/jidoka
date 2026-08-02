@@ -22,10 +22,10 @@ defmodule Jidoka.Debug do
   Request summaries accept:
 
   - `Jidoka.Turn.Result` for a completed turn;
-  - `Jidoka.Harness.Session` for the latest request, or a specific
+  - `Jidoka.Session.Data` for the latest request, or a specific
     `request_id:`;
-  - `Jidoka.Runtime.AgentSnapshot` for hibernated work;
-  - `Jidoka.Harness.Replay` for stored replay projections;
+  - `Jidoka.Snapshot` for hibernated work;
+  - `Jidoka.Session.Replay` for stored replay projections;
   - common return tuples such as `{:ok, result}` and `{:hibernate, snapshot}`.
 
   `Jidoka.Debug` intentionally stores context keys, not full context values.
@@ -41,8 +41,9 @@ defmodule Jidoka.Debug do
   """
 
   alias Jidoka.Debug.{Diagnostics, ReplayDiagnostics, RequestSummary}
-  alias Jidoka.Harness.{Replay, Session}
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Replay
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   @doc """
@@ -68,9 +69,9 @@ defmodule Jidoka.Debug do
     request(result, Keyword.put(opts, :session, session))
   end
 
-  def request({:hibernate, %AgentSnapshot{} = snapshot}, opts), do: request(snapshot, opts)
+  def request({:hibernate, %Snapshot{} = snapshot}, opts), do: request(snapshot, opts)
 
-  def request({:hibernate, %Session{} = session, %AgentSnapshot{} = snapshot}, opts) do
+  def request({:hibernate, %Session{} = session, %Snapshot{} = snapshot}, opts) do
     request(snapshot, Keyword.put(opts, :session, session))
   end
 
@@ -94,11 +95,11 @@ defmodule Jidoka.Debug do
       prompt: prompt,
       context_keys: Map.get(debug, :context_keys, []),
       operation_names: operation_names(prompt, result),
-      operation_results: Enum.map(result.agent_state.operation_results, &Jidoka.project/1),
+      operation_results: Enum.map(result.agent_state.operation_results, &Jidoka.Projection.project/1),
       memory: Map.get(prompt, :memory),
       usage: result.usage,
       timeline: timeline,
-      journal: Jidoka.project(result.journal),
+      journal: Jidoka.Projection.project(result.journal),
       pending_reviews: [],
       diagnostics: Map.get(debug, :diagnostics, []),
       replay_diagnostics: Diagnostics.diagnose!(result),
@@ -125,7 +126,7 @@ defmodule Jidoka.Debug do
     end
   end
 
-  def request(%AgentSnapshot{} = snapshot, opts) do
+  def request(%Snapshot{} = snapshot, opts) do
     session = Keyword.get(opts, :session)
     state = snapshot.turn_state
     prompt = prompt_debug_from_state(state)
@@ -143,12 +144,12 @@ defmodule Jidoka.Debug do
       prompt: prompt,
       context_keys: context_keys(Jidoka.Context.data(state.request.context)),
       operation_names: operation_names(prompt, state),
-      operation_results: Enum.map(state.agent_state.operation_results, &Jidoka.project/1),
+      operation_results: Enum.map(state.agent_state.operation_results, &Jidoka.Projection.project/1),
       memory: memory_from_prompt(state.prompt),
       usage: %{},
       timeline: timeline,
-      journal: Jidoka.project(state.journal),
-      pending_reviews: Enum.map(pending_reviews(snapshot), &Jidoka.project/1),
+      journal: Jidoka.Projection.project(state.journal),
+      pending_reviews: Enum.map(pending_reviews(snapshot), &Jidoka.Projection.project/1),
       diagnostics: state.diagnostics,
       replay_diagnostics: Diagnostics.diagnose!(snapshot),
       metadata: snapshot.metadata
@@ -197,19 +198,19 @@ defmodule Jidoka.Debug do
 
   defp request_from_snapshot(%Session{} = session, nil, opts) do
     case Session.latest_snapshot(session) do
-      %AgentSnapshot{} = snapshot -> request(snapshot, Keyword.put(opts, :session, session))
+      %Snapshot{} = snapshot -> request(snapshot, Keyword.put(opts, :session, session))
       nil -> request_from_session_data(session, nil, opts)
     end
   end
 
   defp request_from_snapshot(%Session{} = session, request_id, opts) do
     snapshot =
-      Enum.find(session.snapshots, fn %AgentSnapshot{} = snapshot ->
+      Enum.find(session.snapshots, fn %Snapshot{} = snapshot ->
         snapshot.turn_state.request.request_id == request_id
       end)
 
     case snapshot do
-      %AgentSnapshot{} = snapshot -> request(snapshot, Keyword.put(opts, :session, session))
+      %Snapshot{} = snapshot -> request(snapshot, Keyword.put(opts, :session, session))
       nil -> request_from_session_data(session, request_id, opts)
     end
   end
@@ -232,7 +233,7 @@ defmodule Jidoka.Debug do
       status: session.status,
       input: request_input(request),
       context_keys: request_context_keys(request),
-      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.project/1),
+      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.Projection.project/1),
       error: session.error,
       replay_diagnostics: Diagnostics.diagnose!(session),
       metadata: session.metadata
@@ -271,7 +272,7 @@ defmodule Jidoka.Debug do
     %{
       model: map_get(prompt, :model),
       loop_index: map_get(prompt, :loop_index),
-      messages: prompt |> map_get(:messages, []) |> Jidoka.project(),
+      messages: prompt |> map_get(:messages, []) |> Jidoka.Projection.project(),
       message_count: length(map_get(prompt, :messages, [])),
       operations: map_get(prompt, :operations, []),
       operation_names: Enum.map(map_get(prompt, :operations, []), &map_get(&1, :name)),
@@ -345,7 +346,7 @@ defmodule Jidoka.Debug do
 
   defp context_keys(_context), do: []
 
-  defp pending_reviews(%AgentSnapshot{metadata: metadata}) do
+  defp pending_reviews(%Snapshot{metadata: metadata}) do
     metadata
     |> map_get(:pending_review)
     |> List.wrap()

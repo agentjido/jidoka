@@ -5,7 +5,7 @@ This guide explains the optional Livebook helpers in
 dependency: every helper compiles without Kino installed and degrades to a
 no-op rendering boundary outside Livebook. The helpers are thin wrappers
 around stable Jidoka contracts (`Jidoka.inspect/1`, `Jidoka.preflight/3`,
-`Jidoka.Harness`, `Jidoka.Turn.Result`). By the end you will be able to set up
+`Jidoka.Turn.Execution`, `Jidoka.Turn.Result`). By the end you will be able to set up
 a notebook, mirror Livebook provider secrets, debug an agent definition,
 debug a completed request, render a preflight, run a chat cell
 deterministically, and start an agent process that survives notebook
@@ -118,7 +118,7 @@ Four concepts cover Kino integration:
   need additional names.
 - `debug_agent/2`, `preflight/3`, and `timeline/2` only project values that
   already exist in `Jidoka.Agent.Spec`, `Turn.Plan`, `Turn.Result`,
-  `AgentSnapshot`, and the trace event journal. No new data crosses a trust
+  `Snapshot`, and the trace event journal. No new data crosses a trust
   boundary.
 - `chat/3` with `require_provider?: true` short-circuits to an `{:error,
   message}` when no provider secret is in scope. This prevents accidental

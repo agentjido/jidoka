@@ -4,7 +4,7 @@ defmodule Jidoka.Parity.PortableAgentAuthoringTest do
   alias Jidoka.Agent.Spec
   alias Jidoka.Effect
   alias Jidoka.Runtime.Controls.OperationContext
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Turn
 
   defmodule LookupAction do
@@ -98,7 +98,7 @@ defmodule Jidoka.Parity.PortableAgentAuthoringTest do
         context_schema: DslAgent.context_schema(),
         result: %{schema: DslAgent.result_schema(), max_repairs: 1},
         memory: %{scope: :session, max_entries: 3},
-        operations: JidoActions.operations_from_actions([LookupAction]),
+        operations: Actions.operations_from_actions([LookupAction]),
         controls: %{
           max_turns: 3,
           timeout_ms: 1_000,

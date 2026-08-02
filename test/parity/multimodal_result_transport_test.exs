@@ -3,8 +3,8 @@ defmodule Jidoka.Parity.MultimodalResultTransportTest do
 
   alias Jidoka.Agent.Spec
   alias Jidoka.ContentPart
-  alias Jidoka.Runtime.AgentSnapshot
-  alias Jidoka.Runtime.ReqLLM
+  alias Jidoka.Snapshot
+  alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Turn
 
   @private_image "private-image-bytes"
@@ -55,11 +55,11 @@ defmodule Jidoka.Parity.MultimodalResultTransportTest do
       flunk("the checkpoint must pause before model execution")
     end
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(spec(), input, llm: checkpoint_llm, checkpoint: :after_prompt)
 
-    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
-    assert {:ok, restored} = AgentSnapshot.deserialize(serialized)
+    assert {:ok, serialized} = Snapshot.serialize(snapshot)
+    assert {:ok, restored} = Snapshot.deserialize(serialized)
     assert [%ContentPart{text: "Review all supplied media."} | _rest] = restored.turn_state.request.content
 
     restored_user = List.last(restored.turn_state.prompt.messages)

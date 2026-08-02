@@ -2,7 +2,7 @@
 
 Jidoka owns the ReAct-style agent loop in its own Runic workflow rather than
 delegating it to `Jido.AI.ReAct`. This guide explains why the spine lives in
-Jidoka, how `Jidoka.Runtime.Spine.Compiler` and `Jidoka.Runtime.Spine.Steps` carve the
+Jidoka, how `Jidoka.Adapter.Runic.TurnCompiler` and `Jidoka.Runtime.Spine.Steps` carve the
 turn into pure phases, and what contributors must preserve when adding new
 steps. It is written for people maintaining the Jidoka runtime, not for agent
 authors.
@@ -11,7 +11,7 @@ authors.
 
 - Use this guide when you are about to add, reorder, or rewrite a workflow
   step in [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) or change how
-  [`Jidoka.Runtime.Spine.Compiler`](`Jidoka.Runtime.Spine.Compiler`) wires steps together.
+  [`Jidoka.Adapter.Runic.TurnCompiler`](`Jidoka.Adapter.Runic.TurnCompiler`) wires steps together.
 - Use this guide before introducing any new "framework" that wraps the turn
   loop; the answer is usually to add a narrowly scoped workflow step, not to
   replace the spine.
@@ -23,7 +23,7 @@ authors.
 - Elixir `~> 1.18` and a checkout of the `jidoka` package.
 - Familiarity with [Runic](https://hexdocs.pm/runic) `Workflow` and `step`.
 - A mental model of the public turn API: `Jidoka.turn/3`,
-  `Jidoka.Harness.run_turn/3`, and `Jidoka.Runtime.TurnRunner.run/4`.
+  `Jidoka.Turn.Execution.run/3`, and `Jidoka.Runtime.TurnRunner.run/4`.
 
 ```bash
 mix deps.get
@@ -38,7 +38,7 @@ purpose:
 
 ```elixir
 alias Jidoka.Turn
-alias Jidoka.Runtime.Spine.Compiler
+alias Jidoka.Adapter.Runic.TurnCompiler, as: Compiler
 alias Runic.Workflow
 
 spec = Jidoka.agent!(id: "spine_demo", model: %{provider: :test, id: "m"})
@@ -81,16 +81,15 @@ Three ideas explain why the spine looks the way it does.
    ([`Jidoka.Runtime.TurnRunner`](`Jidoka.Runtime.TurnRunner`) and
    [`Jidoka.Runtime.EffectInterpreter`](`Jidoka.Runtime.EffectInterpreter`))
    is the only place that performs IO.
-3. **Spec is immutable, Plan is data, Harness is the boundary.**
+3. **Spec is immutable, Plan is data, and execution is an explicit use case.**
    `Jidoka.Agent.Spec` never changes after compilation. `Jidoka.Turn.Plan` is
    normalized executable data derived from a spec.
-   [`Jidoka.Harness`](`Jidoka.Harness`) is the named seam where data meets
-   capabilities.
+   `Jidoka.Turn.Execution` is the seam where data meets capabilities.
 
 ```diagram
 ╭─────────────────────╮
-│   Jidoka.Harness    │  effect shell (IO allowed)
-│  (runtime/turn_*)   │
+│ Turn.Execution      │  application use case
+│ and TurnRunner      │  effect shell (IO allowed)
 ╰──────────┬──────────╯
            │ injects Turn.State
            ▼
@@ -249,7 +248,7 @@ assumptions the rest of the runtime relies on.
    `Jidoka.agent!/1`, the struct must not be patched in place. Build a new
    spec value when the definition changes.
 2. **`Turn.Plan` is pure data.** It contains no pids, sockets, functions, or
-   credentials. `Jidoka.Runtime.AgentSnapshot.serialize/1` enforces this
+   credentials. `Jidoka.Snapshot.serialize/1` enforces this
    property at the snapshot boundary; new plan fields must round-trip through
    `:erlang.term_to_binary/1`.
 3. **Steps are pure.** No process dictionary writes, no `send/2`, no
@@ -273,7 +272,7 @@ directly and running the harness with injected capabilities.
 ```elixir
 test "spine produces an llm intent after one pass" do
   alias Jidoka.Turn
-  alias Jidoka.Runtime.Spine.Compiler
+  alias Jidoka.Adapter.Runic.TurnCompiler, as: Compiler
   alias Runic.Workflow
 
   spec = Jidoka.agent!(id: "spine_test", model: %{provider: :test, id: "m"})
@@ -307,13 +306,13 @@ stable across event metadata churn.
 | --- | --- | --- |
 | Step output is dropped between iterations | Step returned something other than `%Turn.State{}` | Always return `Turn.Transition.commit/1` or the original state. |
 | Snapshot serialization fails with `:non_serializable_snapshot_value` | A step stuffed a function, pid, or socket into state | Move the value into a runtime capability and reference it by id. |
-| New step never runs | Not wired through `Workflow.add(step, to: :predecessor)` | Add the step in `Jidoka.Runtime.Spine.Compiler.model_turn_workflow/1`. |
+| New step never runs | Not wired through `Workflow.add(step, to: :predecessor)` | Add the step in `Jidoka.Adapter.Runic.TurnCompiler.model_turn_workflow/1`. |
 | Events appear out of order in traces | Direct `state.events` mutation | Use `Turn.Transition.event/3 -> commit/1`. |
 | Tests pass locally but live LLM fails | A pure step assumed provider behavior | Move the assumption into the capability or the ReqLLM adapter. |
 
 ## Reference
 
-- [`Jidoka.Runtime.Spine.Compiler`](`Jidoka.Runtime.Spine.Compiler`) - builds the Runic
+- [`Jidoka.Adapter.Runic.TurnCompiler`](`Jidoka.Adapter.Runic.TurnCompiler`) - builds the Runic
   workflow used by the runner.
 - [`Jidoka.Runtime.Spine.Steps`](`Jidoka.Runtime.Spine.Steps`) - pure phase functions
   (`assemble_prompt/1`, `plan_model_effect/1`).

@@ -5,8 +5,8 @@ defmodule Jidoka.CancellationTest do
   alias Jidoka.Cancellation
   alias Jidoka.Chat.Request
   alias Jidoka.Event
-  alias Jidoka.Harness.Session, as: HarnessSession
-  alias Jidoka.Harness.Store.InMemory
+  alias Jidoka.Session.Data, as: SessionData
+  alias Jidoka.Session.Store.InMemory
   alias Jidoka.Stream
 
   test "an active request cancels cooperatively with one typed terminal event" do
@@ -85,7 +85,7 @@ defmodule Jidoka.CancellationTest do
     {:ok, store_pid} = InMemory.start_link()
     store = {InMemory, pid: store_pid}
 
-    assert {:ok, %HarnessSession{session_id: "cancelled-session"}} =
+    assert {:ok, %SessionData{session_id: "cancelled-session"}} =
              Jidoka.Session.start(spec(), "cancelled-session", store: store)
 
     llm = fn _intent, _journal, _context ->
@@ -110,7 +110,7 @@ defmodule Jidoka.CancellationTest do
     refute Process.alive?(capability_pid)
 
     assert {:ok,
-            %HarnessSession{
+            %SessionData{
               status: :cancelled,
               error: %Cancellation{request_id: request_id}
             }} = Jidoka.Session.get(store, "cancelled-session")

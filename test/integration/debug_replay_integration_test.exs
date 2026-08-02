@@ -7,9 +7,10 @@ defmodule Jidoka.DebugReplayIntegrationTest do
   alias Jidoka.Debug.{ReplayDiagnostics, RequestSummary}
   alias Jidoka.Effect
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
+  alias Jidoka.Session.Data, as: Session
   alias Jidoka.Review
-  alias Jidoka.Runtime.{AgentSnapshot, LocalOperations}
+  alias Jidoka.Runtime.LocalOperations
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   import Jidoka.TestSupport, only: [count_results: 2]
@@ -95,7 +96,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
                session_id: "sess_debug_checkpoint"
              )
 
-    assert {:hibernate, %Session{} = session, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Session{} = session, %Snapshot{} = snapshot} =
              Harness.run_session(session, "Check account acct_300.",
                llm: account_llm("acct_300"),
                operations: account_operations(),
@@ -121,7 +122,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
     assert {:ok, %Session{} = session} =
              Harness.start_session(refund_spec(), session_id: "sess_debug_review")
 
-    assert {:hibernate, %Session{status: :waiting} = session, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Session{status: :waiting} = session, %Snapshot{} = snapshot} =
              Harness.run_session(session, "Refund order_123",
                llm: refund_llm("order_123"),
                operations: refund_operations(self())
@@ -145,8 +146,8 @@ defmodule Jidoka.DebugReplayIntegrationTest do
     assert "Human review is still pending." in warnings
     assert "Some unsafe_once effects are not replay-safe." in warnings
 
-    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
-    assert {:ok, %AgentSnapshot{} = deserialized} = AgentSnapshot.deserialize(serialized)
+    assert {:ok, serialized} = Snapshot.serialize(snapshot)
+    assert {:ok, %Snapshot{} = deserialized} = Snapshot.deserialize(serialized)
 
     assert {:ok,
             %RequestSummary{
@@ -159,7 +160,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
     assert {:ok, %Session{} = session} =
              Harness.start_session(refund_spec(), session_id: "sess_debug_unsafe")
 
-    assert {:hibernate, %Session{} = session, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Session{} = session, %Snapshot{} = snapshot} =
              Harness.run_session(session, "Refund order_456",
                llm: refund_llm("order_456"),
                operations: refund_operations(self())
@@ -191,7 +192,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
     assert "Some unsafe_once effects are not replay-safe." in warnings
 
     assert {:ok, %ReplayDiagnostics{status: :complete, unsafe_effects: [_unsafe]}} =
-             Harness.Replay.diagnose(session)
+             Jidoka.Session.Replay.diagnose(session)
   end
 
   defp account_operations do

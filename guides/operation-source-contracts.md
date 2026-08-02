@@ -256,5 +256,5 @@ end
 - [Workflows](workflows.md) - workflow DSL and workflow source options.
 - [Turn And Effect Contracts](turn-and-effect-contracts.md) - the
   `Effect.Intent` shape capabilities consume.
-- [Runtime And Harness](runtime-and-harness.md) - how the routed capability
+- [Runtime And Execution Layers](runtime-and-harness.md) - how the routed capability
   is invoked at run time.

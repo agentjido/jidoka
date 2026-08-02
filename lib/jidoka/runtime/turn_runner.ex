@@ -2,7 +2,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   @moduledoc """
   Executes one `Jidoka.Turn.Plan` through the Runic turn spine.
 
-  This module is the small runtime kernel under `Jidoka.Harness`. It owns the
+  This module is the small runtime kernel under `Jidoka.Turn.Execution`. It owns the
   loop mechanics, checkpoint policy, and effect interpretation, but not
   session storage, replay, eval cases, or approval queues.
   """
@@ -11,21 +11,20 @@ defmodule Jidoka.Runtime.TurnRunner do
   alias Jidoka.Cancellation
   alias Jidoka.Effect
   alias Jidoka.Event
-  alias Jidoka.Projection.Value
+  alias Jidoka.Portable
   alias Jidoka.Review.Interrupt
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectInterpreter
   alias Jidoka.Runtime.Review
-  alias Jidoka.Runtime.Spine.Compiler
+  alias Jidoka.Adapter.Runic.TurnCompiler, as: Compiler
   alias Jidoka.Stream, as: EventStream
   alias Jidoka.Turn
-  alias Runic.Workflow
 
   @type run_result ::
           {:ok, Turn.Result.t()}
-          | {:hibernate, AgentSnapshot.t()}
+          | {:hibernate, Snapshot.t()}
           | {:error, term()}
 
   @doc "Runs a new turn through the pure spine and effect interpreter."
@@ -59,8 +58,8 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   @doc "Resumes a hibernated turn from its safe phase boundary."
-  @spec resume(AgentSnapshot.t(), Capabilities.t(), keyword()) :: run_result()
-  def resume(%AgentSnapshot{} = snapshot, %Capabilities{} = capabilities, opts \\ []) do
+  @spec resume(Snapshot.t(), Capabilities.t(), keyword()) :: run_result()
+  def resume(%Snapshot{} = snapshot, %Capabilities{} = capabilities, opts \\ []) do
     with {:ok, state} <- Turn.State.from_snapshot(snapshot) do
       state
       |> ensure_started_at(opts)
@@ -70,7 +69,7 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   defp resume_from_snapshot(
          %Turn.State{status: :waiting, pending_interrupt: %Interrupt{} = interrupt} = state,
-         %AgentSnapshot{} = snapshot,
+         %Snapshot{} = snapshot,
          capabilities,
          opts
        ) do
@@ -105,12 +104,7 @@ defmodule Jidoka.Runtime.TurnRunner do
       if loop_index >= plan.max_model_turns do
         {:error, {:max_model_turns_exceeded, plan.max_model_turns}}
       else
-        workflow = Compiler.model_turn_workflow(plan)
-
-        planned_state =
-          workflow
-          |> Workflow.react_until_satisfied(state)
-          |> latest_state(:plan_model_effect)
+        planned_state = Compiler.run_model_turn(plan, state)
 
         emit_new_events(state, planned_state, opts)
         maybe_hibernate_after_prompt(planned_state, capabilities, opts)
@@ -260,7 +254,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp hibernate(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts) do
     hibernated_state = append_turn_hibernated(state, cursor)
     emit_new_events(state, hibernated_state, opts)
-    {:hibernate, AgentSnapshot.from_turn_state!(hibernated_state, cursor, snapshot_opts(opts))}
+    {:hibernate, Snapshot.from_turn_state!(hibernated_state, cursor, snapshot_opts(opts))}
   end
 
   defp checkpoint_policy(opts), do: Keyword.get(opts, :checkpoint, :none)
@@ -280,7 +274,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp result_parts_data([]), do: %{}
 
   defp result_parts_data(parts),
-    do: %{parts: Value.project(parts)}
+    do: %{parts: Portable.project(parts)}
 
   defp emit_turn_started(%Turn.State{} = state, opts) do
     Event.build(:turn_started, state.events,
@@ -298,7 +292,7 @@ defmodule Jidoka.Runtime.TurnRunner do
       agent_id: state.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
-      data: %{cursor: Jidoka.project(cursor)}
+      data: %{cursor: Jidoka.Projection.Turn.project(cursor)}
     )
     |> Turn.Transition.commit()
   end
@@ -367,12 +361,5 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   defp snapshot_opts(opts) do
     Keyword.take(opts, [:snapshot_id, :id_generator])
-  end
-
-  defp latest_state(%Workflow{} = workflow, component) do
-    workflow
-    |> Workflow.raw_productions(component)
-    |> Enum.filter(&match?(%Turn.State{}, &1))
-    |> List.last()
   end
 end

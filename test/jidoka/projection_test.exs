@@ -3,7 +3,7 @@ defmodule Jidoka.ProjectionTest do
 
   alias Jidoka.Agent
   alias Jidoka.Effect
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   defmodule SupportControl do
@@ -181,7 +181,7 @@ defmodule Jidoka.ProjectionTest do
 
     intent = Effect.Intent.new(:llm, %{request_id: request.request_id}, id: "llm:1")
     state = Turn.State.set_pending_effects(state, [intent])
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.before_effect(intent))
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.before_effect(intent))
 
     assert %{
              schema_version: 1,

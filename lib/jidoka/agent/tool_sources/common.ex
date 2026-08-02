@@ -2,13 +2,13 @@ defmodule Jidoka.Agent.ToolSources.Common do
   @moduledoc false
 
   alias Jidoka.Agent.Spec.Operation
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Adapter.Jido.Actions
 
   @spec operation_from_action!(module()) :: Operation.t()
   def operation_from_action!(action) do
     with {:module, _module} <- Code.ensure_compiled(action),
          true <- function_exported?(action, :to_tool, 0) do
-      JidoActions.operation_from_action!(action)
+      Actions.operation_from_action!(action)
     else
       {:error, reason} ->
         raise ArgumentError,

@@ -83,7 +83,7 @@ authorization. No process is started by this declaration.
 │ Generated Jido action     │────▶│ Jidoka.Agent.Spec.Operation │
 │ modules (one per action)  │     │ metadata.source = "ash_resource" │
 ╰─────────────┬─────────────╯     ╰──────────────────────────╯
-              │ JidoActions.operations/2
+              │ Jidoka.Adapter.Jido.Actions.operations/2
               ▼
 ╭───────────────────────────╮
 │ Jidoka turn loop          │

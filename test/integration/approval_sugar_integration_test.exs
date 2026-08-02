@@ -23,7 +23,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
   alias Jidoka.ApprovalSugarIntegrationTest.AmountApprovalPredicate
   alias Jidoka.Effect
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
@@ -32,7 +32,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
   test "operation approval policy hibernates before executing and facade approval resumes" do
     test_pid = self()
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(approval_spec(), "Look up approved.",
                llm: single_operation_llm("approved_lookup", %{"id" => "A1001"}, "Approved lookup done."),
                operations: observed_operations(test_pid, ["approved_lookup"]),
@@ -61,7 +61,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
   test "request-level approval can pause any selected operation for one turn" do
     test_pid = self()
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(base_spec(), "Run selected lookup.",
                llm: single_operation_llm("safe_lookup", %{"id" => "A1001"}, "Safe lookup done."),
                operations: observed_operations(test_pid, ["safe_lookup"]),
@@ -101,7 +101,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
   test "request-level approval in a parallel batch hibernates before any operation executes" do
     test_pid = self()
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(base_spec(["safe_lookup", "review_lookup"]), "Run both lookups.",
                llm:
                  batched_llm(
@@ -129,7 +129,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
 
     assert {:ok, session} = Jidoka.session(approval_spec(), "approval-session")
 
-    assert {:hibernate, session, %AgentSnapshot{}} =
+    assert {:hibernate, session, %Snapshot{}} =
              Jidoka.chat(session, "Look up approved.",
                llm: single_operation_llm("approved_lookup", %{"id" => "A1001"}, "Approved lookup done."),
                operations: observed_operations(test_pid, ["approved_lookup"]),
@@ -166,7 +166,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
     assert_receive {:approval_predicate_called, 25}
     assert_receive {:operation_called, "refund_order"}
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(predicate_approval_spec(), request("Large refund.", %{test_pid: test_pid}),
                llm: single_operation_llm("refund_order", %{"amount" => 250}, "Large refund done."),
                operations: observed_operations(test_pid, ["refund_order"]),

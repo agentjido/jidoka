@@ -8,7 +8,7 @@ defmodule Jidoka.Import.Tools do
   alias Jidoka.Operation.Source.Catalog, as: CatalogSource
   alias Jidoka.Operation.Source.MCP, as: MCPSource
   alias Jidoka.Review.Approval
-  alias Jidoka.Runtime.JidoActions
+  alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Schema
 
   @unsupported_tool_sources []
@@ -176,7 +176,7 @@ defmodule Jidoka.Import.Tools do
   end
 
   defp operation_from_action(action) do
-    {:ok, JidoActions.operation_from_action!(action)}
+    {:ok, Actions.operation_from_action!(action)}
   rescue
     exception -> {:error, {:invalid_action_module, action, exception}}
   end
@@ -186,7 +186,7 @@ defmodule Jidoka.Import.Tools do
 
     operations =
       actions
-      |> Enum.map(&JidoActions.operation_from_action!/1)
+      |> Enum.map(&Actions.operation_from_action!/1)
       |> Enum.map(&tag_ash_operation(&1, resource_data))
       |> Approval.apply_to_operations!(resource_data.approval)
 
@@ -207,7 +207,7 @@ defmodule Jidoka.Import.Tools do
     operations =
       browser.mode
       |> Jidoka.Browser.tool_modules()
-      |> Enum.map(&JidoActions.operation_from_action!/1)
+      |> Enum.map(&Actions.operation_from_action!/1)
       |> Enum.map(&tag_browser_operation(&1, browser))
       |> Approval.apply_to_operations!(browser.approval)
 

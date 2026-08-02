@@ -1,22 +1,22 @@
 defmodule Jidoka.Eval do
   @moduledoc """
-  Small deterministic eval runner for Jidoka harness flows.
+  Small deterministic eval runner for Jidoka turn flows.
 
-  The runner intentionally delegates execution to `Jidoka.Harness`. It adds no
+  The runner delegates execution to `Jidoka.Turn.Execution`. It adds no
   new runtime path; it only packages an agent/request pair with assertions that
   are useful for examples, regression tests, and optional live smoke checks.
   """
 
   alias Jidoka.Effect
   alias Jidoka.Eval.{Case, Run}
-  alias Jidoka.Harness
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Schema
   alias Jidoka.Turn
+  alias Jidoka.Turn.Execution, as: TurnExecution
 
   @type case_input :: Case.t() | keyword() | map()
 
-  @doc "Runs one eval case through the harness."
+  @doc "Runs one eval case through turn execution."
   @spec run_case(case_input(), keyword()) :: {:ok, Run.t()} | {:error, term()}
   def run_case(eval_case_input, opts \\ []) do
     with {:ok, %Case{} = eval_case} <- Case.from_input(eval_case_input, opts) do
@@ -36,7 +36,7 @@ defmodule Jidoka.Eval do
   end
 
   defp execute(%Case{} = eval_case, opts) do
-    Harness.run_turn(eval_case.agent, eval_case.request, opts)
+    TurnExecution.run(eval_case.agent, eval_case.request, opts)
   end
 
   defp build_run({:ok, %Turn.Result{} = result}, %Case{} = eval_case) do
@@ -53,11 +53,11 @@ defmodule Jidoka.Eval do
     )
   end
 
-  defp build_run({:hibernate, %AgentSnapshot{} = snapshot}, %Case{} = eval_case) do
+  defp build_run({:hibernate, %Snapshot{} = snapshot}, %Case{} = eval_case) do
     Run.new(
       case_id: eval_case.id,
       status: :error,
-      error: %{reason: :hibernated, snapshot: Jidoka.project(snapshot)},
+      error: %{reason: :hibernated, snapshot: Jidoka.Projection.project(snapshot)},
       assertions: [],
       metadata: eval_case.metadata
     )
@@ -67,7 +67,7 @@ defmodule Jidoka.Eval do
     Run.new(
       case_id: eval_case.id,
       status: :error,
-      error: Jidoka.error_to_map(Jidoka.normalize_error(reason, operation: :eval)),
+      error: Jidoka.Error.to_map(Jidoka.Error.normalize(reason, operation: :eval)),
       assertions: [],
       metadata: eval_case.metadata
     )

@@ -5,12 +5,12 @@ defmodule Jidoka.Parity.SafeSessionForkTest do
   alias Jidoka.Agent.Spec.Controls
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.SessionLineage
-  alias Jidoka.Harness.Store
-  alias Jidoka.Harness.Store.InMemory
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Lineage
+  alias Jidoka.Session.Store
+  alias Jidoka.Session.Store.InMemory
   alias Jidoka.IntegrationSupport.ApprovalControl
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   import Jidoka.TestSupport, only: [count_results: 2, final_llm: 1]
@@ -25,20 +25,20 @@ defmodule Jidoka.Parity.SafeSessionForkTest do
     assert {:ok, %Session{session_id: "sess_source"}} =
              Jidoka.Session.start(spec, "sess_source", store: store)
 
-    assert {:hibernate, source_before_fork, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, source_before_fork, %Snapshot{} = snapshot} =
              Jidoka.Session.run("sess_source", "Choose a path",
                store: store,
                llm: final_llm("unused"),
                checkpoint: :after_prompt
              )
 
-    assert {:ok, signed_snapshot} = AgentSnapshot.serialize(snapshot)
+    assert {:ok, signed_snapshot} = Snapshot.serialize(snapshot)
 
     assert {:ok,
             %Session{
               session_id: "sess_branch",
               status: :hibernated,
-              lineage: %SessionLineage{
+              lineage: %Lineage{
                 root_session_id: "sess_source",
                 parent_session_id: "sess_source",
                 source_snapshot_id: source_snapshot_id,
@@ -84,14 +84,14 @@ defmodule Jidoka.Parity.SafeSessionForkTest do
     assert {:ok, %Session{}} =
              Jidoka.Session.start(spec, "sess_unsafe_source", store: store)
 
-    assert {:hibernate, _session, %AgentSnapshot{cursor: %{phase: :after_prompt}}} =
+    assert {:hibernate, _session, %Snapshot{cursor: %{phase: :after_prompt}}} =
              Jidoka.Session.run("sess_unsafe_source", "Refund order_123",
                store: store,
                llm: llm,
                checkpoint: :after_each_phase
              )
 
-    assert {:hibernate, %Session{} = source, %AgentSnapshot{cursor: %{phase: :before_effect}} = snapshot} =
+    assert {:hibernate, %Session{} = source, %Snapshot{cursor: %{phase: :before_effect}} = snapshot} =
              Jidoka.Session.resume("sess_unsafe_source",
                store: store,
                llm: llm,
@@ -115,7 +115,7 @@ defmodule Jidoka.Parity.SafeSessionForkTest do
       |> Effect.Journal.put_result(completed_result)
 
     completed_snapshot =
-      %AgentSnapshot{
+      %Snapshot{
         snapshot
         | turn_state: %Turn.State{snapshot.turn_state | journal: journal}
       }
@@ -142,7 +142,7 @@ defmodule Jidoka.Parity.SafeSessionForkTest do
                operations: rejecting_operations()
              )
 
-    assert %Session{status: :finished, lineage: %SessionLineage{depth: 1}} = finished
+    assert %Session{status: :finished, lineage: %Lineage{depth: 1}} = finished
     assert Effect.Journal.result_for(result.journal, pending_effect) == completed_result
     assert {:ok, ^completed_source} = Store.get_session(store, "sess_unsafe_source")
   end

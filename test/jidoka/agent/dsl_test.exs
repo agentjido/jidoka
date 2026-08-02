@@ -351,7 +351,7 @@ defmodule Jidoka.Agent.DslTest do
     assert %Jidoka.Agent.Spec.Operation{metadata: %{"kind" => "browser"}} =
              operations["snapshot_url"]
 
-    assert Jidoka.Browser.Tools.ReadPage in agent_module.__jidoka_agent__().actions
+    assert Jidoka.Adapter.Jido.Browser.Tools.ReadPage in agent_module.__jidoka_agent__().actions
 
     assert [
              %{

@@ -6,8 +6,8 @@ defmodule Jidoka.DebugTest do
   alias Jidoka.Effect
   alias Jidoka.Event
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   defmodule LookupAction do
@@ -76,7 +76,7 @@ defmodule Jidoka.DebugTest do
     assert {:ok, %Session{} = session, %Turn.Result{} = result} =
              Harness.run_session(session, "Check D-100.",
                llm: &tool_loop_llm/3,
-               operations: Jidoka.Runtime.JidoActions.operations([LookupAction])
+               operations: Jidoka.Adapter.Jido.Actions.operations([LookupAction])
              )
 
     assert {:ok,
@@ -89,11 +89,11 @@ defmodule Jidoka.DebugTest do
     assert request_id == result.metadata.debug.request_id
 
     assert {:ok, %ReplayDiagnostics{status: :complete, intent_count: 3, result_count: 3}} =
-             Harness.Replay.diagnose(session)
+             Jidoka.Session.Replay.diagnose(session)
   end
 
   test "snapshot diagnostics flag incomplete pending effects" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Agent.run_turn("Pause after prompt.", llm: &tool_loop_llm/3, checkpoint: :after_prompt)
 
     assert {:ok,
@@ -129,7 +129,7 @@ defmodule Jidoka.DebugTest do
   end
 
   test "request summaries handle hibernate tuples and replay projections" do
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Agent.run_turn("Pause after prompt.", llm: &tool_loop_llm/3, checkpoint: :after_prompt)
 
     assert {:ok, %Session{} = session} =
@@ -223,7 +223,7 @@ defmodule Jidoka.DebugTest do
       )
 
     replay =
-      Harness.Replay.new!(
+      Jidoka.Session.Replay.new!(
         agent_id: "debug_agent",
         status: :error,
         timeline: [Jidoka.project(failed_event)],

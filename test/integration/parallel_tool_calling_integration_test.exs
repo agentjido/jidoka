@@ -4,7 +4,7 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Turn
 
@@ -123,7 +123,7 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
         }
       )
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(review_spec(), request,
                llm: batched_llm(["safe_lookup", "review_lookup"], "Reviewed batch finished."),
                operations: observed_operations(test_pid, ["safe_lookup", "review_lookup"]),

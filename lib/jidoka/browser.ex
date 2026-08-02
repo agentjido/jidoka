@@ -40,14 +40,14 @@ defmodule Jidoka.Browser do
   end
 
   defp search_tools do
-    [Module.concat([Jidoka, Browser, Tools, SearchWeb])]
+    [Jidoka.Adapter.Jido.Browser.Tools.SearchWeb]
   end
 
   defp read_only_tools do
     [
-      Module.concat([Jidoka, Browser, Tools, SearchWeb]),
-      Module.concat([Jidoka, Browser, Tools, ReadPage]),
-      Module.concat([Jidoka, Browser, Tools, SnapshotUrl])
+      Jidoka.Adapter.Jido.Browser.Tools.SearchWeb,
+      Jidoka.Adapter.Jido.Browser.Tools.ReadPage,
+      Jidoka.Adapter.Jido.Browser.Tools.SnapshotUrl
     ]
   end
 end

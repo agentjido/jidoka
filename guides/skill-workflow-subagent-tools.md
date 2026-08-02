@@ -100,7 +100,7 @@ subagent.
                ▼
 ╭──────────────────────────────╮
 │ Jidoka.Operation.Source.*    │
-│  Skill -> JidoActions path   │
+│  Skill -> Jidoka.Adapter.Jido.Actions path   │
 │  Workflow -> WorkflowSource  │
 │  Subagent -> SubagentSource  │
 ╰──────────────┬───────────────╯

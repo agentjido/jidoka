@@ -1,8 +1,8 @@
-defmodule Jidoka.Runtime.AgentServerStateTest do
+defmodule Jidoka.Adapter.Jido.AgentServerStateTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Effect
-  alias Jidoka.Runtime.AgentServerState
+  alias Jidoka.Adapter.Jido.AgentServerState
   alias Jidoka.Turn
 
   test "completed states preserve Jido conventions and typed Jidoka state" do
@@ -46,7 +46,7 @@ defmodule Jidoka.Runtime.AgentServerStateTest do
       )
 
     snapshot =
-      Jidoka.Runtime.AgentSnapshot.from_turn_state!(turn_state, Turn.Cursor.after_prompt())
+      Jidoka.Snapshot.from_turn_state!(turn_state, Turn.Cursor.after_prompt())
 
     hibernated = AgentServerState.hibernated(snapshot, request)
     failed = AgentServerState.failed(:boom, request.agent_state)

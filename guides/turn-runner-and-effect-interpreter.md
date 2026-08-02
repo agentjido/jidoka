@@ -20,7 +20,7 @@ written for people maintaining `Jidoka.Runtime.TurnRunner` and
 - Use this guide when introducing a new checkpoint policy or a new failure
   mode that should produce a snapshot rather than an error.
 - Do not use this guide as a tutorial on writing agents. Authors should read
-  [Getting Started](getting-started.md) and [Runtime And Harness](runtime-and-harness.md).
+  [Getting Started](getting-started.md) and [Runtime And Execution Layers](runtime-and-harness.md).
 
 ## Prerequisites
 
@@ -351,7 +351,7 @@ appended, and the snapshot uses `Turn.Cursor.review(interrupt)` as the cursor.
 the snapshot and then branches on whether the state is awaiting approval:
 
 ```elixir
-def resume(%AgentSnapshot{} = snapshot, %Capabilities{} = capabilities, opts \\ []) do
+def resume(%Snapshot{} = snapshot, %Capabilities{} = capabilities, opts \\ []) do
   with {:ok, state} <- Turn.State.from_snapshot(snapshot) do
     state
     |> ensure_started_at(opts)
@@ -523,7 +523,7 @@ do not break unrelated assertions.
 | Capability is called twice for the same intent | Code path bypassed `Effect.Journal.result_for/2` | Route the new path through `EffectInterpreter.interpret_pending/3`. |
 | Resume immediately returns the same snapshot | `:approval` not supplied to `Jidoka.resume/2` | Pass `approval: %Jidoka.Review.Response{...}` (or `approval_response:`). |
 | `:turn_failed` event missing in trace | Error returned outside `maybe_emit_turn_failed/4` | Route the error tuple through the helper before returning it. |
-| Snapshot deserialization fails after a code change | A new field on `Turn.State` is not portable | Use `Jidoka.Runtime.AgentSnapshot.serialize/1` in tests; the portable validator will name the offending key. |
+| Snapshot deserialization fails after a code change | A new field on `Turn.State` is not portable | Use `Jidoka.Snapshot.serialize/1` in tests; the portable validator will name the offending key. |
 | Approval response rejected with `:approval_interrupt_mismatch` | Wrong `interrupt_id` on the response | Look up the latest `Interrupt.id` from `Turn.State.pending_interrupt` or the `pending_review` metadata on the snapshot. |
 
 ## Reference

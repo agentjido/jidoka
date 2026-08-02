@@ -1,4 +1,4 @@
-defmodule Jidoka.Runtime.JidoActionsTest.Support.EchoAction do
+defmodule Jidoka.Adapter.Jido.ActionsTest.Support.EchoAction do
   use Jidoka.Action,
     name: "echo_value",
     description: "Echoes a value through Jido.Action.",
@@ -22,11 +22,11 @@ defmodule Jidoka.Runtime.JidoActionsTest.Support.EchoAction do
   end
 end
 
-defmodule Jidoka.Runtime.JidoActionsTest do
+defmodule Jidoka.Adapter.Jido.ActionsTest do
   use ExUnit.Case, async: true
 
-  alias Jidoka.Runtime.JidoActions, as: Actions
-  alias Jidoka.Runtime.JidoActionsTest.Support.EchoAction
+  alias Jidoka.Adapter.Jido.Actions, as: Actions
+  alias Jidoka.Adapter.Jido.ActionsTest.Support.EchoAction
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
 

@@ -20,8 +20,8 @@ defmodule Jidoka.MultimodalContractTest do
   alias Jidoka.ContentPart
   alias Jidoka.Effect
   alias Jidoka.MultimodalContractTest.Support.Agent
-  alias Jidoka.Runtime.AgentSnapshot
-  alias Jidoka.Runtime.ReqLLM
+  alias Jidoka.Snapshot
+  alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Turn
 
   @input_bytes "private-image-input"
@@ -118,11 +118,11 @@ defmodule Jidoka.MultimodalContractTest do
 
     llm = fn _intent, _journal, _context -> flunk("checkpoint must run before the LLM") end
 
-    assert {:hibernate, %AgentSnapshot{} = snapshot} =
+    assert {:hibernate, %Snapshot{} = snapshot} =
              Jidoka.turn(Agent, input, llm: llm, checkpoint: :after_prompt)
 
-    serialized = AgentSnapshot.serialize!(snapshot)
-    assert {:ok, restored} = AgentSnapshot.deserialize(serialized)
+    serialized = Snapshot.serialize!(snapshot)
+    assert {:ok, restored} = Snapshot.deserialize(serialized)
 
     assert [%ContentPart{data: @input_bytes}] = restored.turn_state.request.content
 

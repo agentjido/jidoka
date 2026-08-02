@@ -200,7 +200,7 @@ defmodule Jidoka.Workflow do
   end
 
   defp run_spec(%Spec{mode: :dsl} = spec, input, opts) do
-    Jidoka.Workflow.Runtime.run(spec, input, opts)
+    Jidoka.Adapter.Runic.Workflow.run(spec, input, opts)
   end
 
   defp run_spec(%Spec{mode: :callback} = spec, input, opts) do
@@ -223,7 +223,7 @@ defmodule Jidoka.Workflow do
           {:ok, term()} | {:hibernate, Jidoka.Workflow.Snapshot.t()} | {:error, term()}
   def resume(snapshot, opts \\ []) when is_list(opts) do
     with {:ok, snapshot} <- normalize_snapshot(snapshot) do
-      Jidoka.Workflow.Runtime.resume(snapshot, opts)
+      Jidoka.Adapter.Runic.Workflow.resume(snapshot, opts)
     end
   end
 

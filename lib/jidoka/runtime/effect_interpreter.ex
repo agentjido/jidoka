@@ -16,7 +16,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectTrace
-  alias Jidoka.Runtime.OperationBatch
+  alias Jidoka.Adapter.Runic.OperationBatch
   alias Jidoka.Turn
 
   @doc "Interprets the next pending effect or reuses its journaled result."

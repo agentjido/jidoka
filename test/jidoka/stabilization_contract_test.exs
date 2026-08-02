@@ -61,14 +61,14 @@ defmodule Jidoka.StabilizationContractTest do
   alias Jidoka.Effect
   alias Jidoka.Handoff
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
+  alias Jidoka.Session.Data, as: Session
   alias Jidoka.Id
   alias Jidoka.Inspection.Preflight
   alias Jidoka.Memory
   alias Jidoka.Review
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Snapshot
   alias Jidoka.Runtime.Controls.OperationContext
-  alias Jidoka.Runtime.ReqLLM
+  alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Schema
   alias Jidoka.Turn
   alias Jidoka.StabilizationContractTest.Support
@@ -79,52 +79,60 @@ defmodule Jidoka.StabilizationContractTest do
     expected_exports = [
       agent: 1,
       agent!: 1,
-      import: 1,
-      import: 2,
-      export: 1,
-      export: 2,
-      start_agent: 1,
-      start_agent: 2,
-      stop_agent: 1,
-      stop_agent: 2,
-      whereis: 1,
-      whereis: 2,
-      session: 1,
-      session: 2,
-      session: 3,
-      handoff: 1,
-      reset_handoff: 1,
-      plan: 1,
-      plan!: 1,
+      approve: 2,
+      approve: 3,
+      await: 1,
+      await: 2,
+      await_agent: 1,
+      await_agent: 2,
+      cancel: 1,
+      cancel: 2,
       chat: 2,
       chat: 3,
       chat_async: 2,
       chat_async: 3,
-      stream: 1,
-      stream: 2,
-      await: 1,
-      await: 2,
-      turn: 2,
-      turn: 3,
-      await_agent: 1,
-      await_agent: 2,
-      resume: 1,
-      resume: 2,
-      format_error: 1,
+      deny: 2,
+      deny: 3,
       error_to_map: 1,
+      export: 1,
+      export: 2,
+      fork_session: 1,
+      fork_session: 2,
+      format_error: 1,
+      handoff: 1,
+      import: 1,
+      import: 2,
       inspect: 1,
       inspect: 2,
+      normalize_error: 1,
+      normalize_error: 2,
+      pending_reviews: 1,
+      plan: 1,
+      plan!: 1,
       preflight: 2,
       preflight: 3,
       project: 1,
-      normalize_error: 1,
-      normalize_error: 2
+      recover_session: 1,
+      recover_session: 2,
+      reset_handoff: 1,
+      resume: 1,
+      resume: 2,
+      session: 1,
+      session: 2,
+      session: 3,
+      start_agent: 1,
+      start_agent: 2,
+      stop_agent: 1,
+      stop_agent: 2,
+      stream: 1,
+      stream: 2,
+      turn: 2,
+      turn: 3,
+      whereis: 1,
+      whereis: 2
     ]
 
-    for {function, arity} <- expected_exports do
-      assert function_exported?(Jidoka, function, arity),
-             "expected Jidoka.#{function}/#{arity} to remain public"
-    end
+    assert Enum.sort(Jidoka.__info__(:functions)) == Enum.sort(expected_exports)
 
     removed_v1_exports = [
       model_aliases: 0,
@@ -282,7 +290,7 @@ defmodule Jidoka.StabilizationContractTest do
 
     interrupt = review_interrupt(spec, request)
     state = base_state(spec, request) |> Turn.State.put_pending_interrupt(interrupt)
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.review(interrupt))
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.review(interrupt))
 
     session = Session.put_snapshot(session, snapshot)
 
@@ -307,28 +315,28 @@ defmodule Jidoka.StabilizationContractTest do
     request = Turn.Request.new!(input: "Hello")
 
     snapshot =
-      AgentSnapshot.from_turn_state!(base_state(spec, request), Turn.Cursor.after_prompt())
+      Snapshot.from_turn_state!(base_state(spec, request), Turn.Cursor.after_prompt())
 
-    assert {:error, :invalid_snapshot_serialization} = AgentSnapshot.deserialize("not-a-snapshot")
+    assert {:error, :invalid_snapshot_serialization} = Snapshot.deserialize("not-a-snapshot")
 
     assert {:error, :invalid_snapshot_signature} =
-             AgentSnapshot.deserialize("jidoka:snapshot:v1:not-valid-base64")
+             Snapshot.deserialize("jidoka:snapshot:v1:not-valid-base64")
 
-    future = %{snapshot | schema_version: AgentSnapshot.schema_version() + 1}
+    future = %{snapshot | schema_version: Snapshot.schema_version() + 1}
 
     assert {:error, {:unsupported_snapshot_schema_version, 2, 1}} =
-             AgentSnapshot.deserialize(signed_snapshot(future))
+             Snapshot.deserialize(signed_snapshot(future))
 
-    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
-    assert {:ok, %AgentSnapshot{snapshot_id: snapshot_id}} = AgentSnapshot.deserialize(serialized)
+    assert {:ok, serialized} = Snapshot.serialize(snapshot)
+    assert {:ok, %Snapshot{snapshot_id: snapshot_id}} = Snapshot.deserialize(serialized)
     assert snapshot_id == snapshot.snapshot_id
 
     assert {:error, :invalid_snapshot_signature} =
              serialized
              |> tamper_serialized_snapshot()
-             |> AgentSnapshot.deserialize()
+             |> Snapshot.deserialize()
 
-    assert {:error, :unsafe_snapshot_input} = AgentSnapshot.from_input(Map.from_struct(snapshot))
+    assert {:error, :unsafe_snapshot_input} = Snapshot.from_input(Map.from_struct(snapshot))
   end
 
   test "snapshots strip runtime context before durable serialization" do
@@ -343,13 +351,13 @@ defmodule Jidoka.StabilizationContractTest do
           )
       )
 
-    snapshot = AgentSnapshot.from_turn_state!(base_state(spec, request), Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(base_state(spec, request), Turn.Cursor.after_prompt())
 
     assert snapshot.turn_state.request.context.data == %{"tenant_id" => "tenant_1"}
     assert snapshot.turn_state.request.context.runtime == %{}
 
-    assert {:ok, serialized} = AgentSnapshot.serialize(snapshot)
-    assert {:ok, restored} = AgentSnapshot.deserialize(serialized)
+    assert {:ok, serialized} = Snapshot.serialize(snapshot)
+    assert {:ok, restored} = Snapshot.deserialize(serialized)
     assert restored.turn_state.request.context.runtime == %{}
   end
 
@@ -368,7 +376,7 @@ defmodule Jidoka.StabilizationContractTest do
 
     finished_state = %Turn.State{state | status: :finished, result: "done", journal: journal}
     turn_result = Turn.Result.from_turn_state!(finished_state)
-    snapshot = AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
 
     session =
       Session.start(spec, session_id: "sess_inspect") |> elem(1) |> Session.put_snapshot(snapshot)

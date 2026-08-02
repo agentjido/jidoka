@@ -133,7 +133,7 @@ defmodule Jidoka.AgentView.Events do
 
   defp operation_events(%Turn.Result{} = result) do
     Enum.map(result.agent_state.operation_results, fn operation_result ->
-      projection = Jidoka.project(operation_result)
+      projection = Jidoka.Projection.project(operation_result)
 
       %{
         id: operation_result.effect_id || message_id("operation"),

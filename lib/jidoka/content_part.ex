@@ -7,7 +7,7 @@ defmodule Jidoka.ContentPart do
   projections omit the value and show only its kind and safe size data.
   """
 
-  alias Jidoka.Projection.Value
+  alias Jidoka.Portable
   alias Jidoka.Schema
 
   @types [:text, :image, :audio, :video, :document]
@@ -155,7 +155,7 @@ defmodule Jidoka.ContentPart do
   @doc "Returns a safe public projection without media bytes or references."
   @spec project(t()) :: map()
   def project(%__MODULE__{type: :text} = part) do
-    %{type: :text, text: part.text, metadata: Value.project(part.metadata)}
+    %{type: :text, text: part.text, metadata: Portable.project(part.metadata)}
     |> drop_empty_metadata()
   end
 
@@ -166,7 +166,7 @@ defmodule Jidoka.ContentPart do
       media_type: part.media_type,
       filename: part.filename,
       byte_size: data_size(part.data),
-      metadata: Value.project(part.metadata)
+      metadata: Portable.project(part.metadata)
     }
     |> Enum.reject(fn
       {_key, nil} -> true

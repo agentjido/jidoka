@@ -1,4 +1,4 @@
-defmodule Jidoka.Runtime.Actions.RunTurnTest.Support.CompleteAgent do
+defmodule Jidoka.Adapter.Jido.RunTurnTest.Support.CompleteAgent do
   alias Jidoka.Effect
   alias Jidoka.Turn
 
@@ -16,8 +16,8 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest.Support.CompleteAgent do
   end
 end
 
-defmodule Jidoka.Runtime.Actions.RunTurnTest.Support.HibernateAgent do
-  alias Jidoka.Runtime.AgentSnapshot
+defmodule Jidoka.Adapter.Jido.RunTurnTest.Support.HibernateAgent do
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   def run_turn(%Turn.Request{} = request, _opts) do
@@ -33,26 +33,26 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest.Support.HibernateAgent do
     state =
       Turn.State.new!(spec: spec, plan: plan, request: request, agent_state: request.agent_state)
 
-    {:hibernate, AgentSnapshot.from_turn_state!(state, Turn.Cursor.after_prompt())}
+    {:hibernate, Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())}
   end
 end
 
-defmodule Jidoka.Runtime.Actions.RunTurnTest.Support.RaisingAgent do
+defmodule Jidoka.Adapter.Jido.RunTurnTest.Support.RaisingAgent do
   def run_turn(_request, _opts), do: raise("boom")
 end
 
-defmodule Jidoka.Runtime.Actions.RunTurnTest do
+defmodule Jidoka.Adapter.Jido.RunTurnTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
-  alias Jidoka.Runtime.AgentServerState
-  alias Jidoka.Runtime.Actions.RunTurn
+  alias Jidoka.Adapter.Jido.AgentServerState
+  alias Jidoka.Adapter.Jido.RunTurn
 
   test "writes completed turn results into Jido agent state" do
     agent_state = Agent.State.new!(metadata: %{existing: true})
 
     context = %{
-      agent: %{agent_module: Jidoka.Runtime.Actions.RunTurnTest.Support.CompleteAgent},
+      agent: %{agent_module: Jidoka.Adapter.Jido.RunTurnTest.Support.CompleteAgent},
       state: %{jidoka: AgentServerState.new!(agent_state: agent_state)},
       agent_server_pid: self()
     }
@@ -61,7 +61,7 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest do
       input: "hello",
       request_id: "request-1",
       context: %{
-        domain: Jidoka.Runtime.Actions.RunTurnTest,
+        domain: Jidoka.Adapter.Jido.RunTurnTest,
         session_id: "session-1",
         user_id: "user-1"
       },
@@ -86,7 +86,7 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest do
 
   test "writes hibernation snapshots into Jido agent state" do
     context = %{
-      agent: %{agent_module: Jidoka.Runtime.Actions.RunTurnTest.Support.HibernateAgent},
+      agent: %{agent_module: Jidoka.Adapter.Jido.RunTurnTest.Support.HibernateAgent},
       state: %{}
     }
 
@@ -102,7 +102,7 @@ defmodule Jidoka.Runtime.Actions.RunTurnTest do
     assert state.jidoka.status == :failed
     assert %Jidoka.Error.ValidationError{field: :input} = state.jidoka.error
 
-    context = %{agent: %{agent_module: Jidoka.Runtime.Actions.RunTurnTest.Support.RaisingAgent}}
+    context = %{agent: %{agent_module: Jidoka.Adapter.Jido.RunTurnTest.Support.RaisingAgent}}
 
     assert {:ok, state} = RunTurn.run(%{input: "explode"}, context)
     assert state.status == :failed

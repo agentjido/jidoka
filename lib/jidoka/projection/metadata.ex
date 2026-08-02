@@ -1,16 +1,16 @@
 defmodule Jidoka.Projection.Metadata do
   @moduledoc false
 
-  alias Jidoka.Projection.Value
+  alias Jidoka.Portable
 
   @spec agent(term()) :: term()
   def agent(metadata) when is_map(metadata) do
     metadata
     |> Map.drop(["dsl_module", :dsl_module])
-    |> Value.project()
+    |> Portable.project()
   end
 
-  def agent(metadata), do: Value.project(metadata)
+  def agent(metadata), do: Portable.project(metadata)
 
   @spec operation(term()) :: term()
   def operation(metadata) when is_map(metadata) do
@@ -19,11 +19,11 @@ defmodule Jidoka.Projection.Metadata do
 
     metadata
     |> Map.drop(["parameters_schema", :parameters_schema])
-    |> Value.project()
+    |> Portable.project()
     |> Map.put("parameters_schema?", has_parameters_schema?)
   end
 
-  def operation(metadata), do: Value.project(metadata)
+  def operation(metadata), do: Portable.project(metadata)
 
   @spec control_name(module()) :: String.t()
   def control_name(module) when is_atom(module) do

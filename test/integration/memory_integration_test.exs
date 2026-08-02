@@ -4,8 +4,8 @@ defmodule Jidoka.MemoryIntegrationTest do
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Harness
-  alias Jidoka.Harness.Session
-  alias Jidoka.Harness.Store.InMemory, as: SessionStore
+  alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Store.InMemory, as: SessionStore
   alias Jidoka.Memory
   alias Jidoka.Memory.Store.InMemory, as: MemoryStore
   alias Jidoka.Turn

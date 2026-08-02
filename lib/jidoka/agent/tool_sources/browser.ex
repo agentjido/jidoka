@@ -4,6 +4,7 @@ defmodule Jidoka.Agent.ToolSources.Browser do
   alias Jidoka.Agent.Dsl.Browser
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Agent.ToolSources.Common
+  alias Jidoka.Operation.Source.JidoAction
   alias Jidoka.Review.Approval
 
   @spec action_modules(term()) :: [module()]
@@ -11,6 +12,11 @@ defmodule Jidoka.Agent.ToolSources.Browser do
     browser
     |> mode!()
     |> Jidoka.Browser.tool_modules()
+  end
+
+  @spec source!(term()) :: JidoAction.t()
+  def source!(%Browser{} = browser) do
+    JidoAction.new!(action_modules(browser), operations!(browser), metadata: metadata!(browser))
   end
 
   @spec operations!(term()) :: [Operation.t()]

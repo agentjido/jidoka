@@ -10,6 +10,8 @@ defmodule Jidoka.AgentView do
   provider client, process state, or adapter data.
   """
 
+  alias Jidoka.Error
+  alias Jidoka.Projection
   alias Jidoka.Schema
   alias Jidoka.AgentView.Events
   alias Jidoka.Event
@@ -109,7 +111,8 @@ defmodule Jidoka.AgentView do
       def before_turn(view, message), do: Jidoka.AgentView.before_turn(view, message)
 
       @doc false
-      @spec after_turn(Jidoka.AgentView.t(), Jidoka.run_result()) :: Jidoka.AgentView.t()
+      @spec after_turn(Jidoka.AgentView.t(), Jidoka.Turn.Execution.result()) ::
+              Jidoka.AgentView.t()
       def after_turn(view, result), do: Jidoka.AgentView.after_turn(view, result)
 
       @doc false
@@ -216,7 +219,7 @@ defmodule Jidoka.AgentView do
   @doc """
   Applies a Jidoka runtime result to view data.
   """
-  @spec after_turn(t(), Jidoka.run_result()) :: t()
+  @spec after_turn(t(), Jidoka.Turn.Execution.result()) :: t()
   def after_turn(%__MODULE__{} = view, {:ok, %Turn.Result{} = result}) do
     %{
       view
@@ -230,7 +233,7 @@ defmodule Jidoka.AgentView do
         metadata:
           view.metadata
           |> Map.put(:agent_state, result.agent_state)
-          |> Map.put(:last_result, Jidoka.project(result))
+          |> Map.put(:last_result, Projection.project(result))
     }
   end
 
@@ -243,7 +246,7 @@ defmodule Jidoka.AgentView do
         error: nil,
         error_text: "Agent hibernated for review.",
         outcome: {:hibernate, snapshot},
-        metadata: Map.put(view.metadata, :last_snapshot, Jidoka.project(snapshot))
+        metadata: Map.put(view.metadata, :last_snapshot, Projection.project(snapshot))
     }
   end
 
@@ -254,7 +257,7 @@ defmodule Jidoka.AgentView do
         streaming_message: nil,
         status: :error,
         error: reason,
-        error_text: Jidoka.format_error(reason),
+        error_text: Error.format(reason),
         outcome: {:error, reason}
     }
   end
@@ -360,13 +363,13 @@ defmodule Jidoka.AgentView do
 
   defp agent_projection(agent) when is_atom(agent) do
     if loaded_agent_module?(agent) and function_exported?(agent, :spec, 0) do
-      Jidoka.project(agent.spec())
+      Projection.project(agent.spec())
     else
       %{module: inspect(agent)}
     end
   end
 
-  defp agent_projection(agent), do: Jidoka.project(agent)
+  defp agent_projection(agent), do: Projection.project(agent)
 
   defp user_message(content, opts) do
     %{

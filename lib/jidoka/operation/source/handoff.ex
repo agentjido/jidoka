@@ -4,7 +4,7 @@ defmodule Jidoka.Operation.Source.Handoff do
 
   Handoff operations record that a target agent owns future turns for a
   conversation. The operation returns data to the current turn; routing future
-  turns through that owner remains an application/harness concern.
+  turns through that owner remains an application concern.
   """
 
   @behaviour Jidoka.Operation.Source

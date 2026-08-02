@@ -1,4 +1,4 @@
-# Runtime And Harness
+# Runtime And Execution Layers
 
 Jidoka separates authoring, executable data, and effect execution.
 
@@ -6,46 +6,46 @@ Jidoka separates authoring, executable data, and effect execution.
 Jidoka.Agent DSL
 -> Jidoka.Agent.Spec
 -> Jidoka.Turn.Plan
--> Jidoka.Harness
+-> Jidoka.Turn.Execution
 -> Jidoka.Runtime.TurnRunner
--> Runic workflow steps
+-> Jidoka.Adapter.Runic.TurnCompiler
+-> pure spine steps
 -> Effect interpreter
--> ReqLLM / Jido.Action
+-> Jidoka.Adapter.ReqLLM / Jidoka.Operation.Source
 ```
 
-For process-hosted agents, `Jido.AgentServer` sits around that harness:
+For process-hosted agents, `Jido.AgentServer` sits around the same turn use
+case:
 
 ```text
 Jido.AgentServer
 -> Jido.Signal "jidoka.turn.run"
--> Jidoka.Runtime.Actions.RunTurn
--> Jidoka.Harness
+-> Jidoka.Adapter.Jido.RunTurn
+-> Jidoka.Turn.Execution
 -> Jido agent state update
 ```
 
-## Harness
+## Execution Use Cases
 
-`Jidoka.Harness` is the execution boundary. It currently owns:
+Three modules own execution workflows:
 
-- `run_turn/3`;
-- `resume/2`;
-- request normalization;
-- context schema validation;
-- runtime normalization;
-- approval response normalization;
-- delegation to `Jidoka.Runtime.TurnRunner`.
+- `Jidoka.Turn.Execution` owns direct turns, request normalization, runtime
+  capabilities, memory setup, and snapshot resume.
+- `Jidoka.Session.Execution` owns session creation, leases, checkpoints,
+  recovery, forks, replay, and session memory.
+- `Jidoka.Review.Execution` owns pending review lists and approval or denial
+  resume work.
 
-The harness is intentionally thin. Future session queues, stores, replay,
-approval flows, and eval fixtures belong here rather than in the root `Jidoka`
-module.
+`Jidoka.Harness` is now a thin compatibility delegate. New internal code calls
+the owner module. Normal application code uses `Jidoka` and `Jidoka.Session`.
 
 ## Sessions And Stores
 
 `Jidoka.Session` is the ergonomic API for durable sessions. It delegates to
-`Jidoka.Harness`, and the underlying data struct is still
-`Jidoka.Harness.Session`.
+`Jidoka.Session.Execution`. The underlying data struct is
+`Jidoka.Session.Data`.
 
-`Jidoka.Harness.Session` is the durable harness envelope for work that spans
+`Jidoka.Session.Data` is the durable harness envelope for work that spans
 requests or process restarts. It contains:
 
 - the canonical agent spec;
@@ -59,8 +59,8 @@ requests or process restarts. It contains:
 Sessions are still data. They do not contain runtime clients or processes.
 
 ```elixir
-{:ok, pid} = Jidoka.Harness.Store.InMemory.start_link()
-store = {Jidoka.Harness.Store.InMemory, pid: pid}
+{:ok, pid} = Jidoka.Session.Store.InMemory.start_link()
+store = {Jidoka.Session.Store.InMemory, pid: pid}
 
 {:ok, session} =
   Jidoka.session(spec, "support-session-1", store: store)
@@ -108,7 +108,7 @@ replay.lineage
 
 For crash recovery, `Jidoka.Session.recoverable/2` lists expired leased work
 that has a durable snapshot. `Jidoka.Session.recover/2` atomically takes a new
-lease and resumes it. `Jidoka.Harness.Store.Dets` provides a synced,
+lease and resumes it. `Jidoka.Session.Store.Dets` provides a synced,
 single-node disk adapter. A multi-node deployment can implement the same store
 callbacks with database compare-and-set transactions.
 
@@ -116,7 +116,7 @@ Replay diagnostics explain whether recorded effects are complete and safe to
 reason about without calling providers or tools:
 
 ```elixir
-{:ok, diagnostics} = Jidoka.Harness.Replay.diagnose(replay)
+{:ok, diagnostics} = Jidoka.Session.Replay.diagnose(replay)
 
 diagnostics.status
 #=> :complete | :waiting | :failed | :incomplete
@@ -200,8 +200,8 @@ Eval cases are deterministic harness fixtures:
 ```
 
 The eval runner does not add another agent runtime. It uses
-`Jidoka.Harness.run_turn/3`, then records assertion results and observations on
-`Jidoka.Eval.Run`.
+`Jidoka.Turn.Execution.run/3`, then records assertion results and observations
+on `Jidoka.Eval.Run`.
 
 Eval input validation and eval execution failures are intentionally different:
 
@@ -229,12 +229,12 @@ spec =
 memory_store = {Jidoka.Memory.Store.InMemory, pid: pid}
 
 {:ok, _write} =
-  Jidoka.Harness.write_memory(spec, "Ada prefers concise answers.",
+  Jidoka.Session.Execution.write_memory(spec, "Ada prefers concise answers.",
     memory_store: memory_store
   )
 ```
 
-Before prompt assembly, the harness recalls memory through the supplied store
+Before prompt assembly, turn execution recalls memory through the supplied store
 and passes a typed `Jidoka.Memory.RecallResult` into the Runic turn state.
 Prompt assembly then:
 
@@ -379,9 +379,9 @@ This is safe-boundary durability, not arbitrary process resurrection.
 
 Versioned durability boundaries:
 
-- `Jidoka.Runtime.AgentSnapshot.schema_version() == 1`;
+- `Jidoka.Snapshot.schema_version() == 1`;
 - serialized snapshots use the opaque prefix `jidoka:snapshot:v1:`;
-- `Jidoka.Harness.Session.schema_version() == 1`;
+- `Jidoka.Session.Data.schema_version() == 1`;
 - import documents use `Jidoka.Import.AgentDocument.version() == 1`.
 
 Unsupported versions fail during normalization instead of attempting a partial
@@ -464,9 +464,9 @@ Jidoka uses Jido as the foundation:
   application module.
 - `MyAgent.start/1` and `Jidoka.start_agent/2` start DSL agents under
   `Jido.AgentServer`.
-- AgentServer routes `"jidoka.turn.run"` to `Jidoka.Runtime.Actions.RunTurn`,
+- AgentServer routes `"jidoka.turn.run"` to `Jidoka.Adapter.Jido.RunTurn`,
   which runs the Jidoka harness and writes `:status`, `:last_answer`, and
-  a typed `Jidoka.Runtime.AgentServerState` under `agent.state[:jidoka]`.
+  a typed `Jidoka.Adapter.Jido.AgentServerState` under `agent.state[:jidoka]`.
 
 Jidoka does not delegate the core loop to `Jido.AI.ReAct`. The ReAct-style loop
 is implemented through Jidoka's Runic/effect/harness spine.

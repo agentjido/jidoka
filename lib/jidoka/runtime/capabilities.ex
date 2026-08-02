@@ -2,14 +2,13 @@ defmodule Jidoka.Runtime.Capabilities do
   @moduledoc "Runtime dependency bundle for interpreting effects."
 
   alias Jidoka.Schema
+  alias Jidoka.Operation.Capability, as: OperationCapability
 
   @type llm_capability ::
           (Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t(), Jidoka.Context.t() ->
              {:ok, Jidoka.Effect.LLMDecision.t() | map()} | {:error, term()})
 
-  @type operation_capability ::
-          (Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t(), Jidoka.Context.t() ->
-             {:ok, term()} | {:error, term()})
+  @type operation_capability :: OperationCapability.t()
 
   @schema Zoi.struct(
             __MODULE__,
@@ -33,10 +32,7 @@ defmodule Jidoka.Runtime.Capabilities do
   def new(opts) do
     opts
     |> Schema.normalize_attrs()
-    |> Schema.put_default(:operations, &missing_operations_capability/3)
+    |> Schema.put_default(:operations, &OperationCapability.missing/3)
     |> then(&Schema.parse(@schema, &1))
   end
-
-  defp missing_operations_capability(_intent, _journal, _context),
-    do: {:error, :missing_operations_capability}
 end

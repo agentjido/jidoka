@@ -1,30 +1,33 @@
 defmodule Jidoka.Session do
   @moduledoc """
-  Ergonomic session facade backed by `Jidoka.Harness.Session`.
+  Ergonomic session facade backed by `Jidoka.Session.Data`.
 
-  `Jidoka.Harness.Session` is the durable data contract. This module is the
+  `Jidoka.Session.Data` is the durable data contract. This module is the
   developer-facing API for starting, running, resuming, and inspecting sessions
-  without reaching into the lower-level harness namespace for common workflows.
+  without reaching into lower-level execution modules for common workflows.
   """
 
   alias Jidoka.Agent
   alias Jidoka.Cancellation
   alias Jidoka.Chat
-  alias Jidoka.Harness
-  alias Jidoka.Harness.Session, as: HarnessSession
-  alias Jidoka.Harness.Store
-  alias Jidoka.Runtime.AgentSnapshot
+  alias Jidoka.Review.Execution, as: ReviewExecution
+  alias Jidoka.Session.Data, as: SessionData
+  alias Jidoka.Session.Execution, as: SessionExecution
+  alias Jidoka.Session.Replay
+  alias Jidoka.Session.Store
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
+  alias Jidoka.Turn.Execution, as: TurnExecution
 
-  @type t :: HarnessSession.t()
-  @type agent_input :: module() | Harness.plan_input()
-  @type session_input :: Harness.session_input()
-  @type request_input :: Harness.request_input()
+  @type t :: SessionData.t()
+  @type agent_input :: module() | TurnExecution.plan_input()
+  @type session_input :: SessionExecution.session_input()
+  @type request_input :: TurnExecution.request_input()
   @type opts :: keyword()
-  @type run_result :: Harness.session_run_result()
+  @type run_result :: SessionExecution.session_run_result()
   @type chat_result ::
           {:ok, t(), String.t()}
-          | {:hibernate, t(), AgentSnapshot.t()}
+          | {:hibernate, t(), Snapshot.t()}
           | {:cancelled, Cancellation.t()}
           | {:error, term()}
   @type async_result :: {:ok, Chat.Request.t()} | {:error, term()}
@@ -32,7 +35,7 @@ defmodule Jidoka.Session do
   @doc """
   Starts a new session for an agent, spec, or plan.
 
-  The returned value is a `Jidoka.Harness.Session` struct. A DSL agent module is
+  The returned value is a `Jidoka.Session.Data` struct. A DSL agent module is
   accepted directly:
 
       {:ok, session} = Jidoka.Session.start(MyApp.SupportAgent, "support-123")
@@ -46,7 +49,7 @@ defmodule Jidoka.Session do
   def start(agent_or_plan, opts) when is_list(opts) do
     with {:ok, opts} <- normalize_start_opts(opts),
          {:ok, plan_input} <- resolve_agent_input(agent_or_plan) do
-      Harness.start_session(plan_input, opts)
+      SessionExecution.start_session(plan_input, opts)
     end
   end
 
@@ -63,11 +66,11 @@ defmodule Jidoka.Session do
   end
 
   @doc """
-  Runs one turn for a session and returns the full harness result.
+  Runs one turn for a session and returns the full session result.
   """
   @spec run(session_input(), request_input(), opts()) :: run_result()
   def run(session_or_id, request_input, opts \\ []) when is_list(opts) do
-    Harness.run_session(session_or_id, request_input, opts)
+    SessionExecution.run_session(session_or_id, request_input, opts)
   end
 
   @doc """
@@ -79,10 +82,10 @@ defmodule Jidoka.Session do
   @spec chat(session_input(), String.t(), opts()) :: chat_result()
   def chat(session_or_id, input, opts \\ []) when is_binary(input) and is_list(opts) do
     case run(session_or_id, input, opts) do
-      {:ok, %HarnessSession{} = session, %Turn.Result{content: content}} ->
+      {:ok, %SessionData{} = session, %Turn.Result{content: content}} ->
         {:ok, session, content}
 
-      {:hibernate, %HarnessSession{} = session, %AgentSnapshot{} = snapshot} ->
+      {:hibernate, %SessionData{} = session, %Snapshot{} = snapshot} ->
         {:hibernate, session, snapshot}
 
       {:error, reason} ->
@@ -125,7 +128,7 @@ defmodule Jidoka.Session do
   """
   @spec resume(session_input(), opts()) :: run_result()
   def resume(session_or_id, opts \\ []) when is_list(opts) do
-    Harness.resume_session(session_or_id, opts)
+    SessionExecution.resume_session(session_or_id, opts)
   end
 
   @doc """
@@ -136,55 +139,55 @@ defmodule Jidoka.Session do
   """
   @spec fork(session_input(), opts()) :: {:ok, t()} | {:error, term()}
   def fork(session_or_id, opts \\ []) when is_list(opts) do
-    Harness.fork_session(session_or_id, opts)
+    SessionExecution.fork_session(session_or_id, opts)
   end
 
   @doc "Recovers a session after its durable worker lease expires."
   @spec recover(String.t(), opts()) :: run_result()
   def recover(session_id, opts \\ []) when is_binary(session_id) and is_list(opts) do
-    Harness.recover_session(session_id, opts)
+    SessionExecution.recover_session(session_id, opts)
   end
 
   @doc "Lists stored sessions that are ready for crash recovery."
   @spec recoverable(Store.store(), opts()) :: {:ok, [t()]} | {:error, term()}
   def recoverable(store, opts \\ []) when is_list(opts) do
-    Harness.store_list_recoverable(store, opts)
+    Store.list_recoverable(store, opts)
   end
 
   @doc "Lists pending human-review requests from a session or session store."
   @spec pending_reviews(t() | Store.store()) ::
           {:ok, [Jidoka.Review.Request.t()]} | {:error, term()}
-  def pending_reviews(session_or_store), do: Harness.pending_reviews(session_or_store)
+  def pending_reviews(session_or_store), do: ReviewExecution.pending(session_or_store)
 
   @doc "Returns a data-only replay view for a session."
-  @spec replay(t()) :: {:ok, Harness.Replay.t()} | {:error, term()}
-  def replay(%HarnessSession{} = session), do: Harness.replay(session)
+  @spec replay(t()) :: {:ok, Replay.t()} | {:error, term()}
+  def replay(%SessionData{} = session), do: Replay.from_session(session)
 
   @doc "Writes one memory entry through the configured memory store."
   @spec write_memory(t(), String.t(), opts()) ::
           {:ok, Jidoka.Memory.WriteResult.t()} | {:error, term()}
-  def write_memory(%HarnessSession{} = session, content, opts \\ []) when is_binary(content) do
-    Harness.write_memory(session, content, opts)
+  def write_memory(%SessionData{} = session, content, opts \\ []) when is_binary(content) do
+    SessionExecution.write_memory(session, content, opts)
   end
 
   @doc "Fetches a persisted session from a configured session store."
   @spec get(Store.store(), String.t()) :: {:ok, t()} | {:error, term()}
   def get(store, session_id) when is_binary(session_id),
-    do: Harness.store_get_session(store, session_id)
+    do: Store.get_session(store, session_id)
 
   @doc "Lists persisted sessions from a configured session store."
   @spec list(Store.store()) :: {:ok, [t()]} | {:error, term()}
-  def list(store), do: Harness.store_list_sessions(store)
+  def list(store), do: Store.list_sessions(store)
 
   defp persist_forced_cancellation(session_or_id, opts, %Cancellation{} = cancellation) do
     with {:ok, store} <- Keyword.fetch(opts, :store),
          {:ok, session_id} <- cancellation_session_id(session_or_id),
-         {:ok, %HarnessSession{} = session} <- Store.get_session(store, session_id),
+         {:ok, %SessionData{} = session} <- Store.get_session(store, session_id),
          true <- active_request?(session, cancellation.request_id) do
-      cancelled = HarnessSession.put_cancellation(session, cancellation)
+      cancelled = SessionData.put_cancellation(session, cancellation)
 
       case session.lease do
-        %Jidoka.Harness.SessionLease{lease_id: lease_id} ->
+        %Jidoka.Session.Lease{lease_id: lease_id} ->
           Store.commit_session(store, session_id, lease_id, cancelled,
             clock: Keyword.get(opts, :clock),
             lease_ttl_ms: Keyword.get(opts, :lease_ttl_ms, 30_000)
@@ -198,11 +201,11 @@ defmodule Jidoka.Session do
     end
   end
 
-  defp cancellation_session_id(%HarnessSession{session_id: session_id}), do: {:ok, session_id}
+  defp cancellation_session_id(%SessionData{session_id: session_id}), do: {:ok, session_id}
   defp cancellation_session_id(session_id) when is_binary(session_id), do: {:ok, session_id}
   defp cancellation_session_id(_session), do: :error
 
-  defp active_request?(%HarnessSession{status: status, requests: requests}, request_id)
+  defp active_request?(%SessionData{status: status, requests: requests}, request_id)
        when status in [:running, :cancelled] do
     case List.last(requests) do
       %Turn.Request{request_id: ^request_id} -> true
