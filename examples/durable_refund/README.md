@@ -1,8 +1,12 @@
 # Durable Refund Agent
 
+## Purpose
+
 The Durable Refund Agent demonstrates the execution and continuation feature group
 with one deterministic business flow. It does not use a provider key, network
 request, or recorded model response.
+
+## Features
 
 The six deterministic demonstrations show:
 
@@ -61,6 +65,13 @@ Open `durable_refund.livemd` for the complete executable walkthrough.
 - `lib/scenarios/` separates the six runtime demonstrations by concept.
 - `example.exs` is the small command entry point.
 - `test/execution_and_continuation_test.exs` is the behavior authority.
+
+## Expected Result
+
+The command prints evidence for streaming, stable parallel result order,
+cancellation, execution limits, crash recovery, replay, and a safe fork.
+
+## Next Guide
 
 For the public contracts, see:
 

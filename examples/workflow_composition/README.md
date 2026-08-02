@@ -1,8 +1,12 @@
 # Workflow Composition Agent
 
+## Purpose
+
 This example shows one fulfillment agent with a complete workflow graph. The
 same graph runs directly, as one agent tool, in the background, and from a
 schedule.
+
+## Features
 
 ```text
 typed order
@@ -45,3 +49,14 @@ mix test --only bounded_dynamic_loops
 
 Open `workflow_composition.livemd` to inspect the graph and run each execution
 form one step at a time.
+
+## Expected Result
+
+The command shows that direct and agent-owned runs return the same result. It
+also prints completed background and scheduled run evidence.
+
+## Next Guide
+
+Read [Workflows](../../guides/workflows.md) for the public workflow DSL and
+[Tools And Operations](../../guides/tools-and-operations.md) for the agent tool
+boundary.

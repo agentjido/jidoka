@@ -1,8 +1,12 @@
 # Warranty Claim
 
+## Purpose
+
 The Warranty Claim example reviews one claim from a customer statement, a
 product photo, and a receipt reference. It shows the complete authoring, model,
 and result-contract feature group in one business flow.
+
+## Features
 
 The example proves these behaviors:
 
@@ -66,7 +70,14 @@ Open `warranty_claim.livemd` for the executable walkthrough.
 - `example.exs` is the small command entry point.
 - `test/warranty_claim_triage_test.exs` is the behavior authority.
 
-For the public contracts, see these guides:
+## Expected Result
+
+The command prints one repaired, schema-valid warranty decision. It also shows
+authoring parity, fallback model use, and the number of result-repair passes.
+
+## Next Guide
+
+For the public contracts, read these guides:
 
 - [`guides/agent-dsl.md`](../../guides/agent-dsl.md)
 - [`guides/import-json-yaml.md`](../../guides/import-json-yaml.md)

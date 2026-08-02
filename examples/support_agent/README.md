@@ -1,7 +1,11 @@
 # Support Agent
 
+## Purpose
+
 The Support Agent is a complete deterministic Jidoka example. Its one scenario,
 `controlled_tool_call`, follows this path:
+
+## Features
 
 ```text
 request
@@ -72,3 +76,14 @@ The command runner and Livebook set a predictable local snapshot signing
 secret so the serialization step runs without application setup. Production
 applications must set their own private `:snapshot_signing_secret` value or
 `JIDOKA_SNAPSHOT_SIGNING_SECRET` environment variable.
+
+## Expected Result
+
+The command prints the allowed tool result and the approved resume result. The
+tests also prove that a blocked operation does not run before approval.
+
+## Next Guide
+
+Read [Tools And Operations](../../guides/tools-and-operations.md), then
+[Controls](../../guides/controls.md) and
+[Human In The Loop](../../guides/human-in-the-loop.md).

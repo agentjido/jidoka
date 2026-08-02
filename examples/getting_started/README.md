@@ -1,7 +1,11 @@
 # Getting Started Agent
 
+## Purpose
+
 This is the smallest complete Jidoka example. It defines one agent, sends one
 text request, and returns one final answer.
+
+## Features
 
 ```text
 agent definition
@@ -37,5 +41,13 @@ mix test examples/getting_started/test/getting_started_test.exs --trace
 Open `getting_started.livemd` to inspect the compiled agent, preview its exact
 prompt, and run the same deterministic chat.
 
+## Expected Result
+
+The command prints the normalized agent id, prompt messages, and this fixed
+answer: `I can explain Jidoka agents and help you build one.`
+
+## Next Guide
+
+Read [Getting Started](../../guides/getting-started.md) for the package path.
 When this flow is clear, continue with the
 [Support Agent](../support_agent/README.md) to add a tool and an approval path.
