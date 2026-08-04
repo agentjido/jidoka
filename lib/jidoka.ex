@@ -124,7 +124,12 @@ defmodule Jidoka do
   create sessions, or run turns.
   """
   @spec whereis(String.t(), keyword()) :: pid() | nil
-  def whereis(id, opts \\ []), do: Jidoka.Jido.whereis(id, opts)
+  def whereis(id, opts \\ []) do
+    case Jidoka.Jido.whereis(id, opts) do
+      pid when is_pid(pid) -> if Process.alive?(pid), do: pid
+      nil -> nil
+    end
+  end
 
   @doc """
   Starts a durable Jidoka session for an agent, spec, or plan.
