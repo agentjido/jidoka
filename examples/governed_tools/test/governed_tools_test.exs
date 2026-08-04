@@ -81,6 +81,7 @@ defmodule JidokaExamples.GovernedToolsTest do
   @tag :trajectory_assertions
   test "runs repeatable cases and fails correct prose with the wrong trajectory" do
     assert {:ok, report} = Scenario.evaluation_suite()
+
     assert Enum.map(report.runs, &{&1.case_id, &1.status}) == [
              {"governed_tools_required_trajectory", :passed},
              {"governed_tools_missing_trajectory", :failed}

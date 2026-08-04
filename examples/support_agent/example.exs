@@ -38,7 +38,10 @@ turn_result =
   end
 
 finished_view = View.after_turn(running_view, {:ok, turn_result})
-IO.puts("[4/6] UI projection: #{length(finished_view.visible_messages)} messages, #{length(finished_view.events)} events")
+
+IO.puts(
+  "[4/6] UI projection: #{length(finished_view.visible_messages)} messages, #{length(finished_view.events)} events"
+)
 
 IO.puts("[5/6] Run the protected path and serialize the paused turn outside its process.")
 

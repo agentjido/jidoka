@@ -14,8 +14,7 @@ defmodule JidokaExamples.GovernedTools.Catalog do
       metadata: %{
         "lua" => %{
           "returns" => "Returns approved source titles and URLs.",
-          "example" =>
-            ~s|{id = "search", tool = "research.source.search", arguments = {query = "Jidoka", limit = 2}}|
+          "example" => ~s|{id = "search", tool = "research.source.search", arguments = {query = "Jidoka", limit = 2}}|
         }
       }
     )

@@ -63,9 +63,7 @@ defmodule JidokaExamples.DurableRefund.Scenarios.Observability do
         }
       )
 
-    Trace.record(result.events ++ [sensitive_event], {InMemory, pid: sink},
-      policy: Policy.new!()
-    )
+    Trace.record(result.events ++ [sensitive_event], {InMemory, pid: sink}, policy: Policy.new!())
   end
 
   defp result_count(%Effect.Journal{} = journal, kind) do

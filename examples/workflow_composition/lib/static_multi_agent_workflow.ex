@@ -34,13 +34,15 @@ defmodule JidokaExamples.WorkflowComposition.StaticMultiAgentWorkflow do
   end
 
   steps do
-    agent :draft, DraftAgent,
+    agent(:draft, DraftAgent,
       prompt: input(:order_id),
       context: %{stage: value(:draft)}
+    )
 
-    agent :review, ReviewAgent,
+    agent(:review, ReviewAgent,
       prompt: from(:draft),
       context: %{stage: value(:review)}
+    )
   end
 
   output from(:review)

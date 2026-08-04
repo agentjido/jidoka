@@ -4,6 +4,7 @@ defmodule JidokaExamples.WorkflowComposition.Scenario do
   alias Jidoka.Effect
   alias Jidoka.Workflow
   alias Jidoka.Workflow.{Background, Scheduler}
+
   alias JidokaExamples.WorkflowComposition.{
     Agent,
     FulfillmentWorkflow,
@@ -85,9 +86,7 @@ defmodule JidokaExamples.WorkflowComposition.Scenario do
   def static_multi_agent(opts \\ []) do
     observer = Keyword.get(opts, :observer)
 
-    Workflow.run(StaticMultiAgentWorkflow, %{order_id: "A1001"},
-      agent_opts: [llm: static_agent_model(observer)]
-    )
+    Workflow.run(StaticMultiAgentWorkflow, %{order_id: "A1001"}, agent_opts: [llm: static_agent_model(observer)])
   end
 
   defp run_direct(observer) do

@@ -49,8 +49,7 @@ defmodule JidokaExamples.GovernedTools.Scenario do
          operations: operations,
          expected_operations: @expected_operations,
          preflight: preflight,
-         skill_metadata:
-           Enum.find(Agent.spec().metadata["tool_sources"], &(&1["source"] == "skill"))
+         skill_metadata: Enum.find(Agent.spec().metadata["tool_sources"], &(&1["source"] == "skill"))
        }}
     end
   end

@@ -75,7 +75,8 @@ defmodule Jidoka.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22", only: [:dev, :test], runtime: false},
       {:ex_doc, "~> 0.38", only: :dev, runtime: false},
-      {:git_ops, "~> 2.9", only: :dev, runtime: false}
+      {:git_ops, "~> 2.9", only: :dev, runtime: false},
+      {:sourceror, "~> 1.7", only: [:dev, :test]}
     ]
   end
 
