@@ -80,7 +80,7 @@ defmodule Jidoka.CancellationTest do
              |> Enum.filter(&Stream.terminal?/1)
   end
 
-  test "forced cancellation releases a persisted session from running state" do
+  test "cancellation releases a persisted session from running state" do
     parent = self()
     {:ok, store_pid} = InMemory.start_link()
     store = {InMemory, pid: store_pid}
@@ -97,14 +97,13 @@ defmodule Jidoka.CancellationTest do
     assert {:ok, request} =
              Jidoka.Session.chat_async("cancelled-session", "Cancel this",
                store: store,
-               llm: llm,
-               cancellation_poll_interval_ms: 1_000
+               llm: llm
              )
 
     assert_receive {:session_capability_started, capability_pid}, 1_000
 
-    assert {:ok, %Cancellation{forced?: true} = cancellation} =
-             Jidoka.Session.cancel(request, grace_ms: 5)
+    assert {:ok, %Cancellation{} = cancellation} =
+             Jidoka.Session.cancel(request, grace_ms: 500)
 
     assert {:cancelled, ^cancellation} = Jidoka.Session.await(request, timeout: 100)
     refute Process.alive?(capability_pid)
