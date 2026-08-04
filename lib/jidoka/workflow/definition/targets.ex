@@ -9,10 +9,10 @@ defmodule Jidoka.Workflow.Definition.Targets do
       not is_atom(step.module) ->
         invalid_action!(owner_module, step)
 
-      Code.ensure_loaded?(step.module) and function_exported?(step.module, :to_tool, 0) ->
+      compiled?(step.module) and function_exported?(step.module, :to_tool, 0) ->
         :ok
 
-      Code.ensure_loaded?(step.module) ->
+      compiled?(step.module) ->
         invalid_action!(owner_module, step)
 
       true ->
@@ -24,10 +24,10 @@ defmodule Jidoka.Workflow.Definition.Targets do
   def validate_function!(owner_module, %{mfa: {module, function, 2}} = step)
       when is_atom(module) and is_atom(function) do
     cond do
-      Code.ensure_loaded?(module) and function_exported?(module, function, 2) ->
+      compiled?(module) and function_exported?(module, function, 2) ->
         :ok
 
-      Code.ensure_loaded?(module) ->
+      compiled?(module) ->
         Error.raise!(
           owner_module,
           "Workflow function step target is not exported.",
@@ -54,10 +54,10 @@ defmodule Jidoka.Workflow.Definition.Targets do
   @spec validate_agent!(module(), map()) :: :ok
   def validate_agent!(owner_module, %{agent: module} = step) when is_atom(module) do
     cond do
-      Code.ensure_loaded?(module) and function_exported?(module, :run_turn, 2) ->
+      compiled?(module) and function_exported?(module, :run_turn, 2) ->
         :ok
 
-      Code.ensure_loaded?(module) ->
+      compiled?(module) ->
         Error.raise!(
           owner_module,
           "Workflow agent step target is not a Jidoka-compatible agent.",
@@ -80,6 +80,10 @@ defmodule Jidoka.Workflow.Definition.Targets do
       "Use `agent :draft, MyApp.Agents.Writer, prompt: ...`."
     )
   end
+
+  # Wait for targets that the parallel compiler is still building before the
+  # export check.
+  defp compiled?(module), do: match?({:module, _module}, Code.ensure_compiled(module))
 
   @spec invalid_action!(module(), map()) :: no_return()
   defp invalid_action!(owner_module, step) do
