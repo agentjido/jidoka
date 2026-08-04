@@ -21,6 +21,10 @@ defmodule Jidoka.Workflow.Definition.Targets do
   end
 
   @spec validate_function!(module(), map()) :: :ok
+  def validate_function!(owner_module, %{mfa: {module, function, 2}})
+      when owner_module == module and is_atom(function),
+      do: :ok
+
   def validate_function!(owner_module, %{mfa: {module, function, 2}} = step)
       when is_atom(module) and is_atom(function) do
     cond do
