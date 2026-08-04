@@ -38,7 +38,7 @@ A minimum useful notebook cell sequence:
 ```elixir
 Mix.install([
   {:kino, "~> 0.14"},
-  {:jidoka, "~> 0.8.0-beta.1"}
+  {:jidoka, "~> 0.9.0"}
 ])
 ```
 

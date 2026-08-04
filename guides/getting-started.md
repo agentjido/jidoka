@@ -22,7 +22,7 @@ Add Jidoka to your application:
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 0.8.0-beta.1"}
+    {:jidoka, "~> 0.9.0"}
   ]
 end
 ```

@@ -30,7 +30,7 @@ The developer adds one dependency:
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 0.8.0-beta.1"}
+    {:jidoka, "~> 0.9.0"}
   ]
 end
 ```
@@ -42,7 +42,7 @@ Public concepts learned: `Jidoka` as one package.
 
 Current friction:
 
-- the beta version is repeated in several documents and will require coordinated
+- the package version is repeated in several documents and will require coordinated
   edits;
 - dotenv behavior is described from both the Jidoka and ReqLLM viewpoints;
 - the production credential rule appears before the developer has run the
