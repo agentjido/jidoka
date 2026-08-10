@@ -13,6 +13,26 @@ config :jidoka,
 
 config :req_llm, load_dotenv: false
 
+if config_env() == :dev do
+  config :git_ops,
+    mix_project: Jidoka.MixProject,
+    changelog_file: "CHANGELOG.md",
+    repository_url: "https://github.com/agentjido/jidoka",
+    manage_mix_version?: true,
+    version_tag_prefix: "v",
+    types: [
+      feat: [header: "Features"],
+      fix: [header: "Bug Fixes"],
+      perf: [header: "Performance"],
+      refactor: [header: "Refactoring"],
+      docs: [hidden?: true],
+      test: [hidden?: true],
+      deps: [hidden?: true],
+      chore: [hidden?: true],
+      ci: [hidden?: true]
+    ]
+end
+
 config :spark, :formatter,
   remove_parens?: true,
   "Jidoka.Agent": [
