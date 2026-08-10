@@ -70,7 +70,7 @@ defmodule Jidoka.Adapter.Jido.Skill do
   def prompt(refs, opts \\ []) when is_list(refs) and is_list(opts) do
     with {:ok, refs} <- load_and_resolve(refs, opts) do
       refs
-      |> Skill.Prompt.render()
+      |> Skill.Prompt.render(include_body: true)
       |> case do
         "" -> {:ok, nil}
         prompt -> {:ok, prompt}
