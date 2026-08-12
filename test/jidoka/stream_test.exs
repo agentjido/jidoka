@@ -136,6 +136,7 @@ defmodule Jidoka.StreamTest do
              :prompt_assembled,
              :effect_planned,
              :effect_started,
+             :policy_allowed,
              :capability_call_started,
              :llm_delta,
              :capability_call_completed,

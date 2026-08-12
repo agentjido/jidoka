@@ -10,6 +10,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Effect
   alias Jidoka.Error
   alias Jidoka.ModelPolicy
+  alias Jidoka.Policy.Gate
   alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.CapabilityInvoker
   alias Jidoka.Runtime.Capabilities
@@ -131,12 +132,12 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Turn.State{} = state,
          %Effect.Intent{} = intent,
          %Capabilities{} = capabilities,
-         %Effect.Journal{} = journal,
+         %Effect.Journal{} = _journal,
          opts
        ) do
-    case run_effect_controls(state, intent, opts) do
+    case run_effect_controls(state, intent, capabilities, opts) do
       {:ok, %Turn.State{} = state} ->
-        execute_controlled_effect(state, intent, capabilities, journal, opts)
+        execute_controlled_effect(state, intent, capabilities, state.journal, opts)
 
       {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
         {:interrupt, interrupt, state}
@@ -182,6 +183,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   defp run_effect_controls(
          %Turn.State{} = state,
          %Effect.Intent{kind: :operation} = intent,
+         %Capabilities{} = capabilities,
          opts
        ) do
     event_count = length(state.events)
@@ -189,7 +191,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     case Controls.run_operation_controls(state, intent, opts) do
       {:ok, %Turn.State{} = state} ->
         EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
-        {:ok, state}
+        run_policy_gate(state, intent, capabilities, opts)
 
       {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
         EffectTrace.emit_events(Enum.drop(state.events, event_count), opts)
@@ -208,7 +210,50 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp run_effect_controls(%Turn.State{} = state, %Effect.Intent{}, _opts), do: {:ok, state}
+  defp run_effect_controls(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Capabilities{} = capabilities,
+         opts
+       ),
+       do: run_policy_gate(state, intent, capabilities, opts)
+
+  defp run_policy_gate(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Capabilities{policy: policy},
+         opts
+       ) do
+    case Gate.authorize(state, intent, policy, opts) do
+      {:allow, _decision, %Turn.State{} = state} ->
+        {:ok, state}
+
+      {:deny, decision, %Turn.State{}} ->
+        {:error,
+         Error.normalize({:policy_denied, decision.rule_id, decision.reason},
+           operation: EffectTrace.operation(intent) || intent.kind,
+           phase: :control,
+           agent_id: state.spec.id,
+           request_id: EffectTrace.request_id(state, intent),
+           intent_id: intent.id,
+           effect_kind: intent.kind
+         )}
+
+      {:review, _decision, %Interrupt{} = interrupt, %Turn.State{} = state} ->
+        {:interrupt, interrupt, state}
+
+      {:error, reason} ->
+        {:error,
+         Error.normalize(reason,
+           operation: EffectTrace.operation(intent) || intent.kind,
+           phase: :control,
+           agent_id: state.spec.id,
+           request_id: EffectTrace.request_id(state, intent),
+           intent_id: intent.id,
+           effect_kind: intent.kind
+         )}
+    end
+  end
 
   defp call_capability(
          %Turn.State{} = state,
@@ -297,7 +342,8 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Capabilities{} = capabilities,
          opts
        ) do
-    with {:ok, state, runnable_intents, replayed_results} <- preflight_operation_batch(state, intents, opts),
+    with {:ok, state, runnable_intents, replayed_results} <-
+           preflight_operation_batch(state, intents, capabilities, opts),
          {:ok, state, batch_results} <-
            execute_preflighted_operation_batch(state, runnable_intents, capabilities, opts) do
       ordered_results =
@@ -309,8 +355,13 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp preflight_operation_batch(%Turn.State{} = state, intents, opts) when is_list(intents) do
-    Enum.reduce_while(intents, {:ok, state, [], %{}}, &preflight_operation_batch_intent(&1, &2, opts))
+  defp preflight_operation_batch(%Turn.State{} = state, intents, capabilities, opts)
+       when is_list(intents) do
+    Enum.reduce_while(
+      intents,
+      {:ok, state, [], %{}},
+      &preflight_operation_batch_intent(&1, &2, capabilities, opts)
+    )
     |> case do
       {:ok, state, runnable_intents, replayed_results} ->
         {:ok, state, Enum.reverse(runnable_intents), replayed_results}
@@ -323,6 +374,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   defp preflight_operation_batch_intent(
          %Effect.Intent{} = intent,
          {:ok, %Turn.State{} = state, runnable_intents, replayed_results},
+         capabilities,
          opts
        ) do
     case Effect.Journal.result_for(state.journal, intent) do
@@ -331,12 +383,26 @@ defmodule Jidoka.Runtime.EffectInterpreter do
         {:cont, {:ok, state, runnable_intents, Map.put(replayed_results, intent.id, result)}}
 
       nil ->
-        preflight_uncached_operation_intent(state, intent, runnable_intents, replayed_results, opts)
+        preflight_uncached_operation_intent(
+          state,
+          intent,
+          runnable_intents,
+          replayed_results,
+          capabilities,
+          opts
+        )
     end
   end
 
-  defp preflight_uncached_operation_intent(state, intent, runnable_intents, replayed_results, opts) do
-    case preflight_operation_intent(state, intent, opts) do
+  defp preflight_uncached_operation_intent(
+         state,
+         intent,
+         runnable_intents,
+         replayed_results,
+         capabilities,
+         opts
+       ) do
+    case preflight_operation_intent(state, intent, capabilities, opts) do
       {:ok, state, intent} ->
         {:cont, {:ok, state, [intent | runnable_intents], replayed_results}}
 
@@ -348,11 +414,16 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp preflight_operation_intent(%Turn.State{} = state, %Effect.Intent{} = intent, opts) do
+  defp preflight_operation_intent(
+         %Turn.State{} = state,
+         %Effect.Intent{} = intent,
+         %Capabilities{} = capabilities,
+         opts
+       ) do
     with :ok <- validate_incomplete_effect_replay(state, intent) do
       state = EffectTrace.append(state, intent, :effect_started, [], opts)
 
-      case run_effect_controls(state, intent, opts) do
+      case run_effect_controls(state, intent, capabilities, opts) do
         {:ok, %Turn.State{} = state} ->
           {:ok, state, intent}
 

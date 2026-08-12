@@ -3,12 +3,14 @@ defmodule Jidoka.Effect.Journal do
 
   alias Jidoka.Schema
   alias Jidoka.Effect
+  alias Jidoka.Policy.Decision
 
   @schema Zoi.struct(
             __MODULE__,
             %{
               intents: Zoi.map(Zoi.string(), Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default(%{}),
-              results: Zoi.map(Zoi.string(), Zoi.lazy({Effect.Result, :schema, []})) |> Zoi.default(%{})
+              results: Zoi.map(Zoi.string(), Zoi.lazy({Effect.Result, :schema, []})) |> Zoi.default(%{}),
+              policy_decisions: Zoi.map(Zoi.string(), Zoi.lazy({Decision, :schema, []})) |> Zoi.default(%{})
             },
             coerce: true
           )
@@ -44,6 +46,17 @@ defmodule Jidoka.Effect.Journal do
   @doc "Returns the recorded result for an intent, if it exists."
   @spec result_for(t(), Effect.Intent.t()) :: Effect.Result.t() | nil
   def result_for(%__MODULE__{results: results}, %Effect.Intent{id: id}), do: Map.get(results, id)
+
+  @doc "Records one authoritative policy decision by effect identifier."
+  @spec put_policy_decision(t(), Effect.Intent.t(), Decision.t()) :: t()
+  def put_policy_decision(%__MODULE__{} = journal, %Effect.Intent{id: id}, %Decision{} = decision) do
+    %__MODULE__{journal | policy_decisions: Map.put_new(journal.policy_decisions, id, decision)}
+  end
+
+  @doc "Returns the policy decision recorded for an effect."
+  @spec policy_decision_for(t(), Effect.Intent.t()) :: Decision.t() | nil
+  def policy_decision_for(%__MODULE__{policy_decisions: decisions}, %Effect.Intent{id: id}),
+    do: Map.get(decisions, id)
 
   @doc "Returns a recorded intent by intent value or identifier."
   @spec intent_for(t(), Effect.Intent.t() | String.t()) :: Effect.Intent.t() | nil

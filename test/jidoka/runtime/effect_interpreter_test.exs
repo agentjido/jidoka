@@ -42,6 +42,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
     assert Enum.map(Jidoka.Trace.timeline(next_state.events), & &1.event) == [
              :effect_started,
+             :policy_allowed,
              :capability_call_started,
              :capability_call_completed,
              :effect_completed
@@ -68,12 +69,14 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
     assert Enum.map(timeline, & &1.event) == [
              :effect_started,
+             :policy_allowed,
              :capability_call_started,
              :capability_call_failed,
              :effect_failed
            ]
 
     assert [
+             %{effect_kind: :operation, operation: "weather"},
              %{effect_kind: :operation, operation: "weather"},
              %{effect_kind: :operation, operation: "weather"},
              %{effect_kind: :operation, operation: "weather", error: %{category: :execution}},

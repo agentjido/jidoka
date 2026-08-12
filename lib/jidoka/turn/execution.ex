@@ -165,7 +165,7 @@ defmodule Jidoka.Turn.Execution do
   end
 
   defp capability_attrs_with_defaults(capability_attrs, opts) do
-    [:llm, :operations]
+    [:llm, :operations, :policy]
     |> Enum.reduce(Schema.normalize_attrs(capability_attrs), fn capability, attrs ->
       case Keyword.fetch(opts, capability) do
         {:ok, value} -> Schema.put_default(attrs, capability, value)

@@ -24,6 +24,9 @@ defmodule Jidoka.Event do
       status: :completed
     },
     capability_call_failed: %{category: :runtime, phase: :interpret_effect, status: :failed},
+    policy_allowed: %{category: :policy, phase: :policy, status: :completed},
+    policy_denied: %{category: :policy, phase: :policy, status: :failed},
+    policy_review_requested: %{category: :policy, phase: :policy, status: :pending},
     control_allowed: %{category: :control, phase: :control, status: :completed},
     control_blocked: %{category: :control, phase: :control, status: :failed},
     control_interrupted: %{category: :control, phase: :control, status: :pending},
@@ -53,11 +56,13 @@ defmodule Jidoka.Event do
     :control,
     :approval,
     :result,
-    :memory
+    :memory,
+    :policy
   ]
   @phases [
     :start,
     :control,
+    :policy,
     :review,
     :memory,
     :assemble_prompt,

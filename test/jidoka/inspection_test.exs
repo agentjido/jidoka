@@ -69,6 +69,7 @@ defmodule Jidoka.InspectionTest do
              :prompt_assembled,
              :effect_planned,
              :effect_started,
+             :policy_allowed,
              :capability_call_started,
              :capability_call_completed,
              :effect_completed,
