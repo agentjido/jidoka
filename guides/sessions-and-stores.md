@@ -57,6 +57,7 @@ The target determines the result shape:
 | `Jidoka.Session.chat(session_id, input, store: store)` | `{:ok, updated_session, text}` | Pass the store on later id-based calls |
 | `Jidoka.Session.run(session_or_id, input, opts)` | `{:ok, updated_session, %Jidoka.Turn.Result{}}` | Handle full result or hibernation data |
 | `Jidoka.Session.run_sequence(session_or_id, requests, opts)` | `{:ok, %Jidoka.Session.Sequence.Result{}}` | Inspect ordered steps and terminal data |
+| `Jidoka.Session.run_sequence_async(session_or_id, requests, opts)` | `{:ok, %Jidoka.Session.Sequence.Request{}}` | Cancel or await a headless ordered run |
 
 ## Concepts
 
@@ -154,6 +155,26 @@ The sequence stops at the first error, hibernation, or cancellation. Its
 `steps` field contains only completed turns. Its `terminal` field identifies
 the stopped request and reason. A store-backed sequence claims and commits one
 turn at a time; it does not persist turns that have not started.
+
+Use `run_sequence_async/3` when the caller must stop a headless sequence. The
+returned handle is opaque and contains no task. `Jidoka.cancel/2` cancels the
+active turn, waits for bounded cleanup, and prevents the next turn from
+starting. `Jidoka.await/2` then returns the same cancellation evidence and the
+completed prefix:
+
+```elixir
+{:ok, request} =
+  Jidoka.Session.run_sequence_async(session.session_id, requests,
+    store: store
+  )
+
+{:ok, cancellation} = Jidoka.cancel(request, grace_ms: 500)
+{:cancelled, ^cancellation, sequence} = Jidoka.await(request)
+```
+
+For a store-backed sequence, cooperative and forced cancellation both commit a
+cancelled session and release the active lease. A completed or hibernated
+sequence wins a later cancellation race.
 
 `Jidoka.Session.run/3` is the full-result API. It returns the underlying
 `Jidoka.Turn.Result`, a hibernation snapshot, or an error, along with the

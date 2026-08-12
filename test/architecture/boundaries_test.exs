@@ -139,7 +139,12 @@ defmodule Jidoka.Architecture.BoundariesTest do
         if schema_count == 0 do
           []
         else
-          generated = source_count(source, ~r/@type t\s*::\s*unquote\(Zoi\.type_spec\(@schema\)\)/)
+          generated =
+            source_count(
+              source,
+              ~r/@(?:type|opaque) t\s*::\s*unquote\(Zoi\.type_spec\(@schema\)\)/
+            )
+
           enforce_keys = source_count(source, ~r/@enforce_keys\s+Zoi\.Struct\.enforce_keys\(@schema\)/)
           struct_fields = source_count(source, ~r/defstruct\s+Zoi\.Struct\.struct_fields\(@schema\)/)
 

@@ -3,11 +3,13 @@ defmodule Jidoka.SessionSequenceTest do
 
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Cancellation
   alias Jidoka.Effect
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Schema
   alias Jidoka.Session
   alias Jidoka.Session.Sequence
+  alias Jidoka.Session.Sequence.Request, as: SequenceRequest
   alias Jidoka.Session.Store.InMemory
   alias Jidoka.Snapshot
   alias Jidoka.Turn
@@ -278,6 +280,213 @@ defmodule Jidoka.SessionSequenceTest do
     assert {:ok, ^finished} = Session.get(store, "sequence-store")
   end
 
+  test "cancels an active asynchronous sequence and returns the completed prefix" do
+    parent = self()
+    {:ok, calls} = Elixir.Agent.start_link(fn -> 0 end)
+
+    llm = fn _intent, _journal, context ->
+      case Elixir.Agent.get_and_update(calls, &{&1, &1 + 1}) do
+        0 ->
+          {:ok, %{type: :final, content: "first complete"}}
+
+        1 ->
+          send(parent, {:sequence_capability_started, self()})
+          :ok = wait_for_cancellation(context, 1_000)
+          send(parent, {:sequence_capability_cleaned_up, self()})
+          {:error, :cancelled}
+
+        _call ->
+          flunk("a later sequence turn started after cancellation")
+      end
+    end
+
+    assert {:ok, session} = Session.start(spec(), "sequence-async-cancel")
+
+    assert {:ok, request_handle} =
+             Session.run_sequence_async(
+               session,
+               [request("First", "async-1"), request("Block", "async-2"), request("Never", "async-3")],
+               llm: llm,
+               sequence_request_id: "sequence-request-1"
+             )
+
+    refute Map.has_key?(Map.from_struct(request_handle), :task)
+    assert_receive {:sequence_capability_started, capability_pid}, 1_000
+
+    assert {:ok,
+            %Cancellation{
+              request_id: "sequence-request-1",
+              forced?: false
+            } = cancellation} = Jidoka.cancel(request_handle, grace_ms: 500)
+
+    assert {:cancelled, ^cancellation,
+            %Sequence.Result{
+              status: :cancelled,
+              steps: [%Sequence.Step{result: %{content: "first complete"}}],
+              terminal: %Sequence.Terminal{
+                index: 2,
+                request_id: "async-2",
+                cancellation: ^cancellation,
+                reason: ^cancellation
+              },
+              session: %{status: :cancelled, error: ^cancellation}
+            } = sequence} = Jidoka.await(request_handle, timeout: 100)
+
+    assert sequence |> Jidoka.project() |> Jason.encode!() |> is_binary()
+
+    assert_receive {:sequence_capability_cleaned_up, ^capability_pid}, 1_000
+    assert Elixir.Agent.get(calls, & &1) == 2
+    assert {:error, :request_already_finished} = Jidoka.cancel(request_handle)
+  end
+
+  test "forces bounded asynchronous sequence cancellation and keeps prior steps" do
+    parent = self()
+    {:ok, calls} = Elixir.Agent.start_link(fn -> 0 end)
+
+    llm = fn _intent, _journal, _context ->
+      case Elixir.Agent.get_and_update(calls, &{&1, &1 + 1}) do
+        0 ->
+          {:ok, %{type: :final, content: "first complete"}}
+
+        1 ->
+          send(parent, {:noncooperative_sequence_started, self()})
+          Process.sleep(5_000)
+          {:ok, %{type: :final, content: "too late"}}
+
+        _call ->
+          flunk("a later sequence turn started after forced cancellation")
+      end
+    end
+
+    assert {:ok, session} = Session.start(spec(), "sequence-async-forced")
+
+    assert {:ok, request_handle} =
+             Session.run_sequence_async(
+               session,
+               [request("First", "forced-1"), request("Block", "forced-2"), request("Never", "forced-3")],
+               llm: llm,
+               sequence_request_id: "sequence-request-forced"
+             )
+
+    assert_receive {:noncooperative_sequence_started, capability_pid}, 1_000
+
+    assert {:ok, %Cancellation{forced?: true} = cancellation} =
+             Jidoka.cancel(request_handle, grace_ms: 5)
+
+    assert {:cancelled, ^cancellation,
+            %Sequence.Result{
+              steps: [%Sequence.Step{result: %{content: "first complete"}}],
+              terminal: %Sequence.Terminal{index: 2, request_id: "forced-2"}
+            }} = Jidoka.await(request_handle, timeout: 100)
+
+    refute Process.alive?(capability_pid)
+    assert Elixir.Agent.get(calls, & &1) == 2
+  end
+
+  test "releases store leases for cooperative and forced sequence cancellation" do
+    for mode <- [:cooperative, :forced] do
+      parent = self()
+      {:ok, store_pid} = InMemory.start_link()
+      store = {InMemory, pid: store_pid}
+      session_id = "sequence-store-cancel-#{mode}"
+
+      assert {:ok, session} = Session.start(spec(), session_id, store: store)
+
+      llm = fn _intent, _journal, context ->
+        send(parent, {:stored_sequence_started, mode, self()})
+
+        case mode do
+          :cooperative ->
+            :ok = wait_for_cancellation(context, 1_000)
+            {:error, :cancelled}
+
+          :forced ->
+            Process.sleep(5_000)
+            {:ok, %{type: :final, content: "too late"}}
+        end
+      end
+
+      assert {:ok, request_handle} =
+               Session.run_sequence_async(
+                 session.session_id,
+                 [request("Block", "stored-#{mode}-1"), request("Never", "stored-#{mode}-2")],
+                 store: store,
+                 llm: llm,
+                 sequence_request_id: "stored-sequence-#{mode}"
+               )
+
+      assert_receive {:stored_sequence_started, ^mode, capability_pid}, 1_000
+      grace_ms = if mode == :cooperative, do: 500, else: 5
+
+      assert {:ok, %Cancellation{forced?: forced?} = cancellation} =
+               Jidoka.cancel(request_handle, grace_ms: grace_ms)
+
+      assert forced? == (mode == :forced)
+
+      assert {:cancelled, ^cancellation, %Sequence.Result{session: cancelled_session}} =
+               Jidoka.await(request_handle, timeout: 100)
+
+      assert cancelled_session.status == :cancelled
+      assert cancelled_session.lease == nil
+      assert cancelled_session.error == cancellation
+
+      assert {:ok, stored_session} = Session.get(store, session_id)
+      assert stored_session.status == :cancelled
+      assert stored_session.lease == nil
+      assert stored_session.error == cancellation
+      refute Process.alive?(capability_pid)
+    end
+  end
+
+  test "a completed asynchronous sequence wins later cancellation" do
+    assert {:ok, session} = Session.start(spec(), "sequence-async-complete")
+
+    assert {:ok, request_handle} =
+             Session.run_sequence_async(
+               session,
+               [request("Complete", "complete-1")],
+               llm: final_llm("done"),
+               sequence_request_id: "sequence-request-complete"
+             )
+
+    assert {:ok, %Sequence.Result{status: :completed}} =
+             Jidoka.await(request_handle, timeout: 1_000)
+
+    assert {:error, :request_already_finished} = Jidoka.cancel(request_handle)
+    assert {:ok, %Sequence.Result{status: :completed}} = Jidoka.await(request_handle)
+  end
+
+  test "a sequence handle expires after its owner exits" do
+    parent = self()
+
+    owner =
+      spawn(fn ->
+        {:ok, session} = Session.start(spec(), "sequence-expired-owner")
+
+        {:ok, request_handle} =
+          Session.run_sequence_async(
+            session,
+            [request("Block", "expired-1")],
+            llm: fn _intent, _journal, _context ->
+              Process.sleep(5_000)
+              {:ok, %{type: :final, content: "too late"}}
+            end
+          )
+
+        send(parent, {:sequence_owner_handle, request_handle})
+        Process.sleep(:infinity)
+      end)
+
+    assert_receive {:sequence_owner_handle, request_handle}, 1_000
+    assert {:ok, controller} = SequenceRequest.controller(request_handle)
+    monitor = Process.monitor(controller)
+    Process.exit(owner, :kill)
+    assert_receive {:DOWN, ^monitor, :process, ^controller, :normal}, 1_000
+
+    assert {:error, :request_expired} = Jidoka.await(request_handle)
+    assert {:error, :request_expired} = Jidoka.cancel(request_handle)
+  end
+
   test "projects a sequence result as JSON-portable data" do
     assert {:ok, session} = Session.start(spec(), "sequence-projection")
 
@@ -335,5 +544,16 @@ defmodule Jidoka.SessionSequenceTest do
       Schema.get_key(message, :role) == :tool and
         Schema.get_key(message, :operation) == operation
     end)
+  end
+
+  defp wait_for_cancellation(_context, 0), do: {:error, :cancellation_not_received}
+
+  defp wait_for_cancellation(context, attempts_left) do
+    if Cancellation.requested?(context) do
+      :ok
+    else
+      Process.sleep(1)
+      wait_for_cancellation(context, attempts_left - 1)
+    end
   end
 end

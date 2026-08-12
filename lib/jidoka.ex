@@ -32,6 +32,8 @@ defmodule Jidoka do
   alias Jidoka.Error
   alias Jidoka.Review.Execution, as: ReviewExecution
   alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Sequence.Async, as: AsyncSequence
+  alias Jidoka.Session.Sequence.Request, as: SequenceRequest
   alias Jidoka.Session.Store
   alias Jidoka.Inspection
   alias Jidoka.Review
@@ -267,17 +269,32 @@ defmodule Jidoka do
 
   This returns the same normalized result shape as `chat/3`, including session
   results when the request target is a `Jidoka.Session`. A cancelled request
-  returns `{:cancelled, %Jidoka.Cancellation{}}`.
+  returns `{:cancelled, %Jidoka.Cancellation{}}`. A cancelled ordered sequence
+  returns `{:cancelled, cancellation, sequence_result}` so the caller keeps the
+  same typed evidence and the completed turn prefix.
   """
-  @spec await(Chat.Request.t() | Jidoka.Stream.t(), keyword()) :: term()
+  @spec await(Chat.Request.t() | Jidoka.Stream.t() | SequenceRequest.t(), keyword()) :: term()
   def await(request_or_stream, opts \\ [])
   def await(%Chat.Request{} = request, opts), do: AsyncChat.await(request, opts)
   def await(%Jidoka.Stream{} = stream, opts), do: Jidoka.Stream.await(stream, opts)
 
-  @doc "Cancels an active asynchronous chat request and returns typed evidence."
-  @spec cancel(Chat.Request.t(), keyword()) ::
+  def await(request, opts) when is_list(opts) do
+    if SequenceRequest.request?(request),
+      do: AsyncSequence.await(request, opts),
+      else: {:error, :invalid_async_request}
+  end
+
+  @doc "Cancels an active asynchronous request and returns typed evidence."
+  @spec cancel(Chat.Request.t() | SequenceRequest.t(), keyword()) ::
           {:ok, Jidoka.Cancellation.t()} | {:error, term()}
-  def cancel(%Chat.Request{} = request, opts \\ []), do: AsyncChat.cancel(request, opts)
+  def cancel(request, opts \\ [])
+  def cancel(%Chat.Request{} = request, opts), do: AsyncChat.cancel(request, opts)
+
+  def cancel(request, opts) when is_list(opts) do
+    if SequenceRequest.request?(request),
+      do: AsyncSequence.cancel(request, opts),
+      else: {:error, :invalid_async_request}
+  end
 
   @doc """
   Runs one agent turn through the Jidoka Runic spine.

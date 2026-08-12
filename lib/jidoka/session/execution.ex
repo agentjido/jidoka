@@ -102,6 +102,28 @@ defmodule Jidoka.Session.Execution do
   def run_sequence(_session_input, request_inputs, opts) when is_list(opts),
     do: {:error, {:invalid_session_sequence, request_inputs}}
 
+  @doc false
+  @spec resolve_sequence_session(session_input(), runtime_opts()) ::
+          {:ok, Session.t()} | {:error, term()}
+  def resolve_sequence_session(session_input, opts) when is_list(opts) do
+    resolve_session(session_input, opts)
+  end
+
+  @doc false
+  @spec persist_sequence_cancellation(map(), Cancellation.t(), runtime_opts()) ::
+          {:ok, Session.t()} | {:error, term()}
+  def persist_sequence_cancellation(progress, %Cancellation{} = cancellation, opts)
+      when is_map(progress) and is_list(opts) do
+    with {:ok, session} <- cancellation_session(progress, opts) do
+      cancelled =
+        session
+        |> maybe_put_sequence_request(Map.get(progress, :request))
+        |> Session.put_cancellation(cancellation)
+
+      persist_sequence_cancellation_session(cancelled, opts)
+    end
+  end
+
   @doc """
   Resumes the latest snapshot for a session.
   """
@@ -244,40 +266,11 @@ defmodule Jidoka.Session.Execution do
          {:ok, request} <- normalize_sequence_request(input, opts),
          :ok <- ensure_unique_sequence_request(request, state.request_ids, index) do
       request = carry_sequence_state(request, state.agent_state)
+      notify_sequence_progress(state, index, request, opts)
 
-      case run_session(sequence_session_input(state.session, opts), request, opts) do
-        {:ok, session, %Turn.Result{} = result} ->
-          operation_results =
-            Enum.drop(result.agent_state.operation_results, state.operation_count)
-
-          step =
-            Sequence.Step.new!(
-              index: index,
-              request: request,
-              result: result,
-              operation_results: operation_results
-            )
-
-          next_state = %{
-            session: session,
-            steps: state.steps ++ [step],
-            agent_state: result.agent_state,
-            operation_count: length(result.agent_state.operation_results),
-            request_ids: [request.request_id | state.request_ids]
-          }
-
-          run_sequence_steps(rest, next_state, index + 1, opts)
-
-        {:hibernate, session, %Snapshot{} = snapshot} ->
-          terminal_sequence_result(
-            :hibernated,
-            session,
-            state.steps,
-            index,
-            request.request_id,
-            snapshot,
-            nil
-          )
+      case Cancellation.check(opts) do
+        :ok ->
+          run_sequence_request(state, request, rest, index, opts)
 
         {:error, reason} ->
           sequence_run_error(state, request, reason, index, opts)
@@ -294,6 +287,67 @@ defmodule Jidoka.Session.Execution do
           reason
         )
     end
+  end
+
+  defp run_sequence_request(state, request, rest, index, opts) do
+    case run_session(sequence_session_input(state.session, opts), request, opts) do
+      {:ok, session, %Turn.Result{} = result} ->
+        operation_results =
+          Enum.drop(result.agent_state.operation_results, state.operation_count)
+
+        step =
+          Sequence.Step.new!(
+            index: index,
+            request: request,
+            result: result,
+            operation_results: operation_results
+          )
+
+        next_state = %{
+          session: session,
+          steps: state.steps ++ [step],
+          agent_state: result.agent_state,
+          operation_count: length(result.agent_state.operation_results),
+          request_ids: [request.request_id | state.request_ids]
+        }
+
+        run_sequence_steps(rest, next_state, index + 1, opts)
+
+      {:hibernate, session, %Snapshot{} = snapshot} ->
+        terminal_sequence_result(
+          :hibernated,
+          session,
+          state.steps,
+          index,
+          request.request_id,
+          snapshot,
+          nil
+        )
+
+      {:error, reason} ->
+        sequence_run_error(state, request, reason, index, opts)
+    end
+  end
+
+  defp notify_sequence_progress(state, index, request, opts) do
+    case Keyword.get(opts, :sequence_progress) do
+      callback when is_function(callback, 1) ->
+        _result =
+          safe_sequence_progress(callback, %{session: state.session, steps: state.steps, index: index, request: request})
+
+        :ok
+
+      _callback ->
+        :ok
+    end
+  end
+
+  defp safe_sequence_progress(callback, progress) do
+    callback.(progress)
+  rescue
+    _exception -> :ok
+  catch
+    _kind, _reason -> :ok
   end
 
   defp normalize_sequence_request(input, opts) do
@@ -389,6 +443,47 @@ defmodule Jidoka.Session.Execution do
       )
 
     Sequence.Result.new!(status: status, session: session, steps: steps, terminal: terminal)
+  end
+
+  defp cancellation_session(%{session: %Session{} = session}, opts) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} -> Store.get_session(store, session.session_id)
+      :error -> {:ok, session}
+    end
+  end
+
+  defp cancellation_session(_progress, _opts),
+    do: {:error, :invalid_sequence_cancellation_progress}
+
+  defp maybe_put_sequence_request(session, %Turn.Request{request_id: request_id} = request) do
+    case List.last(session.requests) do
+      %Turn.Request{request_id: ^request_id} -> session
+      _last -> Session.put_request(session, request)
+    end
+  end
+
+  defp maybe_put_sequence_request(session, _request), do: session
+
+  defp persist_sequence_cancellation_session(
+         %Session{lease: %Lease{lease_id: lease_id}} = session,
+         opts
+       ) do
+    with {:ok, store} <- fetch_store(opts) do
+      Store.commit_session(
+        store,
+        session.session_id,
+        lease_id,
+        session,
+        lease_store_opts(opts)
+      )
+    end
+  end
+
+  defp persist_sequence_cancellation_session(%Session{} = session, opts) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} -> Store.put_session(store, Session.clear_lease(session))
+      :error -> {:ok, Session.clear_lease(session)}
+    end
   end
 
   defp sequence_request_id(%Turn.Request{request_id: request_id}), do: request_id

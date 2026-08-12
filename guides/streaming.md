@@ -266,6 +266,9 @@ idempotency keys and reconciliation policy for that case.
   truth; use streaming for UX.
 - **Treat cancellation as a terminal result.** Match on
   `{:cancelled, %Jidoka.Cancellation{}}`. Do not convert it to success.
+- **Keep the prefix for a cancelled sequence.** An asynchronous session
+  sequence returns `{:cancelled, cancellation, sequence}`. The sequence has all
+  completed steps and typed terminal evidence.
 
 ## Testing
 
@@ -318,6 +321,8 @@ Key modules touched in this guide:
   `:on_event`.
 - [`Jidoka.Session.run/3`](`Jidoka.Session.run/3`) - forwards the same
   options for session-backed turns.
+- [`Jidoka.Session.run_sequence_async/3`](`Jidoka.Session.run_sequence_async/3`)
+  - returns an opaque cancellable handle for ordered session work.
 - [`Jidoka.cancel/2`](`Jidoka.cancel/2`) - cancels one async request and
   waits for bounded cleanup.
 - [`Jidoka.Cancellation`](`Jidoka.Cancellation`) - typed terminal

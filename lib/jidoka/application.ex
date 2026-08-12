@@ -11,6 +11,8 @@ defmodule Jidoka.Application do
       [
         {Task.Supervisor, name: Jidoka.Chat.TaskSupervisor},
         {DynamicSupervisor, name: Jidoka.Chat.RequestSupervisor, strategy: :one_for_one},
+        {Task.Supervisor, name: Jidoka.Session.Sequence.TaskSupervisor},
+        {DynamicSupervisor, name: Jidoka.Session.Sequence.RequestSupervisor, strategy: :one_for_one},
         {Task.Supervisor, name: Jidoka.Runtime.TaskSupervisor}
       ] ++
         handoff_owner_store_children() ++

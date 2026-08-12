@@ -152,6 +152,22 @@ data. It carries semantic state only inside that ordered call. Separate
 `Jidoka.Session.run/3` calls keep durable history but do not automatically use
 the prior result as continuation state.
 
+For a headless run that must support cancellation, start the same sequence with
+an opaque handle:
+
+```elixir
+{:ok, request} =
+  Jidoka.Session.run_sequence_async(session, requests)
+
+{:ok, cancellation} = Jidoka.cancel(request)
+
+{:cancelled, ^cancellation, sequence} = Jidoka.await(request)
+```
+
+The sequence keeps completed steps, stops the active turn, and does not start a
+later turn. The handle has no task field. Jidoka owns task control and bounded
+cleanup.
+
 Use `session/3` when passing a store or runtime options:
 
 ```elixir

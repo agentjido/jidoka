@@ -16,6 +16,8 @@ defmodule Jidoka.Session do
   alias Jidoka.Session.Execution, as: SessionExecution
   alias Jidoka.Session.Replay
   alias Jidoka.Session.Sequence
+  alias Jidoka.Session.Sequence.Async, as: AsyncSequence
+  alias Jidoka.Session.Sequence.Request, as: SequenceRequest
   alias Jidoka.Session.Store
   alias Jidoka.Snapshot
   alias Jidoka.Turn
@@ -29,6 +31,11 @@ defmodule Jidoka.Session do
           | {:hibernate, t(), Snapshot.t()}
           | {:error, term()}
   @type sequence_result :: {:ok, Sequence.Result.t()} | {:error, term()}
+  @type sequence_async_result :: {:ok, SequenceRequest.t()} | {:error, term()}
+  @type sequence_await_result ::
+          {:ok, Sequence.Result.t()}
+          | {:cancelled, Cancellation.t(), Sequence.Result.t()}
+          | {:error, term()}
   @type chat_result ::
           {:ok, t(), String.t()}
           | {:hibernate, t(), Snapshot.t()}
@@ -90,6 +97,26 @@ defmodule Jidoka.Session do
   end
 
   @doc """
+  Starts an ordered request sequence and returns an opaque public handle.
+
+  Use `Jidoka.await/2` to get the final sequence result. Use
+  `Jidoka.cancel/2` to stop the active turn and prevent later turns from
+  starting. A cancelled await returns typed evidence and the completed prefix.
+  """
+  @spec run_sequence_async(session_input(), Sequence.input(), opts()) ::
+          sequence_async_result()
+  def run_sequence_async(session_or_id, request_inputs, opts \\ [])
+      when is_list(request_inputs) and is_list(opts) do
+    with [_request | _rest] <- request_inputs,
+         {:ok, session} <- SessionExecution.resolve_sequence_session(session_or_id, opts) do
+      AsyncSequence.start(session_or_id, session, request_inputs, opts)
+    else
+      [] -> {:error, :empty_session_sequence}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc """
   Runs one turn for a session and returns final assistant text.
 
   The updated session is returned with the text so caller-managed sessions do
@@ -127,16 +154,32 @@ defmodule Jidoka.Session do
     end)
   end
 
-  @doc "Waits for a request handle returned by `chat_async/3`."
-  @spec await(Chat.Request.t(), opts()) :: chat_result()
-  def await(%Chat.Request{} = request, opts \\ []) when is_list(opts) do
-    AsyncChat.await(request, opts)
+  @doc "Waits for a request handle returned by an asynchronous session call."
+  @spec await(Chat.Request.t() | SequenceRequest.t(), opts()) ::
+          chat_result() | sequence_await_result()
+  def await(request, opts \\ [])
+
+  def await(%Chat.Request{} = request, opts) when is_list(opts),
+    do: AsyncChat.await(request, opts)
+
+  def await(request, opts) when is_list(opts) do
+    if SequenceRequest.request?(request),
+      do: AsyncSequence.await(request, opts),
+      else: {:error, :invalid_async_request}
   end
 
   @doc "Cancels an active asynchronous session request."
-  @spec cancel(Chat.Request.t(), opts()) :: {:ok, Cancellation.t()} | {:error, term()}
-  def cancel(%Chat.Request{} = request, opts \\ []) when is_list(opts) do
-    AsyncChat.cancel(request, opts)
+  @spec cancel(Chat.Request.t() | SequenceRequest.t(), opts()) ::
+          {:ok, Cancellation.t()} | {:error, term()}
+  def cancel(request, opts \\ [])
+
+  def cancel(%Chat.Request{} = request, opts) when is_list(opts),
+    do: AsyncChat.cancel(request, opts)
+
+  def cancel(request, opts) when is_list(opts) do
+    if SequenceRequest.request?(request),
+      do: AsyncSequence.cancel(request, opts),
+      else: {:error, :invalid_async_request}
   end
 
   @doc """
