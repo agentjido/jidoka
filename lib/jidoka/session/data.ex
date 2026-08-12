@@ -152,6 +152,21 @@ defmodule Jidoka.Session.Data do
     %__MODULE__{session | revision: revision + 1}
   end
 
+  @doc "Returns portable extension state from durable session metadata."
+  @spec extension_state(t()) :: map()
+  def extension_state(%__MODULE__{metadata: metadata}) do
+    Map.get(metadata, "extension_state", Map.get(metadata, :extension_state, %{}))
+  end
+
+  @doc "Stores validated namespaced extension state in durable session metadata."
+  @spec put_extension_state(t(), map()) :: {:ok, t()} | {:error, term()}
+  def put_extension_state(%__MODULE__{} = session, states) when is_map(states) do
+    case Jidoka.ExecutionEnvironment.Contract.validate_safe_map(states) do
+      :ok -> {:ok, %{session | metadata: Map.put(session.metadata, "extension_state", states)}}
+      {:error, reason} -> {:error, {:invalid_extension_state, reason}}
+    end
+  end
+
   @doc "Records a durable in-run checkpoint while lease ownership stays active."
   @spec put_durable_checkpoint(t(), Snapshot.t()) :: t()
   def put_durable_checkpoint(%__MODULE__{} = session, %Snapshot{} = snapshot) do

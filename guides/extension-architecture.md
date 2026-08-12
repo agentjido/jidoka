@@ -46,3 +46,26 @@ Each subscriber has a time limit. A raise, exit, timeout, or bad return becomes
 delivery evidence. It does not change the turn result and does not stop the
 next subscriber. Events do not write to CLI output and do not create a second
 event store.
+
+## Built-in Host
+
+`Jidoka.Extension.Host` opens only bindings that the trusted resolver accepted.
+A built-in factory receives the portable binding, inert request config, and a
+small session context. It returns live instance data and `Slot` values.
+
+Supported slots are tools, deterministic commands, providers, advisory policy,
+pre-turn context, lifecycle handlers, checkpoint state, close handlers, and
+namespaced result data. Tool slots compile through `Jidoka.Operation.Source`.
+The normal effect interpreter therefore applies the authoritative host policy
+before it calls a tool. Advisory policy cannot override a host denial.
+
+Tool, command, provider, state, and result names cannot collide. A host can
+replace or disable a default registry entry by stable ID before resolution.
+Agent data cannot replace a registry entry. Result and state data must be
+portable, must use a registered namespace, and cannot use the `core` namespace.
+
+Live instance data stays in the host process. Checkpoints write only portable
+namespaced state to durable session metadata. The normal session metadata copy
+keeps this data during resume and fork. `Host.with_open/6` closes all instances
+on success, error, raise, and exit. Close failures and isolated lifecycle
+handler failures return evidence; they do not write to CLI output.
