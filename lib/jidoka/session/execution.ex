@@ -92,6 +92,12 @@ defmodule Jidoka.Session.Execution do
 
   defp run_sequence_with_runtime(session_input, request_inputs, opts) do
     with {:ok, session} <- resolve_session(session_input, opts) do
+      Jidoka.Extension.RuntimeEvents.emit(
+        "session.start",
+        %{session_ref: session.session_id, data: %{request_count: length(request_inputs)}},
+        opts
+      )
+
       with_sequence_environment_observer(session, opts, fn runtime_opts ->
         state = %{
           session: session,
@@ -101,7 +107,15 @@ defmodule Jidoka.Session.Execution do
           request_ids: []
         }
 
-        run_sequence_steps(request_inputs, state, 1, runtime_opts)
+        result = run_sequence_steps(request_inputs, state, 1, runtime_opts)
+
+        Jidoka.Extension.RuntimeEvents.emit(
+          "session.end",
+          %{session_ref: session.session_id, data: %{status: result.status}},
+          opts
+        )
+
+        result
       end)
     end
   end

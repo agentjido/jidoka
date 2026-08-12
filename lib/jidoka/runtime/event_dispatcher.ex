@@ -16,6 +16,7 @@ defmodule Jidoka.Runtime.EventDispatcher do
   def emit(%Event{} = event, opts) when is_list(opts) do
     emit_to_mailbox(event, Keyword.get(opts, :stream_to))
     emit_to_callback(event, Keyword.get(opts, :on_event))
+    Jidoka.Extension.RuntimeEvents.emit_runtime(event, opts)
     :ok
   end
 

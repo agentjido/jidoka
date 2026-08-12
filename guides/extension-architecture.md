@@ -22,3 +22,27 @@ permission grant, capability set, mode, or protocol version changed.
 
 This contract does not install or start extensions. Later host layers consume
 the binding and keep all live runtime values outside durable data.
+
+## Lifecycle Events
+
+`Jidoka.Extension.Event` is separate from the interactive `Jidoka.Event`
+stream contract. Its version-1 catalog is fixed:
+
+- `session.start`, `session.resume`, `session.compact`, and `session.end`
+- `turn.start`, `turn.update`, and `turn.end`
+- `model.start`, `model.update`, `model.end`, and `model.error`
+- `tool.before`, `tool.update`, `tool.after`, and `tool.error`
+- `automation.cell.start` and `automation.cell.end`
+
+For one session, the dispatcher delivers events in call order. A normal turn
+has one start, zero or more updates, paired model and tool events, and one turn
+end. Cancellation, hibernation, policy denial, and runtime failure also use one
+turn end with the reason in portable data. A sequence has one session start and
+one session end around its turn events.
+
+Payloads use string keys, have a 64 KiB limit, and remove credential-like
+fields before delivery. IDs and time can be injected for repeatable tests.
+Each subscriber has a time limit. A raise, exit, timeout, or bad return becomes
+delivery evidence. It does not change the turn result and does not stop the
+next subscriber. Events do not write to CLI output and do not create a second
+event store.
