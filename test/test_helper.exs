@@ -6,4 +6,4 @@ Application.put_env(
 
 Application.put_env(:tzdata, :autoupdate, :disabled)
 
-ExUnit.start(exclude: [:live, :parity])
+ExUnit.start(exclude: [:litterbox_contract, :live, :parity])
