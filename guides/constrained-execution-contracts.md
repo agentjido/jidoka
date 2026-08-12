@@ -55,3 +55,21 @@ facts against every profile requirement. Missing evidence is not confirmation.
 Resolution and validation return stable `Jidoka.ExecutionEnvironment.Error`
 values. Unknown, disabled, malformed, unavailable, insufficient, and
 unenforced profiles fail before protected work continues.
+
+## Lifecycle manager
+
+Adapters implement seven callbacks: `open`, `acquire`, `checkpoint`, `restore`,
+`fork`, `close`, and `cleanup`. `Manager` calls the host policy before every
+callback and validates confirmed evidence after every successful callback.
+
+`open` creates or locates durable state. `acquire` returns an opaque transient
+manager handle and is exclusive for one binding. `checkpoint` produces an
+immutable portable checkpoint. `restore` can rotate binding identity. `fork`
+uses only a forkable checkpoint and never running mutable state. `close`
+releases one transient handle but preserves durable state. `cleanup`
+idempotently destroys durable resources.
+
+Use `Manager.with_acquired/4` when possible. It closes the transient handle
+after success, error, or exception. The manager also closes its remaining
+handles when it stops. Runtime handles never enter bindings, checkpoints,
+sessions, or snapshots.
