@@ -237,7 +237,7 @@ defmodule Jidoka.CodingPack.ShellPort do
   defp known_limit_atom("wall_time_ms"), do: :wall_time_ms
   defp known_limit_atom("output_bytes"), do: :output_bytes
 
-  defp text?(value), do: is_binary(value) and String.valid?(value) and not String.contains?(value, <<0>>)
+  defp text?(value), do: is_binary(value) and String.valid?(value)
   defp truthy?(true), do: true
   defp truthy?(_value), do: false
   defp cap(value, limit) when byte_size(value) <= limit, do: {value, false}

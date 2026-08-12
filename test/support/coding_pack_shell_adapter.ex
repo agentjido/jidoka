@@ -34,7 +34,10 @@ defmodule Jidoka.TestSupport.CodingPackShellAdapter do
   def execute(_handle, request, opts) do
     record(opts, {:execute, request})
 
-    case mode(opts) do
+    case scripted_result(opts) || mode(opts) do
+      {:scripted, result} ->
+        {:ok, result, execute_evidence(request, opts)}
+
       :adapter_error ->
         {:error, :injected_execute_failure}
 
@@ -155,6 +158,19 @@ defmodule Jidoka.TestSupport.CodingPackShellAdapter do
 
   defp mode(opts) do
     if state = state(opts), do: Agent.get(state, &Map.get(&1, :mode, :success)), else: :success
+  end
+
+  defp scripted_result(opts) do
+    if state = state(opts) do
+      Agent.get_and_update(state, &pop_response/1)
+    end
+  end
+
+  defp pop_response(current) do
+    case Map.get(current, :responses, []) do
+      [result | rest] -> {{:scripted, result}, Map.put(current, :responses, rest)}
+      [] -> {nil, current}
+    end
   end
 
   defp state(opts), do: Keyword.get(opts, :state)

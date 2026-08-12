@@ -128,3 +128,36 @@ output, cancellation, command-class, or limit evidence fails closed.
 
 The coding pack does not call a host shell, `System.cmd`, or `Port.open`. It has
 no interactive terminal, background-job, SSH, or raw container mode.
+
+## Git review
+
+The host can add a `Jidoka.CodingPack.GitPort` that binds a trusted Git command
+name to the constrained shell. The pack then registers `coding.git_status` and
+`coding.git_diff`. Both operations are read-only. They use fixed argument lists
+and add only validated workspace path filters. They cannot commit, push, reset,
+checkout, or change repository state.
+
+Git status gives deterministic entries for staged, unstaged, untracked,
+renamed, copied, added, deleted, and unmerged paths. It gives the original path
+for a rename. Git diff first gets the changed-path list, removes ignored or
+unsafe paths, and then requests bounded statistics and patch content only for
+those paths. File statistics mark binary files. Result limits state omitted and
+truncated data. A non-repository and a Git error have different statuses.
+
+## Named verification
+
+`Jidoka.CodingPack.VerifyPort` is a trusted host registry for test and lint
+helpers. Each helper has an ID, description, fixed registered command, fixed
+argument template, optional target patterns, timeout, network need, and allowed
+exit codes. The only variable token is an exact `{target}` argument. The target
+must resolve inside the workspace, match a trusted pattern, and not be ignored
+or start with a command option.
+
+The `coding.verify` operation selects only a helper ID and optional safe target.
+It cannot give a command, command switch, or raw shell string. Results state
+passed, failed, timeout, cancelled, or blocked. They keep bounded output,
+confirmed enforcement and cleanup evidence, and optional edit or checkpoint
+IDs supplied by the caller.
+
+The host can disable or replace each Git and verification operation by its
+stable tool ID.
