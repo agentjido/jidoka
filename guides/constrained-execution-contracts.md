@@ -38,3 +38,20 @@ copied into confirmed fields.
 All contracts have version 1 constructors and stable projections. Projections
 use string keys, remove credential-like fields, and encode with Jason. Live
 values fail validation with their data path.
+
+## Trusted host resolution
+
+An embedding host creates `Registration` values. Each registration joins one
+trusted profile, one installed adapter module, and one provider-neutral adapter
+capability declaration. `ProfileResolver.resolve/3` accepts only a
+`PolicyRequest`. Agent and scenario documents cannot create registrations.
+
+Before `open`, `Validator.validate_profile/3` checks availability, adapter
+identity, isolation, network, workspace, immutable image evidence, limit keys,
+checkpoint support, fork support, and requested capability identifiers. After
+each lifecycle call, `Validator.validate_evidence/2` checks actual confirmed
+facts against every profile requirement. Missing evidence is not confirmation.
+
+Resolution and validation return stable `Jidoka.ExecutionEnvironment.Error`
+values. Unknown, disabled, malformed, unavailable, insufficient, and
+unenforced profiles fail before protected work continues.

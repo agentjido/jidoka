@@ -55,6 +55,15 @@ defmodule Jidoka.Projection do
   def project(%ExecutionEnvironment.EnforcementEvidence{} = value),
     do: ExecutionEnvironment.project(value)
 
+  def project(%ExecutionEnvironment.AdapterCapabilities{} = value),
+    do: ExecutionEnvironment.project(value)
+
+  def project(%ExecutionEnvironment.Registration{} = value),
+    do: ExecutionEnvironment.Registration.to_map(value)
+
+  def project(%ExecutionEnvironment.Error{} = value),
+    do: ExecutionEnvironment.Error.to_map(value)
+
   def project(%Jidoka.Memory.Entry{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.RecallRequest{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.RecallResult{} = value), do: Projection.Memory.project(value)
