@@ -102,3 +102,29 @@ checkpoint reference, confirmed enforcement evidence, and bounded structural
 diff facts. It does not include changed file content. A partial backend error
 reports the observed final state and the checkpoint that is available for
 recovery.
+
+## Constrained shell
+
+The pack registers `coding.shell` only when a trusted host supplies a
+`Jidoka.CodingPack.ShellPort`. The port holds an execution-environment manager,
+portable binding, trusted security profile, and a command registry. An agent
+can select a registered command and give arguments. It cannot select an
+adapter, executable class, image, mount, or backend option.
+
+The request accepts an executable name, argument list, bounded standard input,
+relative working directory, timeout, output limit, and network-need flag. The
+workspace and trusted profile set the maximum values. Each registered command
+states its policy class, mutation class, and whether it can use network access.
+The normal operation policy gate receives that summary without standard-input
+content. The environment manager applies a second policy gate before adapter
+execution.
+
+Jidoka acquires the environment before execution and closes it after success,
+failure, timeout, or cancellation. Cancellation does not stop the close call.
+The result keeps standard output and standard error separate and bounded. It
+also gives status, exit status, duration, truncation facts, confirmed backend
+and enforcement evidence, and cleanup evidence. Missing shell, path, timeout,
+output, cancellation, command-class, or limit evidence fails closed.
+
+The coding pack does not call a host shell, `System.cmd`, or `Port.open`. It has
+no interactive terminal, background-job, SSH, or raw container mode.

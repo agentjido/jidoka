@@ -112,6 +112,19 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
       {:ok, evidence(opts)}
     end
 
+    @impl true
+    def execute(_handle, request, opts) do
+      record(opts, :execute)
+
+      {:ok,
+       %{
+         "status" => "ok",
+         "stdout" => Map.get(request, "stdin", ""),
+         "stderr" => "",
+         "exit_status" => 0
+       }, evidence(opts)}
+    end
+
     defp evidence(opts) do
       EnforcementEvidence.new!(
         status: :confirmed,
@@ -172,6 +185,26 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
              Manager.with_acquired(manager, binding, fn _handle -> raise "failed" end)
 
     assert Enum.count(Agent.get(probe, & &1), &(&1 == :close)) == 2
+  end
+
+  test "executes a portable request only through an acquired handle and closes it" do
+    {:ok, probe} = Agent.start_link(fn -> [] end)
+    {:ok, manager} = Manager.start_link(registration(), allow_policy(probe), probe: probe)
+    {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: "restricted"))
+
+    request = %{
+      "command" => "echo",
+      "command_class" => "read",
+      "cwd" => ".",
+      "mutation" => "read",
+      "network" => false,
+      "stdin" => "value"
+    }
+
+    assert {:ok, {:ok, {%{"stdout" => "value"}, %EnforcementEvidence{}}}, %EnforcementEvidence{}} =
+             Manager.with_acquired(manager, binding, &Manager.execute(manager, &1, request))
+
+    assert [:open, :acquire, :execute, :close] = probe |> Agent.get(&Enum.reverse/1)
   end
 
   test "weak acquire evidence and checkpoint failures close transient handles" do

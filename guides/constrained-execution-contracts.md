@@ -58,9 +58,11 @@ unenforced profiles fail before protected work continues.
 
 ## Lifecycle manager
 
-Adapters implement seven callbacks: `open`, `acquire`, `checkpoint`, `restore`,
-`fork`, `close`, and `cleanup`. `Manager` calls the host policy before every
-callback and validates confirmed evidence after every successful callback.
+Adapters implement seven lifecycle callbacks: `open`, `acquire`, `checkpoint`,
+`restore`, `fork`, `close`, and `cleanup`. An adapter can also implement the
+optional `execute` callback for portable requests. `Manager` calls the host
+policy before every callback and validates confirmed evidence after every
+successful callback.
 
 `open` creates or locates durable state. `acquire` returns an opaque transient
 manager handle and is exclusive for one binding. `checkpoint` produces an
@@ -73,6 +75,11 @@ Use `Manager.with_acquired/4` when possible. It closes the transient handle
 after success, error, or exception. The manager also closes its remaining
 handles when it stops. Runtime handles never enter bindings, checkpoints,
 sessions, or snapshots.
+
+`Manager.execute/4` accepts only portable data and only an acquired handle. It
+does not expose the adapter handle. Cancellation can stop work, but it does not
+stop the required close call. Close ignores an already-set cancellation token
+so that cleanup can complete.
 
 ## Durable session use
 

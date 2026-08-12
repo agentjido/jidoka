@@ -28,4 +28,9 @@ defmodule Jidoka.ExecutionEnvironment.Adapter do
               | {:error, term()}
   @callback close(handle(), keyword()) :: {:ok, EnforcementEvidence.t() | map()} | {:error, term()}
   @callback cleanup(Binding.t(), keyword()) :: {:ok, EnforcementEvidence.t() | map()} | {:error, term()}
+
+  @callback execute(handle(), map(), keyword()) ::
+              {:ok, map(), EnforcementEvidence.t() | map()} | {:error, term()}
+
+  @optional_callbacks execute: 3
 end

@@ -11,6 +11,7 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   alias Jidoka.ExecutionEnvironment.Binding
   alias Jidoka.ExecutionEnvironment.Checkpoint
   alias Jidoka.ExecutionEnvironment.Conformance
+  alias Jidoka.ExecutionEnvironment.Contract
   alias Jidoka.ExecutionEnvironment.EnforcementEvidence
   alias Jidoka.ExecutionEnvironment.Error
   alias Jidoka.ExecutionEnvironment.Manager.Handle
@@ -68,6 +69,12 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
           {:ok, EnforcementEvidence.t()} | {:error, Error.t()}
   def cleanup(manager, %Binding{} = binding, opts \\ []),
     do: GenServer.call(manager, {:cleanup, binding, opts}, :infinity)
+
+  @doc "Executes a portable request through an acquired environment handle."
+  @spec execute(manager(), Handle.t(), map(), keyword()) ::
+          {:ok, {map(), EnforcementEvidence.t()}} | {:error, Error.t()}
+  def execute(manager, %Handle{} = handle, request, opts \\ []) when is_map(request),
+    do: GenServer.call(manager, {:execute, handle, request, opts}, :infinity)
 
   @doc "Acquires a handle, runs a callback, and always closes the handle."
   @spec with_acquired(manager(), Binding.t(), (Handle.t() -> term()), keyword()) ::
@@ -198,6 +205,8 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   end
 
   def handle_call({:close, handle, opts}, _from, state) do
+    opts = cleanup_opts(opts)
+
     with {:ok, token, entry} <- owned_handle(handle, state),
          :ok <- authorize(state, "close", entry.binding.resource_ref, opts),
          {:ok, evidence} <- call_adapter(state.registration.adapter, :close, [entry.raw, call_opts(state, opts)]),
@@ -235,6 +244,23 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
     end
   end
 
+  def handle_call({:execute, handle, request, opts}, _from, state) do
+    result =
+      with {:ok, _token, entry} <- owned_handle(handle, state),
+           :ok <- execute_supported(state.registration.adapter),
+           :ok <- Contract.validate_safe_map(request),
+           :ok <- authorize_execute(state, entry.binding.resource_ref, request, opts),
+           {:ok, result, evidence} <-
+             call_adapter(state.registration.adapter, :execute, [entry.raw, request, call_opts(state, opts)]),
+           true <- is_map(result),
+           :ok <- Contract.validate_safe_map(result),
+           {:ok, evidence} <- normalize_evidence(evidence, state.registration) do
+        {:ok, {result, evidence}}
+      end
+
+    {:reply, normalize_error(result, :execute), state}
+  end
+
   @impl true
   def terminate(_reason, state) do
     Enum.each(state.handles, fn {_token, entry} ->
@@ -257,6 +283,34 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
       {:ok, _decision} -> :ok
       {:error, reason} -> {:error, {:policy_denied, reason}}
     end
+  end
+
+  defp authorize_execute(state, resource_ref, request, opts) do
+    resource = %{
+      "resource_ref" => resource_ref,
+      "command" => Map.get(request, "command"),
+      "command_class" => Map.get(request, "command_class"),
+      "cwd" => Map.get(request, "cwd"),
+      "mutation" => Map.get(request, "mutation"),
+      "network" => Map.get(request, "network")
+    }
+
+    gate_request =
+      GateRequest.new!(
+        effect_class: :execution_environment,
+        action: "execute",
+        resource: resource,
+        request_id: Keyword.get(opts, :request_id, "environment-execute")
+      )
+
+    case Gate.check(gate_request, state.policy, call_opts(state, opts)) do
+      {:ok, _decision} -> :ok
+      {:error, reason} -> {:error, {:policy_denied, reason}}
+    end
+  end
+
+  defp execute_supported(adapter) do
+    if function_exported?(adapter, :execute, 3), do: :ok, else: {:error, :execute_unsupported}
   end
 
   defp profile_matches(%PolicyRequest{profile_id: id}, %Registration{profile: %{profile_id: id}}), do: :ok
@@ -364,7 +418,9 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
         {:ok, evidence}
 
       {:error, reason} ->
-        close_result = call_adapter(state.registration.adapter, :close, [raw_handle, call_opts(state, opts)])
+        close_result =
+          call_adapter(state.registration.adapter, :close, [raw_handle, call_opts(state, cleanup_opts(opts))])
+
         {:error, {:invalid_acquire_evidence, reason, close_result}}
     end
   end
@@ -372,7 +428,9 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   defp close_after_error(handle, error, state, opts, operation) do
     case owned_handle(handle, state) do
       {:ok, token, entry} ->
-        close_result = call_adapter(state.registration.adapter, :close, [entry.raw, call_opts(state, opts)])
+        close_result =
+          call_adapter(state.registration.adapter, :close, [entry.raw, call_opts(state, cleanup_opts(opts))])
+
         state = drop_handle(state, token, entry.binding.resource_ref)
         reason = {:lifecycle_failed_and_handle_closed, operation, error, close_result}
         {:reply, normalize_error({:error, reason}, operation), state}
@@ -395,6 +453,7 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   end
 
   defp call_opts(state, opts), do: Keyword.merge(state.opts, opts)
+  defp cleanup_opts(opts), do: Keyword.delete(opts, :cancellation)
 
   defp normalize_error({:error, %Error{} = error}, _operation), do: {:error, error}
 

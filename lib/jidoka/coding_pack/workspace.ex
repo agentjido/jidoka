@@ -12,7 +12,11 @@ defmodule Jidoka.CodingPack.Workspace do
     max_instruction_bytes: 65_536,
     max_instruction_files: 32,
     max_search_files: 10_000,
-    max_search_results: 200
+    max_search_results: 200,
+    max_shell_args: 64,
+    max_shell_stdin_bytes: 65_536,
+    max_shell_output_bytes: 262_144,
+    max_shell_timeout_ms: 60_000
   }
   @keys [
     :root,
