@@ -25,6 +25,7 @@ defmodule Jidoka.Agent.Spec do
               memory: Zoi.lazy({@memory_module, :schema, []}) |> Zoi.nullish(),
               operations: Zoi.array(Zoi.lazy({@operation_module, :schema, []})) |> Zoi.default([]),
               controls: Zoi.lazy({@controls_module, :schema, []}) |> Zoi.default(@default_controls),
+              execution_profile: Schema.non_empty_string() |> Zoi.nullish(),
               runtime_defaults: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },

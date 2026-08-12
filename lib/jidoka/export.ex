@@ -83,7 +83,8 @@ defmodule Jidoka.Export do
           "instructions" => spec.instructions,
           "context" => context,
           "result" => result,
-          "memory" => portable_memory(spec.memory)
+          "memory" => portable_memory(spec.memory),
+          "execution_profile" => spec.execution_profile
         }
         |> reject_empty_values()
 

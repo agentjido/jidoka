@@ -10,6 +10,8 @@ defmodule Jidoka.Import.AgentDocument do
   alias Jidoka.Schema
 
   @version 1
+  @forbidden_document_keys ~w(execution_environment adapter backend command image mount mounts network)
+  @forbidden_agent_keys ~w(execution_environment adapter backend command image mount mounts network)
 
   @schema Zoi.struct(
             __MODULE__,
@@ -40,8 +42,13 @@ defmodule Jidoka.Import.AgentDocument do
   @doc "Builds a portable agent document from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
-    with {:ok, %__MODULE__{} = document} <- Schema.parse(@schema, attrs),
-         :ok <- validate_version(document) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    with :ok <- reject_keys(attrs, @forbidden_document_keys),
+         {:ok, %__MODULE__{} = document} <- Schema.parse(@schema, attrs),
+         :ok <- validate_version(document),
+         :ok <- validate_execution_profile(document.agent),
+         :ok <- reject_keys(document.agent, @forbidden_agent_keys) do
       {:ok, document}
     end
   end
@@ -62,5 +69,22 @@ defmodule Jidoka.Import.AgentDocument do
 
   defp validate_version(%__MODULE__{version: version}) do
     {:error, {:unsupported_import_document_version, version, @version}}
+  end
+
+  defp validate_execution_profile(agent) do
+    case Schema.get_key(agent, :execution_profile) do
+      nil -> :ok
+      profile when is_binary(profile) and profile != "" -> :ok
+      profile -> {:error, {:invalid_execution_profile, profile}}
+    end
+  end
+
+  defp reject_keys(attrs, forbidden_keys) do
+    keys = attrs |> Map.keys() |> Enum.map(&to_string/1)
+
+    case keys -- (keys -- forbidden_keys) do
+      [] -> :ok
+      forbidden -> {:error, {:forbidden_execution_profile_keys, Enum.sort(forbidden)}}
+    end
   end
 end

@@ -93,6 +93,11 @@ Portable JSON/YAML authoring document.
 | `runtime_defaults` | map | `%{}` | Maps to `Spec.runtime_defaults`. |
 | `metadata` | map | `%{}` | Caller metadata. |
 
+The `agent` map can contain `execution_profile`, which is a nonempty profile
+identifier. It is inert data. Import and export preserve it, but they do not
+resolve it. Backend controls, commands, images, mounts, networks, and adapter
+names are not valid profile selectors.
+
 `AgentDocument.new/1` enforces `version == 1`; any other value returns
 `{:error, {:unsupported_import_document_version, version, 1}}`.
 

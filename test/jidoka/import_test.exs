@@ -67,6 +67,56 @@ defmodule Jidoka.ImportTest do
     assert spec.metadata["source_ref"]["format"] == "yaml"
   end
 
+  test "round-trips an inert execution profile and rejects backend controls" do
+    yaml = """
+    agent:
+      id: constrained_agent
+      model:
+        provider: test
+        id: constrained-model
+      execution_profile: restricted
+    """
+
+    assert {:ok, %Agent.Spec{execution_profile: "restricted"} = spec} =
+             Jidoka.import(yaml, format: :yaml)
+
+    assert %{execution_profile: "restricted"} = Jidoka.project(spec)
+    assert {:ok, json} = Jidoka.export(spec, format: :json)
+
+    assert %{"agent" => %{"execution_profile" => "restricted"}} = Jason.decode!(json)
+
+    assert {:ok, %Agent.Spec{execution_profile: "restricted"}} =
+             Jidoka.import(json, format: :json)
+
+    for invalid <- [42, %{"profile" => "restricted"}, ""] do
+      assert {:error,
+              %Jidoka.Error.ValidationError{
+                details: %{reason: {:invalid_execution_profile, ^invalid}}
+              }} =
+               Jidoka.Import.load(%{
+                 agent: %{
+                   id: "invalid_profile_agent",
+                   model: %{provider: :test, id: "model"},
+                   execution_profile: invalid
+                 }
+               })
+    end
+
+    for key <- ~w(execution_environment adapter backend command image mount network) do
+      assert {:error,
+              %Jidoka.Error.ValidationError{
+                details: %{reason: {:forbidden_execution_profile_keys, [^key]}}
+              }} =
+               Jidoka.Import.load(%{
+                 agent: %{
+                   key => "untrusted",
+                   id: "forbidden_profile_agent",
+                   model: %{provider: :test, id: "model"}
+                 }
+               })
+    end
+  end
+
   test "rejects import documents that exceed parser limits" do
     json =
       Jason.encode!(%{

@@ -41,7 +41,7 @@ defmodule Jidoka.Import do
           | {:result_schemas, registry()}
           | {:result_schema_registry, registry()}
 
-  @agent_keys ~w(id model generation instructions context context_schema result result_schema memory runtime_defaults metadata)
+  @agent_keys ~w(id model generation instructions context context_schema result result_schema memory execution_profile runtime_defaults metadata)
   @document_keys ~w(version agent tools controls operations runtime_defaults metadata)
 
   @doc """
@@ -122,6 +122,7 @@ defmodule Jidoka.Import do
          context_schema: context_schema,
          result: result,
          memory: Schema.get_key(agent, :memory),
+         execution_profile: Schema.get_key(agent, :execution_profile),
          operations: tool_source_data.operations ++ explicit_operations,
          controls: controls,
          runtime_defaults: Schema.get_key(agent, :runtime_defaults, document.runtime_defaults) || %{},

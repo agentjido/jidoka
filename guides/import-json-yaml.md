@@ -86,6 +86,20 @@ The import surface is three layers and one trust boundary.
    `context_schemas`, `result_schemas`. The trust boundary is here: only
    refs the caller put in the registry can become live modules or schemas.
 
+An agent can select an execution policy with one inert string:
+
+```yaml
+agent:
+  id: constrained_agent
+  model: test:model
+  execution_profile: restricted
+```
+
+The value stays data in `Jidoka.Agent.Spec`. It does not name an adapter or
+start an environment. A trusted host resolves it later. Import rejects maps,
+empty values, and direct backend controls such as commands, images, mounts,
+network settings, adapter names, and backend names.
+
 ```diagram
 ╭───────────────────╮     ╭──────────────────────╮     ╭─────────────────╮
 │ JSON / YAML       │────▶│ Jidoka.Import.import │────▶│ AgentDocument   │
