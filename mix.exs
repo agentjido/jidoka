@@ -174,6 +174,7 @@ defmodule Jidoka.MixProject do
       "guides/constrained-execution-contracts.md",
       "guides/extension-architecture.md",
       "guides/process-extensions.md",
+      "guides/coding-pack.md",
       "guides/decisions/litterbox-adapter.md",
 
       # ── Integrations ─────────────────────────────────────────────────────
