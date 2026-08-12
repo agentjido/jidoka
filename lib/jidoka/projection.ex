@@ -8,6 +8,7 @@ defmodule Jidoka.Projection do
 
   alias Jidoka.Agent
   alias Jidoka.Effect
+  alias Jidoka.ExecutionEnvironment
   alias Jidoka.Event
   alias Jidoka.Handoff
   alias Jidoka.Projection
@@ -45,6 +46,14 @@ defmodule Jidoka.Projection do
   def project(%Effect.OperationRequest{} = value), do: Projection.Effect.project(value)
   def project(%Effect.OperationResult{} = value), do: Projection.Effect.project(value)
   def project(%Effect.Result{} = value), do: Projection.Effect.project(value)
+
+  def project(%ExecutionEnvironment.PolicyRequest{} = value), do: ExecutionEnvironment.project(value)
+  def project(%ExecutionEnvironment.SecurityProfile{} = value), do: ExecutionEnvironment.project(value)
+  def project(%ExecutionEnvironment.Binding{} = value), do: ExecutionEnvironment.project(value)
+  def project(%ExecutionEnvironment.Checkpoint{} = value), do: ExecutionEnvironment.project(value)
+
+  def project(%ExecutionEnvironment.EnforcementEvidence{} = value),
+    do: ExecutionEnvironment.project(value)
 
   def project(%Jidoka.Memory.Entry{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.RecallRequest{} = value), do: Projection.Memory.project(value)
