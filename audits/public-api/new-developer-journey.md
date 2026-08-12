@@ -30,7 +30,7 @@ The developer adds one dependency:
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 0.9.0"}
+    {:jidoka, "~> 0.9.1"}
   ]
 end
 ```

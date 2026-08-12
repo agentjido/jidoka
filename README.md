@@ -52,7 +52,7 @@ If your project uses [Igniter](https://hex.pm/packages/igniter), install the
 current release from Hex:
 
 ```bash
-mix igniter.install jidoka@0.9.0
+mix igniter.install jidoka@0.9.1
 ```
 
 For manual installation, add Jidoka to `mix.exs`:
@@ -60,7 +60,7 @@ For manual installation, add Jidoka to `mix.exs`:
 ```elixir
 def deps do
   [
-    {:jidoka, "~> 0.9.0"}
+    {:jidoka, "~> 0.9.1"}
   ]
 end
 ```
@@ -387,7 +387,7 @@ change.
 
 ## Project Status
 
-The current package version is `0.9.0`. The stable application surface
+The current package version is `0.9.1`. The stable application surface
 is centered on the `Jidoka` facade, the agent DSL, and public data contracts.
 
 The runtime uses a provider-neutral JSON decision protocol. Native provider
