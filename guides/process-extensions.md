@@ -52,3 +52,30 @@ The process command, environment, working directory, and OS limits are not wire
 data. They stay in trusted host configuration. Agent documents cannot supply
 them. This protocol does not define TCP, WebSocket, MCP, executable UI, package
 installation, or hot reload.
+
+## Process Host
+
+`Jidoka.Extension.ProcessHost` accepts only a resolved process binding and a
+trusted descriptor. The descriptor supplies an injected transport. Jidoka has
+no direct host-process fallback. Automation startup requires confirmed
+constrained-launch evidence. Interactive host launch without this evidence
+requires the separate `host_process` grant.
+
+The host captures transport stdout as private protocol frames. It sends stderr
+and other diagnostics only through a redacted diagnostic projection. After the
+pinned handshake, the verified manifest becomes normal built-in host slots.
+Tools compile through `Jidoka.Operation.Source`; the authoritative policy gate
+runs before a `tool.call` frame can reach the child. Providers use the normal
+model effect path. Commands are host callbacks and must be called only from an
+authoritative command effect path.
+
+State restore happens after initialize. State checkpoint, lifecycle events,
+context, policy advice, results, and portable UI data use their protocol-v1
+methods and registered namespace. A tool, command, or provider not in the
+verified manifest is rejected before transport.
+
+The process host monitors the active caller. Caller cancellation, timeout,
+child exit, malformed protocol, broken transport, and shutdown failure become
+stable extension errors. Cancellation sends the transport cancel operation.
+Close always attempts transport cleanup. The live handle remains in the host
+process and never enters a session, snapshot, event, result, or diagnostic map.

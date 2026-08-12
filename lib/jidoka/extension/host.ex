@@ -165,6 +165,17 @@ defmodule Jidoka.Extension.Host do
     end)
   end
 
+  @doc "Projects only registered namespaced portable UI data."
+  @spec ui_data(t()) :: {:ok, map()} | {:error, Error.t()}
+  def ui_data(%__MODULE__{instances: instances}) do
+    Enum.reduce_while(instances, {:ok, %{}}, fn instance, {:ok, acc} ->
+      case put_portable_namespace(instance.slots.namespace, instance.slots.ui_data, acc) do
+        {:ok, next} -> {:cont, {:ok, next}}
+        {:error, error} -> {:halt, {:error, error}}
+      end
+    end)
+  end
+
   @doc "Closes every opened instance and returns stable evidence for all outcomes."
   @spec close(t()) :: {:ok, [map()]}
   def close(%__MODULE__{instances: instances, dispatcher: dispatcher}) do

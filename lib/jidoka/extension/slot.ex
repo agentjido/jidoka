@@ -5,7 +5,7 @@ defmodule Jidoka.Extension.Slot do
   alias Jidoka.ExecutionEnvironment.Contract
   alias Jidoka.Extension.Identity
 
-  @keys ~w(namespace tools tool_handlers commands providers policy_advice context lifecycle checkpoint close state result)a
+  @keys ~w(namespace tools tool_handlers commands providers policy_advice context lifecycle checkpoint close state result ui_data)a
   @enforce_keys [:namespace]
   defstruct namespace: nil,
             tools: [],
@@ -18,7 +18,8 @@ defmodule Jidoka.Extension.Slot do
             checkpoint: nil,
             close: nil,
             state: %{},
-            result: %{}
+            result: %{},
+            ui_data: %{}
 
   @type t :: %__MODULE__{
           namespace: String.t(),
@@ -32,7 +33,8 @@ defmodule Jidoka.Extension.Slot do
           checkpoint: function() | nil,
           close: function() | nil,
           state: map(),
-          result: map()
+          result: map(),
+          ui_data: map()
         }
 
   @doc "Builds and validates live extension slots and portable initial data."
@@ -69,7 +71,8 @@ defmodule Jidoka.Extension.Slot do
          true <- optional_function?(slot.checkpoint),
          true <- optional_function?(slot.close),
          :ok <- Contract.validate_safe_map(slot.state),
-         :ok <- Contract.validate_safe_map(slot.result) do
+         :ok <- Contract.validate_safe_map(slot.result),
+         :ok <- Contract.validate_safe_map(slot.ui_data) do
       {:ok, slot}
     else
       reason -> {:error, {:invalid_extension_slots, reason}}
