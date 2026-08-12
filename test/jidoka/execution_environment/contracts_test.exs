@@ -168,5 +168,10 @@ defmodule Jidoka.ExecutionEnvironment.ContractsTest do
              "backend" => "sandbox-v1",
              "provider_private" => %{"region" => "test"}
            }
+
+    assert ExecutionEnvironment.Contract.project(%{enabled: true, forkable: false}) == %{
+             "enabled" => true,
+             "forkable" => false
+           }
   end
 end

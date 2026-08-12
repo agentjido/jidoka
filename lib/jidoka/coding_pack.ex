@@ -53,7 +53,7 @@ defmodule Jidoka.CodingPack do
   @doc "Builds one trusted extension registry entry for a workspace."
   @spec entry(Workspace.t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def entry(%Workspace{} = workspace, opts \\ []) do
-    defaults = Keyword.get(opts, :tools, Tools.defaults(workspace))
+    defaults = Keyword.get(opts, :tools, Tools.defaults(workspace, opts))
     replacements = Keyword.get(opts, :replace_tools, %{})
     disabled = Keyword.get(opts, :disable_tools, [])
 

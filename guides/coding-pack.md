@@ -52,8 +52,9 @@ result includes a relative path, scope, byte count, SHA-256 digest, and UTF-8
 content. File, count, and total-result limits apply before the data enters a
 turn context.
 
-This foundation does not expose a model-callable file, edit, shell, Git, or
-verification operation.
+This foundation does not expose a model-callable operation by itself. Each
+operation is present only when the trusted host includes its required port and
+access class.
 
 ## Read-only operations
 
@@ -77,3 +78,27 @@ Binary files are counted and skipped. The operation does not call a host shell.
 
 The host can replace or disable either operation by its stable ID when it
 creates the pack registry entry.
+
+## Reviewed mutations
+
+The pack registers `coding.write` and `coding.edit` only when the trusted host
+supplies a `Jidoka.CodingPack.MutationPort`. The port delegates to a constrained
+execution environment. Jidoka requires confirmed evidence for path confinement,
+file reads, file writes, checkpoints, and atomic replacement. It fails closed
+when any fact is absent. The pack does not use direct host file writes.
+
+`coding.write` creates a missing bounded UTF-8 file. Existing files require the
+explicit `overwrite` flag. A caller can also give an `expected_before_sha256`
+digest. A mismatch writes nothing.
+
+`coding.edit` replaces one exact UTF-8 value. It requires an exact expected
+occurrence count and can require the before digest. A count or digest mismatch
+writes nothing.
+
+Both operations resolve and check the path again immediately before mutation.
+They create a portable environment checkpoint first. A successful result gives
+the path, operation ID, before and after digests and sizes, atomic-write method,
+checkpoint reference, confirmed enforcement evidence, and bounded structural
+diff facts. It does not include changed file content. A partial backend error
+reports the observed final state and the checkpoint that is available for
+recovery.

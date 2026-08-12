@@ -59,6 +59,7 @@ defmodule Jidoka.ExecutionEnvironment.Contract do
 
   def project(list) when is_list(list), do: Enum.map(list, &project/1)
   def project(tuple) when is_tuple(tuple), do: tuple |> Tuple.to_list() |> project()
+  def project(value) when is_boolean(value), do: value
   def project(value) when is_atom(value) and not is_nil(value), do: Atom.to_string(value)
   def project(value), do: value
 
