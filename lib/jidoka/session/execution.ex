@@ -14,6 +14,7 @@ defmodule Jidoka.Session.Execution do
   alias Jidoka.Session.Data, as: Session
   alias Jidoka.Session.Lease
   alias Jidoka.Session.Lineage
+  alias Jidoka.Session.Sequence
   alias Jidoka.Session.Store
   alias Jidoka.Memory
   alias Jidoka.Snapshot
@@ -32,6 +33,10 @@ defmodule Jidoka.Session.Execution do
   @type session_run_result ::
           {:ok, Session.t(), Turn.Result.t()}
           | {:hibernate, Session.t(), Snapshot.t()}
+          | {:error, term()}
+
+  @type session_sequence_result ::
+          {:ok, Sequence.Result.t()}
           | {:error, term()}
 
   @doc """
@@ -71,6 +76,31 @@ defmodule Jidoka.Session.Execution do
       end)
     end
   end
+
+  @doc "Runs a nonempty ordered request sequence in one session."
+  @spec run_sequence(session_input(), Sequence.input(), runtime_opts()) :: session_sequence_result()
+  def run_sequence(session_input, request_inputs, opts \\ [])
+
+  def run_sequence(session_input, [_request | _rest] = request_inputs, opts)
+      when is_list(request_inputs) and is_list(opts) do
+    with {:ok, session} <- resolve_session(session_input, opts) do
+      state = %{
+        session: session,
+        steps: [],
+        agent_state: nil,
+        operation_count: 0,
+        request_ids: []
+      }
+
+      {:ok, run_sequence_steps(request_inputs, state, 1, opts)}
+    end
+  end
+
+  def run_sequence(_session_input, [], opts) when is_list(opts),
+    do: {:error, :empty_session_sequence}
+
+  def run_sequence(_session_input, request_inputs, opts) when is_list(opts),
+    do: {:error, {:invalid_session_sequence, request_inputs}}
 
   @doc """
   Resumes the latest snapshot for a session.
@@ -199,6 +229,184 @@ defmodule Jidoka.Session.Execution do
         |> persist_session_result(opts, fn _session -> {:error, reason} end)
     end
   end
+
+  defp run_sequence_steps([], state, _index, _opts) do
+    Sequence.Result.new!(
+      status: :completed,
+      session: state.session,
+      steps: state.steps,
+      terminal: nil
+    )
+  end
+
+  defp run_sequence_steps([input | rest], state, index, opts) do
+    with :ok <- reject_continuation_state(input, index),
+         {:ok, request} <- normalize_sequence_request(input, opts),
+         :ok <- ensure_unique_sequence_request(request, state.request_ids, index) do
+      request = carry_sequence_state(request, state.agent_state)
+
+      case run_session(sequence_session_input(state.session, opts), request, opts) do
+        {:ok, session, %Turn.Result{} = result} ->
+          operation_results =
+            Enum.drop(result.agent_state.operation_results, state.operation_count)
+
+          step =
+            Sequence.Step.new!(
+              index: index,
+              request: request,
+              result: result,
+              operation_results: operation_results
+            )
+
+          next_state = %{
+            session: session,
+            steps: state.steps ++ [step],
+            agent_state: result.agent_state,
+            operation_count: length(result.agent_state.operation_results),
+            request_ids: [request.request_id | state.request_ids]
+          }
+
+          run_sequence_steps(rest, next_state, index + 1, opts)
+
+        {:hibernate, session, %Snapshot{} = snapshot} ->
+          terminal_sequence_result(
+            :hibernated,
+            session,
+            state.steps,
+            index,
+            request.request_id,
+            snapshot,
+            nil
+          )
+
+        {:error, reason} ->
+          sequence_run_error(state, request, reason, index, opts)
+      end
+    else
+      {:error, reason} ->
+        terminal_sequence_result(
+          :error,
+          state.session,
+          state.steps,
+          index,
+          sequence_request_id(input),
+          nil,
+          reason
+        )
+    end
+  end
+
+  defp normalize_sequence_request(input, opts) do
+    Turn.Request.from_input(input, Keyword.take(opts, [:id_generator]))
+  end
+
+  defp sequence_run_error(state, request, reason, index, opts) do
+    status = if Cancellation.cancelled_reason?(reason), do: :cancelled, else: :error
+    session = sequence_error_session(state.session, request, status, reason, opts)
+
+    terminal_sequence_result(
+      status,
+      session,
+      state.steps,
+      index,
+      request.request_id,
+      nil,
+      reason
+    )
+  end
+
+  defp reject_continuation_state(_input, 1), do: :ok
+
+  defp reject_continuation_state(%Turn.Request{agent_state: agent_state} = request, index) do
+    if agent_state == Agent.State.new!() do
+      :ok
+    else
+      {:error, {:sequence_continuation_state_forbidden, index, request.request_id}}
+    end
+  end
+
+  defp reject_continuation_state(input, index) do
+    attrs = Jidoka.Schema.normalize_attrs(input)
+
+    if is_map(attrs) and
+         (Map.has_key?(attrs, :agent_state) or Map.has_key?(attrs, "agent_state")) do
+      {:error, {:sequence_continuation_state_forbidden, index, sequence_request_id(input)}}
+    else
+      :ok
+    end
+  end
+
+  defp ensure_unique_sequence_request(%Turn.Request{request_id: request_id}, request_ids, index) do
+    if request_id in request_ids do
+      {:error, {:duplicate_sequence_request_id, index, request_id}}
+    else
+      :ok
+    end
+  end
+
+  defp carry_sequence_state(%Turn.Request{} = request, nil), do: request
+
+  defp carry_sequence_state(%Turn.Request{} = request, %Agent.State{} = agent_state) do
+    %Turn.Request{request | agent_state: agent_state}
+  end
+
+  defp sequence_session_input(%Session{session_id: session_id} = session, opts) do
+    if Keyword.has_key?(opts, :store), do: session_id, else: session
+  end
+
+  defp sequence_error_session(session, request, status, reason, opts) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} ->
+        case Store.get_session(store, session.session_id) do
+          {:ok, stored} -> stored
+          {:error, _reason} -> put_sequence_error(session, request, status, reason)
+        end
+
+      :error ->
+        put_sequence_error(session, request, status, reason)
+    end
+  end
+
+  defp put_sequence_error(session, request, :cancelled, reason) do
+    session |> Session.put_request(request) |> Session.put_cancellation(reason)
+  end
+
+  defp put_sequence_error(session, request, :error, reason) do
+    session |> Session.put_request(request) |> Session.put_error(reason)
+  end
+
+  defp terminal_sequence_result(status, session, steps, index, request_id, snapshot, reason) do
+    cancellation = if match?(%Cancellation{}, reason), do: reason, else: nil
+
+    terminal =
+      Sequence.Terminal.new!(
+        kind: status,
+        index: index,
+        request_id: request_id,
+        reason: reason,
+        snapshot: snapshot,
+        cancellation: cancellation
+      )
+
+    Sequence.Result.new!(status: status, session: session, steps: steps, terminal: terminal)
+  end
+
+  defp sequence_request_id(%Turn.Request{request_id: request_id}), do: request_id
+
+  defp sequence_request_id(input) do
+    input
+    |> Jidoka.Schema.normalize_attrs()
+    |> sequence_request_id_from_attrs()
+  end
+
+  defp sequence_request_id_from_attrs(attrs) when is_map(attrs) do
+    case Jidoka.Schema.get_key(attrs, :request_id) do
+      request_id when is_binary(request_id) -> request_id
+      _request_id -> nil
+    end
+  end
+
+  defp sequence_request_id_from_attrs(_attrs), do: nil
 
   defp resume_session_snapshot(
          %Session{} = session,

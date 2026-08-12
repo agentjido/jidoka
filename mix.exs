@@ -269,7 +269,7 @@ defmodule Jidoka.MixProject do
       "State And Policy Contracts": [
         Jidoka.Snapshot,
         ~r/^Jidoka\.Controls\./,
-        ~r/^Jidoka\.Session\.(Data|Store|Lease|Lineage|Replay|Transitions)(\.|$)/,
+        ~r/^Jidoka\.Session\.(Data|Store|Lease|Lineage|Replay|Sequence|Transitions)(\.|$)/,
         ~r/^Jidoka\.Review(\.|$)/,
         ~r/^Jidoka\.Handoff(\.|$)/,
         ~r/^Jidoka\.Memory\./,

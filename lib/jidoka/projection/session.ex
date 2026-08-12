@@ -2,11 +2,18 @@ defmodule Jidoka.Projection.Session do
   @moduledoc false
 
   alias Jidoka.Portable
-  alias Jidoka.Projection.{Review, Turn}
-  alias Jidoka.Session.{Data, Replay}
+  alias Jidoka.Projection.{Effect, Review, Turn}
+  alias Jidoka.Session.{Data, Replay, Sequence}
   alias Jidoka.Snapshot
 
-  @spec project(Snapshot.t() | Data.t() | Replay.t()) :: map()
+  @spec project(
+          Snapshot.t()
+          | Data.t()
+          | Replay.t()
+          | Sequence.Step.t()
+          | Sequence.Terminal.t()
+          | Sequence.Result.t()
+        ) :: map()
   def project(%Snapshot{} = snapshot) do
     %{
       schema_version: snapshot.schema_version,
@@ -38,6 +45,41 @@ defmodule Jidoka.Projection.Session do
 
   def project(%Replay{} = replay), do: replay |> Map.from_struct() |> Portable.project()
 
+  def project(%Sequence.Step{} = step) do
+    %{
+      index: step.index,
+      request: Turn.project(step.request),
+      result: Turn.project(step.result),
+      operation_results: Enum.map(step.operation_results, &Effect.project/1)
+    }
+  end
+
+  def project(%Sequence.Terminal{} = terminal) do
+    %{
+      kind: terminal.kind,
+      index: terminal.index,
+      request_id: terminal.request_id,
+      reason: Portable.project(terminal.reason),
+      snapshot: maybe_project_snapshot(terminal.snapshot),
+      cancellation: Portable.project(terminal.cancellation)
+    }
+  end
+
+  def project(%Sequence.Result{} = result) do
+    %{
+      status: result.status,
+      session: project(result.session),
+      steps: Enum.map(result.steps, &project/1),
+      terminal: maybe_project_terminal(result.terminal)
+    }
+  end
+
   defp maybe_project_result(nil), do: nil
   defp maybe_project_result(result), do: Turn.project(result)
+
+  defp maybe_project_snapshot(nil), do: nil
+  defp maybe_project_snapshot(snapshot), do: project(snapshot)
+
+  defp maybe_project_terminal(nil), do: nil
+  defp maybe_project_terminal(terminal), do: project(terminal)
 end

@@ -93,6 +93,7 @@ session from each call.
 | Agent, spec, plan, or hosted agent with `chat/3` | `{:ok, text}` |
 | Caller-managed session with `chat/3` | `{:ok, updated_session, text}` |
 | Agent, spec, plan, or hosted agent with `turn/3` | `{:ok, %Jidoka.Turn.Result{}}` |
+| Ordered session sequence | `{:ok, %Jidoka.Session.Sequence.Result{}}` |
 | Paused direct turn | `{:hibernate, snapshot}` |
 | Paused caller-managed session | `{:hibernate, updated_session, snapshot}` |
 | Any failed call | `{:error, reason}` |
@@ -139,12 +140,17 @@ Use sessions for multi-turn conversations:
 ```elixir
 {:ok, session} = Jidoka.session(MyApp.Assistant, "conversation-123")
 
-{:ok, session, text} =
-  Jidoka.chat(session, "Remember that my account is A1001.")
-
-{:ok, session, text} =
-  Jidoka.chat(session, "Which account did I mention?")
+{:ok, sequence} =
+  Jidoka.Session.run_sequence(session, [
+    %{input: "Remember that my account is A1001.", request_id: "account-1"},
+    %{input: "Which account did I mention?", request_id: "account-2"}
+  ])
 ```
+
+The sequence result contains the updated session, completed steps, and terminal
+data. It carries semantic state only inside that ordered call. Separate
+`Jidoka.Session.run/3` calls keep durable history but do not automatically use
+the prior result as continuation state.
 
 Use `session/3` when passing a store or runtime options:
 

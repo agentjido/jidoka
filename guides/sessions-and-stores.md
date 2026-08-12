@@ -56,6 +56,7 @@ The target determines the result shape:
 | `Jidoka.chat(session, input)` | `{:ok, updated_session, text}` | Keep the returned session when no store owns it |
 | `Jidoka.Session.chat(session_id, input, store: store)` | `{:ok, updated_session, text}` | Pass the store on later id-based calls |
 | `Jidoka.Session.run(session_or_id, input, opts)` | `{:ok, updated_session, %Jidoka.Turn.Result{}}` | Handle full result or hibernation data |
+| `Jidoka.Session.run_sequence(session_or_id, requests, opts)` | `{:ok, %Jidoka.Session.Sequence.Result{}}` | Inspect ordered steps and terminal data |
 
 ## Concepts
 
@@ -128,6 +129,32 @@ needs a persistent external handle (a chat thread id, a ticket id, a workflow id
 
 ### Step 2: Run Turns
 
+Use `Jidoka.Session.run_sequence/3` when later turns must receive semantic
+state from earlier turns in the same call. Jidoka carries the state and returns
+operation results for each step separately.
+
+```elixir
+requests = [
+  %{input: "Remember that the account is A1001.", request_id: "account-1"},
+  %{input: "Which account did I mention?", request_id: "account-2"}
+]
+
+{:ok, sequence} =
+  Jidoka.Session.run_sequence(session.session_id, requests,
+    store: store
+  )
+
+sequence.status
+#=> :completed
+
+Enum.map(sequence.steps, & &1.result.content)
+```
+
+The sequence stops at the first error, hibernation, or cancellation. Its
+`steps` field contains only completed turns. Its `terminal` field identifies
+the stopped request and reason. A store-backed sequence claims and commits one
+turn at a time; it does not persist turns that have not started.
+
 `Jidoka.Session.run/3` is the full-result API. It returns the underlying
 `Jidoka.Turn.Result`, a hibernation snapshot, or an error, along with the
 updated session struct so callers without a store still have durable state.
@@ -155,6 +182,11 @@ product code.
 
 Both functions accept either a session struct or a session id. With a store
 the id is enough; without a store, hold onto the returned struct.
+
+Separate calls to `run/3` or `chat/3` record session history, but they do not
+automatically put the prior semantic agent state into a later request. Use one
+`run_sequence/3` call for ordered semantic continuation. Advanced callers can
+still supply explicit state to a one-turn request when they own that policy.
 
 ### Step 3: Hibernate And Resume
 

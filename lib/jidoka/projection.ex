@@ -12,7 +12,7 @@ defmodule Jidoka.Projection do
   alias Jidoka.Handoff
   alias Jidoka.Projection
   alias Jidoka.Review
-  alias Jidoka.Session.{Data, Replay}
+  alias Jidoka.Session.{Data, Replay, Sequence}
   alias Jidoka.Snapshot
   alias Jidoka.Turn
   alias Jidoka.Workflow
@@ -55,6 +55,9 @@ defmodule Jidoka.Projection do
   def project(%Snapshot{} = value), do: Projection.Session.project(value)
   def project(%Data{} = value), do: Projection.Session.project(value)
   def project(%Replay{} = value), do: Projection.Session.project(value)
+  def project(%Sequence.Step{} = value), do: Projection.Session.project(value)
+  def project(%Sequence.Terminal{} = value), do: Projection.Session.project(value)
+  def project(%Sequence.Result{} = value), do: Projection.Session.project(value)
 
   def project(%Review.Interrupt{} = value), do: Projection.Review.project(value)
   def project(%Review.Request{} = value), do: Projection.Review.project(value)

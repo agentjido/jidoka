@@ -181,15 +181,23 @@ clients.
 
 ## Sessions Keep State Across Turns
 
-A single `turn/3` call is stateless. Use sessions for conversations:
+A single `turn/3` call is stateless. Use an ordered session sequence when later
+turns must receive earlier semantic state:
 
 ```elixir
 {:ok, session} = Jidoka.session(MyApp.Assistant, "customer-123")
-{:ok, session, text} = Jidoka.chat(session, "Remember my account is A1001.")
-{:ok, session, text} = Jidoka.chat(session, "What account did I mention?")
+
+{:ok, sequence} =
+  Jidoka.Session.run_sequence(session, [
+    %{input: "Remember my account is A1001.", request_id: "account-1"},
+    %{input: "What account did I mention?", request_id: "account-2"}
+  ])
 ```
 
 Sessions store requests, results, snapshots, pending reviews, and replay data.
+`run_sequence/3` also carries semantic agent state between its ordered steps.
+Separate `Jidoka.Session.run/3` calls do not add that continuation state unless
+the caller supplies it explicitly.
 
 ## Runtime Flow
 
@@ -203,7 +211,7 @@ code configures agents through the DSL and runs them through the facade.
 | --- | --- |
 | Final text | `Jidoka.chat/3` |
 | Full result, events, journal, snapshot | `Jidoka.turn/3` |
-| Multi-turn state | `Jidoka.session/2` |
+| Ordered multi-turn state | `Jidoka.Session.run_sequence/3` |
 | Prompt/tool inspection | `Jidoka.preflight/3` |
 | Compiled agent shape | `Jidoka.inspect/2` |
 | Data projection for goldens/UI | `Jidoka.project/1` |

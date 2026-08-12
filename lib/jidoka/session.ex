@@ -15,6 +15,7 @@ defmodule Jidoka.Session do
   alias Jidoka.Session.Data, as: SessionData
   alias Jidoka.Session.Execution, as: SessionExecution
   alias Jidoka.Session.Replay
+  alias Jidoka.Session.Sequence
   alias Jidoka.Session.Store
   alias Jidoka.Snapshot
   alias Jidoka.Turn
@@ -27,6 +28,7 @@ defmodule Jidoka.Session do
           {:ok, t(), Turn.Result.t()}
           | {:hibernate, t(), Snapshot.t()}
           | {:error, term()}
+  @type sequence_result :: {:ok, Sequence.Result.t()} | {:error, term()}
   @type chat_result ::
           {:ok, t(), String.t()}
           | {:hibernate, t(), Snapshot.t()}
@@ -73,6 +75,18 @@ defmodule Jidoka.Session do
   @spec run(session_input(), request_input(), opts()) :: run_result()
   def run(session_or_id, request_input, opts \\ []) when is_list(opts) do
     SessionExecution.run_session(session_or_id, request_input, opts)
+  end
+
+  @doc """
+  Runs a nonempty ordered list of requests in one session.
+
+  Jidoka carries semantic agent state between successful steps and returns
+  turn-scoped operation results in each `Jidoka.Session.Sequence.Step`.
+  Execution stops at the first error, hibernation, or cancellation.
+  """
+  @spec run_sequence(session_input(), Sequence.input(), opts()) :: sequence_result()
+  def run_sequence(session_or_id, request_inputs, opts \\ []) when is_list(opts) do
+    SessionExecution.run_sequence(session_or_id, request_inputs, opts)
   end
 
   @doc """
