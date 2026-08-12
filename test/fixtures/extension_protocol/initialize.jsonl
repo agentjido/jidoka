@@ -1,0 +1,1 @@
+{"jsonrpc":"2.0","id":"init-1","method":"initialize","params":{"protocol_version":1,"extension_id":"acme.process","identity_hash":"sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee","mode":"automation","requested_permissions":["tools"],"granted_permissions":["tools"],"capabilities":["protocol.tool"]}}
