@@ -9,10 +9,45 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   alias Jidoka.ExecutionEnvironment.Manager
   alias Jidoka.ExecutionEnvironment.PolicyRequest
+  alias Jidoka.ExecutionEnvironment.Registration
   alias Jidoka.Session.Data
   alias Jidoka.Session.Environment
 
   @type lease :: %{manager: Manager.manager(), handle: Manager.Handle.t(), tracker: pid()}
+
+  @doc "Owns one manager for a resolved registration during a public run."
+  @spec with_manager(keyword(), (keyword() -> term())) :: term()
+  def with_manager(opts, function) when is_list(opts) and is_function(function, 1) do
+    case unresolved_registration(opts) do
+      :none ->
+        function.(opts)
+
+      {:ok, registration, request} ->
+        with {:ok, policy} <- environment_policy(opts),
+             {:ok, manager_opts} <- manager_opts(opts),
+             {:ok, manager} <- Manager.start_link(registration, policy, manager_opts) do
+          run_with_manager(manager, registration, request, manager_opts, opts, function)
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp run_with_manager(manager, registration, request, manager_opts, opts, function) do
+    runtime = %{
+      manager: manager,
+      request: request,
+      retention: registration.profile.retention,
+      opts: manager_opts
+    }
+
+    try do
+      function.(Keyword.put(opts, :execution_environment, runtime))
+    after
+      if Process.alive?(manager), do: GenServer.stop(manager, :normal)
+    end
+  end
 
   @doc "Opens configured environment state when the session has no binding."
   @spec prepare(Data.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
@@ -54,6 +89,7 @@ defmodule Jidoka.Session.EnvironmentRuntime do
         |> Keyword.put(:execution_environment_handle, handle)
         |> Keyword.put(:execution_environment_manager, manager)
         |> Keyword.put(:execution_environment_tracker, tracker)
+        |> put_capability_context(manager, handle, environment)
 
       {:ok, Data.put_environment(session, environment), runtime_opts,
        %{manager: manager, handle: handle, tracker: tracker}}
@@ -84,16 +120,32 @@ defmodule Jidoka.Session.EnvironmentRuntime do
     result =
       case close_result do
         {:ok, close_evidence} ->
-          environment
-          |> Environment.observed(close_evidence)
-          |> then(&maybe_cleanup(manager, &1, terminal, opts))
+          closed = Environment.observed(environment, close_evidence)
+
+          case maybe_cleanup(manager, closed, terminal, opts) do
+            {:ok, final} = success ->
+              notify_observer(final, opts)
+              success
+
+            {:error, _reason} = error ->
+              notify_observer(closed, opts)
+              error
+          end
 
         {:error, _reason} = error ->
+          notify_observer(environment, opts)
           error
       end
 
     Agent.stop(tracker)
     result
+  end
+
+  defp notify_observer(environment, opts) do
+    case Keyword.get(opts, :session_environment_observer) do
+      observer when is_function(observer, 1) -> observer.(environment)
+      _observer -> :ok
+    end
   end
 
   @doc "Restores the latest stored checkpoint before recovery work starts."
@@ -200,6 +252,62 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   defp normalize_config(config), do: {:error, {:invalid_execution_environment_runtime, config}}
 
+  defp unresolved_registration(opts) do
+    case Keyword.get(opts, :execution_environment) do
+      nil ->
+        :none
+
+      config when is_list(config) ->
+        unresolved_registration_config(Map.new(config))
+
+      %{} = config ->
+        unresolved_registration_config(config)
+
+      config ->
+        {:error, {:invalid_execution_environment_runtime, config}}
+    end
+  end
+
+  defp unresolved_registration_config(config) do
+    registration = Map.get(config, :registration, Map.get(config, "registration"))
+    request = Map.get(config, :request, Map.get(config, "request"))
+    manager = Map.get(config, :manager, Map.get(config, "manager"))
+
+    cond do
+      not is_nil(manager) ->
+        :none
+
+      not match?(%Registration{}, registration) ->
+        {:error, {:invalid_execution_environment_registration, registration}}
+
+      not match?(%PolicyRequest{}, request) ->
+        {:error, {:invalid_execution_environment_request, request}}
+
+      true ->
+        {:ok, registration, request}
+    end
+  end
+
+  defp environment_policy(opts) do
+    case Keyword.get(opts, :execution_environment_policy) do
+      policy when is_function(policy, 2) -> {:ok, policy}
+      nil -> {:error, :missing_execution_environment_policy}
+      policy -> {:error, {:invalid_execution_environment_policy, policy}}
+    end
+  end
+
+  defp manager_opts(opts) do
+    case Keyword.get(opts, :execution_environment_adapter_opts, []) do
+      manager_opts when is_list(manager_opts) ->
+        if Keyword.keyword?(manager_opts),
+          do: {:ok, manager_opts},
+          else: {:error, {:invalid_execution_environment_adapter_opts, manager_opts}}
+
+      manager_opts ->
+        {:error, {:invalid_execution_environment_adapter_opts, manager_opts}}
+    end
+  end
+
   defp runtime_refs(opts) do
     with {:ok, manager} <- Keyword.fetch(opts, :execution_environment_manager),
          {:ok, handle} <- Keyword.fetch(opts, :execution_environment_handle),
@@ -219,5 +327,27 @@ defmodule Jidoka.Session.EnvironmentRuntime do
       _config -> []
     end
     |> Keyword.merge(Keyword.take(opts, [:request_id, :session_id]))
+  end
+
+  defp put_capability_context(opts, manager, handle, environment) do
+    runtime = %{
+      manager: manager,
+      handle: handle,
+      binding: environment.binding,
+      enforcement: environment.evidence
+    }
+
+    opts
+    |> put_context_value(:llm_context, runtime)
+    |> put_context_value(:operation_context, runtime)
+  end
+
+  defp put_context_value(opts, key, runtime) do
+    current =
+      opts
+      |> Keyword.get(key, %{})
+      |> Jidoka.Schema.normalize_attrs()
+
+    Keyword.put(opts, key, Map.put(current, :execution_environment, runtime))
   end
 end

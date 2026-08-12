@@ -153,7 +153,16 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
              )
 
     assert finished.environment.binding.resource_ref == "environment-source"
-    assert events(probe) == [:open, :acquire, :checkpoint, :checkpoint, :close, :cleanup]
+
+    assert events(probe) == [
+             :open,
+             :acquire,
+             :checkpoint,
+             :checkpoint,
+             :checkpoint,
+             :close,
+             :cleanup
+           ]
 
     assert {:error, {:execution_environment_cleaned, "environment-source"}} =
              Jidoka.Session.run("session-ephemeral", "Again",
@@ -162,7 +171,15 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
                llm: final_llm()
              )
 
-    assert events(probe) == [:open, :acquire, :checkpoint, :checkpoint, :close, :cleanup]
+    assert events(probe) == [
+             :open,
+             :acquire,
+             :checkpoint,
+             :checkpoint,
+             :checkpoint,
+             :close,
+             :cleanup
+           ]
   end
 
   test "stores a turn snapshot and its environment checkpoint in one revision" do
@@ -297,7 +314,15 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
 
     assert recovered.environment.binding.resource_ref == "environment-restored"
     assert Enum.count(events(probe), &(&1 == :restore)) == 1
-    assert Enum.take(events(probe), -5) == [:restore, :acquire, :checkpoint, :checkpoint, :close]
+
+    assert Enum.take(events(probe), -6) == [
+             :restore,
+             :acquire,
+             :checkpoint,
+             :checkpoint,
+             :checkpoint,
+             :close
+           ]
 
     source_for_fork =
       source

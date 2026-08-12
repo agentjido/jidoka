@@ -96,3 +96,31 @@ Ephemeral environments are cleaned after a completed, failed, or cancelled
 run. They stay available while a session is hibernated. Durable environments
 need an explicit trusted cleanup action. Cleaned session state rejects later
 acquire, restore, and fork operations.
+
+### Resolved sequence option
+
+A host can give `Jidoka.Session.run_sequence/3` a resolved registration and
+policy request:
+
+```elixir
+Jidoka.Session.run_sequence(session, inputs,
+  execution_environment: %{
+    request: policy_request,
+    registration: registration
+  },
+  execution_environment_policy: host_policy,
+  execution_environment_adapter_opts: trusted_adapter_opts
+)
+```
+
+Jidoka starts and owns one manager for the full ordered sequence. It opens one
+binding, acquires active use for each turn, checkpoints at terminal safe
+points, and closes after each use. The final turn applies the trusted retention
+rule. Different sequence calls get different managers and do not share a
+binding.
+
+The acquired handle is present only in the transient LLM and operation runtime
+context under `:execution_environment`. It is not in request data, session
+data, snapshots, results, or projections. Missing lifecycle policy fails before
+the adapter opens. Unconfirmed acquire evidence fails before the first model or
+operation capability call.

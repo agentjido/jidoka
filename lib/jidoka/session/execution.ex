@@ -79,17 +79,9 @@ defmodule Jidoka.Session.Execution do
 
   def run_sequence(session_input, [_request | _rest] = request_inputs, opts)
       when is_list(request_inputs) and is_list(opts) do
-    with {:ok, session} <- resolve_session(session_input, opts) do
-      state = %{
-        session: session,
-        steps: [],
-        agent_state: nil,
-        operation_count: 0,
-        request_ids: []
-      }
-
-      {:ok, run_sequence_steps(request_inputs, state, 1, opts)}
-    end
+    EnvironmentRuntime.with_manager(opts, fn runtime_opts ->
+      run_sequence_with_runtime(session_input, request_inputs, runtime_opts)
+    end)
   end
 
   def run_sequence(_session_input, [], opts) when is_list(opts),
@@ -97,6 +89,43 @@ defmodule Jidoka.Session.Execution do
 
   def run_sequence(_session_input, request_inputs, opts) when is_list(opts),
     do: {:error, {:invalid_session_sequence, request_inputs}}
+
+  defp run_sequence_with_runtime(session_input, request_inputs, opts) do
+    with {:ok, session} <- resolve_session(session_input, opts) do
+      with_sequence_environment_observer(session, opts, fn runtime_opts ->
+        state = %{
+          session: session,
+          steps: [],
+          agent_state: nil,
+          operation_count: 0,
+          request_ids: []
+        }
+
+        run_sequence_steps(request_inputs, state, 1, runtime_opts)
+      end)
+    end
+  end
+
+  defp with_sequence_environment_observer(session, opts, run) do
+    {:ok, tracker} = Elixir.Agent.start_link(fn -> session.environment end)
+    observer = fn environment -> Elixir.Agent.update(tracker, fn _current -> environment end) end
+    runtime_opts = Keyword.put(opts, :session_environment_observer, observer)
+
+    try do
+      result = run.(runtime_opts)
+
+      case Elixir.Agent.get(tracker, & &1) do
+        nil -> {:ok, result}
+        environment -> {:ok, put_sequence_environment(result, environment)}
+      end
+    after
+      Elixir.Agent.stop(tracker)
+    end
+  end
+
+  defp put_sequence_environment(%Sequence.Result{} = result, environment) do
+    %{result | session: Session.put_environment(result.session, environment)}
+  end
 
   @doc false
   @spec resolve_sequence_session(session_input(), runtime_opts()) ::
@@ -795,7 +824,11 @@ defmodule Jidoka.Session.Execution do
 
   defp with_session_environment(%Session{} = session, opts, run) when is_function(run, 2) do
     with {:ok, session, runtime_opts, lease} <- EnvironmentRuntime.acquire(session, opts) do
-      result = run.(session, runtime_opts)
+      result =
+        session
+        |> run.(runtime_opts)
+        |> checkpoint_terminal_environment(runtime_opts)
+
       terminal = environment_terminal(result, runtime_opts)
 
       case EnvironmentRuntime.finish(lease, terminal, runtime_opts) do
@@ -805,6 +838,22 @@ defmodule Jidoka.Session.Execution do
       end
     end
   end
+
+  defp checkpoint_terminal_environment({:ok, _session, _result} = result, opts) do
+    case EnvironmentRuntime.checkpoint(opts) do
+      {:ok, _environment} -> result
+      {:error, reason} -> {:error, {:execution_environment_checkpoint_failed, reason}}
+    end
+  end
+
+  defp checkpoint_terminal_environment({:hibernate, _session, _snapshot} = result, opts) do
+    case EnvironmentRuntime.checkpoint(opts) do
+      {:ok, _environment} -> result
+      {:error, reason} -> {:error, {:execution_environment_checkpoint_failed, reason}}
+    end
+  end
+
+  defp checkpoint_terminal_environment(result, _opts), do: result
 
   defp environment_terminal({:hibernate, _session, _snapshot}, _opts), do: :hibernated
 
