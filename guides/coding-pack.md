@@ -54,3 +54,26 @@ turn context.
 
 This foundation does not expose a model-callable file, edit, shell, Git, or
 verification operation.
+
+## Read-only operations
+
+When enabled, the pack registers `coding.read` and `coding.search`. Both run
+through the normal Jidoka operation policy gate before their local workspace
+handler. Their policy resource states read access and includes only bounded,
+declared argument fields.
+
+`coding.read` accepts a relative `path`. It can also accept an inclusive
+`start_line` and `end_line`, or a byte `offset` and `length`. The two range
+forms cannot be mixed. The result contains UTF-8 content, the full-file digest,
+file size, actual range, truncation state, and ignore provenance. Binary,
+ignored, oversized, changed, missing, or outside-root files return typed
+errors.
+
+`coding.search` accepts `mode: "path" | "text"`, a relative base `path`, a
+literal `pattern`, and an optional file `glob`. Results have deterministic path,
+line, and column order. Trusted limits bound visited entries, returned results,
+file size, previews, and encoded output bytes. Ignored trees are not traversed.
+Binary files are counted and skipped. The operation does not call a host shell.
+
+The host can replace or disable either operation by its stable ID when it
+creates the pack registry entry.

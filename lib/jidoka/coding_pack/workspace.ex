@@ -10,7 +10,9 @@ defmodule Jidoka.CodingPack.Workspace do
     max_file_bytes: 1_048_576,
     max_result_bytes: 262_144,
     max_instruction_bytes: 65_536,
-    max_instruction_files: 32
+    max_instruction_files: 32,
+    max_search_files: 10_000,
+    max_search_results: 200
   }
   @keys [
     :root,

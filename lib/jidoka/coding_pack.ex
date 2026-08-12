@@ -2,7 +2,7 @@ defmodule Jidoka.CodingPack do
   @moduledoc "Removable first-party coding-pack registration and host factory."
 
   alias Jidoka.Agent.Spec.Operation
-  alias Jidoka.CodingPack.{Error, Instructions, Workspace}
+  alias Jidoka.CodingPack.{Error, Instructions, Tools, Workspace}
   alias Jidoka.Extension.{Binding, Registration, Request}
 
   @pack_id "jido.coding_pack"
@@ -53,7 +53,7 @@ defmodule Jidoka.CodingPack do
   @doc "Builds one trusted extension registry entry for a workspace."
   @spec entry(Workspace.t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def entry(%Workspace{} = workspace, opts \\ []) do
-    defaults = Keyword.get(opts, :tools, %{})
+    defaults = Keyword.get(opts, :tools, Tools.defaults(workspace))
     replacements = Keyword.get(opts, :replace_tools, %{})
     disabled = Keyword.get(opts, :disable_tools, [])
 

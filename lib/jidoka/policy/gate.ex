@@ -118,7 +118,7 @@ defmodule Jidoka.Policy.Gate do
     Request.new!(
       effect_class: kind,
       action: action(intent),
-      resource: resource(intent),
+      resource: resource(state, intent),
       session_id: metadata_value(state.request.metadata, :session_id),
       request_id: EffectTrace.request_id(state, intent),
       intent_id: intent.id,
@@ -130,16 +130,67 @@ defmodule Jidoka.Policy.Gate do
   defp action(%Effect.Intent{kind: :operation} = intent), do: EffectTrace.operation(intent) || "operation"
   defp action(%Effect.Intent{kind: :llm}), do: "model.invoke"
 
-  defp resource(%Effect.Intent{kind: :operation, payload: payload}) do
+  defp resource(state, %Effect.Intent{kind: :operation, payload: payload}) do
     arguments = Map.get(payload, :arguments) || Map.get(payload, "arguments") || %{}
 
-    %{
+    base = %{
       "operation" => Map.get(payload, :name) || Map.get(payload, "name"),
       "argument_keys" => arguments |> Map.keys() |> Enum.map(&to_string/1) |> Enum.sort()
     }
+
+    Map.merge(base, declared_resource(state, base["operation"], arguments))
   end
 
-  defp resource(%Effect.Intent{kind: :llm}), do: %{"class" => "model"}
+  defp resource(_state, %Effect.Intent{kind: :llm}), do: %{"class" => "model"}
+
+  defp declared_resource(state, operation_name, arguments) do
+    state.spec.operations
+    |> Enum.find(&(&1.name == operation_name))
+    |> case do
+      %{metadata: metadata} when is_map(metadata) ->
+        metadata
+        |> metadata_value(:policy_resource)
+        |> declared_resource_arguments(arguments)
+
+      _operation ->
+        %{}
+    end
+  end
+
+  defp declared_resource_arguments(resource, arguments) when is_map(resource) do
+    fields = metadata_value(resource, :argument_fields) || []
+
+    selected =
+      fields
+      |> Enum.reduce(%{}, fn field, selected ->
+        case portable_argument(arguments, field) do
+          {:ok, value} -> Map.put(selected, to_string(field), value)
+          :error -> selected
+        end
+      end)
+
+    resource
+    |> Map.new(fn {key, value} -> {to_string(key), value} end)
+    |> Map.delete("argument_fields")
+    |> Map.put("arguments", selected)
+  end
+
+  defp declared_resource_arguments(_resource, _arguments), do: %{}
+
+  defp portable_argument(arguments, field) do
+    case fetch_argument(arguments, field) do
+      {:ok, value} when is_binary(value) and byte_size(value) <= 1_024 -> {:ok, value}
+      {:ok, value} when is_integer(value) or is_float(value) or is_boolean(value) or is_nil(value) -> {:ok, value}
+      _result -> :error
+    end
+  end
+
+  defp fetch_argument(arguments, field) do
+    case Map.fetch(arguments, field) do
+      {:ok, value} -> {:ok, value}
+      :error -> Map.fetch(arguments, to_string(field))
+    end
+  end
 
   defp normalize_decision(output, opts) do
     with {:ok, decision} <- Decision.new(output), do: {:ok, stamp(decision, opts)}

@@ -61,6 +61,17 @@ defmodule Jidoka.CodingPack.RegistrationTest do
 
     assert {:ok, %{operations: [], handlers: %{}}} =
              CodingPack.compose_tools(%{"coding.read" => original}, %{}, ["coding.read"])
+
+    assert {:ok, default_entry} = CodingPack.entry(workspace, disable_tools: ["coding.search"])
+    {:ok, session} = Session.start(spec(), session_id: "disabled-search")
+    request = CodingPack.request()
+    {:ok, host} = Host.open(session, [request], %{CodingPack.id() => default_entry}, :interactive)
+
+    assert Enum.map(Host.operation_sources(host), &Enum.map(&1.operations, fn operation -> operation.name end)) == [
+             ["coding.read"]
+           ]
+
+    Host.close(host)
   end
 
   test "rejects duplicate, unknown, malformed, and agent-configured tools", %{workspace: workspace} do
@@ -88,5 +99,14 @@ defmodule Jidoka.CodingPack.RegistrationTest do
     assert resource["workspace"] == workspace.root_digest
     refute inspect(resource) =~ workspace.root
     refute inspect(Workspace.to_map(workspace)) =~ workspace.root
+  end
+
+  defp spec do
+    Agent.Spec.new!(
+      id: "coding_pack_registration_agent",
+      instructions: "Test.",
+      model: %{provider: :test, id: "model"},
+      extensions: [CodingPack.request()]
+    )
   end
 end
