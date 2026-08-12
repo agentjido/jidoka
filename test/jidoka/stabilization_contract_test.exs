@@ -263,9 +263,9 @@ defmodule Jidoka.StabilizationContractTest do
              :error
            ]
 
-    assert {:error, {:unsupported_session_schema_version, 2, 1}} =
+    assert {:error, {:unsupported_session_schema_version, 3, 2}} =
              Session.new(%{
-               schema_version: 2,
+               schema_version: 3,
                session_id: "sess_future",
                agent_id: spec.id,
                spec: spec
@@ -324,7 +324,7 @@ defmodule Jidoka.StabilizationContractTest do
 
     future = %{snapshot | schema_version: Snapshot.schema_version() + 1}
 
-    assert {:error, {:unsupported_snapshot_schema_version, 2, 1}} =
+    assert {:error, {:unsupported_snapshot_schema_version, 3, 2}} =
              Snapshot.deserialize(signed_snapshot(future))
 
     assert {:ok, serialized} = Snapshot.serialize(snapshot)

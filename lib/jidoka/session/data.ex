@@ -10,13 +10,15 @@ defmodule Jidoka.Session.Data do
   alias Jidoka.Agent
   alias Jidoka.Session.Lease
   alias Jidoka.Session.Lineage
+  alias Jidoka.Session.Environment
   alias Jidoka.Id
   alias Jidoka.Review
   alias Jidoka.Snapshot
   alias Jidoka.Schema
   alias Jidoka.Turn
 
-  @schema_version 1
+  @schema_version 2
+  @supported_schema_versions [1, 2]
   @statuses [:new, :running, :hibernated, :waiting, :finished, :cancelled, :error]
 
   @schema Zoi.struct(
@@ -35,6 +37,7 @@ defmodule Jidoka.Session.Data do
               error: Zoi.any() |> Zoi.nullish(),
               lease: Zoi.lazy({Lease, :schema, []}) |> Zoi.nullish(),
               lineage: Zoi.lazy({Lineage, :schema, []}) |> Zoi.nullish(),
+              environment: Zoi.lazy({Environment, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -115,6 +118,7 @@ defmodule Jidoka.Session.Data do
              spec: source.spec,
              requests: requests_through_snapshot(source, snapshot),
              lineage: lineage,
+             environment: Keyword.get(opts, :environment, snapshot.environment),
              metadata: Map.merge(source.metadata, Keyword.get(opts, :metadata, %{}))
            ) do
       {:ok, put_snapshot(fork, snapshot)}
@@ -157,6 +161,7 @@ defmodule Jidoka.Session.Data do
       session
       | agent_id: snapshot.agent_id,
         snapshots: snapshots,
+        environment: snapshot.environment || session.environment,
         status: :running,
         error: nil
     }
@@ -171,6 +176,7 @@ defmodule Jidoka.Session.Data do
       session
       | agent_id: snapshot.agent_id,
         snapshots: upsert_snapshot(snapshots, snapshot),
+        environment: snapshot.environment || session.environment,
         pending_reviews: pending_reviews,
         status: snapshot_status(snapshot, pending_reviews),
         error: nil
@@ -199,6 +205,14 @@ defmodule Jidoka.Session.Data do
   @spec put_cancellation(t(), Jidoka.Cancellation.t() | term()) :: t()
   def put_cancellation(%__MODULE__{} = session, cancellation) do
     %__MODULE__{session | status: :cancelled, error: cancellation}
+  end
+
+  @doc "Records portable execution-environment state."
+  @spec put_environment(t(), Environment.t() | nil) :: t()
+  def put_environment(%__MODULE__{} = session, nil), do: %__MODULE__{session | environment: nil}
+
+  def put_environment(%__MODULE__{} = session, %Environment{} = environment) do
+    %__MODULE__{session | environment: environment}
   end
 
   @doc "Returns the most recent session snapshot, if one exists."
@@ -249,7 +263,9 @@ defmodule Jidoka.Session.Data do
     end
   end
 
-  defp validate_schema_version(%__MODULE__{schema_version: @schema_version}), do: :ok
+  defp validate_schema_version(%__MODULE__{schema_version: version})
+       when version in @supported_schema_versions,
+       do: :ok
 
   defp validate_schema_version(%__MODULE__{schema_version: version}) do
     {:error, {:unsupported_session_schema_version, version, @schema_version}}

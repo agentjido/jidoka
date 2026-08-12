@@ -3,12 +3,13 @@ defmodule Jidoka.Projection.Session do
 
   alias Jidoka.Portable
   alias Jidoka.Projection.{Effect, Review, Turn}
-  alias Jidoka.Session.{Data, Replay, Sequence}
+  alias Jidoka.Session.{Data, Environment, Replay, Sequence}
   alias Jidoka.Snapshot
 
   @spec project(
           Snapshot.t()
           | Data.t()
+          | Environment.t()
           | Replay.t()
           | Sequence.Step.t()
           | Sequence.Terminal.t()
@@ -21,6 +22,7 @@ defmodule Jidoka.Projection.Session do
       agent_id: snapshot.agent_id,
       cursor: Turn.project(snapshot.cursor),
       turn_state: Turn.project(snapshot.turn_state),
+      environment: maybe_project_environment(snapshot.environment),
       metadata: Portable.project(snapshot.metadata)
     }
   end
@@ -39,7 +41,20 @@ defmodule Jidoka.Projection.Session do
       error: Portable.project(session.error),
       lease: Portable.project(session.lease),
       lineage: Portable.project(session.lineage),
+      environment: maybe_project_environment(session.environment),
       metadata: Portable.project(session.metadata)
+    }
+  end
+
+  def project(%Environment{} = environment) do
+    %{
+      version: environment.version,
+      status: environment.status,
+      retention: environment.retention,
+      request: Jidoka.ExecutionEnvironment.project(environment.request),
+      binding: Jidoka.ExecutionEnvironment.project(environment.binding),
+      checkpoint: maybe_project_execution_checkpoint(environment.checkpoint),
+      evidence: Jidoka.ExecutionEnvironment.project(environment.evidence)
     }
   end
 
@@ -82,4 +97,12 @@ defmodule Jidoka.Projection.Session do
 
   defp maybe_project_terminal(nil), do: nil
   defp maybe_project_terminal(terminal), do: project(terminal)
+
+  defp maybe_project_environment(nil), do: nil
+  defp maybe_project_environment(environment), do: project(environment)
+
+  defp maybe_project_execution_checkpoint(nil), do: nil
+
+  defp maybe_project_execution_checkpoint(checkpoint),
+    do: Jidoka.ExecutionEnvironment.project(checkpoint)
 end

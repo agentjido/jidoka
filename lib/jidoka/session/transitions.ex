@@ -110,6 +110,7 @@ defmodule Jidoka.Session.Transitions do
             lease: nil,
             requests: current.requests,
             snapshots: Data.merge_snapshots(current.snapshots, completed.snapshots),
+            environment: merge_environment(current.environment, completed.environment),
             lineage: current.lineage
         }
         |> Data.bump_revision()
@@ -195,6 +196,18 @@ defmodule Jidoka.Session.Transitions do
 
   defp validate_commit_target(%Data{} = current, %Data{} = completed),
     do: {:error, {:session_commit_mismatch, current.session_id, completed.session_id}}
+
+  defp merge_environment(nil, completed), do: completed
+  defp merge_environment(current, nil), do: current
+
+  defp merge_environment(
+         %{binding: %{revision: current_revision}} = current,
+         %{binding: %{revision: completed_revision}}
+       )
+       when current_revision > completed_revision,
+       do: current
+
+  defp merge_environment(_current, completed), do: completed
 
   defp recovery_request_id(%Data{} = session) do
     case Data.latest_snapshot(session) do

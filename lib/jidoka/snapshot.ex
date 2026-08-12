@@ -11,10 +11,12 @@ defmodule Jidoka.Snapshot do
   alias Jidoka.Id
   alias Jidoka.Review
   alias Jidoka.Schema
+  alias Jidoka.Session.Environment
   alias Jidoka.Snapshot.Codec
   alias Jidoka.Turn
 
-  @schema_version 1
+  @schema_version 2
+  @supported_schema_versions [1, 2]
   @forkable_phases [:after_prompt, :before_effect, :review, :wait]
 
   @schema Zoi.struct(
@@ -25,6 +27,7 @@ defmodule Jidoka.Snapshot do
               agent_id: Schema.non_empty_string(),
               cursor: Zoi.lazy({Turn.Cursor, :schema, []}),
               turn_state: Zoi.lazy({Turn.State, :schema, []}),
+              environment: Zoi.lazy({Environment, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -120,6 +123,7 @@ defmodule Jidoka.Snapshot do
         agent_id: state.spec.id,
         cursor: %Turn.Cursor{cursor | loop_index: state.loop_index},
         turn_state: state,
+        environment: Keyword.get(opts, :environment),
         metadata: snapshot_metadata(state, opts)
       )
     end
@@ -189,7 +193,9 @@ defmodule Jidoka.Snapshot do
     {:error, {:snapshot_not_forkable, snapshot_id, cursor.phase}}
   end
 
-  defp validate_schema_version(%__MODULE__{schema_version: @schema_version}), do: :ok
+  defp validate_schema_version(%__MODULE__{schema_version: version})
+       when version in @supported_schema_versions,
+       do: :ok
 
   defp validate_schema_version(%__MODULE__{schema_version: version}) do
     {:error, {:unsupported_snapshot_schema_version, version, @schema_version}}

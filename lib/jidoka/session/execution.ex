@@ -10,6 +10,7 @@ defmodule Jidoka.Session.Execution do
   alias Jidoka.Agent
   alias Jidoka.Cancellation
   alias Jidoka.Session.Replay
+  alias Jidoka.Session.EnvironmentRuntime
   alias Jidoka.Session.LeaseHeartbeat
   alias Jidoka.Session.Data, as: Session
   alias Jidoka.Session.Lease
@@ -48,7 +49,8 @@ defmodule Jidoka.Session.Execution do
   @spec start_session(plan_input(), runtime_opts()) :: {:ok, Session.t()} | {:error, term()}
   def start_session(spec_or_plan, opts \\ []) do
     with {:ok, plan} <- TurnExecution.plan(spec_or_plan),
-         {:ok, session} <- Session.start(plan.spec, session_opts(opts)) do
+         {:ok, session} <- Session.start(plan.spec, session_opts(opts)),
+         {:ok, session} <- EnvironmentRuntime.prepare(session, opts) do
       persist_session(session, opts)
     end
   end
@@ -60,20 +62,14 @@ defmodule Jidoka.Session.Execution do
   def run_session(session_input, request_input, opts \\ []) do
     with {:ok, session} <- resolve_session(session_input, opts),
          :ok <- ensure_runnable_session(session),
+         {:ok, session} <- EnvironmentRuntime.prepare(session, opts),
+         {:ok, session} <- persist_prepared_environment(session_input, session, opts),
          opts = Keyword.put(opts, :session_id, session.session_id),
          {:ok, prepared} <- TurnExecution.prepare(session.spec, request_input, opts),
          {:ok, session} <- claim_session(session_input, session, prepared.request, prepared.opts) do
       runtime_opts = Keyword.put(prepared.opts, :session_id, session.session_id)
 
-      with_session_lease(session, runtime_opts, fn leased_opts ->
-        run_session_turn(
-          session,
-          prepared.plan,
-          prepared.request,
-          prepared.capabilities,
-          leased_opts
-        )
-      end)
+      run_session_in_environment(session, prepared, runtime_opts)
     end
   end
 
@@ -130,12 +126,12 @@ defmodule Jidoka.Session.Execution do
   @spec resume_session(session_input(), runtime_opts()) :: session_run_result()
   def resume_session(session_input, opts \\ []) do
     with {:ok, session} <- resolve_session(session_input, opts),
+         {:ok, session} <- EnvironmentRuntime.prepare(session, opts),
+         {:ok, session} <- persist_prepared_environment(session_input, session, opts),
          {:ok, session} <- claim_resume_session(session, opts),
          {:ok, snapshot} <- latest_snapshot(session),
          {:ok, prepared} <- TurnExecution.prepare_resume(snapshot, opts) do
-      with_session_lease(session, prepared.opts, fn leased_opts ->
-        resume_session_snapshot(session, prepared.snapshot, prepared.capabilities, leased_opts)
-      end)
+      resume_session_in_environment(session, prepared)
     end
   end
 
@@ -148,9 +144,14 @@ defmodule Jidoka.Session.Execution do
   """
   @spec recover_session(String.t(), runtime_opts()) :: session_run_result()
   def recover_session(session_id, opts \\ []) when is_binary(session_id) and is_list(opts) do
+    opts = Keyword.put(opts, :session_id, session_id)
+
     with {:ok, store} <- fetch_store(opts),
-         {:ok, session} <- Store.recover_session(store, session_id, lease_store_opts(opts)) do
-      recover_claimed_session(session, opts)
+         {:ok, session} <- Store.recover_session(store, session_id, lease_store_opts(opts)),
+         {:ok, session} <- EnvironmentRuntime.restore(session, opts) do
+      with_session_environment(session, opts, fn environment_session, environment_opts ->
+        recover_claimed_session(environment_session, environment_opts)
+      end)
     end
   end
 
@@ -175,7 +176,9 @@ defmodule Jidoka.Session.Execution do
              source_snapshot.snapshot_id,
              clock_ms(opts)
            ),
-         {:ok, fork_snapshot} <- fork_snapshot(source_snapshot, source, lineage, opts),
+         {:ok, environment} <- EnvironmentRuntime.fork(source, opts),
+         {:ok, fork_snapshot} <-
+           fork_snapshot(source_snapshot, source, lineage, environment, opts),
          {:ok, fork} <- Session.fork(source, fork_snapshot, lineage, fork_session_opts(opts)),
          :ok <- ensure_fork_destination_available(fork, opts) do
       persist_session(fork, opts)
@@ -252,6 +255,41 @@ defmodule Jidoka.Session.Execution do
     end
   end
 
+  defp run_session_in_environment(session, prepared, runtime_opts) do
+    with_session_environment(session, runtime_opts, fn environment_session, environment_opts ->
+      run_session_with_lease(environment_session, prepared, environment_opts)
+    end)
+  end
+
+  defp run_session_with_lease(environment_session, prepared, environment_opts) do
+    with_session_lease(environment_session, environment_opts, fn leased_opts ->
+      run_session_turn(
+        environment_session,
+        prepared.plan,
+        prepared.request,
+        prepared.capabilities,
+        leased_opts
+      )
+    end)
+  end
+
+  defp resume_session_in_environment(session, prepared) do
+    with_session_environment(session, prepared.opts, fn environment_session, environment_opts ->
+      resume_session_with_lease(environment_session, prepared, environment_opts)
+    end)
+  end
+
+  defp resume_session_with_lease(environment_session, prepared, environment_opts) do
+    with_session_lease(environment_session, environment_opts, fn leased_opts ->
+      resume_session_snapshot(
+        environment_session,
+        prepared.snapshot,
+        prepared.capabilities,
+        leased_opts
+      )
+    end)
+  end
+
   defp run_sequence_steps([], state, _index, _opts) do
     Sequence.Result.new!(
       status: :completed,
@@ -290,7 +328,12 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp run_sequence_request(state, request, rest, index, opts) do
-    case run_session(sequence_session_input(state.session, opts), request, opts) do
+    run_opts =
+      opts
+      |> Keyword.put(:session_sequence_active, true)
+      |> Keyword.put(:session_sequence_terminal, rest == [])
+
+    case run_session(sequence_session_input(state.session, opts), request, run_opts) do
       {:ok, session, %Turn.Result{} = result} ->
         operation_results =
           Enum.drop(result.agent_state.operation_results, state.operation_count)
@@ -548,6 +591,10 @@ defmodule Jidoka.Session.Execution do
     end
   end
 
+  defp persist_prepared_environment(_session_input, %Session{} = session, opts) do
+    persist_session(session, opts)
+  end
+
   defp persist_stored_session(
          store,
          %Session{lease: %Lease{lease_id: lease_id}} = session,
@@ -665,7 +712,7 @@ defmodule Jidoka.Session.Execution do
     {:error, {:invalid_session_snapshot_selector, session.session_id, snapshot_input}}
   end
 
-  defp fork_snapshot(%Snapshot{} = snapshot, %Session{} = source, lineage, opts) do
+  defp fork_snapshot(%Snapshot{} = snapshot, %Session{} = source, lineage, environment, opts) do
     fork_opts =
       [
         snapshot_id: Keyword.get(opts, :fork_snapshot_id),
@@ -675,7 +722,13 @@ defmodule Jidoka.Session.Execution do
       ]
       |> Enum.reject(fn {_key, value} -> is_nil(value) end)
 
-    Snapshot.fork(snapshot, fork_opts)
+    with {:ok, %Snapshot{} = fork} <- Snapshot.fork(snapshot, fork_opts) do
+      Snapshot.new(%Snapshot{
+        fork
+        | schema_version: Snapshot.schema_version(),
+          environment: environment
+      })
+    end
   end
 
   defp ensure_forkable_session(%Session{status: :running, session_id: session_id}) do
@@ -740,6 +793,72 @@ defmodule Jidoka.Session.Execution do
     end
   end
 
+  defp with_session_environment(%Session{} = session, opts, run) when is_function(run, 2) do
+    with {:ok, session, runtime_opts, lease} <- EnvironmentRuntime.acquire(session, opts) do
+      result = run.(session, runtime_opts)
+      terminal = environment_terminal(result, runtime_opts)
+
+      case EnvironmentRuntime.finish(lease, terminal, runtime_opts) do
+        {:ok, nil} -> result
+        {:ok, environment} -> persist_result_environment(result, environment, runtime_opts)
+        {:error, finish_reason} -> combine_environment_finish_error(result, finish_reason)
+      end
+    end
+  end
+
+  defp environment_terminal({:hibernate, _session, _snapshot}, _opts), do: :hibernated
+
+  defp environment_terminal({:ok, _session, _result}, opts) do
+    if Keyword.get(opts, :session_sequence_active, false) and
+         not Keyword.get(opts, :session_sequence_terminal, false),
+       do: :continued,
+       else: :completed
+  end
+
+  defp environment_terminal({:error, reason}, _opts) do
+    if Cancellation.cancelled_reason?(reason), do: :cancelled, else: :error
+  end
+
+  defp persist_result_environment({:ok, session, result}, environment, opts) do
+    session = Session.put_environment(session, environment)
+    persist_session_result(session, opts, fn session -> {:ok, session, result} end)
+  end
+
+  defp persist_result_environment(
+         {:hibernate, session, %Snapshot{} = snapshot},
+         environment,
+         opts
+       ) do
+    snapshot =
+      Snapshot.new!(%Snapshot{
+        snapshot
+        | schema_version: Snapshot.schema_version(),
+          environment: environment
+      })
+
+    session = session |> Session.put_environment(environment) |> Session.put_snapshot(snapshot)
+    persist_session_result(session, opts, fn session -> {:hibernate, session, snapshot} end)
+  end
+
+  defp persist_result_environment({:error, reason} = result, environment, opts) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} ->
+        with {:ok, session} <- Store.get_session(store, Keyword.fetch!(opts, :session_id)),
+             {:ok, _stored} <- Store.put_session(store, Session.put_environment(session, environment)) do
+          result
+        end
+
+      :error ->
+        {:error, reason}
+    end
+  end
+
+  defp combine_environment_finish_error({:error, reason}, finish_reason),
+    do: {:error, {:primary_and_environment_finish_failed, reason, finish_reason}}
+
+  defp combine_environment_finish_error(_result, finish_reason),
+    do: {:error, {:execution_environment_finish_failed, finish_reason}}
+
   defp durable_runtime_opts(
          %Session{lease: %Lease{} = lease} = session,
          opts
@@ -764,9 +883,11 @@ defmodule Jidoka.Session.Execution do
   defp durable_checkpoint(store, session, lease, state, intent, stage, opts) do
     cursor = Turn.Cursor.before_effect(intent)
 
-    with {:ok, snapshot} <-
+    with {:ok, environment} <- EnvironmentRuntime.checkpoint(opts),
+         {:ok, snapshot} <-
            Snapshot.from_turn_state(state, cursor,
              id_generator: Keyword.get(opts, :id_generator),
+             environment: environment,
              metadata: %{"durable_checkpoint" => Atom.to_string(stage)}
            ),
          {:ok, stored} <-

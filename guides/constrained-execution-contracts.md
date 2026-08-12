@@ -73,3 +73,26 @@ Use `Manager.with_acquired/4` when possible. It closes the transient handle
 after success, error, or exception. The manager also closes its remaining
 handles when it stops. Runtime handles never enter bindings, checkpoints,
 sessions, or snapshots.
+
+## Durable session use
+
+Pass an `execution_environment` runtime option with a manager, a
+`PolicyRequest`, and an `:ephemeral` or `:durable` retention value. Jidoka opens
+the environment before it stores a new session. Each active turn acquires one
+transient handle. Jidoka closes that handle for success, hibernation, error,
+and cancellation.
+
+`Jidoka.Session.Environment` is the portable session value. Session data and
+snapshots use schema version 2 and still accept version 1 data without an
+environment. Each durable effect checkpoint stores the turn snapshot and the
+matching environment checkpoint in one session revision.
+
+Recovery restores the latest immutable environment checkpoint, validates its
+confirmed evidence, and then acquires a handle. Session fork asks the manager
+to fork the stored checkpoint. It gives the child a different binding and does
+not change the source session.
+
+Ephemeral environments are cleaned after a completed, failed, or cancelled
+run. They stay available while a session is hibernated. Durable environments
+need an explicit trusted cleanup action. Cleaned session state rejects later
+acquire, restore, and fork operations.

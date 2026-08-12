@@ -1,0 +1,223 @@
+defmodule Jidoka.Session.EnvironmentRuntime do
+  @moduledoc """
+  Coordinates transient environment resources for session execution.
+
+  Session callers normally use `Jidoka.Session`. This module keeps manager
+  processes and acquired handles in runtime options and returns only portable
+  `Jidoka.Session.Environment` data.
+  """
+
+  alias Jidoka.ExecutionEnvironment.Manager
+  alias Jidoka.ExecutionEnvironment.PolicyRequest
+  alias Jidoka.Session.Data
+  alias Jidoka.Session.Environment
+
+  @type lease :: %{manager: Manager.manager(), handle: Manager.Handle.t(), tracker: pid()}
+
+  @doc "Opens configured environment state when the session has no binding."
+  @spec prepare(Data.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
+  def prepare(%Data{environment: nil} = session, opts) do
+    case config(opts) do
+      :none ->
+        {:ok, session}
+
+      {:ok, manager, request, retention} ->
+        with {:ok, binding, evidence} <- Manager.open(manager, request, lifecycle_opts(opts)) do
+          {:ok, Data.put_environment(session, Environment.opened(request, binding, evidence, retention))}
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  def prepare(%Data{environment: %Environment{} = environment} = session, opts) do
+    with :ok <- Environment.ensure_usable(environment),
+         :ok <- validate_runtime_profile(environment, opts) do
+      {:ok, session}
+    end
+  end
+
+  @doc "Acquires a transient handle and adds it to runtime options."
+  @spec acquire(Data.t(), keyword()) ::
+          {:ok, Data.t(), keyword(), lease() | nil} | {:error, term()}
+  def acquire(%Data{environment: nil} = session, opts), do: {:ok, session, opts, nil}
+
+  def acquire(%Data{environment: %Environment{} = environment} = session, opts) do
+    with :ok <- Environment.ensure_usable(environment),
+         {:ok, manager, _request, _retention} <- require_config(opts),
+         {:ok, handle, evidence} <- Manager.acquire(manager, environment.binding, lifecycle_opts(opts)),
+         environment = Environment.observed(environment, evidence),
+         {:ok, tracker} <- Agent.start_link(fn -> environment end) do
+      runtime_opts =
+        opts
+        |> Keyword.put(:execution_environment_handle, handle)
+        |> Keyword.put(:execution_environment_manager, manager)
+        |> Keyword.put(:execution_environment_tracker, tracker)
+
+      {:ok, Data.put_environment(session, environment), runtime_opts,
+       %{manager: manager, handle: handle, tracker: tracker}}
+    end
+  end
+
+  @doc "Creates a portable environment checkpoint for the active handle."
+  @spec checkpoint(keyword()) :: {:ok, Environment.t() | nil} | {:error, term()}
+  def checkpoint(opts) do
+    case runtime_refs(opts) do
+      :none ->
+        {:ok, nil}
+
+      {:ok, manager, handle, tracker} ->
+        checkpoint_tracked_environment(manager, handle, tracker, opts)
+    end
+  end
+
+  @doc "Closes the active handle and applies the configured retention rule."
+  @spec finish(lease() | nil, atom(), keyword()) ::
+          {:ok, Environment.t() | nil} | {:error, term()}
+  def finish(nil, _terminal, _opts), do: {:ok, nil}
+
+  def finish(%{manager: manager, handle: handle, tracker: tracker}, terminal, opts) do
+    environment = Agent.get(tracker, & &1)
+    close_result = Manager.close(manager, handle, lifecycle_opts(opts))
+
+    result =
+      case close_result do
+        {:ok, close_evidence} ->
+          environment
+          |> Environment.observed(close_evidence)
+          |> then(&maybe_cleanup(manager, &1, terminal, opts))
+
+        {:error, _reason} = error ->
+          error
+      end
+
+    Agent.stop(tracker)
+    result
+  end
+
+  @doc "Restores the latest stored checkpoint before recovery work starts."
+  @spec restore(Data.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
+  def restore(%Data{environment: nil} = session, _opts), do: {:ok, session}
+
+  def restore(%Data{environment: %Environment{checkpoint: nil}} = session, _opts),
+    do: {:ok, session}
+
+  def restore(%Data{environment: %Environment{} = environment} = session, opts) do
+    with :ok <- Environment.ensure_usable(environment),
+         {:ok, manager, _request, _retention} <- require_config(opts),
+         {:ok, binding, evidence} <-
+           Manager.restore(manager, environment.binding, environment.checkpoint, lifecycle_opts(opts)) do
+      {:ok, Data.put_environment(session, Environment.restored(environment, binding, evidence))}
+    end
+  end
+
+  @doc "Forks an immutable environment checkpoint for a child session."
+  @spec fork(Data.t(), keyword()) :: {:ok, Environment.t() | nil} | {:error, term()}
+  def fork(%Data{environment: nil}, _opts), do: {:ok, nil}
+
+  def fork(%Data{environment: %Environment{checkpoint: nil}}, _opts),
+    do: {:error, :execution_environment_fork_requires_checkpoint}
+
+  def fork(%Data{environment: %Environment{} = environment}, opts) do
+    with :ok <- Environment.ensure_usable(environment),
+         {:ok, manager, _request, _retention} <- require_config(opts),
+         {:ok, binding, checkpoint, evidence} <-
+           Manager.fork(manager, environment.binding, environment.checkpoint, lifecycle_opts(opts)) do
+      {:ok, Environment.forked(environment, binding, checkpoint, evidence)}
+    end
+  end
+
+  defp maybe_cleanup(manager, %Environment{retention: :ephemeral} = environment, terminal, opts)
+       when terminal in [:completed, :error, :cancelled] do
+    with {:ok, evidence} <- Manager.cleanup(manager, environment.binding, lifecycle_opts(opts)) do
+      {:ok, Environment.cleaned(environment, evidence)}
+    end
+  end
+
+  defp maybe_cleanup(_manager, %Environment{} = environment, _terminal, _opts),
+    do: {:ok, environment}
+
+  defp checkpoint_tracked_environment(manager, handle, tracker, opts) do
+    environment = Agent.get(tracker, & &1)
+
+    case Manager.checkpoint(manager, handle, environment.binding, lifecycle_opts(opts)) do
+      {:ok, binding, checkpoint, evidence} ->
+        environment = Environment.checkpointed(environment, binding, checkpoint, evidence)
+        Agent.update(tracker, fn _current -> environment end)
+        {:ok, environment}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp validate_runtime_profile(environment, opts) do
+    case config(opts) do
+      :none ->
+        :ok
+
+      {:ok, _manager, request, _retention} when request.profile_id == environment.request.profile_id ->
+        :ok
+
+      {:ok, _manager, request, _retention} ->
+        {:error, {:execution_environment_profile_mismatch, environment.request.profile_id, request.profile_id}}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  defp config(opts) do
+    case Keyword.get(opts, :execution_environment) do
+      nil -> :none
+      config -> normalize_config(config)
+    end
+  end
+
+  defp require_config(opts) do
+    case config(opts) do
+      {:ok, _manager, _request, _retention} = config -> config
+      :none -> {:error, :missing_execution_environment_runtime}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp normalize_config(config) when is_list(config), do: normalize_config(Map.new(config))
+
+  defp normalize_config(%{} = config) do
+    manager = Map.get(config, :manager, Map.get(config, "manager"))
+    request = Map.get(config, :request, Map.get(config, "request"))
+    retention = Map.get(config, :retention, Map.get(config, "retention", :ephemeral))
+
+    cond do
+      is_nil(manager) -> {:error, :missing_execution_environment_manager}
+      not match?(%PolicyRequest{}, request) -> {:error, {:invalid_execution_environment_request, request}}
+      retention not in [:ephemeral, :durable] -> {:error, {:invalid_execution_environment_retention, retention}}
+      true -> {:ok, manager, request, retention}
+    end
+  end
+
+  defp normalize_config(config), do: {:error, {:invalid_execution_environment_runtime, config}}
+
+  defp runtime_refs(opts) do
+    with {:ok, manager} <- Keyword.fetch(opts, :execution_environment_manager),
+         {:ok, handle} <- Keyword.fetch(opts, :execution_environment_handle),
+         {:ok, tracker} <- Keyword.fetch(opts, :execution_environment_tracker) do
+      {:ok, manager, handle, tracker}
+    else
+      :error -> :none
+    end
+  end
+
+  defp lifecycle_opts(opts) do
+    opts
+    |> Keyword.get(:execution_environment)
+    |> case do
+      config when is_list(config) -> Keyword.get(config, :opts, [])
+      %{} = config -> Map.get(config, :opts, Map.get(config, "opts", []))
+      _config -> []
+    end
+    |> Keyword.merge(Keyword.take(opts, [:request_id, :session_id]))
+  end
+end

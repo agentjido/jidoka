@@ -182,9 +182,10 @@ defmodule Jidoka.ProjectionTest do
     intent = Effect.Intent.new(:llm, %{request_id: request.request_id}, id: "llm:1")
     state = Turn.State.set_pending_effects(state, [intent])
     snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.before_effect(intent))
+    schema_version = Snapshot.schema_version()
 
     assert %{
-             schema_version: 1,
+             schema_version: ^schema_version,
              agent_id: "snapshot_projection_agent",
              cursor: %{
                phase: :before_effect,
