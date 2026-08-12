@@ -282,7 +282,8 @@ defmodule Jidoka.Session.Sequence.RequestController do
       result.steps,
       if(terminal, do: terminal.index, else: progress.index),
       terminal_request_id(terminal, progress),
-      cancellation
+      cancellation,
+      result.limits
     )
   end
 
@@ -292,11 +293,12 @@ defmodule Jidoka.Session.Sequence.RequestController do
       progress.steps,
       progress.index,
       request_id(progress.request),
-      cancellation
+      cancellation,
+      nil
     )
   end
 
-  defp build_cancelled_result(session, steps, index, request_id, cancellation) do
+  defp build_cancelled_result(session, steps, index, request_id, cancellation, limits) do
     terminal =
       Sequence.Terminal.new!(
         kind: :cancelled,
@@ -311,7 +313,8 @@ defmodule Jidoka.Session.Sequence.RequestController do
       status: :cancelled,
       session: session,
       steps: steps,
-      terminal: terminal
+      terminal: terminal,
+      limits: limits
     )
   end
 

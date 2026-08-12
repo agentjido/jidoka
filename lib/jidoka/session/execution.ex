@@ -20,6 +20,7 @@ defmodule Jidoka.Session.Execution do
   alias Jidoka.Memory
   alias Jidoka.Snapshot
   alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Runtime.TurnRunner
   alias Jidoka.Turn
   alias Jidoka.Turn.Execution, as: TurnExecution
@@ -91,7 +92,14 @@ defmodule Jidoka.Session.Execution do
     do: {:error, {:invalid_session_sequence, request_inputs}}
 
   defp run_sequence_with_runtime(session_input, request_inputs, opts) do
-    with {:ok, session} <- resolve_session(session_input, opts) do
+    with {:ok, session} <- resolve_session(session_input, opts),
+         {:ok, plan} <- TurnExecution.plan(session.spec),
+         {:ok, limits} <- Limits.resolve(plan, opts) do
+      opts =
+        opts
+        |> Keyword.put(:runtime_limits, limits)
+        |> Keyword.put(:runtime_sequence_started_at_ms, runtime_clock_ms(opts))
+
       Jidoka.Extension.RuntimeEvents.emit(
         "session.start",
         %{session_ref: session.session_id, data: %{request_count: length(request_inputs)}},
@@ -107,7 +115,10 @@ defmodule Jidoka.Session.Execution do
           request_ids: []
         }
 
-        result = run_sequence_steps(request_inputs, state, 1, runtime_opts)
+        result =
+          request_inputs
+          |> run_sequence_steps(state, 1, runtime_opts)
+          |> put_sequence_limits(limits, runtime_opts)
 
         Jidoka.Extension.RuntimeEvents.emit(
           "session.end",
@@ -349,12 +360,12 @@ defmodule Jidoka.Session.Execution do
       request = carry_sequence_state(request, state.agent_state)
       notify_sequence_progress(state, index, request, opts)
 
-      case Cancellation.check(opts) do
+      case Limits.check_sequence_deadline(opts, index) do
         :ok ->
-          run_sequence_request(state, request, rest, index, opts)
+          run_sequence_after_deadline(state, request, rest, index, opts)
 
-        {:error, reason} ->
-          sequence_run_error(state, request, reason, index, opts)
+        {:error, exceeded} ->
+          sequence_run_error(state, request, {:runtime_limit_exceeded, exceeded}, index, opts)
       end
     else
       {:error, reason} ->
@@ -367,6 +378,13 @@ defmodule Jidoka.Session.Execution do
           nil,
           reason
         )
+    end
+  end
+
+  defp run_sequence_after_deadline(state, request, rest, index, opts) do
+    case Cancellation.check(opts) do
+      :ok -> run_sequence_request(state, request, rest, index, opts)
+      {:error, reason} -> sequence_run_error(state, request, reason, index, opts)
     end
   end
 
@@ -397,7 +415,19 @@ defmodule Jidoka.Session.Execution do
           request_ids: [request.request_id | state.request_ids]
         }
 
-        run_sequence_steps(rest, next_state, index + 1, opts)
+        case Limits.check_usage(next_state.steps, Keyword.fetch!(opts, :runtime_limits), index) do
+          :ok ->
+            run_sequence_steps(rest, next_state, index + 1, opts)
+
+          {:error, exceeded} ->
+            sequence_run_error(
+              next_state,
+              request,
+              {:runtime_limit_exceeded, exceeded},
+              index,
+              opts
+            )
+        end
 
       {:hibernate, session, %Snapshot{} = snapshot} ->
         terminal_sequence_result(
@@ -508,11 +538,11 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp put_sequence_error(session, request, :cancelled, reason) do
-    session |> Session.put_request(request) |> Session.put_cancellation(reason)
+    session |> maybe_put_sequence_request(request) |> Session.put_cancellation(reason)
   end
 
   defp put_sequence_error(session, request, :error, reason) do
-    session |> Session.put_request(request) |> Session.put_error(reason)
+    session |> maybe_put_sequence_request(request) |> Session.put_error(reason)
   end
 
   defp terminal_sequence_result(status, session, steps, index, request_id, snapshot, reason) do
@@ -529,6 +559,19 @@ defmodule Jidoka.Session.Execution do
       )
 
     Sequence.Result.new!(status: status, session: session, steps: steps, terminal: terminal)
+  end
+
+  defp put_sequence_limits(%Sequence.Result{} = result, limits, opts) do
+    reason = if result.terminal, do: result.terminal.reason, else: nil
+    evidence = Limits.evidence(limits, result.steps, Limits.sequence_elapsed_ms(opts), reason)
+    %{result | limits: evidence}
+  end
+
+  defp runtime_clock_ms(opts) do
+    case Keyword.get(opts, :clock) do
+      clock when is_function(clock, 0) -> clock.()
+      _clock -> System.monotonic_time(:millisecond)
+    end
   end
 
   defp cancellation_session(%{session: %Session{} = session}, opts) do

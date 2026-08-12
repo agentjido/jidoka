@@ -170,6 +170,7 @@ defmodule Jidoka.MixProject do
       "guides/streaming.md",
       "guides/agent-view.md",
       "guides/idempotency-and-safety.md",
+      "guides/runtime-limits.md",
       "guides/capability-replay.md",
       "guides/policy-gate.md",
       "guides/constrained-execution-contracts.md",
@@ -218,7 +219,7 @@ defmodule Jidoka.MixProject do
         ~r{guides/(agent-dsl|tools-and-operations|structured-results|controls|memory|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
       "Compose Work": ~r{guides/(workflows|agent-orchestration|handoffs)\.md},
       "Operate Agents":
-        ~r{guides/(configuration|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety|capability-replay|policy-gate|constrained-execution-contracts|extension-architecture|process-extensions)\.md},
+        ~r{guides/(configuration|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety|runtime-limits|capability-replay|policy-gate|constrained-execution-contracts|extension-architecture|process-extensions)\.md},
       Decisions: ~r{guides/decisions/.+\.md},
       Integrations:
         ~r{guides/(live-llm-tool-loop|jido-process-integration|ash-jido|browser-tools|mcp-tools|skill-workflow-subagent-tools|kino-notebooks)\.md},
@@ -301,7 +302,7 @@ defmodule Jidoka.MixProject do
         Jidoka.Adapter.Jido.Actions,
         Jidoka.Adapter.Jido.AgentServerState,
         Jidoka.Adapter.ReqLLM,
-        Jidoka.Runtime.Capabilities,
+        ~r/^Jidoka\.Runtime\.(Capabilities|Limits)(\.|$)/,
         Jidoka.Runtime.Controls.OperationContext,
         Jidoka.Runtime.LocalOperations
       ],

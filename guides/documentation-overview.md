@@ -53,7 +53,9 @@ Use this path when you deploy or operate Jidoka:
    side effects.
 5. [Tracing And Events](tracing-and-events.md) - collect safe operational
    evidence.
-6. [Troubleshooting](troubleshooting.md) - diagnose common failures.
+6. [Runtime Limits](runtime-limits.md) - bound turns, capabilities, sequences,
+   and provider usage.
+7. [Troubleshooting](troubleshooting.md) - diagnose common failures.
 
 The in-memory stores are suitable for tests, examples, and one-node
 development. Use application-owned durable stores when session state, memory,
@@ -85,6 +87,7 @@ write compatibility tests:
 - [Memory Contracts](memory-contracts.md)
 - [Import And Snapshot Contracts](import-and-snapshot-contracts.md)
 - [Errors And Config Reference](errors-and-config-reference.md)
+- [Runtime Limits](runtime-limits.md)
 
 The module pages are the source for function signatures and types. The guides
 explain how the contracts work together.

@@ -3,6 +3,7 @@ defmodule Jidoka.Extension.RuntimeEvents do
 
   alias Jidoka.Event, as: RuntimeEvent
   alias Jidoka.Extension.{Dispatcher, Event}
+  alias Jidoka.Runtime.Limits
 
   @doc "Maps and emits a core runtime event when an extension dispatcher is present."
   @spec emit_runtime(RuntimeEvent.t(), keyword()) :: :ok
@@ -67,5 +68,15 @@ defmodule Jidoka.Extension.RuntimeEvents do
     ]
   end
 
-  defp dispatcher_opts(opts), do: Keyword.take(opts, [:subscriber_timeout_ms, :call_timeout])
+  defp dispatcher_opts(opts) do
+    dispatcher_opts = Keyword.take(opts, [:subscriber_timeout_ms, :call_timeout, :cancellation])
+
+    case Limits.capability_timeout(opts, :infinity) do
+      :infinity ->
+        dispatcher_opts
+
+      timeout ->
+        Keyword.update(dispatcher_opts, :subscriber_timeout_ms, timeout, &min(&1, timeout))
+    end
+  end
 end

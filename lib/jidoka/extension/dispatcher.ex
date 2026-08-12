@@ -3,6 +3,7 @@ defmodule Jidoka.Extension.Dispatcher do
 
   use GenServer
 
+  alias Jidoka.Cancellation.Token
   alias Jidoka.Extension.Event
 
   @type subscriber :: (Event.t() -> term()) | module()
@@ -27,11 +28,11 @@ defmodule Jidoka.Extension.Dispatcher do
   @impl true
   def handle_call({:dispatch, event, opts}, _from, state) do
     timeout = Keyword.get(opts, :subscriber_timeout_ms, state.timeout_ms)
-    evidence = Enum.map(state.subscribers, &deliver(&1, event, timeout))
+    evidence = Enum.map(state.subscribers, &deliver(&1, event, timeout, opts))
     {:reply, {:ok, evidence}, state}
   end
 
-  defp deliver(subscriber, event, timeout) do
+  defp deliver(subscriber, event, timeout, opts) do
     owner = self()
 
     {pid, monitor} =
@@ -39,6 +40,8 @@ defmodule Jidoka.Extension.Dispatcher do
         result = safe_invoke(subscriber, event)
         send(owner, {:extension_subscriber_result, owner, self(), result})
       end)
+
+    maybe_register_cancellation(pid, opts)
 
     receive do
       {:extension_subscriber_result, ^owner, ^pid, result} ->
@@ -77,4 +80,11 @@ defmodule Jidoka.Extension.Dispatcher do
   end
 
   defp invoke(_subscriber, _event), do: {:error, :invalid_subscriber}
+
+  defp maybe_register_cancellation(pid, opts) do
+    case Keyword.get(opts, :cancellation) do
+      %Token{} = token -> Token.register(token, pid)
+      _token -> :ok
+    end
+  end
 end

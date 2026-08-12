@@ -20,6 +20,8 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   alias Jidoka.ExecutionEnvironment.Validator
   alias Jidoka.Policy.Gate
   alias Jidoka.Policy.Request, as: GateRequest
+  alias Jidoka.Runtime.BoundedCall
+  alias Jidoka.Runtime.Limits.Exceeded
 
   @type manager :: GenServer.server()
 
@@ -219,6 +221,8 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   end
 
   def handle_call({:cleanup, binding, opts}, _from, state) do
+    opts = cleanup_opts(opts)
+
     case Map.fetch(state.cleanup_evidence, binding.resource_ref) do
       {:ok, evidence} ->
         {:reply, {:ok, evidence}, state}
@@ -445,17 +449,30 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   end
 
   defp call_adapter(adapter, function, arguments) do
-    apply(adapter, function, arguments)
-  rescue
-    exception -> {:error, {:adapter_exception, function, exception}}
-  catch
-    kind, reason -> {:error, {:adapter_failure, function, {kind, reason}}}
+    opts = List.last(arguments)
+
+    BoundedCall.run(
+      fn -> apply(adapter, function, arguments) end,
+      :execution_environment,
+      if(is_list(opts), do: opts, else: [])
+    )
   end
 
   defp call_opts(state, opts), do: Keyword.merge(state.opts, opts)
   defp cleanup_opts(opts), do: Keyword.delete(opts, :cancellation)
 
   defp normalize_error({:error, %Error{} = error}, _operation), do: {:error, error}
+
+  defp normalize_error(
+         {:error, {:runtime_limit_exceeded, %Exceeded{} = exceeded}},
+         operation
+       ) do
+    {:error,
+     Error.new(:execution_environment_limit_exceeded, "execution environment call exceeded its limit", %{
+       operation: operation,
+       limit: exceeded
+     })}
+  end
 
   defp normalize_error({:error, reason}, operation) do
     {:error,

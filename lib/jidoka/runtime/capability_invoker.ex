@@ -4,6 +4,7 @@ defmodule Jidoka.Runtime.CapabilityInvoker do
   alias Jidoka.Cancellation
   alias Jidoka.Cancellation.Token
   alias Jidoka.Effect
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Turn
 
   @task_supervisor Jidoka.Runtime.TaskSupervisor
@@ -132,7 +133,9 @@ defmodule Jidoka.Runtime.CapabilityInvoker do
     configured_timeout = normalize_timeout(Keyword.get(opts, :capability_timeout_ms))
     remaining_timeout = remaining_turn_timeout(state, opts)
 
-    min_timeout(configured_timeout, remaining_timeout)
+    configured_timeout
+    |> min_timeout(remaining_timeout)
+    |> then(&Limits.capability_timeout(opts, &1))
   end
 
   defp remaining_turn_timeout(%Turn.State{plan: %{timeout_ms: timeout_ms}, started_at_ms: started_at_ms}, opts)

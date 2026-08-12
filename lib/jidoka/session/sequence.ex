@@ -79,6 +79,7 @@ defmodule Jidoka.Session.Sequence.Result do
   @moduledoc "Result of one ordered session sequence."
 
   alias Jidoka.Schema
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Session.Data
   alias Jidoka.Session.Sequence
 
@@ -90,7 +91,8 @@ defmodule Jidoka.Session.Sequence.Result do
               status: Schema.atom_enum(@statuses),
               session: Zoi.lazy({Data, :schema, []}),
               steps: Zoi.array(Zoi.lazy({Sequence.Step, :schema, []})) |> Zoi.default([]),
-              terminal: Zoi.lazy({Sequence.Terminal, :schema, []}) |> Zoi.nullish()
+              terminal: Zoi.lazy({Sequence.Terminal, :schema, []}) |> Zoi.nullish(),
+              limits: Zoi.lazy({Limits.Evidence, :schema, []}) |> Zoi.nullish() |> Zoi.default(nil)
             },
             coerce: true
           )

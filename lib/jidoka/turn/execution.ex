@@ -15,6 +15,7 @@ defmodule Jidoka.Turn.Execution do
   alias Jidoka.Memory
   alias Jidoka.ModelPolicy
   alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Runtime.TurnRunner
   alias Jidoka.Schema
@@ -48,6 +49,9 @@ defmodule Jidoka.Turn.Execution do
   def prepare(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- plan(spec_or_plan),
          opts = runtime_opts(plan, opts),
+         {:ok, limits} <- Limits.resolve(plan, opts),
+         plan = Limits.apply_plan(plan, limits),
+         opts = Keyword.put(opts, :runtime_limits, limits),
          {:ok, request} <- Turn.Request.from_input(request_input, request_opts(opts)),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
          {:ok, plan} <- Instructions.resolve(plan, request, opts),
@@ -78,6 +82,9 @@ defmodule Jidoka.Turn.Execution do
   def prepare_resume(snapshot_input, opts \\ []) do
     with {:ok, snapshot} <- Snapshot.from_input(snapshot_input),
          opts = runtime_opts(snapshot, opts),
+         {:ok, limits} <- Limits.resolve(snapshot.turn_state.plan, opts),
+         snapshot = apply_snapshot_limits(snapshot, limits),
+         opts = Keyword.put(opts, :runtime_limits, limits),
          {:ok, capabilities} <- normalize_capabilities(opts) do
       {:ok, %{snapshot: snapshot, capabilities: capabilities, opts: opts}}
     end
@@ -172,6 +179,11 @@ defmodule Jidoka.Turn.Execution do
         :error -> attrs
       end
     end)
+  end
+
+  defp apply_snapshot_limits(%Snapshot{} = snapshot, %Limits.Applied{} = limits) do
+    plan = Limits.apply_plan(snapshot.turn_state.plan, limits)
+    %{snapshot | turn_state: %{snapshot.turn_state | plan: plan}}
   end
 
   defp request_opts(opts) do

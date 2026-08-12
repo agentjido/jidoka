@@ -326,7 +326,17 @@ defmodule Jidoka.Session.EnvironmentRuntime do
       %{} = config -> Map.get(config, :opts, Map.get(config, "opts", []))
       _config -> []
     end
-    |> Keyword.merge(Keyword.take(opts, [:request_id, :session_id]))
+    |> Keyword.merge(
+      Keyword.take(opts, [
+        :request_id,
+        :session_id,
+        :cancellation,
+        :cancellation_poll_interval_ms,
+        :runtime_limits,
+        :runtime_sequence_started_at_ms,
+        :clock
+      ])
+    )
   end
 
   defp put_capability_context(opts, manager, handle, environment) do

@@ -85,7 +85,8 @@ defmodule Jidoka.Projection.Session do
       status: result.status,
       session: project(result.session),
       steps: Enum.map(result.steps, &project/1),
-      terminal: maybe_project_terminal(result.terminal)
+      terminal: maybe_project_terminal(result.terminal),
+      limits: Portable.project(result.limits)
     }
   end
 
