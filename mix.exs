@@ -172,6 +172,7 @@ defmodule Jidoka.MixProject do
       "guides/idempotency-and-safety.md",
       "guides/policy-gate.md",
       "guides/constrained-execution-contracts.md",
+      "guides/extension-architecture.md",
       "guides/decisions/litterbox-adapter.md",
 
       # ── Integrations ─────────────────────────────────────────────────────
@@ -214,7 +215,7 @@ defmodule Jidoka.MixProject do
         ~r{guides/(agent-dsl|tools-and-operations|structured-results|controls|memory|import-json-yaml|inspection-and-preflight|testing-and-evals)\.md},
       "Compose Work": ~r{guides/(workflows|agent-orchestration|handoffs)\.md},
       "Operate Agents":
-        ~r{guides/(configuration|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety|policy-gate|constrained-execution-contracts)\.md},
+        ~r{guides/(configuration|sessions-and-stores|snapshots-and-resume|human-in-the-loop|tracing-and-events|streaming|agent-view|idempotency-and-safety|policy-gate|constrained-execution-contracts|extension-architecture)\.md},
       Decisions: ~r{guides/decisions/.+\.md},
       Integrations:
         ~r{guides/(live-llm-tool-loop|jido-process-integration|ash-jido|browser-tools|mcp-tools|skill-workflow-subagent-tools|kino-notebooks)\.md},
