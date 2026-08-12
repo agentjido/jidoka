@@ -11,6 +11,7 @@ defmodule Jidoka.Agent.Spec do
   @memory_module :"Elixir.Jidoka.Agent.Spec.Memory"
   @operation_module :"Elixir.Jidoka.Agent.Spec.Operation"
   @result_module :"Elixir.Jidoka.Agent.Spec.Result"
+  @extension_request_module :"Elixir.Jidoka.Extension.Request"
   @default_controls apply(@controls_module, :new!, [])
 
   @schema Zoi.struct(
@@ -26,6 +27,7 @@ defmodule Jidoka.Agent.Spec do
               operations: Zoi.array(Zoi.lazy({@operation_module, :schema, []})) |> Zoi.default([]),
               controls: Zoi.lazy({@controls_module, :schema, []}) |> Zoi.default(@default_controls),
               execution_profile: Schema.non_empty_string() |> Zoi.nullish(),
+              extensions: Zoi.array(Zoi.lazy({@extension_request_module, :schema, []})) |> Zoi.default([]),
               runtime_defaults: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
@@ -48,6 +50,7 @@ defmodule Jidoka.Agent.Spec do
          {:ok, attrs} <- normalize_result_input(attrs),
          {:ok, attrs} <- normalize_memory_input(attrs),
          {:ok, attrs} <- normalize_operations_input(attrs),
+         {:ok, attrs} <- normalize_extensions_input(attrs),
          {:ok, attrs} <- normalize_controls_input(attrs) do
       Schema.parse(@schema, attrs)
     end
@@ -213,6 +216,20 @@ defmodule Jidoka.Agent.Spec do
         {:error, reason} -> {:halt, {:error, normalize_operation_error(reason, operation, index)}}
       end
     end)
+  end
+
+  defp normalize_extensions_input(attrs) do
+    attrs = Schema.normalize_attrs(attrs)
+
+    case Map.get(attrs, :extensions) do
+      nil ->
+        {:ok, Map.put(attrs, :extensions, [])}
+
+      extensions ->
+        with {:ok, extensions} <- Jidoka.Extension.Request.normalize_list(extensions) do
+          {:ok, Map.put(attrs, :extensions, extensions)}
+        end
+    end
   end
 
   defp raw_model(attrs) when is_map(attrs) do

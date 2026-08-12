@@ -8,6 +8,7 @@ defmodule Jidoka.Import.AgentDocument do
   """
 
   alias Jidoka.Schema
+  alias Jidoka.Extension.Request
 
   @version 1
   @forbidden_document_keys ~w(execution_environment adapter backend command image mount mounts network)
@@ -21,6 +22,7 @@ defmodule Jidoka.Import.AgentDocument do
               tools: Zoi.map() |> Zoi.default(%{}),
               controls: Zoi.map() |> Zoi.default(%{}),
               operations: Zoi.array(Zoi.map()) |> Zoi.default([]),
+              extensions: Zoi.array(Zoi.map()) |> Zoi.default([]),
               runtime_defaults: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
@@ -48,8 +50,9 @@ defmodule Jidoka.Import.AgentDocument do
          {:ok, %__MODULE__{} = document} <- Schema.parse(@schema, attrs),
          :ok <- validate_version(document),
          :ok <- validate_execution_profile(document.agent),
+         {:ok, extensions} <- Request.normalize_list(document.extensions),
          :ok <- reject_keys(document.agent, @forbidden_agent_keys) do
-      {:ok, document}
+      {:ok, %__MODULE__{document | extensions: Enum.map(extensions, &Request.to_map/1)}}
     end
   end
 

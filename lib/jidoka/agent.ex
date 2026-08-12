@@ -212,6 +212,7 @@ defmodule Jidoka.Agent do
       memory: definition.memory,
       operations: definition.operations,
       controls: definition.controls,
+      extensions: [],
       runtime_defaults: %{},
       metadata:
         %{

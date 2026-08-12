@@ -30,6 +30,66 @@ defmodule Jidoka.ImportTest do
   alias Jidoka.ImportTest.Support.{EchoAction, EchoControl}
   alias Jidoka.Review
 
+  test "round-trips ordered inert extension requests" do
+    yaml = """
+    agent:
+      id: extension_agent
+      model:
+        provider: test
+        id: extension-model
+    extensions:
+      - id: acme.context
+        config:
+          template: "$(do-not-run)"
+          paths: [lib, test]
+      - id: acme.context
+        instance_id: acme.context.tests
+        mode: automation
+        enabled: false
+        config:
+          command: "rm -rf /not-executed"
+    """
+
+    assert {:ok, %Agent.Spec{} = spec} = Jidoka.import(yaml, format: :yaml)
+
+    assert [first, second] = spec.extensions
+    assert first.id == "acme.context"
+    assert first.config["template"] == "$(do-not-run)"
+    assert second.instance_id == "acme.context.tests"
+    assert second.mode == :automation
+    refute second.enabled
+
+    assert {:ok, json} = Jidoka.export(spec, format: :json)
+    assert %{"extensions" => [first_map, second_map]} = Jason.decode!(json)
+    assert first_map["id"] == "acme.context"
+    assert second_map["instance_id"] == "acme.context.tests"
+
+    assert {:ok, %Agent.Spec{} = imported_again} = Jidoka.import(json, format: :json)
+    assert imported_again.extensions == spec.extensions
+    assert Jidoka.project(imported_again).extensions == Enum.map(spec.extensions, &Jidoka.Extension.Request.to_map/1)
+  end
+
+  test "rejects unsafe or ambiguous extension requests" do
+    base = %{
+      agent: %{id: "invalid_extension_agent", model: %{provider: :test, id: "model"}}
+    }
+
+    for extensions <- [
+          [%{id: "notnamespaced"}],
+          [%{id: "acme.context", unknown: true}],
+          [%{id: "acme.context", config: %{"value" => self()}}],
+          [%{id: "acme.context"}, %{id: "acme.context"}]
+        ] do
+      assert {:error, %Jidoka.Error.ValidationError{}} =
+               Jidoka.Import.load(Map.put(base, :extensions, extensions))
+    end
+
+    oversized = String.duplicate("x", 65_537)
+
+    assert {:error, %Jidoka.Error.ValidationError{}} =
+             Jidoka.Import.load(Map.put(base, :extensions, [%{id: "acme.context", config: %{"value" => oversized}}]))
+  end
+
   test "imports the smallest possible agent document with default instructions" do
     assert {:ok, %Agent.Spec{} = spec} =
              Jidoka.Import.load(%{

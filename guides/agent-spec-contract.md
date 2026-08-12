@@ -101,6 +101,7 @@ them first, then validate the normalized value against the final schema.
 | `controls` | `Jidoka.Agent.Spec.Controls.t()` | `Controls.new!()` | Policy controls (input/operation/output, `max_turns`, `timeout_ms`). |
 | `runtime_defaults` | map | `%{}` | Default knobs consumed by `Turn.Plan.new/1` (`:workflow_profile`, `:max_model_turns`, `:timeout_ms`). |
 | `execution_profile` | string or `nil` | `nil` | Inert trusted-profile selector. The host resolves it; the spec cannot contain backend controls. |
+| `extensions` | `[Jidoka.Extension.Request.t()]` | `[]` | Ordered, inert extension requests. A trusted host resolves them later. |
 | `metadata` | map | `%{}` | Caller-defined metadata; opaque to Jidoka. |
 
 ### `id` And `instructions`

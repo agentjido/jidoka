@@ -90,6 +90,7 @@ Portable JSON/YAML authoring document.
 | `tools` | map | `%{}` | Tool registry references (`actions`, `ash_resources`, `browsers`, `mcp_tools`, etc.). |
 | `controls` | map | `%{}` | Inline controls config. |
 | `operations` | `[map()]` | `[]` | Inline operation definitions. |
+| `extensions` | `[Jidoka.Extension.Request.t()]` | `[]` | Ordered, inert requests for trusted host extensions. |
 | `runtime_defaults` | map | `%{}` | Maps to `Spec.runtime_defaults`. |
 | `metadata` | map | `%{}` | Caller metadata. |
 
@@ -97,6 +98,13 @@ The `agent` map can contain `execution_profile`, which is a nonempty profile
 identifier. It is inert data. Import and export preserve it, but they do not
 resolve it. Backend controls, commands, images, mounts, networks, and adapter
 names are not valid profile selectors.
+
+Each extension request has `version`, a namespaced `id`, optional namespaced
+`instance_id`, JSON-only `config`, `mode`, and `enabled`. Import keeps request
+order. Repeated IDs require different explicit instance IDs. The config has a
+64 KiB encoded limit and a nesting limit. Unknown request keys are invalid.
+Import and export only move this data. They do not find code, load a module,
+start a process, or create an atom from an extension ID.
 
 `AgentDocument.new/1` enforces `version == 1`; any other value returns
 `{:error, {:unsupported_import_document_version, version, 1}}`.

@@ -45,6 +45,7 @@ defmodule Jidoka.Export do
           "agent" => agent,
           "controls" => controls,
           "operations" => operations,
+          "extensions" => Enum.map(spec.extensions, &Jidoka.Extension.Request.to_map/1),
           "runtime_defaults" => portable_value(spec.runtime_defaults),
           "metadata" => export_metadata(spec.metadata)
         }

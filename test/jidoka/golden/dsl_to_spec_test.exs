@@ -77,6 +77,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
                metadata: %{}
              },
              execution_profile: nil,
+             extensions: [],
              runtime_defaults: %{},
              metadata: %{
                "context_schema?" => false,
@@ -127,6 +128,7 @@ defmodule Jidoka.Golden.DslToSpecTest do
                metadata: %{}
              },
              execution_profile: nil,
+             extensions: [],
              runtime_defaults: %{},
              metadata: %{
                "context_schema?" => true,

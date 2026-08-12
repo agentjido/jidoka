@@ -32,6 +32,7 @@ defmodule Jidoka.Projection.AgentSpec do
       operations: Enum.map(spec.operations, &project/1),
       controls: project(spec.controls),
       execution_profile: spec.execution_profile,
+      extensions: Enum.map(spec.extensions, &Jidoka.Extension.Request.to_map/1),
       runtime_defaults: Portable.project(spec.runtime_defaults),
       metadata: Metadata.agent(spec.metadata)
     }

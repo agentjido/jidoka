@@ -84,6 +84,7 @@ defmodule Jidoka.ProjectionTest do
                metadata: %{}
              },
              execution_profile: nil,
+             extensions: [],
              runtime_defaults: %{},
              metadata: %{
                "context_schema?" => true,
