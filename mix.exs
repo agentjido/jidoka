@@ -1,7 +1,7 @@
 defmodule Jidoka.MixProject do
   use Mix.Project
 
-  @version "0.9.0"
+  @version "0.9.1"
   @source_url "https://github.com/agentjido/jidoka"
   @description "A data-driven agent framework for the Jido ecosystem with a Spark DSL and durable turn runtime."
 
@@ -49,7 +49,7 @@ defmodule Jidoka.MixProject do
   defp deps do
     [
       # Jido ecosystem
-      {:ash_jido, "~> 1.0"},
+      {:ash_jido, "~> 1.0 and >= 1.0.1"},
       {:jido, "~> 2.3"},
       {:jido_action, "~> 2.3"},
       {:jido_ai, "~> 2.2"},
