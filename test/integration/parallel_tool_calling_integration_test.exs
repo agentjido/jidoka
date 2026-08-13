@@ -88,6 +88,33 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
     assert Enum.map(result.agent_state.operation_results, & &1.operation) == operation_names
   end
 
+  test "a preflighted group can run serially and keeps observation order" do
+    test_pid = self()
+    operation_names = ["serial_a", "serial_b", "serial_c"]
+
+    task =
+      Task.async(fn ->
+        Jidoka.turn(spec(operation_names), "Run the serial group.",
+          llm: batched_llm(operation_names, "Serial group finished."),
+          operations: blocking_operations(test_pid, operation_names),
+          max_parallel_operations: 1
+        )
+      end)
+
+    started_names =
+      Enum.map(operation_names, fn _operation ->
+        assert_receive {:operation_started, name, operation_pid}, 1_000
+        assert name in operation_names
+        refute_receive {:operation_started, _other_name, _other_pid}, 25
+        send(operation_pid, {:release_operation, name})
+        name
+      end)
+
+    assert {:ok, %Turn.Result{} = result} = Task.await(task, 2_000)
+    assert Enum.sort(started_names) == Enum.sort(operation_names)
+    assert Enum.map(result.agent_state.operation_results, & &1.operation) == operation_names
+  end
+
   test "duplicate operation calls in one batch are both executed and observed" do
     test_pid = self()
 
@@ -167,6 +194,150 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
 
     assert_receive {:operation_called, "safe_lookup"}, 1_000
     assert_receive {:operation_called, "review_lookup"}, 1_000
+  end
+
+  test "before-effect checkpoints keep the complete batch behind review" do
+    test_pid = self()
+
+    request =
+      Turn.Request.new!(
+        input: "Run safe lookup and reviewed lookup.",
+        metadata: %{
+          test_pid: test_pid,
+          operation_control_decision: {:interrupt, :approval_required}
+        }
+      )
+
+    opts = [
+      llm: batched_llm(["safe_lookup", "review_lookup"], "Reviewed batch finished."),
+      operations: observed_operations(test_pid, ["safe_lookup", "review_lookup"]),
+      checkpoint: :before_each_effect,
+      clock: clock(2_000)
+    ]
+
+    assert {:hibernate, %Snapshot{} = model_checkpoint} =
+             Jidoka.turn(review_spec(), request, opts)
+
+    assert model_checkpoint.cursor.phase == :before_effect
+    assert Turn.State.current_pending_effect(model_checkpoint.turn_state).kind == :llm
+    refute_received {:operation_called, "safe_lookup"}
+    refute_received {:operation_called, "review_lookup"}
+
+    assert {:hibernate, %Snapshot{} = operation_checkpoint} =
+             Jidoka.resume(model_checkpoint, opts)
+
+    assert operation_checkpoint.cursor.phase == :before_effect
+    assert Turn.State.current_pending_effect(operation_checkpoint.turn_state).kind == :operation
+    refute_received {:operation_called, "safe_lookup"}
+    refute_received {:operation_called, "review_lookup"}
+
+    assert {:hibernate, %Snapshot{} = review_snapshot} =
+             Jidoka.resume(operation_checkpoint, opts)
+
+    assert review_snapshot.cursor.phase == :review
+    assert review_snapshot.turn_state.pending_interrupt.operation == "review_lookup"
+    refute_received {:operation_called, "safe_lookup"}
+    refute_received {:operation_called, "review_lookup"}
+
+    approval =
+      review_snapshot.turn_state.pending_interrupt
+      |> Review.Response.approve(responded_at_ms: 2_001)
+
+    assert {:hibernate, %Snapshot{} = final_model_checkpoint} =
+             Jidoka.resume(review_snapshot, Keyword.put(opts, :approval, approval))
+
+    assert_receive {:operation_called, "safe_lookup"}, 1_000
+    assert_receive {:operation_called, "review_lookup"}, 1_000
+
+    assert Enum.map(final_model_checkpoint.turn_state.agent_state.operation_results, & &1.operation) == [
+             "safe_lookup",
+             "review_lookup"
+           ]
+
+    assert {:ok, %Turn.Result{content: "Reviewed batch finished."}} =
+             Jidoka.resume(final_model_checkpoint, opts)
+  end
+
+  test "before-effect checkpoints preflight every group policy before scheduling" do
+    test_pid = self()
+
+    policy = fn request, _context ->
+      send(test_pid, {:policy_checked, request.action})
+
+      if request.action == "denied_lookup" do
+        {:ok,
+         Jidoka.Policy.Decision.new!(
+           outcome: :deny,
+           rule_id: "test.deny",
+           reason: :not_allowed
+         )}
+      else
+        {:ok, Jidoka.Policy.Decision.new!(outcome: :allow, rule_id: "test.allow")}
+      end
+    end
+
+    opts = [
+      llm: batched_llm(["safe_lookup", "denied_lookup"], "Unreachable."),
+      operations: observed_operations(test_pid, ["safe_lookup", "denied_lookup"]),
+      policy: policy,
+      checkpoint: :before_each_effect
+    ]
+
+    assert {:hibernate, %Snapshot{} = model_checkpoint} =
+             Jidoka.turn(spec(["safe_lookup", "denied_lookup"]), "Run both lookups.", opts)
+
+    assert {:hibernate, %Snapshot{} = operation_checkpoint} =
+             Jidoka.resume(model_checkpoint, opts)
+
+    assert {:error, %Jidoka.Error.ExecutionError{}} =
+             Jidoka.resume(operation_checkpoint, opts)
+
+    assert_receive {:policy_checked, "safe_lookup"}
+    assert_receive {:policy_checked, "denied_lookup"}
+    refute_received {:operation_called, "safe_lookup"}
+    refute_received {:operation_called, "denied_lookup"}
+  end
+
+  test "after-phase checkpoints keep the complete batch behind review" do
+    test_pid = self()
+
+    request =
+      Turn.Request.new!(
+        input: "Run safe lookup and reviewed lookup.",
+        metadata: %{
+          test_pid: test_pid,
+          operation_control_decision: {:interrupt, :approval_required}
+        }
+      )
+
+    opts = [
+      llm: batched_llm(["safe_lookup", "review_lookup"], "Reviewed batch finished."),
+      operations: observed_operations(test_pid, ["safe_lookup", "review_lookup"]),
+      checkpoint: :after_each_phase,
+      clock: clock(3_000)
+    ]
+
+    assert {:hibernate, %Snapshot{} = phase_checkpoint} =
+             Jidoka.turn(review_spec(), request, opts)
+
+    assert phase_checkpoint.cursor.phase == :after_prompt
+    assert Turn.State.current_pending_effect(phase_checkpoint.turn_state).kind == :llm
+
+    assert {:hibernate, %Snapshot{} = operation_checkpoint} =
+             Jidoka.resume(phase_checkpoint, opts)
+
+    assert operation_checkpoint.cursor.phase == :before_effect
+    assert Turn.State.current_pending_effect(operation_checkpoint.turn_state).kind == :operation
+    refute_received {:operation_called, "safe_lookup"}
+    refute_received {:operation_called, "review_lookup"}
+
+    assert {:hibernate, %Snapshot{} = review_snapshot} =
+             Jidoka.resume(operation_checkpoint, opts)
+
+    assert review_snapshot.cursor.phase == :review
+    assert review_snapshot.turn_state.pending_interrupt.operation == "review_lookup"
+    refute_received {:operation_called, "safe_lookup"}
+    refute_received {:operation_called, "review_lookup"}
   end
 
   defp spec(operation_names) do

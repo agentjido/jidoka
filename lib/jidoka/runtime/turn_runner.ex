@@ -224,20 +224,20 @@ defmodule Jidoka.Runtime.TurnRunner do
   end
 
   defp interpret_next_effects(%Turn.State{} = state, %Capabilities{} = capabilities, opts) do
-    if parallel_operation_batch?(state, opts) do
+    if operation_group?(state) do
       EffectInterpreter.interpret_operation_batch(state, capabilities, opts)
     else
       EffectInterpreter.interpret_pending(state, capabilities, opts)
     end
   end
 
-  defp parallel_operation_batch?(%Turn.State{pending_effects: pending_effects}, opts) do
+  defp operation_group?(%Turn.State{pending_effects: pending_effects}) do
     batch_size =
       pending_effects
       |> Enum.take_while(&match?(%Effect.Intent{kind: :operation}, &1))
       |> length()
 
-    checkpoint_policy(opts) not in [:before_each_effect, :after_each_phase] and batch_size > 1
+    batch_size > 1
   end
 
   defp apply_effect_results(%Turn.State{} = state, results) when is_list(results) do
