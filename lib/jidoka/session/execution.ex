@@ -113,8 +113,7 @@ defmodule Jidoka.Session.Execution do
         state = %{
           session: session,
           steps: [],
-          agent_state: nil,
-          operation_count: 0,
+          operation_count: sequence_operation_count(session, opts),
           request_ids: []
         }
 
@@ -357,10 +356,8 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp run_sequence_steps([input | rest], state, index, opts) do
-    with :ok <- reject_continuation_state(input, index),
-         {:ok, request} <- normalize_sequence_request(input, opts),
+    with {:ok, request} <- normalize_sequence_request(input, opts),
          :ok <- ensure_unique_sequence_request(request, state.request_ids, index) do
-      request = carry_sequence_state(request, state.agent_state)
       notify_sequence_progress(state, index, request, opts)
 
       case Limits.check_sequence_deadline(opts, index) do
@@ -396,6 +393,7 @@ defmodule Jidoka.Session.Execution do
       opts
       |> Keyword.put(:session_sequence_active, true)
       |> Keyword.put(:session_sequence_terminal, rest == [])
+      |> Keyword.put(:fresh_conversation, index == 1 and Keyword.get(opts, :fresh_conversation, false))
 
     case run_session(sequence_session_input(state.session, opts), request, run_opts) do
       {:ok, session, %Turn.Result{} = result} ->
@@ -413,7 +411,6 @@ defmodule Jidoka.Session.Execution do
         next_state = %{
           session: session,
           steps: state.steps ++ [step],
-          agent_state: result.agent_state,
           operation_count: length(result.agent_state.operation_results),
           request_ids: [request.request_id | state.request_ids]
         }
@@ -488,39 +485,12 @@ defmodule Jidoka.Session.Execution do
     )
   end
 
-  defp reject_continuation_state(_input, 1), do: :ok
-
-  defp reject_continuation_state(%Turn.Request{agent_state: agent_state} = request, index) do
-    if agent_state == Agent.State.new!() do
-      :ok
-    else
-      {:error, {:sequence_continuation_state_forbidden, index, request.request_id}}
-    end
-  end
-
-  defp reject_continuation_state(input, index) do
-    attrs = Jidoka.Schema.normalize_attrs(input)
-
-    if is_map(attrs) and
-         (Map.has_key?(attrs, :agent_state) or Map.has_key?(attrs, "agent_state")) do
-      {:error, {:sequence_continuation_state_forbidden, index, sequence_request_id(input)}}
-    else
-      :ok
-    end
-  end
-
   defp ensure_unique_sequence_request(%Turn.Request{request_id: request_id}, request_ids, index) do
     if request_id in request_ids do
       {:error, {:duplicate_sequence_request_id, index, request_id}}
     else
       :ok
     end
-  end
-
-  defp carry_sequence_state(%Turn.Request{} = request, nil), do: request
-
-  defp carry_sequence_state(%Turn.Request{} = request, %Agent.State{} = agent_state) do
-    %Turn.Request{request | agent_state: agent_state}
   end
 
   defp sequence_session_input(%Session{session_id: session_id} = session, opts) do
@@ -538,6 +508,12 @@ defmodule Jidoka.Session.Execution do
       :error ->
         put_sequence_error(session, request, status, reason)
     end
+  end
+
+  defp sequence_operation_count(%Session{} = session, opts) do
+    if Keyword.get(opts, :fresh_conversation, false),
+      do: 0,
+      else: length(session.conversation.agent_state.operation_results)
   end
 
   defp put_sequence_error(session, request, :cancelled, reason) do

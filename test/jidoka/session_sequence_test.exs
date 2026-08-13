@@ -86,6 +86,36 @@ defmodule Jidoka.SessionSequenceTest do
 
     assert length(List.last(sequence.steps).result.agent_state.operation_results) == 1
     assert Enum.map(sequence.session.requests, & &1.request_id) == ~w(sequence-1 sequence-2 sequence-3)
+    assert sequence.session.conversation.agent_state == List.last(sequence.steps).result.agent_state
+    assert sequence.session.conversation.turn_count == 3
+  end
+
+  test "sequence and repeated session calls create the same transcript" do
+    llm = fn %Effect.Intent{payload: payload}, _journal, _context ->
+      messages = payload |> Schema.get_key(:prompt) |> Schema.get_key(:messages, [])
+
+      current =
+        messages
+        |> Enum.filter(&(Schema.get_key(&1, :role) in [:user, "user"]))
+        |> List.last()
+        |> Schema.get_key(:content)
+
+      {:ok, %{type: :final, content: "answer:#{current}"}}
+    end
+
+    requests = [request("First", "compare-1"), request("Second", "compare-2")]
+    assert {:ok, sequence_session} = Session.start(spec(), "sequence-compare")
+
+    assert {:ok, %Sequence.Result{status: :completed} = sequence} =
+             Session.run_sequence(sequence_session, requests, llm: llm)
+
+    assert {:ok, repeated_session} = Session.start(spec(), "repeated-compare")
+    assert {:ok, after_first, first_result} = Session.run(repeated_session, hd(requests), llm: llm)
+    assert {:ok, after_second, second_result} = Session.run(after_first, List.last(requests), llm: llm)
+
+    assert sequence.session.conversation == after_second.conversation
+    assert Enum.map(sequence.steps, & &1.result.content) == [first_result.content, second_result.content]
+    assert Enum.map(sequence.steps, & &1.operation_results) == [[], []]
   end
 
   test "keeps fresh sessions isolated" do
@@ -142,7 +172,7 @@ defmodule Jidoka.SessionSequenceTest do
     assert Elixir.Agent.get(calls, & &1) == 1
   end
 
-  test "rejects empty, duplicate, and caller-managed continuation input" do
+  test "rejects empty and duplicate input and ignores caller-managed continuation state" do
     assert {:ok, session} = Session.start(spec(), "sequence-validation")
     assert {:error, :empty_session_sequence} = Session.run_sequence(session, [])
 
@@ -166,12 +196,9 @@ defmodule Jidoka.SessionSequenceTest do
 
     assert {:ok,
             %Sequence.Result{
-              status: :error,
-              terminal: %Sequence.Terminal{
-                index: 2,
-                request_id: "state-2",
-                reason: {:sequence_continuation_state_forbidden, 2, "state-2"}
-              }
+              status: :completed,
+              terminal: nil,
+              steps: [_, %Sequence.Step{result: second_result}]
             }} =
              Session.run_sequence(
                other_session,
@@ -185,6 +212,8 @@ defmodule Jidoka.SessionSequenceTest do
                ],
                llm: final_llm("done")
              )
+
+    refute second_result.agent_state.metadata[:caller_owned]
   end
 
   test "stops on a model error and returns the completed prefix" do
