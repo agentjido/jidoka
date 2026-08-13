@@ -413,7 +413,18 @@ defmodule Jidoka.Session.Execution do
           request_ids: [request.request_id | state.request_ids]
         }
 
-        case Limits.check_usage(next_state.steps, Keyword.fetch!(opts, :runtime_limits), index) do
+        check =
+          if rest == [] do
+            Limits.check_usage(next_state.steps, Keyword.fetch!(opts, :runtime_limits), index)
+          else
+            Limits.check_usage_before_next(
+              next_state.steps,
+              Keyword.fetch!(opts, :runtime_limits),
+              index
+            )
+          end
+
+        case check do
           :ok ->
             run_sequence_steps(rest, next_state, index + 1, opts)
 

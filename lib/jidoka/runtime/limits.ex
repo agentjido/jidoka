@@ -12,6 +12,12 @@ defmodule Jidoka.Runtime.Limits.Applied do
               turn_timeout_ms: Zoi.integer() |> Zoi.positive(),
               capability_timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
               sequence_timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
+              max_provider_attempts: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
+              max_tool_calls_per_group: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
+              max_tool_calls_per_turn: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
+              max_recovery_steps: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),
+              max_observation_bytes: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
+              max_result_repairs: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),
               max_total_tokens: Zoi.integer() |> Zoi.positive() |> Zoi.nullish(),
               max_total_cost: Zoi.number() |> Zoi.gt(0) |> Zoi.nullish(),
               environment:
@@ -39,6 +45,46 @@ defmodule Jidoka.Runtime.Limits.Applied do
   def new!(attrs), do: Schema.parse!(@schema, attrs, "applied runtime limits")
 end
 
+defmodule Jidoka.Runtime.Limits.Ledger do
+  @moduledoc "Portable usage ledger for one Jidoka turn."
+
+  alias Jidoka.Schema
+
+  @schema Zoi.struct(
+            __MODULE__,
+            %{
+              provider_attempts: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              tool_call_groups: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              tool_calls: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              recovery_steps: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              observation_bytes: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              result_repairs: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              total_tokens: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              total_cost: Zoi.number() |> Zoi.gte(0) |> Zoi.default(0),
+              operation_group_ids: Zoi.array(Zoi.string()) |> Zoi.default([]),
+              tool_call_ids: Zoi.array(Zoi.string()) |> Zoi.default([]),
+              recovery_intent_ids: Zoi.array(Zoi.string()) |> Zoi.default([])
+            },
+            coerce: true
+          )
+
+  @type t :: unquote(Zoi.type_spec(@schema))
+  @enforce_keys Zoi.Struct.enforce_keys(@schema)
+  defstruct Zoi.Struct.struct_fields(@schema)
+
+  @doc "Returns the limit-ledger schema."
+  @spec schema() :: Zoi.schema()
+  def schema, do: @schema
+
+  @doc "Builds a limit ledger."
+  @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
+  def new(attrs \\ []), do: Schema.parse(@schema, attrs)
+
+  @doc "Builds a limit ledger or raises."
+  @spec new!(keyword() | map()) :: t()
+  def new!(attrs \\ []), do: Schema.parse!(@schema, attrs, "runtime limit ledger")
+end
+
 defmodule Jidoka.Runtime.Limits.Observed do
   @moduledoc """
   Portable usage facts observed while Jidoka applies runtime limits.
@@ -58,6 +104,10 @@ defmodule Jidoka.Runtime.Limits.Observed do
               model_turns: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               tool_call_groups: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               tool_calls: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              provider_attempts: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              recovery_steps: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              observation_bytes: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              result_repairs: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               sequence_duration_ms: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               usage: Zoi.map() |> Zoi.default(%{}),
               environment:
@@ -95,6 +145,12 @@ defmodule Jidoka.Runtime.Limits.Exceeded do
     :turn_timeout,
     :capability_timeout,
     :sequence_timeout,
+    :provider_attempts,
+    :tool_calls_per_group,
+    :tool_calls_per_turn,
+    :recovery_steps,
+    :observation_bytes,
+    :result_repairs,
     :total_tokens,
     :total_cost,
     :environment
@@ -117,6 +173,12 @@ defmodule Jidoka.Runtime.Limits.Exceeded do
           | :turn_timeout
           | :capability_timeout
           | :sequence_timeout
+          | :provider_attempts
+          | :tool_calls_per_group
+          | :tool_calls_per_turn
+          | :recovery_steps
+          | :observation_bytes
+          | :result_repairs
           | :total_tokens
           | :total_cost
           | :environment
@@ -185,7 +247,8 @@ defmodule Jidoka.Runtime.Limits do
   applied, observed, and exceeded evidence.
   """
 
-  alias Jidoka.Runtime.Limits.{Applied, Evidence, Exceeded, Observed}
+  alias Jidoka.Effect
+  alias Jidoka.Runtime.Limits.{Applied, Evidence, Exceeded, Ledger, Observed}
   alias Jidoka.Schema
   alias Jidoka.Session.Sequence
   alias Jidoka.Turn
@@ -195,6 +258,12 @@ defmodule Jidoka.Runtime.Limits do
     :turn_timeout_ms,
     :capability_timeout_ms,
     :sequence_timeout_ms,
+    :max_provider_attempts,
+    :max_tool_calls_per_group,
+    :max_tool_calls_per_turn,
+    :max_recovery_steps,
+    :max_observation_bytes,
+    :max_result_repairs,
     :max_total_tokens,
     :max_total_cost,
     :environment
@@ -218,6 +287,90 @@ defmodule Jidoka.Runtime.Limits do
       | max_model_turns: min(plan.max_model_turns, applied.max_model_turns),
         timeout_ms: min(plan.timeout_ms, applied.turn_timeout_ms)
     }
+  end
+
+  @doc "Reserves one complete operation group before any operation starts."
+  @spec reserve_operation_group(Turn.State.t(), [Effect.Intent.t()]) ::
+          {:ok, Turn.State.t()} | {:error, {:runtime_limit_exceeded, Exceeded.t()}}
+  def reserve_operation_group(%Turn.State{} = state, intents) when is_list(intents) do
+    %Ledger{} = ledger = ledger(state)
+    group_id = Effect.OperationGroup.new!(intents).id
+    new_intents = Enum.reject(intents, &(&1.id in ledger.tool_call_ids))
+
+    recoveries =
+      Enum.filter(intents, fn intent ->
+        Effect.Journal.incomplete_intent?(state.journal, intent) and
+          intent.id not in ledger.recovery_intent_ids
+      end)
+
+    with :ok <- check_max(state, :tool_calls_per_group, length(intents)),
+         :ok <- check_max(state, :tool_calls_per_turn, ledger.tool_calls + length(new_intents)),
+         :ok <- check_max(state, :recovery_steps, ledger.recovery_steps + length(recoveries)) do
+      ledger = %Ledger{
+        ledger
+        | tool_call_groups: ledger.tool_call_groups + if(group_id in ledger.operation_group_ids, do: 0, else: 1),
+          tool_calls: ledger.tool_calls + length(new_intents),
+          recovery_steps: ledger.recovery_steps + length(recoveries),
+          operation_group_ids: Enum.uniq(ledger.operation_group_ids ++ [group_id]),
+          tool_call_ids: Enum.uniq(ledger.tool_call_ids ++ Enum.map(new_intents, & &1.id)),
+          recovery_intent_ids: Enum.uniq(ledger.recovery_intent_ids ++ Enum.map(recoveries, & &1.id))
+      }
+
+      {:ok, %Turn.State{state | limit_ledger: Map.from_struct(ledger)}}
+    end
+  end
+
+  @doc "Records one effect result and enforces result-size limits."
+  @spec record_effect_result(Turn.State.t(), Effect.Result.t()) ::
+          {:ok, Turn.State.t()}
+          | {:error, {:runtime_limit_exceeded, Exceeded.t()}, Turn.State.t()}
+  def record_effect_result(%Turn.State{} = state, %Effect.Result{} = result) do
+    ledger = add_effect_result(ledger(state), result)
+    state = %Turn.State{state | limit_ledger: Map.from_struct(ledger)}
+
+    case check_max(state, :observation_bytes, ledger.observation_bytes) do
+      :ok -> {:ok, state}
+      {:error, reason} -> {:error, reason, state}
+    end
+  end
+
+  @doc "Checks budgets that must have capacity before the next model step."
+  @spec check_before_model_step(Turn.State.t()) ::
+          :ok | {:error, {:runtime_limit_exceeded, Exceeded.t()}}
+  def check_before_model_step(%Turn.State{} = state) do
+    ledger = ledger(state)
+
+    [
+      check_capacity(state, :provider_attempts, ledger.provider_attempts),
+      check_capacity(state, :total_tokens, ledger.total_tokens),
+      check_capacity(state, :total_cost, ledger.total_cost)
+    ]
+    |> Enum.find(:ok, &match?({:error, _reason}, &1))
+  end
+
+  @doc "Checks one provider call against the aggregate turn budget."
+  @spec check_provider_attempt(Effect.Journal.t(), non_neg_integer(), Applied.t() | nil) ::
+          :ok | {:error, {:runtime_limit_exceeded, Exceeded.t()}}
+  def check_provider_attempt(%Effect.Journal{} = journal, current_attempts, %Applied{} = applied)
+      when is_integer(current_attempts) and current_attempts >= 0 do
+    observed = provider_attempts(journal) + current_attempts
+
+    if is_integer(applied.max_provider_attempts) and observed >= applied.max_provider_attempts do
+      exceeded(:provider_attempts, applied.max_provider_attempts, observed)
+    else
+      :ok
+    end
+  end
+
+  def check_provider_attempt(%Effect.Journal{}, _current_attempts, _applied), do: :ok
+
+  @doc "Counts completed provider calls in an effect journal."
+  @spec provider_attempts(Effect.Journal.t()) :: non_neg_integer()
+  def provider_attempts(%Effect.Journal{} = journal) do
+    journal.results
+    |> Map.values()
+    |> Enum.filter(&(&1.kind == :llm))
+    |> Enum.reduce(0, fn result, total -> total + provider_attempt_count(result) end)
   end
 
   @doc "Returns the effective capability timeout, including sequence time left."
@@ -254,24 +407,37 @@ defmodule Jidoka.Runtime.Limits do
   @doc "Checks cumulative sequence usage after a completed turn."
   @spec check_usage([Sequence.Step.t()], Applied.t(), pos_integer()) :: :ok | {:error, Exceeded.t()}
   def check_usage(steps, %Applied{} = applied, turn_index) when is_list(steps) do
+    check_usage(steps, applied, turn_index, :crossed)
+  end
+
+  @doc "Checks cumulative sequence capacity before another turn starts."
+  @spec check_usage_before_next([Sequence.Step.t()], Applied.t(), pos_integer()) ::
+          :ok | {:error, Exceeded.t()}
+  def check_usage_before_next(steps, %Applied{} = applied, turn_index) when is_list(steps) do
+    check_usage(steps, applied, turn_index, :exhausted)
+  end
+
+  defp check_usage(steps, applied, turn_index, mode) do
     usage = aggregate_usage(steps)
+    tokens = numeric(usage, :total_tokens)
+    cost = numeric(usage, :total_cost)
 
     cond do
-      is_integer(applied.max_total_tokens) and numeric(usage, :total_tokens) > applied.max_total_tokens ->
+      usage_limit?(tokens, applied.max_total_tokens, mode) ->
         {:error,
          Exceeded.new!(
            kind: :total_tokens,
            limit: applied.max_total_tokens,
-           observed: numeric(usage, :total_tokens),
+           observed: tokens,
            turn_index: turn_index
          )}
 
-      is_number(applied.max_total_cost) and numeric(usage, :total_cost) > applied.max_total_cost ->
+      usage_limit?(cost, applied.max_total_cost, mode) ->
         {:error,
          Exceeded.new!(
            kind: :total_cost,
            limit: applied.max_total_cost,
-           observed: numeric(usage, :total_cost),
+           observed: cost,
            turn_index: turn_index
          )}
 
@@ -279,6 +445,10 @@ defmodule Jidoka.Runtime.Limits do
         :ok
     end
   end
+
+  defp usage_limit?(_observed, nil, _mode), do: false
+  defp usage_limit?(observed, limit, :crossed), do: observed > limit
+  defp usage_limit?(observed, limit, :exhausted), do: observed >= limit
 
   @doc "Builds final sequence evidence from completed steps and terminal data."
   @spec evidence(Applied.t(), [Sequence.Step.t()], non_neg_integer(), term()) :: Evidence.t()
@@ -292,6 +462,10 @@ defmodule Jidoka.Runtime.Limits do
         model_turns: counts.model_steps,
         tool_call_groups: counts.tool_call_groups,
         tool_calls: counts.tool_calls,
+        provider_attempts: ledger_total(steps, :provider_attempts),
+        recovery_steps: ledger_total(steps, :recovery_steps),
+        observation_bytes: ledger_total(steps, :observation_bytes),
+        result_repairs: ledger_total(steps, :result_repairs),
         sequence_duration_ms: max(duration_ms, 0),
         usage: aggregate_usage(steps),
         environment: applied.environment
@@ -329,6 +503,12 @@ defmodule Jidoka.Runtime.Limits do
         turn_timeout_ms: minimum(plan.timeout_ms, Map.get(normalized, :turn_timeout_ms)),
         capability_timeout_ms: minimum_optional(legacy_capability, Map.get(normalized, :capability_timeout_ms)),
         sequence_timeout_ms: Map.get(normalized, :sequence_timeout_ms),
+        max_provider_attempts: Map.get(normalized, :max_provider_attempts),
+        max_tool_calls_per_group: Map.get(normalized, :max_tool_calls_per_group),
+        max_tool_calls_per_turn: Map.get(normalized, :max_tool_calls_per_turn),
+        max_recovery_steps: Map.get(normalized, :max_recovery_steps),
+        max_observation_bytes: Map.get(normalized, :max_observation_bytes),
+        max_result_repairs: Map.get(normalized, :max_result_repairs),
         max_total_tokens: Map.get(normalized, :max_total_tokens),
         max_total_cost: Map.get(normalized, :max_total_cost),
         environment: Map.get(normalized, :environment, %{})
@@ -345,6 +525,98 @@ defmodule Jidoka.Runtime.Limits do
       | max_model_turns: min(applied.max_model_turns, plan.max_model_turns),
         turn_timeout_ms: min(applied.turn_timeout_ms, plan.timeout_ms)
     })
+  end
+
+  defp add_effect_result(%Ledger{} = ledger, %Effect.Result{kind: :llm} = result) do
+    usage = Jidoka.Usage.normalize(Map.get(result.metadata, :usage, Map.get(result.metadata, "usage")))
+
+    %Ledger{
+      ledger
+      | provider_attempts: ledger.provider_attempts + provider_attempt_count(result),
+        total_tokens: ledger.total_tokens + trunc(numeric(usage, :total_tokens)),
+        total_cost: ledger.total_cost + numeric(usage, :total_cost)
+    }
+  end
+
+  defp add_effect_result(%Ledger{} = ledger, %Effect.Result{kind: :operation} = result) do
+    %Ledger{ledger | observation_bytes: ledger.observation_bytes + observation_bytes(result.output)}
+  end
+
+  defp provider_attempt_count(%Effect.Result{metadata: metadata}) when is_map(metadata) do
+    case Map.get(metadata, :model_attempts, Map.get(metadata, "model_attempts")) do
+      attempts when is_list(attempts) and attempts != [] -> length(attempts)
+      _attempts -> 1
+    end
+  end
+
+  defp observation_bytes(output) do
+    output
+    |> Jidoka.Portable.project()
+    |> Jason.encode!()
+    |> byte_size()
+  rescue
+    _exception -> :erlang.external_size(output)
+  end
+
+  defp check_max(%Turn.State{} = state, kind, observed) do
+    case applied(state) do
+      %Applied{} = applied ->
+        case limit_for(applied, kind) do
+          limit when is_number(limit) and observed > limit -> exceeded(kind, limit, observed)
+          _limit -> :ok
+        end
+
+      nil ->
+        :ok
+    end
+  end
+
+  defp check_capacity(%Turn.State{} = state, kind, observed) do
+    case applied(state) do
+      %Applied{} = applied ->
+        case limit_for(applied, kind) do
+          limit when is_number(limit) and observed >= limit -> exceeded(kind, limit, observed)
+          _limit -> :ok
+        end
+
+      nil ->
+        :ok
+    end
+  end
+
+  defp ledger(%Turn.State{limit_ledger: %Ledger{} = ledger}), do: ledger
+  defp ledger(%Turn.State{limit_ledger: attrs}), do: Ledger.new!(attrs)
+
+  defp applied(%Turn.State{limits: %Applied{} = applied}), do: applied
+  defp applied(%Turn.State{limits: nil}), do: nil
+  defp applied(%Turn.State{limits: attrs}) when is_map(attrs), do: Applied.new!(attrs)
+
+  defp limit_for(applied, :provider_attempts), do: applied.max_provider_attempts
+  defp limit_for(applied, :tool_calls_per_group), do: applied.max_tool_calls_per_group
+  defp limit_for(applied, :tool_calls_per_turn), do: applied.max_tool_calls_per_turn
+  defp limit_for(applied, :recovery_steps), do: applied.max_recovery_steps
+  defp limit_for(applied, :observation_bytes), do: applied.max_observation_bytes
+  defp limit_for(applied, :total_tokens), do: applied.max_total_tokens
+  defp limit_for(applied, :total_cost), do: applied.max_total_cost
+
+  defp exceeded(kind, limit, observed) do
+    {:error,
+     {:runtime_limit_exceeded,
+      Exceeded.new!(
+        kind: kind,
+        limit: limit,
+        observed: observed
+      )}}
+  end
+
+  defp ledger_total(steps, key) do
+    Enum.reduce(steps, 0, fn step, total ->
+      case Map.get(step.result, :limit_usage) do
+        %Ledger{} = ledger -> total + Map.fetch!(ledger, key)
+        ledger when is_map(ledger) -> total + Map.get(ledger, key, Map.get(ledger, Atom.to_string(key), 0))
+        _ledger -> total
+      end
+    end)
   end
 
   defp remaining_sequence_ms(_opts, %Applied{sequence_timeout_ms: nil}), do: nil
@@ -403,6 +675,13 @@ defmodule Jidoka.Runtime.Limits do
   defp exceeded_reason({:runtime_limit_exceeded, %Exceeded{} = exceeded}, _observed),
     do: exceeded
 
+  defp exceeded_reason({:runtime_limit_exceeded, %{} = attrs}, _observed) do
+    case Exceeded.new(attrs) do
+      {:ok, exceeded} -> exceeded
+      {:error, _reason} -> nil
+    end
+  end
+
   defp exceeded_reason({:max_model_turns_exceeded, max}, observed) do
     Exceeded.new!(kind: :model_turns, limit: max, observed: max, turn_index: max(observed.model_turns, 1))
   end
@@ -435,6 +714,13 @@ defmodule Jidoka.Runtime.Limits do
 
   defp exceeded_reason(%{details: %{limit: %Exceeded{} = exceeded}}, _observed),
     do: exceeded
+
+  defp exceeded_reason(%{details: %{limit: %{} = attrs}}, _observed) do
+    case Exceeded.new(attrs) do
+      {:ok, exceeded} -> exceeded
+      {:error, _reason} -> nil
+    end
+  end
 
   defp exceeded_reason(_reason, _observed), do: nil
 

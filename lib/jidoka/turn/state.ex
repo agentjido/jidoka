@@ -27,6 +27,22 @@ defmodule Jidoka.Turn.State do
                 |> Zoi.default([]),
               result_value: Zoi.any() |> Zoi.nullish(),
               result_repair_count: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              limits: Zoi.map() |> Zoi.nullish() |> Zoi.default(nil),
+              limit_ledger:
+                Zoi.map()
+                |> Zoi.default(%{
+                  provider_attempts: 0,
+                  tool_call_groups: 0,
+                  tool_calls: 0,
+                  recovery_steps: 0,
+                  observation_bytes: 0,
+                  result_repairs: 0,
+                  total_tokens: 0,
+                  total_cost: 0,
+                  operation_group_ids: [],
+                  tool_call_ids: [],
+                  recovery_intent_ids: []
+                }),
               status: Schema.atom_enum([:running, :waiting, :finished]) |> Zoi.default(:running),
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               started_at_ms: Zoi.integer() |> Zoi.gte(0) |> Zoi.nullish(),
@@ -60,8 +76,27 @@ defmodule Jidoka.Turn.State do
   defp prepare_attrs(attrs) do
     attrs
     |> Schema.normalize_attrs()
+    |> normalize_limit_data()
     |> normalize_pending_effects()
     |> Schema.put_default(:journal, Jidoka.Effect.Journal.new!())
+  end
+
+  defp normalize_limit_data(%{} = attrs) do
+    attrs
+    |> normalize_struct_field(:limits)
+    |> normalize_struct_field(:limit_ledger)
+  end
+
+  defp normalize_limit_data(attrs), do: attrs
+
+  defp normalize_struct_field(attrs, key) do
+    string_key = Atom.to_string(key)
+
+    cond do
+      is_struct(Map.get(attrs, key)) -> Map.update!(attrs, key, &Map.from_struct/1)
+      is_struct(Map.get(attrs, string_key)) -> Map.update!(attrs, string_key, &Map.from_struct/1)
+      true -> attrs
+    end
   end
 
   @doc "Applies one interpreted effect result to turn state."
@@ -276,25 +311,50 @@ defmodule Jidoka.Turn.State do
          %Jidoka.Agent.Spec.Result{} = result,
          reason
        ) do
-    if state.result_repair_count < result.max_repairs do
-      repair_count = state.result_repair_count + 1
-
-      state =
-        state
-        |> append_result_repair_requested(decision, repair_count, reason)
-        |> put_repair_message(repair_count, reason)
-
-      {:ok,
-       %__MODULE__{
-         state
-         | llm_result: decision,
-           result_repair_count: repair_count,
-           status: :running
-       }}
-    else
+    if state.result_repair_count >= result.max_repairs do
       {:error, {:invalid_result, reason, state.result_repair_count, result.max_repairs}}
+    else
+      with {:ok, state} <- reserve_result_repair(state) do
+        repair_count = state.result_repair_count + 1
+
+        state =
+          state
+          |> append_result_repair_requested(decision, repair_count, reason)
+          |> put_repair_message(repair_count, reason)
+
+        {:ok,
+         %__MODULE__{
+           state
+           | llm_result: decision,
+             result_repair_count: repair_count,
+             status: :running
+         }}
+      end
     end
   end
+
+  defp reserve_result_repair(%__MODULE__{} = state) do
+    observed = Map.get(state.limit_ledger, :result_repairs, 0) + 1
+    limit = limit_value(state.limits, :max_result_repairs)
+
+    if is_integer(limit) and observed > limit do
+      {:error,
+       {:runtime_limit_exceeded,
+        %{
+          kind: :result_repairs,
+          limit: limit,
+          observed: observed
+        }}}
+    else
+      {:ok, %__MODULE__{state | limit_ledger: Map.put(state.limit_ledger, :result_repairs, observed)}}
+    end
+  end
+
+  defp limit_value(limits, key) when is_map(limits) do
+    Map.get(limits, key, Map.get(limits, Atom.to_string(key)))
+  end
+
+  defp limit_value(_limits, _key), do: nil
 
   defp put_repair_message(%__MODULE__{} = state, repair_count, reason) do
     message =

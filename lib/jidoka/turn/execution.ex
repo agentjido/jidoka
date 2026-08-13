@@ -177,7 +177,7 @@ defmodule Jidoka.Turn.Execution do
       end
 
     with {:ok, capabilities} <- capabilities do
-      ModelPolicy.wrap(capabilities, Keyword.get(opts, :model_policy))
+      ModelPolicy.wrap(capabilities, Keyword.get(opts, :model_policy), opts)
     end
   end
 
@@ -241,7 +241,8 @@ defmodule Jidoka.Turn.Execution do
 
   defp apply_snapshot_limits(%Snapshot{} = snapshot, %Limits.Applied{} = limits) do
     plan = Limits.apply_plan(snapshot.turn_state.plan, limits)
-    %{snapshot | turn_state: %{snapshot.turn_state | plan: plan}}
+    state = %{snapshot.turn_state | plan: plan, spec: plan.spec, limits: Map.from_struct(limits)}
+    %{snapshot | turn_state: state}
   end
 
   defp request_opts(opts) do

@@ -46,6 +46,8 @@ defmodule Jidoka.Projection.Turn do
       result_parts: Portable.project(state.result_parts),
       result_value: Portable.project(state.result_value),
       result_repair_count: state.result_repair_count,
+      limits: Portable.project(state.limits),
+      limit_ledger: Portable.project(state.limit_ledger),
       status: state.status,
       loop_index: state.loop_index,
       started_at_ms: state.started_at_ms,
@@ -68,6 +70,7 @@ defmodule Jidoka.Projection.Turn do
       journal: Effect.project(result.journal),
       events: Portable.project(result.events),
       usage: Portable.project(result.usage),
+      limit_usage: Portable.project(result.limit_usage),
       metadata: Portable.project(result.metadata)
     }
   end

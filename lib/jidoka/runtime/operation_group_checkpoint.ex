@@ -4,6 +4,7 @@ defmodule Jidoka.Runtime.OperationGroupCheckpoint do
   alias Jidoka.Effect
   alias Jidoka.Runtime.DurableCheckpoint
   alias Jidoka.Runtime.EffectTrace
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Turn
 
   @type coordinator :: pid()
@@ -124,6 +125,12 @@ defmodule Jidoka.Runtime.OperationGroupCheckpoint do
   end
 
   defp persist_completed_call(data, %Turn.State{} = state, group, intent, result, opts) do
+    {limit_status, state} =
+      case Limits.record_effect_result(state, result) do
+        {:ok, state} -> {:ok, state}
+        {:error, reason, state} -> {{:error, reason}, state}
+      end
+
     journal =
       state.journal
       |> Effect.Journal.put_operation_group(group)
@@ -134,7 +141,12 @@ defmodule Jidoka.Runtime.OperationGroupCheckpoint do
       |> EffectTrace.append_capability_result(intent, result, opts)
       |> EffectTrace.append_effect_result(intent, result, opts)
 
-    checkpoint = DurableCheckpoint.persist(state, intent, :result, opts)
+    checkpoint =
+      case DurableCheckpoint.persist(state, intent, :result, opts) do
+        :ok -> limit_status
+        {:error, _reason} = error -> error
+      end
+
     {checkpoint, %{data | state: state, group: group}}
   end
 

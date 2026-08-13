@@ -381,6 +381,35 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
              EffectInterpreter.interpret_pending(base_state(), capabilities)
   end
 
+  test "a recovery budget stops replay before an idempotent call starts" do
+    parent = self()
+    intent = Effect.Intent.new(:operation, %{name: "recover", arguments: %{}})
+    journal = Effect.Journal.new!() |> Effect.Journal.put_intent(intent)
+    plan = Turn.Plan.new!(spec())
+
+    limits =
+      Jidoka.Runtime.Limits.Applied.new!(
+        max_model_turns: plan.max_model_turns,
+        turn_timeout_ms: plan.timeout_ms,
+        max_recovery_steps: 0
+      )
+
+    state = state_with_pending_effect(intent, journal: journal) |> Map.put(:limits, limits)
+
+    operations = fn _intent, _journal, _context ->
+      send(parent, :operation_started)
+      {:ok, %{done: true}}
+    end
+
+    {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+    assert {:error,
+            {:runtime_limit_exceeded, %Jidoka.Runtime.Limits.Exceeded{kind: :recovery_steps, limit: 0, observed: 1}}} =
+             EffectInterpreter.interpret_pending(state, capabilities)
+
+    refute_receive :operation_started
+  end
+
   defp state_with_pending_effect(%Effect.Intent{} = intent, opts \\ []) do
     opts
     |> base_state()

@@ -18,6 +18,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.DurableCheckpoint
   alias Jidoka.Runtime.EffectTrace
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Runtime.OperationGroupCheckpoint
   alias Jidoka.Runtime.OperationInvoker
   alias Jidoka.Turn
@@ -75,7 +76,8 @@ defmodule Jidoka.Runtime.EffectInterpreter do
         {:ok, result, EffectTrace.append(state, intent, :effect_replayed, [], opts)}
 
       nil ->
-        with :ok <- validate_incomplete_effect_replay(state, intent) do
+        with {:ok, state} <- reserve_operation_intent(state, intent),
+             :ok <- validate_incomplete_effect_replay(state, intent) do
           journal = Effect.Journal.put_intent(state.journal, intent)
           state = %Turn.State{state | journal: journal}
           state = EffectTrace.append(state, intent, :effect_started, [], opts)
@@ -173,6 +175,18 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Effect.Journal{} = journal,
          opts
        ) do
+    case Limits.record_effect_result(state, result) do
+      {:ok, state} ->
+        persist_effect_result(state, intent, result, journal, opts)
+
+      {:error, reason, state} ->
+        with {:ok, _state} <- persist_effect_result(state, intent, result, journal, opts) do
+          {:error, reason}
+        end
+    end
+  end
+
+  defp persist_effect_result(%Turn.State{} = state, intent, result, journal, opts) do
     journal = Effect.Journal.put_result(journal, result)
 
     state =
@@ -182,6 +196,11 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
     with :ok <- DurableCheckpoint.persist(state, intent, :result, opts), do: {:ok, state}
   end
+
+  defp reserve_operation_intent(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent),
+    do: Limits.reserve_operation_group(state, [intent])
+
+  defp reserve_operation_intent(%Turn.State{} = state, %Effect.Intent{}), do: {:ok, state}
 
   defp run_effect_controls(
          %Turn.State{} = state,
@@ -323,7 +342,8 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Capabilities{} = capabilities,
          opts
        ) do
-    with {:ok, state, runnable_intents, replayed_results} <-
+    with {:ok, state} <- Limits.reserve_operation_group(state, intents),
+         {:ok, state, runnable_intents, replayed_results} <-
            preflight_operation_batch(state, intents, capabilities, opts),
          {:ok, state, batch_results} <-
            execute_preflighted_operation_batch(state, intents, runnable_intents, capabilities, opts) do

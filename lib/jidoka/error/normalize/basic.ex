@@ -84,6 +84,8 @@ defmodule Jidoka.Error.Normalize.Basic do
   defp normalize_instruction_reason(_reason, _context), do: :error
 
   defp normalize_model_policy_reason({:model_policy_failed, attempts, cause}, context) do
+    limit = runtime_limit(cause)
+
     {:ok,
      execution_error("The model policy exhausted its routes.",
        phase: :model,
@@ -91,7 +93,8 @@ defmodule Jidoka.Error.Normalize.Basic do
          details(context, %{
            reason: :model_policy_failed,
            model_attempts: attempts,
-           cause: cause
+           cause: cause,
+           limit: limit
          })
      )}
   end
@@ -116,6 +119,11 @@ defmodule Jidoka.Error.Normalize.Basic do
   end
 
   defp normalize_model_policy_reason(_reason, _context), do: :error
+
+  defp runtime_limit({:runtime_limit_exceeded, %{kind: _kind, limit: _limit, observed: _observed} = exceeded}),
+    do: exceeded
+
+  defp runtime_limit(_cause), do: nil
 
   defp normalize_turn_reason(:missing_input, context) do
     {:ok,
@@ -151,6 +159,22 @@ defmodule Jidoka.Error.Normalize.Basic do
            reason: :turn_timeout_exceeded,
            timeout_ms: timeout_ms,
            elapsed_ms: elapsed_ms,
+           cause: reason
+         })
+     )}
+  end
+
+  defp normalize_turn_reason(
+         {:runtime_limit_exceeded, %{kind: _kind, limit: _limit, observed: _observed} = exceeded} = reason,
+         context
+       ) do
+    {:ok,
+     execution_error("A Jidoka runtime limit stopped the turn.",
+       phase: :turn,
+       details:
+         details(context, %{
+           reason: :runtime_limit_exceeded,
+           limit: exceeded,
            cause: reason
          })
      )}

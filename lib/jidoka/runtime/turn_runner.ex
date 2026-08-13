@@ -44,6 +44,7 @@ defmodule Jidoka.Runtime.TurnRunner do
                request: request,
                agent_state: request.agent_state,
                memory: Keyword.get(opts, :memory),
+               limits: limit_attrs(Keyword.get(opts, :runtime_limits)),
                started_at_ms: clock_ms(opts)
              ),
            :ok <- emit_turn_started(state, opts),
@@ -99,7 +100,8 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   defp run_loop(%Turn.State{loop_index: loop_index, plan: plan} = state, capabilities, opts) do
     with :ok <- Cancellation.check(opts),
-         :ok <- enforce_timeout(state, opts) do
+         :ok <- enforce_timeout(state, opts),
+         :ok <- Jidoka.Runtime.Limits.check_before_model_step(state) do
       continue_model_loop(state, capabilities, opts, loop_index, plan)
     end
   end
@@ -372,7 +374,7 @@ defmodule Jidoka.Runtime.TurnRunner do
        when is_integer(timeout_ms) do
     elapsed_ms = clock_ms(opts) - state.started_at_ms
 
-    if elapsed_ms > timeout_ms do
+    if elapsed_ms >= timeout_ms do
       {:error, {:turn_timeout_exceeded, timeout_ms, elapsed_ms}}
     else
       :ok
@@ -395,4 +397,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp snapshot_opts(opts) do
     Keyword.take(opts, [:snapshot_id, :id_generator])
   end
+
+  defp limit_attrs(%_{} = limits), do: Map.from_struct(limits)
+  defp limit_attrs(limits), do: limits
 end

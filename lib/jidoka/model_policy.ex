@@ -15,6 +15,7 @@ defmodule Jidoka.ModelPolicy do
   alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Runtime.Capabilities
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Schema
   alias Jidoka.Workflow.RetryPolicy
 
@@ -107,16 +108,21 @@ defmodule Jidoka.ModelPolicy do
   @doc false
   @spec wrap(Capabilities.t(), keyword() | map() | t() | nil) ::
           {:ok, Capabilities.t()} | {:error, term()}
-  def wrap(%Capabilities{} = capabilities, nil), do: {:ok, capabilities}
+  def wrap(%Capabilities{} = capabilities, policy), do: wrap(capabilities, policy, [])
 
-  def wrap(%Capabilities{} = capabilities, %__MODULE__{} = policy) do
-    llm = policy_capability(capabilities.llm, policy)
+  @doc false
+  @spec wrap(Capabilities.t(), keyword() | map() | t() | nil, keyword()) ::
+          {:ok, Capabilities.t()} | {:error, term()}
+  def wrap(%Capabilities{} = capabilities, nil, _opts), do: {:ok, capabilities}
+
+  def wrap(%Capabilities{} = capabilities, %__MODULE__{} = policy, opts) do
+    llm = policy_capability(capabilities.llm, policy, Keyword.get(opts, :runtime_limits))
     {:ok, %Capabilities{capabilities | llm: llm}}
   end
 
-  def wrap(%Capabilities{} = capabilities, attrs) do
+  def wrap(%Capabilities{} = capabilities, attrs, opts) do
     with {:ok, policy} <- new(attrs) do
-      wrap(capabilities, policy)
+      wrap(capabilities, policy, opts)
     end
   end
 
@@ -137,11 +143,19 @@ defmodule Jidoka.ModelPolicy do
 
   def error_metadata(_reason), do: %{}
 
-  defp policy_capability(llm, %__MODULE__{} = policy) do
+  defp policy_capability(llm, %__MODULE__{} = policy, limits) do
     fn %Effect.Intent{} = intent, %Effect.Journal{} = journal, %Context{} = context ->
       case selected_models(policy, intent, context) do
         {:ok, models} ->
-          call = %{llm: llm, intent: intent, journal: journal, context: context, policy: policy}
+          call = %{
+            llm: llm,
+            intent: intent,
+            journal: journal,
+            context: context,
+            policy: policy,
+            limits: limits
+          }
+
           call_models(models, call, [])
 
         {:error, reason} ->
@@ -187,13 +201,19 @@ defmodule Jidoka.ModelPolicy do
   defp call_model(model, rest, call, model_attempt, attempts) do
     routed_intent = route_intent(call.intent, model)
 
-    case safe_capability_call(call.llm, routed_intent, call.journal, call.context) do
-      {:ok, output} ->
-        attempts = attempts ++ [attempt(model, attempts, model_attempt, :ok, nil)]
-        {:ok, attach_metadata(output, model, attempts)}
+    case Limits.check_provider_attempt(call.journal, length(attempts), call.limits) do
+      :ok ->
+        case safe_capability_call(call.llm, routed_intent, call.journal, call.context) do
+          {:ok, output} ->
+            attempts = attempts ++ [attempt(model, attempts, model_attempt, :ok, nil)]
+            {:ok, attach_metadata(output, model, attempts)}
+
+          {:error, reason} ->
+            handle_model_failure(reason, model, rest, call, model_attempt, attempts)
+        end
 
       {:error, reason} ->
-        handle_model_failure(reason, model, rest, call, model_attempt, attempts)
+        {:error, {:model_policy_failed, attempts, reason}}
     end
   end
 

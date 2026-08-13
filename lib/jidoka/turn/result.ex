@@ -21,6 +21,7 @@ defmodule Jidoka.Turn.Result do
               journal: Zoi.lazy({Effect.Journal, :schema, []}),
               events: Zoi.array(Zoi.lazy({Jidoka.Event, :schema, []})) |> Zoi.default([]),
               usage: Zoi.map() |> Zoi.default(%{}),
+              limit_usage: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -53,6 +54,7 @@ defmodule Jidoka.Turn.Result do
       journal: state.journal,
       events: state.events,
       usage: Jidoka.Usage.from_journal(state.journal),
+      limit_usage: state.limit_ledger,
       metadata: %{debug: debug_metadata(state)}
     )
   end
