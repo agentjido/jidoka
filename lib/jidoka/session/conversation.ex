@@ -16,6 +16,7 @@ defmodule Jidoka.Session.Conversation do
   @credential_compounds ~w(apikey privatekey)
   @continuation_revision_key "jidoka_continuation_revision"
   @fresh_conversation_key "jidoka_fresh_conversation"
+  @snapshot_revision_key "jidoka_conversation_revision"
 
   @schema Zoi.struct(
             __MODULE__,
@@ -120,6 +121,43 @@ defmodule Jidoka.Session.Conversation do
       nil -> :ok
       ^current -> :ok
       expected -> {:error, {:stale_conversation_revision, session_id, expected, current}}
+    end
+  end
+
+  @doc false
+  @spec request_revision(Turn.Request.t()) :: non_neg_integer() | nil
+  def request_revision(%Turn.Request{metadata: metadata}) do
+    Map.get(metadata, @continuation_revision_key, Map.get(metadata, :jidoka_continuation_revision))
+  end
+
+  @doc false
+  @spec put_snapshot_revision(map(), Turn.Request.t()) :: map()
+  def put_snapshot_revision(metadata, %Turn.Request{} = request) when is_map(metadata) do
+    case request_revision(request) do
+      revision when is_integer(revision) and revision >= 0 ->
+        Map.put(metadata, @snapshot_revision_key, revision)
+
+      _revision ->
+        metadata
+    end
+  end
+
+  @doc false
+  @spec validate_snapshot_revision(t(), map(), String.t()) :: :ok | {:error, term()}
+  def validate_snapshot_revision(
+        %__MODULE__{continuation_revision: current},
+        %{metadata: metadata},
+        session_id
+      ) do
+    case Map.get(metadata, @snapshot_revision_key, Map.get(metadata, :jidoka_conversation_revision)) do
+      nil ->
+        :ok
+
+      ^current ->
+        :ok
+
+      snapshot_revision ->
+        {:error, {:stale_snapshot_conversation_revision, session_id, snapshot_revision, current}}
     end
   end
 

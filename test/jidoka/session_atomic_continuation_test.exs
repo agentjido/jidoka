@@ -7,9 +7,11 @@ defmodule Jidoka.SessionAtomicContinuationTest do
   alias Jidoka.Session
   alias Jidoka.Session.Conversation
   alias Jidoka.Session.Data
+  alias Jidoka.Session.Store
   alias Jidoka.Session.Store.Dets
   alias Jidoka.Session.Store.InMemory
   alias Jidoka.Session.Transitions
+  alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   test "caller-owned session calls continue the committed transcript" do
@@ -132,6 +134,210 @@ defmodule Jidoka.SessionAtomicContinuationTest do
              Transitions.claim_without_lease(current, prepared)
   end
 
+  test "hibernate keeps active work outside the completed conversation until resume succeeds" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+
+    assert {:ok, _session} = Session.start(spec(), "resume-continuation", store: store)
+    assert {:ok, first} = run_first_call("resume-continuation", store: store)
+    committed = first.conversation
+
+    assert {:hibernate, hibernated, %Snapshot{} = snapshot} =
+             Session.run("resume-continuation", "Second question",
+               store: store,
+               request_id: "resume-continuation-second",
+               llm: fn _intent, _journal, _context -> flunk("model ran before resume") end,
+               checkpoint: :after_prompt
+             )
+
+    assert hibernated.conversation == committed
+    assert snapshot.metadata["jidoka_conversation_revision"] == committed.continuation_revision
+
+    assert Enum.map(snapshot.turn_state.agent_state.messages, &{&1.role, &1.content}) == [
+             {:user, "First question"},
+             {:assistant, "First answer"},
+             {:user, "Second question"}
+           ]
+
+    llm = fn intent, _journal, _context ->
+      assert conversation_messages(intent) == [
+               {:user, "First question"},
+               {:assistant, "First answer"},
+               {:user, "Second question"}
+             ]
+
+      {:ok, %{type: :final, content: "Second answer"}}
+    end
+
+    assert {:ok, resumed, %Turn.Result{content: "Second answer"}} =
+             Session.resume("resume-continuation", store: store, llm: llm)
+
+    assert_completed_conversation(resumed)
+  end
+
+  test "cancelled resume does not promote active snapshot work" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+
+    assert {:ok, _session} = Session.start(spec(), "cancel-resume", store: store)
+    assert {:ok, first} = run_first_call("cancel-resume", store: store)
+    committed = first.conversation
+
+    assert {:hibernate, hibernated, %Snapshot{}} =
+             Session.run("cancel-resume", "Do not commit this turn",
+               store: store,
+               request_id: "cancel-resume-second",
+               llm: fn _intent, _journal, _context -> flunk("model ran before resume") end,
+               checkpoint: :after_prompt
+             )
+
+    assert hibernated.conversation == committed
+
+    assert {:error, _cancellation} =
+             Session.resume("cancel-resume",
+               store: store,
+               llm: fn _intent, _journal, _context -> {:error, :cancelled} end
+             )
+
+    assert {:ok, stored} = Session.get(store, "cancel-resume")
+    assert stored.status == :cancelled
+    assert stored.conversation == committed
+
+    refute Enum.any?(
+             stored.conversation.agent_state.messages,
+             &(&1.content == "Do not commit this turn")
+           )
+  end
+
+  test "recovery resumes the active turn from its completed conversation revision" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+
+    assert {:ok, _session} = Session.start(spec(), "recover-continuation", store: store)
+    assert {:ok, first} = run_first_call("recover-continuation", store: store)
+    committed = first.conversation
+
+    assert {:hibernate, hibernated, %Snapshot{}} =
+             Session.run(first.session_id, "Second question",
+               store: store,
+               request_id: "recover-continuation-second",
+               llm: fn _intent, _journal, _context -> flunk("model ran before recovery") end,
+               checkpoint: :after_prompt
+             )
+
+    assert hibernated.conversation == committed
+
+    assert {:ok, checkpointed} =
+             Store.claim_resume(store, first.session_id,
+               clock: fn -> 100 end,
+               lease_ttl_ms: 50,
+               owner_id: "first-worker"
+             )
+
+    assert checkpointed.conversation == committed
+
+    llm = fn intent, _journal, _context ->
+      assert conversation_messages(intent) == [
+               {:user, "First question"},
+               {:assistant, "First answer"},
+               {:user, "Second question"}
+             ]
+
+      {:ok, %{type: :final, content: "Second answer"}}
+    end
+
+    assert {:ok, recovered, %Turn.Result{content: "Second answer"}} =
+             Session.recover(first.session_id,
+               store: store,
+               llm: llm,
+               clock: fn -> 150 end,
+               lease_ttl_ms: 50,
+               lease_heartbeat: false,
+               owner_id: "recovery-worker"
+             )
+
+    assert_completed_conversation(recovered)
+  end
+
+  test "source and fork promote active work into isolated conversations" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+
+    assert {:ok, _session} = Session.start(spec(), "fork-continuation", store: store)
+    assert {:ok, first} = run_first_call("fork-continuation", store: store)
+    committed = first.conversation
+
+    assert {:hibernate, source, %Snapshot{}} =
+             Session.run("fork-continuation", "Choose a path",
+               store: store,
+               request_id: "fork-continuation-second",
+               llm: fn _intent, _journal, _context -> flunk("model ran before resume") end,
+               checkpoint: :after_prompt
+             )
+
+    assert {:ok, branch} =
+             Session.fork("fork-continuation",
+               store: store,
+               session_id: "fork-continuation-branch",
+               fork_snapshot_id: "fork-continuation-snapshot",
+               clock: fn -> 200 end
+             )
+
+    assert source.conversation == committed
+    assert branch.conversation == committed
+
+    assert {:ok, source, %Turn.Result{content: "source path"}} =
+             Session.resume("fork-continuation",
+               store: store,
+               llm: final_response("source path")
+             )
+
+    assert {:ok, branch, %Turn.Result{content: "branch path"}} =
+             Session.resume("fork-continuation-branch",
+               store: store,
+               llm: final_response("branch path")
+             )
+
+    assert conversation_contents(source) == [
+             "First question",
+             "First answer",
+             "Choose a path",
+             "source path"
+           ]
+
+    assert conversation_contents(branch) == [
+             "First question",
+             "First answer",
+             "Choose a path",
+             "branch path"
+           ]
+  end
+
+  test "resume rejects a snapshot from an older completed conversation" do
+    assert {:ok, session} = Session.start(spec(), "stale-resume")
+    assert {:ok, first} = run_first_call(session, [])
+
+    assert {:hibernate, %Data{} = hibernated, %Snapshot{}} =
+             Session.run(first, "Old active turn",
+               request_id: "stale-resume-active",
+               llm: fn _intent, _journal, _context -> flunk("model ran before resume") end,
+               checkpoint: :after_prompt
+             )
+
+    newer_conversation =
+      Conversation.new!(
+        agent_state: first.conversation.agent_state,
+        continuation_revision: 2,
+        turn_count: 2,
+        last_completed_request_id: "different-completed-turn"
+      )
+
+    stale = %Data{hibernated | conversation: newer_conversation}
+
+    assert {:error, {:stale_snapshot_conversation_revision, "stale-resume", 1, 2}} =
+             Session.resume(stale, llm: final_response("must not run"))
+  end
+
   defp run_two_calls(session_input, opts) do
     case run_first_call(session_input, opts) do
       {:ok, first} -> run_second_call(session_ref(first, session_input), opts)
@@ -205,6 +411,14 @@ defmodule Jidoka.SessionAtomicContinuationTest do
 
   defp normalize_role(role) when is_atom(role), do: role
   defp normalize_role(role), do: String.to_existing_atom(role)
+
+  defp conversation_contents(%Data{} = session) do
+    Enum.map(session.conversation.agent_state.messages, & &1.content)
+  end
+
+  defp final_response(content) do
+    fn _intent, _journal, _context -> {:ok, %{type: :final, content: content}} end
+  end
 
   defp session_ref(%Data{} = session, %Data{}), do: session
   defp session_ref(%Data{} = session, _session_id), do: session.session_id

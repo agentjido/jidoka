@@ -706,7 +706,7 @@ defmodule Jidoka.Session.Execution do
   defp claim_resume_session(%Session{} = session, opts) do
     case Keyword.fetch(opts, :store) do
       {:ok, store} -> Store.claim_resume(store, session.session_id, lease_store_opts(opts))
-      :error -> ensure_resumable_session(session)
+      :error -> Transitions.resume_without_lease(session)
     end
   end
 
@@ -748,13 +748,6 @@ defmodule Jidoka.Session.Execution do
       {:error, _reason} = error -> error
     end
   end
-
-  defp ensure_resumable_session(%Session{status: status} = session)
-       when status in [:hibernated, :waiting],
-       do: {:ok, session}
-
-  defp ensure_resumable_session(%Session{session_id: session_id, status: status}),
-    do: {:error, {:session_not_resumable, session_id, status}}
 
   defp latest_snapshot(%Session{} = session) do
     case Session.latest_snapshot(session) do

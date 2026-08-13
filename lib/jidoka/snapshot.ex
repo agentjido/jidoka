@@ -12,6 +12,7 @@ defmodule Jidoka.Snapshot do
   alias Jidoka.Review
   alias Jidoka.Schema
   alias Jidoka.Session.Environment
+  alias Jidoka.Session.Conversation
   alias Jidoka.Snapshot.Codec
   alias Jidoka.Turn
 
@@ -263,7 +264,10 @@ defmodule Jidoka.Snapshot do
   defp existing_atom_key(key), do: key
 
   defp snapshot_metadata(%Turn.State{} = state, opts) do
-    metadata = Keyword.get(opts, :metadata, %{})
+    metadata =
+      opts
+      |> Keyword.get(:metadata, %{})
+      |> Conversation.put_snapshot_revision(state.request)
 
     case state.pending_interrupt do
       nil -> metadata

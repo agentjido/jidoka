@@ -62,14 +62,17 @@ defmodule Jidoka.Session.Transitions do
   @doc "Claims a hibernated or waiting session for resume."
   @spec resume(Data.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
   def resume(%Data{} = session, opts) do
-    with :ok <- ensure_resumable(session),
-         %Snapshot{turn_state: %{request: %Turn.Request{request_id: request_id}}} <-
-           Data.latest_snapshot(session),
+    with {:ok, request_id} <- validate_resume(session),
          {:ok, lease} <- acquire_lease(request_id, opts) do
       {:ok, session |> Data.put_lease(lease) |> Data.bump_revision()}
-    else
-      nil -> {:error, {:missing_session_snapshot, session.session_id}}
-      {:error, _reason} = error -> error
+    end
+  end
+
+  @doc false
+  @spec resume_without_lease(Data.t()) :: {:ok, Data.t()} | {:error, term()}
+  def resume_without_lease(%Data{} = session) do
+    with {:ok, _request_id} <- validate_resume(session) do
+      {:ok, session}
     end
   end
 
@@ -79,6 +82,7 @@ defmodule Jidoka.Session.Transitions do
     now_ms = clock_ms(opts)
 
     with :ok <- ensure_recoverable(session, now_ms),
+         :ok <- validate_recovery_conversation(session),
          {:ok, request_id} <- recovery_request_id(session),
          {:ok, lease} <- acquire_lease(request_id, opts) do
       {:ok, session |> Data.put_lease(lease) |> Data.bump_revision()}
@@ -172,6 +176,18 @@ defmodule Jidoka.Session.Transitions do
       else: {:error, {:session_lease_active, session_id, lease.owner_id, lease.expires_at_ms}}
   end
 
+  defp validate_resume(%Data{} = session) do
+    with :ok <- ensure_resumable(session),
+         %Snapshot{turn_state: %{request: %Turn.Request{request_id: request_id}}} = snapshot <-
+           Data.latest_snapshot(session),
+         :ok <- Conversation.validate_snapshot_revision(session.conversation, snapshot, session.session_id) do
+      {:ok, request_id}
+    else
+      nil -> {:error, {:missing_session_snapshot, session.session_id}}
+      {:error, _reason} = error -> error
+    end
+  end
+
   defp validate_active_lease(
          %Data{lease: %Lease{lease_id: lease_id} = lease, session_id: session_id},
          lease_id,
@@ -186,13 +202,18 @@ defmodule Jidoka.Session.Transitions do
     do: {:error, {:stale_session_lease, session_id, lease_id}}
 
   defp validate_checkpoint(
-         %Data{agent_id: agent_id, lease: %Lease{request_id: request_id}},
+         %Data{
+           agent_id: agent_id,
+           session_id: session_id,
+           conversation: conversation,
+           lease: %Lease{request_id: request_id}
+         },
          %Snapshot{
            agent_id: agent_id,
            turn_state: %{request: %Turn.Request{request_id: request_id}}
-         }
+         } = snapshot
        ),
-       do: :ok
+       do: Conversation.validate_snapshot_revision(conversation, snapshot, session_id)
 
   defp validate_checkpoint(%Data{session_id: session_id}, %Snapshot{snapshot_id: snapshot_id}),
     do: {:error, {:checkpoint_session_mismatch, session_id, snapshot_id}}
@@ -257,6 +278,22 @@ defmodule Jidoka.Session.Transitions do
         case List.last(session.requests) do
           %Turn.Request{request_id: request_id} -> {:ok, request_id}
           nil -> {:error, {:session_not_recoverable, session.session_id, :missing_request}}
+        end
+    end
+  end
+
+  defp validate_recovery_conversation(%Data{} = session) do
+    case Data.latest_snapshot(session) do
+      %Snapshot{} = snapshot ->
+        Conversation.validate_snapshot_revision(session.conversation, snapshot, session.session_id)
+
+      nil ->
+        case List.last(session.requests) do
+          %Turn.Request{} = request ->
+            Conversation.validate_request_revision(session.conversation, request, session.session_id)
+
+          nil ->
+            :ok
         end
     end
   end

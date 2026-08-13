@@ -115,6 +115,7 @@ defmodule Jidoka.Session.Data do
         opts \\ []
       ) do
     with :ok <- validate_fork_agent(source, snapshot),
+         :ok <- Conversation.validate_snapshot_revision(source.conversation, snapshot, source.session_id),
          {:ok, fork_session_id} <- session_id(opts),
          :ok <- validate_distinct_fork_id(source, fork_session_id),
          {:ok, fork} <-
