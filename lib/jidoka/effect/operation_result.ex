@@ -49,18 +49,19 @@ defmodule Jidoka.Effect.OperationResult do
   def from_input(input), do: new(input)
 
   @doc "Builds an operation result from an operation intent and its output."
-  @spec from_effect(Effect.Intent.t(), term()) :: {:ok, t()} | {:error, term()}
-  def from_effect(%Effect.Intent{kind: :operation, payload: payload} = intent, output) do
+  @spec from_effect(Effect.Intent.t(), term(), keyword()) :: {:ok, t()} | {:error, term()}
+  def from_effect(%Effect.Intent{kind: :operation, payload: payload} = intent, output, opts \\ []) do
     with {:ok, request} <- Effect.OperationRequest.from_input(payload) do
       new(
         operation: request.name,
         arguments: request.arguments,
         output: output,
-        content: inspect(output),
+        content: encode_content(output),
         request_id: request.request_id,
         loop_index: request.loop_index,
         effect_id: intent.id,
-        tool_call: request.tool_call
+        tool_call: request.tool_call,
+        metadata: Keyword.get(opts, :metadata, %{})
       )
     end
   end
@@ -72,8 +73,16 @@ defmodule Jidoka.Effect.OperationResult do
       id: message_id(result),
       request_id: result.request_id,
       content: result.content || inspect(result.output),
-      tool_call: result.tool_call
+      tool_call: result.tool_call,
+      metadata: result.metadata
     )
+  end
+
+  defp encode_content(output) do
+    case Jason.encode(output) do
+      {:ok, content} -> content
+      {:error, _reason} -> inspect(output)
+    end
   end
 
   defp message_id(%__MODULE__{tool_call: %Effect.ToolCall{} = call, request_id: request_id}) do

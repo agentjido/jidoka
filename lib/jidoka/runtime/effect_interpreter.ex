@@ -17,6 +17,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Runtime.Controls
   alias Jidoka.Runtime.EffectTrace
+  alias Jidoka.Runtime.OperationInvoker
   alias Jidoka.Turn
 
   @doc "Interprets the next pending effect or reuses its journaled result."
@@ -286,33 +287,11 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   defp call_capability(
          %Turn.State{} = state,
          %Effect.Intent{kind: :operation} = intent,
-         %Capabilities{operations: operations},
+         %Capabilities{} = capabilities,
          journal,
          opts
        ) do
-    case RuntimeContext.operation(state, intent, opts) do
-      {:ok, ctx} ->
-        operations
-        |> invoke_capability(intent, journal, ctx, state, opts)
-        |> operation_capability_result(intent)
-
-      {:error, reason} ->
-        {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
-    end
-  end
-
-  defp operation_capability_result({:ok, output}, %Effect.Intent{} = intent),
-    do: {:ok, Effect.Result.ok(intent, output)}
-
-  defp operation_capability_result({:error, reason}, %Effect.Intent{} = intent),
-    do: {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
-
-  defp operation_capability_result(other, %Effect.Intent{} = intent) do
-    {:ok,
-     Effect.Result.error(
-       intent,
-       normalize_capability_error({:invalid_capability_result, other}, intent)
-     )}
+    OperationInvoker.invoke(state, intent, capabilities, journal, opts)
   end
 
   defp invoke_capability(capability, intent, journal, ctx, state, opts),

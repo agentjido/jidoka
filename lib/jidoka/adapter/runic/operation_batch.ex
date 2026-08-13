@@ -8,7 +8,7 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
   alias Jidoka.Error
   alias Jidoka.Runtime.CapabilityInvoker
   alias Jidoka.Runtime.Capabilities
-  alias Jidoka.Runtime.Context, as: RuntimeContext
+  alias Jidoka.Runtime.OperationInvoker
   alias Jidoka.Turn
   alias Runic.Workflow
 
@@ -80,45 +80,11 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
   defp call_operation_capability(
          %Turn.State{} = state,
          %Effect.Intent{kind: :operation} = intent,
-         %Capabilities{operations: operations},
+         %Capabilities{} = capabilities,
          journal,
          opts
        ) do
-    case RuntimeContext.operation(state, intent, opts) do
-      {:ok, ctx} ->
-        operations
-        |> invoke_capability(intent, journal, ctx, state, opts)
-        |> capability_result(intent)
-
-      {:error, reason} ->
-        {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
-    end
-  end
-
-  defp capability_result({:ok, output}, %Effect.Intent{} = intent),
-    do: {:ok, Effect.Result.ok(intent, output)}
-
-  defp capability_result({:error, reason}, %Effect.Intent{} = intent),
-    do: {:ok, Effect.Result.error(intent, normalize_capability_error(reason, intent))}
-
-  defp capability_result(other, %Effect.Intent{} = intent) do
-    {:ok,
-     Effect.Result.error(
-       intent,
-       normalize_capability_error({:invalid_capability_result, other}, intent)
-     )}
-  end
-
-  defp invoke_capability(capability, intent, journal, ctx, state, opts),
-    do: CapabilityInvoker.invoke(capability, intent, journal, ctx, state, opts)
-
-  defp normalize_capability_error(reason, %Effect.Intent{} = intent) do
-    Error.normalize(reason,
-      operation: intent.kind,
-      phase: :effect,
-      intent_id: intent.id,
-      effect_kind: intent.kind
-    )
+    OperationInvoker.invoke(state, intent, capabilities, journal, opts)
   end
 
   defp operation_batch_step_names(intents) do

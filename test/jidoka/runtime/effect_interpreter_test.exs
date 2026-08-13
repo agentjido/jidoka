@@ -49,21 +49,29 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
            ]
   end
 
-  test "wraps capability errors as effect results" do
+  test "turns recoverable capability errors into model-visible effect results" do
     intent = Effect.Intent.new(:operation, %{name: "weather", arguments: %{}})
     state = state_with_pending_effect(intent)
 
-    operations = fn _intent, _journal, _ctx -> {:error, :tool_failed} end
+    operations = fn _intent, _journal, _ctx ->
+      {:error, Jidoka.Effect.OperationFailure.recoverable(:tool_failed)}
+    end
+
     {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
 
     assert {:ok,
             %Effect.Result{
-              status: :error,
-              output: %Jidoka.Error.ExecutionError{details: %{cause: :tool_failed}}
+              status: :ok,
+              output: %{
+                "ok" => false,
+                "error" => %{"kind" => "recoverable", "code" => "tool_failed"}
+              }
             }, next_state} =
              EffectInterpreter.interpret_pending(state, capabilities)
 
-    assert %Effect.Result{status: :error} = next_state.journal.results[intent.id]
+    assert %Effect.Result{status: :ok, metadata: metadata} = next_state.journal.results[intent.id]
+    assert metadata.operation_failure.kind == :recoverable
+    assert metadata.operation_attempt_count == 1
 
     timeline = Jidoka.Trace.timeline(next_state.events)
 
@@ -71,17 +79,103 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
              :effect_started,
              :policy_allowed,
              :capability_call_started,
-             :capability_call_failed,
-             :effect_failed
+             :capability_call_completed,
+             :effect_completed
            ]
 
     assert [
              %{effect_kind: :operation, operation: "weather"},
              %{effect_kind: :operation, operation: "weather"},
              %{effect_kind: :operation, operation: "weather"},
-             %{effect_kind: :operation, operation: "weather", error: %{category: :execution}},
-             %{effect_kind: :operation, operation: "weather", error: %{category: :execution}}
+             %{effect_kind: :operation, operation: "weather"},
+             %{effect_kind: :operation, operation: "weather"}
            ] = timeline
+  end
+
+  test "retries only transport failures for retry-safe operation effects" do
+    intent = Effect.Intent.new(:operation, %{name: "lookup", arguments: %{}})
+    state = state_with_pending_effect(intent)
+    {:ok, counter} = Elixir.Agent.start_link(fn -> 0 end)
+    parent = self()
+
+    operations = fn _intent, _journal, _ctx ->
+      attempt = Elixir.Agent.get_and_update(counter, &{&1 + 1, &1 + 1})
+      send(parent, {:operation_attempt, attempt})
+      if attempt < 3, do: {:error, :timeout}, else: {:ok, %{value: "ready"}}
+    end
+
+    {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+    assert {:ok, %Effect.Result{status: :ok, output: %{value: "ready"}, metadata: metadata}, _state} =
+             EffectInterpreter.interpret_pending(state, capabilities,
+               operation_retry: [max_attempts: 3, backoff_ms: 1],
+               operation_retry_sleep: fn delay -> send(parent, {:retry_sleep, delay}) end
+             )
+
+    assert metadata.operation_attempt_count == 3
+    assert Enum.map(metadata.operation_attempts, & &1.status) == [:error, :error, :ok]
+    assert_receive {:operation_attempt, 1}
+    assert_receive {:retry_sleep, 1}
+    assert_receive {:operation_attempt, 2}
+    assert_receive {:retry_sleep, 1}
+    assert_receive {:operation_attempt, 3}
+  end
+
+  test "does not retry transport failures for reconcile or unsafe operations" do
+    for idempotency <- [:reconcile, :unsafe_once] do
+      intent =
+        Effect.Intent.new(:operation, %{name: "write", arguments: %{}}, idempotency: idempotency)
+
+      state = state_with_pending_effect(intent)
+      parent = self()
+
+      operations = fn _intent, _journal, _ctx ->
+        send(parent, {:called, idempotency})
+        {:error, Jidoka.Effect.OperationFailure.transport(:timeout)}
+      end
+
+      {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+      assert {:ok, %Effect.Result{status: :error, metadata: metadata}, _state} =
+               EffectInterpreter.interpret_pending(state, capabilities, operation_retry: [max_attempts: 3])
+
+      assert metadata.operation_failure.kind == :transport
+      assert metadata.operation_attempt_count == 1
+      assert_receive {:called, ^idempotency}
+      refute_receive {:called, ^idempotency}
+    end
+  end
+
+  test "does not retry policy, review, reconciliation, cancellation, or runtime failures" do
+    failures = [
+      Jidoka.Effect.OperationFailure.policy(:blocked),
+      Jidoka.Effect.OperationFailure.review(:approval_required),
+      Jidoka.Effect.OperationFailure.reconciliation(:unknown_commit),
+      Jidoka.Effect.OperationFailure.cancelled(),
+      Jidoka.Effect.OperationFailure.runtime(:adapter_failed)
+    ]
+
+    for failure <- failures do
+      failure_kind = failure.kind
+      intent = Effect.Intent.new(:operation, %{name: "terminal_tool", arguments: %{}})
+      state = state_with_pending_effect(intent)
+      parent = self()
+
+      operations = fn _intent, _journal, _ctx ->
+        send(parent, {:terminal_call, failure.kind})
+        {:error, failure}
+      end
+
+      {:ok, capabilities} = Capabilities.new(llm: missing_llm(), operations: operations)
+
+      assert {:ok, %Effect.Result{status: :error, metadata: metadata}, _state} =
+               EffectInterpreter.interpret_pending(state, capabilities, operation_retry: [max_attempts: 3])
+
+      assert metadata.operation_failure.kind == failure.kind
+      assert metadata.operation_attempt_count == 1
+      assert_receive {:terminal_call, ^failure_kind}
+      refute_receive {:terminal_call, ^failure_kind}
+    end
   end
 
   test "times out and cancels hung capabilities" do
@@ -171,7 +265,8 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
             %Jidoka.Error.ExecutionError{
               phase: :control,
               details: %{reason: :control_blocked, boundary: :operation}
-            }} = EffectInterpreter.interpret_pending(state, capabilities)
+            }} =
+             EffectInterpreter.interpret_pending(state, capabilities, operation_retry: [max_attempts: 3])
   end
 
   test "reuses journaled results without calling capabilities again" do
@@ -246,7 +341,8 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
                 idempotency: :unsafe_once,
                 idempotency_key: idempotency_key
               }
-            }} = EffectInterpreter.interpret_pending(state, capabilities)
+            }} =
+             EffectInterpreter.interpret_pending(state, capabilities, operation_retry: [max_attempts: 3])
 
     assert idempotency_key == intent.idempotency_key
   end
@@ -273,7 +369,8 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
                   idempotency: ^idempotency,
                   operation_name: "charge"
                 }
-              }} = EffectInterpreter.interpret_pending(state, capabilities)
+              }} =
+               EffectInterpreter.interpret_pending(state, capabilities, operation_retry: [max_attempts: 3])
     end
   end
 

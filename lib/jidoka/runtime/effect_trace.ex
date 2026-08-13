@@ -93,6 +93,15 @@ defmodule Jidoka.Runtime.EffectTrace do
       idempotency: intent.idempotency,
       idempotency_key: intent.idempotency_key
     }
-    |> Map.merge(Map.take(result.metadata, [:model, :provider, :model_attempts]))
+    |> Map.merge(
+      Map.take(result.metadata, [
+        :model,
+        :provider,
+        :model_attempts,
+        :operation_attempts,
+        :operation_attempt_count,
+        :operation_failure
+      ])
+    )
   end
 end

@@ -75,7 +75,7 @@ defmodule Jidoka.Turn.State do
 
       %Jidoka.Effect.Intent{kind: :operation} = effect ->
         with :ok <- ensure_result_for_effect(effect, result) do
-          apply_operation_result(state, effect, result.output)
+          apply_operation_result(state, effect, result.output, result.metadata)
         end
 
       nil ->
@@ -166,8 +166,9 @@ defmodule Jidoka.Turn.State do
 
   defp apply_llm_result(_state, output), do: {:error, {:invalid_llm_output, output}}
 
-  defp apply_operation_result(%__MODULE__{} = state, %Jidoka.Effect.Intent{} = effect, output) do
-    with {:ok, observation} <- Jidoka.Effect.OperationResult.from_effect(effect, output) do
+  defp apply_operation_result(%__MODULE__{} = state, %Jidoka.Effect.Intent{} = effect, output, metadata) do
+    with {:ok, observation} <-
+           Jidoka.Effect.OperationResult.from_effect(effect, output, metadata: metadata) do
       state = pop_pending_effect(state)
 
       agent_state =
@@ -186,11 +187,21 @@ defmodule Jidoka.Turn.State do
           agent_id: state.spec.id,
           request_id: state.request.request_id,
           loop_index: state.loop_index,
-          operation: observation.operation
+          operation: observation.operation,
+          data: operation_observation_data(observation)
         )
         |> Jidoka.Turn.Transition.commit()
 
       {:ok, state}
+    end
+  end
+
+  defp operation_observation_data(%Jidoka.Effect.OperationResult{metadata: metadata}) do
+    attempts = Map.get(metadata, :operation_attempt_count, 1)
+
+    case Map.get(metadata, :operation_failure) do
+      %{kind: kind} -> %{outcome: :failed, failure_kind: kind, attempts: attempts}
+      _failure -> %{outcome: :completed, attempts: attempts}
     end
   end
 
