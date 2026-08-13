@@ -27,6 +27,18 @@ mix test --cover
 mix hex.build --unpack
 ```
 
+### ReqLLM Compatibility
+
+Jidoka supports ReqLLM `~> 1.20.0` and tests the exact version in `mix.lock`.
+Do not widen this range as part of an unrelated dependency update.
+
+To update ReqLLM, change and test Jidoka first. Run the ReqLLM adapter tests and
+the full quality gate. Then update the Jido CLI lock and run its dependency
+contract with both the pinned Jidoka dependency and `JIDO_CLI_JIDOKA_PATH`.
+A new ReqLLM minor line requires an explicit constraint change in both
+repositories. A patch release in the current line requires fresh locks and the
+same cross-repository tests.
+
 Live provider tests are opt-in and require provider keys in the process
 environment. Jidoka does not implement dotenv loading. ReqLLM loads `.env` by
 default, but this source checkout disables that behavior for deterministic

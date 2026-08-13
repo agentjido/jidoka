@@ -45,7 +45,7 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapter do
   defp response_content_parts(%ReqLLM.Response{message: %{content: content}})
        when is_list(content) do
     content
-    |> Enum.reject(&(&1.type in [:text, :thinking]))
+    |> Enum.reject(&(&1.type in [:text, :thinking, :object]))
     |> Enum.reduce_while({:ok, []}, fn part, {:ok, converted} ->
       case from_req_content_part(part) do
         {:ok, converted_part} -> {:cont, {:ok, [converted_part | converted]}}
