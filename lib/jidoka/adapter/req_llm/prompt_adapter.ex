@@ -18,12 +18,14 @@ defmodule Jidoka.Adapter.ReqLLM.PromptAdapter do
         |> Map.delete("messages")
         |> Jason.encode!()
 
-      {:ok,
-       [
-         LLMContext.system(runtime_system_prompt(prompt)),
-         LLMContext.system("Jidoka turn contract:\n" <> contract)
-         | messages
-       ]}
+      messages =
+        [
+          LLMContext.system(runtime_system_prompt(prompt)),
+          LLMContext.system("Jidoka turn contract:\n" <> contract)
+          | messages
+        ]
+
+      validate_messages(messages)
     end
   rescue
     exception -> {:error, {:invalid_prompt_payload, exception}}
@@ -49,16 +51,16 @@ defmodule Jidoka.Adapter.ReqLLM.PromptAdapter do
     metadata = Schema.get_key(message, :metadata, %{})
 
     case role do
+      role when role in [:assistant, "assistant"] ->
+        convert_assistant_tool_calls(message, content, metadata)
+
       role when role in [:system, "system", :user, "user", :assistant, "assistant"] ->
         with {:ok, parts} <- convert_content(content) do
           {:ok, LLMContext.build(normalize_role(role), parts, metadata)}
         end
 
       role when role in [:tool, "tool"] ->
-        {:ok,
-         LLMContext.user(tool_observation(message),
-           metadata: Map.put(metadata, :jidoka_original_role, :tool)
-         )}
+        convert_tool_message(message, metadata)
 
       other ->
         {:error, {:invalid_prompt_message_role, other}}
@@ -66,6 +68,149 @@ defmodule Jidoka.Adapter.ReqLLM.PromptAdapter do
   end
 
   defp convert_message(message), do: {:error, {:invalid_prompt_message, message}}
+
+  defp convert_assistant_tool_calls(message, content, metadata) do
+    calls = Schema.get_key(message, :tool_calls, [])
+
+    if native_tool_calls?(calls) do
+      with {:ok, tool_calls} <- req_tool_calls(calls),
+           {:ok, reasoning_details} <- reasoning_details(message) do
+        provider_metadata = Schema.get_key(message, :provider_metadata, %{})
+        message_metadata = provider_metadata |> Schema.get_key(:message_metadata, %{}) |> ensure_map()
+
+        req_message =
+          LLMContext.assistant(content || "",
+            tool_calls: tool_calls,
+            metadata: Map.merge(message_metadata, metadata)
+          )
+
+        {:ok, %{req_message | reasoning_details: reasoning_details}}
+      end
+    else
+      with {:ok, parts} <- convert_content(content) do
+        {:ok, LLMContext.build(:assistant, parts, metadata)}
+      end
+    end
+  end
+
+  defp convert_tool_message(message, metadata) do
+    case Schema.get_key(message, :tool_call_id) do
+      id when is_binary(id) and id != "" ->
+        name = Schema.get_key(message, :provider_name, Schema.get_key(message, :operation))
+        output = Schema.get_key(message, :output, Schema.get_key(message, :content, ""))
+        req_message = LLMContext.tool_result(id, name, output)
+        {:ok, %{req_message | metadata: Map.merge(req_message.metadata, metadata)}}
+
+      _missing ->
+        {:ok,
+         LLMContext.user(tool_observation(message),
+           metadata: Map.put(metadata, :jidoka_original_role, :tool)
+         )}
+    end
+  end
+
+  defp native_tool_calls?([_ | _] = calls) do
+    Enum.all?(calls, fn call ->
+      case Schema.get_key(call, :provider_call_id) do
+        id when is_binary(id) -> id != ""
+        _other -> false
+      end
+    end)
+  end
+
+  defp native_tool_calls?(_calls), do: false
+
+  defp req_tool_calls(calls) do
+    calls
+    |> Enum.reduce_while({:ok, []}, fn call, {:ok, converted} ->
+      case req_tool_call(call) do
+        {:ok, tool_call} -> {:cont, {:ok, [tool_call | converted]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, converted} -> {:ok, Enum.reverse(converted)}
+      error -> error
+    end
+  end
+
+  defp req_tool_call(call) when is_map(call) do
+    id = Schema.get_key(call, :provider_call_id)
+    name = Schema.get_key(call, :provider_name, Schema.get_key(call, :name))
+    arguments = Schema.get_key(call, :arguments, %{})
+    provider_metadata = Schema.get_key(call, :provider_metadata, %{})
+
+    with true <- (is_binary(id) and id != "") or {:error, {:invalid_provider_call_id, id}},
+         true <- (is_binary(name) and name != "") or {:error, {:invalid_provider_tool_name, name}},
+         {:ok, encoded} <- Jason.encode(arguments) do
+      tool_call = ReqLLM.ToolCall.new(id, name, encoded)
+      {:ok, ReqLLM.ToolCall.put_metadata(tool_call, provider_metadata)}
+    end
+  end
+
+  defp req_tool_call(call), do: {:error, {:invalid_prompt_tool_call, call}}
+
+  defp reasoning_details(message) do
+    provider_metadata = Schema.get_key(message, :provider_metadata, %{})
+
+    case Schema.get_key(provider_metadata, :reasoning_details) do
+      nil -> {:ok, nil}
+      details when is_list(details) -> normalize_reasoning_details(details)
+      details -> {:error, {:invalid_reasoning_details, details}}
+    end
+  end
+
+  defp normalize_reasoning_details(details) do
+    details
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {detail, index}, {:ok, normalized} ->
+      case reasoning_detail(detail, index) do
+        {:ok, detail} -> {:cont, {:ok, [detail | normalized]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, normalized} -> {:ok, Enum.reverse(normalized)}
+      error -> error
+    end
+  end
+
+  defp reasoning_detail(%ReqLLM.Message.ReasoningDetails{} = detail, _index), do: {:ok, detail}
+
+  defp reasoning_detail(detail, index) when is_map(detail) do
+    {:ok,
+     %ReqLLM.Message.ReasoningDetails{
+       text: Schema.get_key(detail, :text),
+       signature: Schema.get_key(detail, :signature),
+       encrypted?: Schema.get_key(detail, :encrypted?, false),
+       provider: reasoning_provider(Schema.get_key(detail, :provider)),
+       format: Schema.get_key(detail, :format),
+       index: Schema.get_key(detail, :index, index),
+       provider_data: Schema.get_key(detail, :provider_data, %{})
+     }}
+  end
+
+  defp reasoning_detail(detail, _index), do: {:error, {:invalid_reasoning_detail, detail}}
+
+  defp reasoning_provider(provider) when is_atom(provider), do: provider
+
+  defp reasoning_provider(provider) when is_binary(provider) do
+    String.to_existing_atom(provider)
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp reasoning_provider(_provider), do: nil
+
+  defp ensure_map(value) when is_map(value), do: value
+  defp ensure_map(_value), do: %{}
+
+  defp validate_messages(messages) do
+    case LLMContext.normalize(messages) do
+      {:ok, context} -> {:ok, context.messages}
+      {:error, reason} -> {:error, {:invalid_provider_continuation, reason}}
+    end
+  end
 
   defp convert_content(content) when is_binary(content), do: {:ok, [LLMContentPart.text(content)]}
 

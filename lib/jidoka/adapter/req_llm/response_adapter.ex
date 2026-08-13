@@ -36,7 +36,7 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapter do
       {:ok,
        decision
        |> attach_output_parts(parts)
-       |> attach_response_metadata(model, response)}
+       |> attach_response_metadata(model, response, classification)}
     end
   end
 
@@ -168,8 +168,8 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapter do
   defp native_call_id(%ReqLLM.ToolCall{id: id}), do: optional_id(id)
   defp native_call_id(call) when is_map(call), do: optional_id(Schema.get_key(call, :id))
 
-  defp optional_id(nil), do: {:ok, nil}
-  defp optional_id(""), do: {:ok, nil}
+  defp optional_id(nil), do: {:error, {:invalid_native_tool_call_id, nil}}
+  defp optional_id(""), do: {:error, {:invalid_native_tool_call_id, ""}}
   defp optional_id(id) when is_binary(id), do: {:ok, id}
   defp optional_id(id), do: {:error, {:invalid_native_tool_call_id, id}}
 
@@ -188,7 +188,7 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapter do
   defp normalized_text(text) when is_binary(text), do: String.trim(text)
   defp normalized_text(_text), do: ""
 
-  defp attach_response_metadata(%Effect.LLMDecision{} = decision, model, response) do
+  defp attach_response_metadata(%Effect.LLMDecision{} = decision, model, response, classification) do
     metadata =
       %{}
       |> maybe_put(:usage, response_usage(response))
@@ -198,6 +198,8 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapter do
       |> maybe_put(:finish_reason, ReqLLM.Response.finish_reason(response))
       |> maybe_put(:provider_meta, empty_to_nil(response.provider_meta))
       |> maybe_put(:message_metadata, response_message_metadata(response))
+      |> maybe_put(:reasoning_details, response_reasoning_details(response))
+      |> maybe_put(:assistant_text, assistant_tool_text(decision, classification))
 
     %Effect.LLMDecision{decision | metadata: Map.merge(decision.metadata, metadata)}
   end
@@ -312,6 +314,22 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapter do
     do: empty_to_nil(metadata)
 
   defp response_message_metadata(_response), do: nil
+
+  defp response_reasoning_details(%ReqLLM.Response{message: %{reasoning_details: details}})
+       when is_list(details) and details != [] do
+    Enum.map(details, fn
+      %ReqLLM.Message.ReasoningDetails{} = detail -> Map.from_struct(detail)
+      detail when is_map(detail) -> detail
+    end)
+  end
+
+  defp response_reasoning_details(_response), do: nil
+
+  defp assistant_tool_text(%Effect.LLMDecision{type: type}, %{text: text})
+       when type in [:operation, :operations] and is_binary(text),
+       do: text
+
+  defp assistant_tool_text(_decision, _classification), do: nil
 
   defp response_usage(response) do
     response

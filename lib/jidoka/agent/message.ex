@@ -114,6 +114,7 @@ defmodule Jidoka.Agent.Message do
     message
     |> Map.from_struct()
     |> message_content(message)
+    |> continuation_content(message)
     |> Map.drop([:parts, :id, :request_id, :interaction, :tool_call])
     |> Enum.reject(fn
       {_key, nil} -> true
@@ -204,6 +205,55 @@ defmodule Jidoka.Agent.Message do
 
   defp message_content(map, %__MODULE__{parts: []}), do: map
   defp message_content(map, %__MODULE__{parts: parts}), do: Map.put(map, :content, parts)
+
+  defp continuation_content(
+         map,
+         %__MODULE__{role: :assistant, interaction: %Effect.ModelInteraction{} = interaction}
+       ) do
+    calls =
+      for group <- interaction.tool_call_groups,
+          call <- group.calls do
+        %{
+          provider_call_id: call.provider_call_id,
+          name: call.name,
+          provider_name: provider_tool_name(call),
+          arguments: call.arguments,
+          provider_metadata: call.provider_metadata
+        }
+      end
+
+    map
+    |> Map.put(:tool_calls, calls)
+    |> Map.put(:provider_metadata, interaction.provider_metadata)
+    |> maybe_put_native_assistant_content(calls, interaction.provider_metadata)
+  end
+
+  defp continuation_content(
+         map,
+         %__MODULE__{role: :tool, tool_call: %Effect.ToolCall{} = call}
+       ) do
+    map
+    |> maybe_put(:tool_call_id, call.provider_call_id)
+    |> Map.put(:provider_name, provider_tool_name(call))
+    |> Map.put(:provider_metadata, call.provider_metadata)
+  end
+
+  defp continuation_content(map, _message), do: map
+
+  defp provider_tool_name(%Effect.ToolCall{name: name, provider_metadata: metadata}) do
+    Schema.get_key(metadata, :provider_tool_name, name)
+  end
+
+  defp maybe_put_native_assistant_content(map, calls, provider_metadata) do
+    if Enum.all?(calls, &(is_binary(&1.provider_call_id) and &1.provider_call_id != "")) do
+      Map.put(map, :content, Schema.get_key(provider_metadata, :assistant_text, ""))
+    else
+      map
+    end
+  end
+
+  defp maybe_put(map, _key, nil), do: map
+  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp tool_call_content(%Effect.ModelInteraction{} = interaction) do
     operations =

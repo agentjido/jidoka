@@ -28,6 +28,38 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapterTest do
     assert request.provider_metadata.provider_tool_name == call.function.name
   end
 
+  test "preserves provider tool and reasoning continuation metadata" do
+    provider_name = ToolProjection.provider_name("coding.read")
+
+    call =
+      ToolCall.new("call-google-1", provider_name, ~s({"path":"lib/jidoka.ex"}))
+      |> ToolCall.put_metadata(%{thought_signature: "google-thought"})
+
+    reasoning = %ReqLLM.Message.ReasoningDetails{
+      text: "",
+      signature: "google-reasoning",
+      encrypted?: true,
+      provider: :google,
+      format: "fixture-v1",
+      index: 0,
+      provider_data: %{}
+    }
+
+    response = response([call])
+    response = %{response | message: %{response.message | reasoning_details: [reasoning]}}
+
+    assert {:ok, decision} =
+             ResponseAdapter.decision(response, nil, "", prompt: prompt(["coding.read"]))
+
+    assert [request] = decision.operations
+    assert request.provider_metadata.thought_signature == "google-thought"
+    assert request.provider_metadata.provider_tool_name == provider_name
+    assert [detail] = decision.metadata.reasoning_details
+    assert detail.signature == "google-reasoning"
+    assert detail.provider == :google
+    assert decision.metadata.assistant_text == ""
+  end
+
   test "normalizes multiple native calls in provider order" do
     prompt = prompt(["lookup", "coding.read"])
 
