@@ -263,9 +263,9 @@ defmodule Jidoka.StabilizationContractTest do
              :error
            ]
 
-    assert {:error, {:unsupported_session_schema_version, 3, 2}} =
+    assert {:error, {:unsupported_session_schema_version, 4, 3}} =
              Session.new(%{
-               schema_version: 3,
+               schema_version: 4,
                session_id: "sess_future",
                agent_id: spec.id,
                spec: spec

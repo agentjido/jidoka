@@ -8,17 +8,18 @@ defmodule Jidoka.Session.Data do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Session.Conversation
+  alias Jidoka.Session.Environment
   alias Jidoka.Session.Lease
   alias Jidoka.Session.Lineage
-  alias Jidoka.Session.Environment
   alias Jidoka.Id
   alias Jidoka.Review
   alias Jidoka.Snapshot
   alias Jidoka.Schema
   alias Jidoka.Turn
 
-  @schema_version 2
-  @supported_schema_versions [1, 2]
+  @schema_version 3
+  @supported_schema_versions [1, 2, 3]
   @statuses [:new, :running, :hibernated, :waiting, :finished, :cancelled, :error]
 
   @schema Zoi.struct(
@@ -30,6 +31,9 @@ defmodule Jidoka.Session.Data do
               agent_id: Schema.non_empty_string(),
               spec: Zoi.lazy({Agent.Spec, :schema, []}),
               status: Schema.atom_enum(@statuses) |> Zoi.default(:new),
+              conversation:
+                Zoi.lazy({Conversation, :schema, []})
+                |> Zoi.default(Conversation.new!()),
               requests: Zoi.array(Zoi.lazy({Turn.Request, :schema, []})) |> Zoi.default([]),
               snapshots: Zoi.array(Zoi.lazy({Snapshot, :schema, []})) |> Zoi.default([]),
               result: Zoi.lazy({Turn.Result, :schema, []}) |> Zoi.nullish(),
@@ -63,9 +67,11 @@ defmodule Jidoka.Session.Data do
   @doc "Builds a durable session from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
-    with {:ok, %__MODULE__{} = session} <- Schema.parse(@schema, attrs),
+    with {:ok, attrs} <- attrs |> Schema.normalize_attrs() |> put_legacy_conversation(),
+         {:ok, %__MODULE__{} = session} <- Schema.parse(@schema, attrs),
+         {:ok, conversation} <- Conversation.from_input(session.conversation),
          :ok <- validate_schema_version(session) do
-      {:ok, session}
+      {:ok, %__MODULE__{session | conversation: conversation}}
     end
   end
 
@@ -93,6 +99,7 @@ defmodule Jidoka.Session.Data do
         agent_id: spec.id,
         spec: spec,
         status: :new,
+        conversation: Conversation.new!(),
         metadata: Keyword.get(opts, :metadata, %{})
       )
     end
@@ -116,6 +123,7 @@ defmodule Jidoka.Session.Data do
              session_id: fork_session_id,
              agent_id: source.agent_id,
              spec: source.spec,
+             conversation: source.conversation,
              requests: requests_through_snapshot(source, snapshot),
              lineage: lineage,
              environment: Keyword.get(opts, :environment, snapshot.environment),
@@ -201,9 +209,13 @@ defmodule Jidoka.Session.Data do
   @doc "Adds a completed turn result and updates semantic agent state."
   @spec put_result(t(), Turn.Result.t()) :: t()
   def put_result(%__MODULE__{} = session, %Turn.Result{} = result) do
+    request = List.last(session.requests)
+    conversation = complete_conversation(session.conversation, request, result)
+
     %__MODULE__{
       session
-      | result: result,
+      | conversation: conversation,
+        result: result,
         pending_reviews: [],
         status: :finished,
         error: nil
@@ -285,6 +297,31 @@ defmodule Jidoka.Session.Data do
   defp validate_schema_version(%__MODULE__{schema_version: version}) do
     {:error, {:unsupported_session_schema_version, version, @schema_version}}
   end
+
+  defp complete_conversation(%Conversation{} = conversation, %Turn.Request{} = request, result),
+    do: Conversation.complete!(conversation, request, result)
+
+  defp complete_conversation(nil, %Turn.Request{} = request, result),
+    do: Conversation.complete!(Conversation.new!(), request, result)
+
+  defp complete_conversation(conversation, nil, _result), do: conversation || Conversation.new!()
+
+  defp put_legacy_conversation(attrs) when is_map(attrs) do
+    if has_key?(attrs, :conversation) do
+      {:ok, attrs}
+    else
+      result = Schema.get_key(attrs, :result)
+      requests = Schema.get_key(attrs, :requests, [])
+
+      with {:ok, conversation} <- Conversation.from_legacy(result, requests) do
+        {:ok, Map.put(attrs, :conversation, conversation)}
+      end
+    end
+  end
+
+  defp put_legacy_conversation(attrs), do: {:ok, attrs}
+
+  defp has_key?(map, key), do: Map.has_key?(map, key) or Map.has_key?(map, Atom.to_string(key))
 
   defp pending_reviews_from_snapshot(%Snapshot{metadata: metadata}) do
     case Map.get(metadata, "pending_review", Map.get(metadata, :pending_review)) do
