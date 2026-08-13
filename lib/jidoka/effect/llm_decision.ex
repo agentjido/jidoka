@@ -9,6 +9,7 @@ defmodule Jidoka.Effect.LLMDecision do
   """
 
   alias Jidoka.ContentPart
+  alias Jidoka.Effect.ModelInteraction
   alias Jidoka.Effect.OperationRequest
   alias Jidoka.Schema
 
@@ -26,6 +27,7 @@ defmodule Jidoka.Effect.LLMDecision do
               name: Schema.non_empty_string() |> Zoi.nullish(),
               arguments: Zoi.map() |> Zoi.default(%{}),
               operations: Zoi.array(Zoi.lazy({OperationRequest, :schema, []})) |> Zoi.default([]),
+              interaction: Zoi.lazy({ModelInteraction, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -86,8 +88,24 @@ defmodule Jidoka.Effect.LLMDecision do
       type: :operation,
       name: name,
       arguments: arguments,
+      operations: [
+        %{
+          name: name,
+          arguments: arguments,
+          provider_call_id: Keyword.get(opts, :provider_call_id),
+          provider_metadata: Keyword.get(opts, :provider_metadata, %{})
+        }
+      ],
       metadata: Keyword.get(opts, :metadata, %{})
     )
+  end
+
+  @doc "Attaches a durable interaction record to a model decision."
+  @spec with_interaction(t(), keyword()) :: {:ok, t()} | {:error, term()}
+  def with_interaction(%__MODULE__{} = decision, opts \\ []) do
+    with {:ok, interaction} <- ModelInteraction.from_decision(decision, opts) do
+      new(%__MODULE__{decision | interaction: interaction})
+    end
   end
 
   @doc "Builds a decision that requests one or more operations."
@@ -169,9 +187,23 @@ defmodule Jidoka.Effect.LLMDecision do
     arguments = Schema.get_key(attrs, :arguments, %{})
 
     cond do
-      not is_binary(name) -> {:error, {:invalid_operation_name, name}}
-      not is_map(arguments) -> {:error, {:invalid_operation_arguments, arguments}}
-      true -> parse_typed(attrs, :operation)
+      not is_binary(name) ->
+        {:error, {:invalid_operation_name, name}}
+
+      not is_map(arguments) ->
+        {:error, {:invalid_operation_arguments, arguments}}
+
+      true ->
+        attrs
+        |> normalize_singular_operation(name, arguments)
+        |> parse_typed(:operation)
+    end
+  end
+
+  defp normalize_singular_operation(attrs, name, arguments) do
+    case Schema.get_key(attrs, :operations, []) do
+      [] -> Map.put(attrs, :operations, [%{name: name, arguments: arguments}])
+      operations -> Map.put(attrs, :operations, operations)
     end
   end
 

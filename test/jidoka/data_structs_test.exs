@@ -496,6 +496,111 @@ defmodule Jidoka.DataStructsTest do
     assert effect_id == intent.id
   end
 
+  test "model interactions normalize singular and grouped tool calls" do
+    singular =
+      Effect.LLMDecision.operation("lookup", %{"id" => "A-1"},
+        provider_call_id: "provider_call_1",
+        provider_metadata: %{"signature" => "sig_1"}
+      )
+
+    assert {:ok,
+            %Effect.LLMDecision{
+              interaction: %Effect.ModelInteraction{
+                interaction_id: "interaction_1",
+                tool_call_groups: [
+                  %Effect.ToolCallGroup{
+                    group_id: "group_1",
+                    calls: [
+                      %Effect.ToolCall{
+                        provider_call_id: "provider_call_1",
+                        call_index: 0,
+                        arguments: %{"id" => "A-1"}
+                      }
+                    ]
+                  }
+                ]
+              }
+            } = normalized} =
+             Effect.LLMDecision.with_interaction(singular,
+               interaction_id: "interaction_1",
+               group_id: "group_1"
+             )
+
+    assert Effect.ModelInteraction.to_payload(normalized.interaction) == %{
+             interaction_id: "interaction_1",
+             tool_call_groups: [
+               %{
+                 interaction_id: "interaction_1",
+                 group_id: "group_1",
+                 calls: [
+                   %{
+                     interaction_id: "interaction_1",
+                     group_id: "group_1",
+                     provider_call_id: "provider_call_1",
+                     call_index: 0,
+                     name: "lookup",
+                     arguments: %{"id" => "A-1"},
+                     provider_metadata: %{"signature" => "sig_1"}
+                   }
+                 ]
+               }
+             ]
+           }
+
+    parallel =
+      Effect.LLMDecision.operations([
+        %{name: "read_file", arguments: %{"path" => "a"}, provider_call_id: "call_a"},
+        %{name: "read_file", arguments: %{"path" => "b"}, provider_call_id: "call_b"}
+      ])
+
+    assert {:ok, interaction} =
+             Effect.ModelInteraction.from_decision(parallel,
+               interaction_id: "interaction_2",
+               group_id: "group_2"
+             )
+
+    assert Enum.map(hd(interaction.tool_call_groups).calls, &{&1.provider_call_id, &1.call_index}) ==
+             [{"call_a", 0}, {"call_b", 1}]
+  end
+
+  test "model interaction validation rejects mismatched group identity and call indexes" do
+    call =
+      Effect.ToolCall.new!(
+        interaction_id: "interaction_1",
+        group_id: "group_1",
+        call_index: 1,
+        name: "lookup"
+      )
+
+    assert {:error, :non_contiguous_tool_call_indexes} =
+             Effect.ToolCallGroup.new(
+               interaction_id: "interaction_1",
+               group_id: "group_1",
+               calls: [call]
+             )
+
+    other_call =
+      Effect.ToolCall.new!(
+        interaction_id: "interaction_other",
+        group_id: "group_1",
+        call_index: 0,
+        name: "lookup"
+      )
+
+    group =
+      Effect.ToolCallGroup.new!(
+        interaction_id: "interaction_other",
+        group_id: "group_1",
+        calls: [other_call]
+      )
+
+    assert {:error, :tool_call_group_interaction_mismatch} =
+             Effect.ModelInteraction.new(
+               interaction_id: "interaction_1",
+               tool_call_groups: [group]
+             )
+  end
+
   test "effect journals keep intents and replace results by intent id" do
     intent = Effect.Intent.new(:llm, %{request_id: "turn_1"})
     first = Effect.Result.ok(intent, %{type: :final, content: "first"})
@@ -634,6 +739,54 @@ defmodule Jidoka.DataStructsTest do
     assert restored.snapshot_id == snapshot.snapshot_id
     assert restored.cursor.phase == :after_prompt
     assert restored.turn_state.spec.id == "snapshot_agent"
+  end
+
+  test "agent snapshot restore keeps model interaction and tool-call identifiers" do
+    decision =
+      Effect.LLMDecision.operations([
+        %{
+          name: "lookup",
+          arguments: %{"id" => "A-1"},
+          provider_call_id: "provider_call_1",
+          provider_metadata: %{"opaque" => "provider_value"}
+        }
+      ])
+
+    assert {:ok, decision} =
+             Effect.LLMDecision.with_interaction(decision,
+               interaction_id: "interaction_1",
+               group_id: "group_1",
+               provider_metadata: %{"response_id" => "response_1"}
+             )
+
+    snapshot =
+      base_state()
+      |> Map.put(:llm_result, decision)
+      |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt())
+
+    assert {:ok, restored} = snapshot |> Snapshot.serialize!() |> Snapshot.deserialize()
+
+    assert %Effect.LLMDecision{
+             interaction: %Effect.ModelInteraction{
+               interaction_id: "interaction_1",
+               provider_metadata: %{"response_id" => "response_1"},
+               tool_call_groups: [
+                 %Effect.ToolCallGroup{
+                   interaction_id: "interaction_1",
+                   group_id: "group_1",
+                   calls: [
+                     %Effect.ToolCall{
+                       interaction_id: "interaction_1",
+                       group_id: "group_1",
+                       provider_call_id: "provider_call_1",
+                       call_index: 0,
+                       provider_metadata: %{"opaque" => "provider_value"}
+                     }
+                   ]
+                 }
+               ]
+             }
+           } = restored.turn_state.llm_result
   end
 
   test "snapshot serialization rejects non-portable runtime values" do

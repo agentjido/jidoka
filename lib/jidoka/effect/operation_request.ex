@@ -15,6 +15,8 @@ defmodule Jidoka.Effect.OperationRequest do
               arguments: Zoi.map() |> Zoi.default(%{}),
               request_id: Schema.non_empty_string() |> Zoi.nullish(),
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              provider_call_id: Schema.non_empty_string() |> Zoi.nullish(),
+              provider_metadata: Zoi.map() |> Zoi.default(%{}),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -48,6 +50,7 @@ defmodule Jidoka.Effect.OperationRequest do
     |> Map.from_struct()
     |> Map.reject(fn
       {_key, nil} -> true
+      {:provider_metadata, metadata} when metadata == %{} -> true
       {:metadata, metadata} when metadata == %{} -> true
       {_key, _value} -> false
     end)
