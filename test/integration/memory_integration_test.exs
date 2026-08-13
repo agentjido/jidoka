@@ -142,7 +142,16 @@ defmodule Jidoka.MemoryIntegrationTest do
              )
 
     assert {:ok, [entry]} = Memory.Store.list_entries(memory_store)
-    assert entry.id == "mem_capture"
+
+    assert entry.id ==
+             Jidoka.Id.stable("mem", [
+               spec.id,
+               "direct",
+               entry.metadata["request_id"],
+               :conversation
+             ])
+
+    assert entry.metadata["idempotency_key"] == entry.id
     assert entry.content =~ "User: Capture this request"
     assert entry.content =~ "Assistant: Captured response."
     assert entry.metadata["source"] == "jidoka_capture"

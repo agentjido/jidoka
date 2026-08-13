@@ -59,7 +59,7 @@ defmodule Jidoka.Memory.Store.JidoMemory do
     namespace = namespace(entry.agent_id, entry.session_id, scope(entry), opts)
 
     attrs = %{
-      id: entry.id,
+      id: request.idempotency_key || entry.id,
       namespace: namespace,
       class: metadata_value(entry.metadata, :class, :semantic),
       kind: metadata_value(entry.metadata, :kind, :fact),
@@ -69,6 +69,7 @@ defmodule Jidoka.Memory.Store.JidoMemory do
       source: metadata_value(entry.metadata, :source, "jidoka"),
       metadata:
         entry.metadata
+        |> maybe_put_metadata("idempotency_key", request.idempotency_key)
         |> Map.put("jidoka_agent_id", entry.agent_id)
         |> maybe_put_metadata("jidoka_session_id", entry.session_id)
     }

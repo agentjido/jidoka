@@ -31,14 +31,37 @@ defmodule Jidoka.Memory.Store.InMemory do
   end
 
   @impl true
-  def write(%WriteRequest{entry: %Entry{} = entry} = request, opts) do
+  def write(%WriteRequest{entry: %Entry{} = entry, idempotency_key: key} = request, opts) do
     pid = fetch_pid!(opts)
+    entry = put_idempotency_key(entry, key)
 
-    Agent.update(pid, fn entries ->
-      [entry | Enum.reject(entries, &(&1.id == entry.id))]
-    end)
+    stored_entry =
+      Agent.get_and_update(pid, fn entries ->
+        stored_entry = idempotent_entry(entries, entry, key)
+        updated = [stored_entry | Enum.reject(entries, &(&1.id == stored_entry.id))]
+        {stored_entry, updated}
+      end)
 
-    WriteResult.new(request: request, entry: entry)
+    WriteResult.new(request: request, entry: stored_entry)
+  end
+
+  defp idempotent_entry(_entries, entry, nil), do: entry
+
+  defp idempotent_entry(entries, entry, key) do
+    case Enum.find(entries, &(idempotency_key(&1) == key)) do
+      nil -> entry
+      existing -> existing
+    end
+  end
+
+  defp put_idempotency_key(entry, nil), do: entry
+
+  defp put_idempotency_key(%Entry{} = entry, key) do
+    %Entry{entry | metadata: Map.put(entry.metadata, "idempotency_key", key)}
+  end
+
+  defp idempotency_key(%Entry{} = entry) do
+    Map.get(entry.metadata, "idempotency_key", Map.get(entry.metadata, :idempotency_key))
   end
 
   @impl true

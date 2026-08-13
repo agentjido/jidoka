@@ -3,6 +3,7 @@ defmodule Jidoka.Memory.Runtime do
 
   alias Jidoka.Agent
   alias Jidoka.Context
+  alias Jidoka.Id
   alias Jidoka.Memory
   alias Jidoka.Turn
 
@@ -43,18 +44,24 @@ defmodule Jidoka.Memory.Runtime do
       context = normalize_context(Keyword.get(opts, :context, %{}))
 
       with {:ok, store} <- store_with_policy(store, spec.memory, context, opts) do
-        entry =
-          Memory.Entry.new!(
-            [
-              agent_id: spec.id,
-              session_id: write_session_id(spec.memory, opts),
-              content: content,
-              metadata: Keyword.get(opts, :metadata, %{})
-            ],
-            Keyword.take(opts, [:id_generator])
+        entry_attrs =
+          [
+            id: Keyword.get(opts, :entry_id),
+            agent_id: spec.id,
+            session_id: write_session_id(spec.memory, opts),
+            content: content,
+            metadata: Keyword.get(opts, :metadata, %{})
+          ]
+          |> Enum.reject(&nil_attribute?/1)
+
+        entry = Memory.Entry.new!(entry_attrs, Keyword.take(opts, [:id_generator]))
+
+        request =
+          Memory.WriteRequest.new!(
+            entry: entry,
+            idempotency_key: Keyword.get(opts, :idempotency_key)
           )
 
-        request = Memory.WriteRequest.new!(entry: entry)
         Memory.Store.write(store, request)
       end
     end
@@ -65,10 +72,23 @@ defmodule Jidoka.Memory.Runtime do
   def capture_turn(%Agent.Spec{memory: memory} = spec, %Turn.Request{} = request, result, opts) do
     if Agent.Spec.Memory.capture_conversation?(memory) do
       content = "User: #{request.input}\nAssistant: #{result.content}"
-      write(spec, content, capture_opts(request, opts))
+      capture_id = capture_id(spec, request, opts, :conversation)
+      write(spec, content, capture_opts(request, opts, capture_id, :conversation))
     else
       {:ok, nil}
     end
+  end
+
+  @doc false
+  @spec capture_id(Agent.Spec.t(), Turn.Request.t(), keyword(), atom()) :: String.t()
+  def capture_id(%Agent.Spec{} = spec, %Turn.Request{} = request, opts, capture_kind)
+      when is_list(opts) and is_atom(capture_kind) do
+    Id.stable("mem", [
+      spec.id,
+      Keyword.get(opts, :session_id, "direct"),
+      request.request_id,
+      capture_kind
+    ])
   end
 
   defp memory_session_id(%{scope: :session}, opts), do: Keyword.get(opts, :session_id)
@@ -132,14 +152,20 @@ defmodule Jidoka.Memory.Runtime do
   defp normalize_context(%Context{} = context), do: context
   defp normalize_context(context), do: Context.from_data!(context)
 
-  defp capture_opts(%Turn.Request{} = request, opts) do
+  defp capture_opts(%Turn.Request{} = request, opts, capture_id, capture_kind) do
     opts
     |> Keyword.put(:context, request.context)
+    |> Keyword.put(:entry_id, capture_id)
+    |> Keyword.put(:idempotency_key, capture_id)
     |> Keyword.put(:metadata, %{
       "class" => :episodic,
-      "kind" => :conversation,
+      "kind" => capture_kind,
       "source" => "jidoka_capture",
-      "request_id" => request.request_id
+      "request_id" => request.request_id,
+      "session_id" => Keyword.get(opts, :session_id),
+      "idempotency_key" => capture_id
     })
   end
+
+  defp nil_attribute?({_key, value}), do: is_nil(value)
 end

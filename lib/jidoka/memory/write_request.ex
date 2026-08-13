@@ -1,5 +1,10 @@
 defmodule Jidoka.Memory.WriteRequest do
-  @moduledoc "Request to write one memory entry."
+  @moduledoc """
+  Request to write one memory entry.
+
+  Stores must treat repeated writes with the same non-null `idempotency_key` as
+  one logical write and return the first visible entry.
+  """
 
   alias Jidoka.Memory.Entry
   alias Jidoka.Schema
@@ -8,6 +13,7 @@ defmodule Jidoka.Memory.WriteRequest do
             __MODULE__,
             %{
               entry: Zoi.lazy({Entry, :schema, []}),
+              idempotency_key: Schema.non_empty_string() |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true

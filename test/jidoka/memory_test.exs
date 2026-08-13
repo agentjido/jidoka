@@ -137,6 +137,40 @@ defmodule Jidoka.MemoryTest do
     assert Enum.map(all_entries, & &1.id) == ["mem_agent", "mem_session", "mem_other"]
   end
 
+  test "memory stores collapse repeated idempotency keys to one visible entry" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+
+    first =
+      Memory.Entry.new!(
+        id: "mem_first",
+        agent_id: "memory_agent",
+        content: "First capture"
+      )
+
+    second =
+      Memory.Entry.new!(
+        id: "mem_second",
+        agent_id: "memory_agent",
+        content: "Repeated capture"
+      )
+
+    assert {:ok, %Memory.WriteResult{entry: %{id: "mem_first"}}} =
+             Memory.Store.write(
+               store,
+               Memory.WriteRequest.new!(entry: first, idempotency_key: "capture-key")
+             )
+
+    assert {:ok, %Memory.WriteResult{entry: %{id: "mem_first"}}} =
+             Memory.Store.write(
+               store,
+               Memory.WriteRequest.new!(entry: second, idempotency_key: "capture-key")
+             )
+
+    assert {:ok, [%{id: "mem_first", content: "First capture"}]} =
+             Memory.Store.list_entries(store)
+  end
+
   test "memory writes require context namespace values when configured" do
     {:ok, pid} = InMemory.start_link()
 

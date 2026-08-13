@@ -293,11 +293,9 @@ defmodule Jidoka.Session.Execution do
        ) do
     case TurnRunner.run(plan, request, capabilities, opts) do
       {:ok, %Turn.Result{} = result} ->
-        _capture = Memory.Runtime.capture_turn(plan.spec, request, result, opts)
-
         session
         |> Session.put_result(result)
-        |> persist_session_result(opts, fn session -> {:ok, session, result} end)
+        |> persist_completed_session(request, result, opts)
 
       {:hibernate, %Snapshot{} = snapshot} ->
         session
@@ -619,9 +617,11 @@ defmodule Jidoka.Session.Execution do
        ) do
     case TurnRunner.resume(snapshot, capabilities, opts) do
       {:ok, %Turn.Result{} = result} ->
+        request = snapshot.turn_state.request
+
         session
         |> Session.put_result(result)
-        |> persist_session_result(opts, fn session -> {:ok, session, result} end)
+        |> persist_completed_session(request, result, opts)
 
       {:hibernate, %Snapshot{} = snapshot} ->
         session
@@ -638,6 +638,19 @@ defmodule Jidoka.Session.Execution do
   defp persist_session_result(%Session{} = session, opts, callback) do
     with {:ok, session} <- persist_session(session, opts) do
       callback.(session)
+    end
+  end
+
+  defp persist_completed_session(
+         %Session{} = session,
+         %Turn.Request{} = request,
+         %Turn.Result{} = result,
+         opts
+       ) do
+    with {:ok, session} <- persist_session(session, opts) do
+      capture_opts = Keyword.put(opts, :session_id, session.session_id)
+      _capture = Memory.Runtime.capture_turn(session.spec, request, result, capture_opts)
+      {:ok, session, result}
     end
   end
 

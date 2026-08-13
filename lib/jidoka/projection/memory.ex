@@ -46,7 +46,12 @@ defmodule Jidoka.Projection.Memory do
   end
 
   def project(%Memory.WriteRequest{} = request) do
-    %{entry: project(request.entry), metadata: Portable.project(request.metadata)}
+    %{
+      entry: project(request.entry),
+      idempotency_key: request.idempotency_key,
+      metadata: Portable.project(request.metadata)
+    }
+    |> reject_nil_values()
   end
 
   def project(%Memory.WriteResult{} = result) do
