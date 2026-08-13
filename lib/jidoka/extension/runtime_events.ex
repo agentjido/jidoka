@@ -47,6 +47,7 @@ defmodule Jidoka.Extension.RuntimeEvents do
   end
 
   defp event_name(%RuntimeEvent{event: :turn_started}), do: "turn.start"
+  defp event_name(%RuntimeEvent{event: :context_compacted}), do: "session.compact"
 
   defp event_name(%RuntimeEvent{event: event}) when event in [:turn_finished, :turn_hibernated, :turn_failed],
     do: "turn.end"

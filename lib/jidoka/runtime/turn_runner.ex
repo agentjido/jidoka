@@ -120,7 +120,8 @@ defmodule Jidoka.Runtime.TurnRunner do
     case Keyword.fetch(opts, :model_turn_executor) do
       {:ok, executor} when is_function(executor, 2) ->
         case executor.(plan, state) do
-          %Turn.State{} = planned_state -> {:ok, planned_state}
+          %Turn.State{context_projection_error: nil} = planned_state -> {:ok, planned_state}
+          %Turn.State{context_projection_error: reason} -> {:error, reason}
           other -> {:error, {:invalid_model_turn_result, other}}
         end
 

@@ -2,6 +2,7 @@ defmodule Jidoka.Turn.Plan do
   @moduledoc "Executable data compiled from `Jidoka.Agent.Spec`."
 
   alias Jidoka.Config
+  alias Jidoka.ContextWindow.Policy
   alias Jidoka.Schema
 
   @phases [
@@ -20,6 +21,7 @@ defmodule Jidoka.Turn.Plan do
               workflow_profile: Schema.atom_enum(@workflow_profiles) |> Zoi.default(:tool_loop),
               max_model_turns: Zoi.integer() |> Zoi.positive() |> Zoi.default(8),
               timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.default(30_000),
+              context_policy: Zoi.lazy({Policy, :schema, []}) |> Zoi.default(Policy.new!()),
               phases: Zoi.array(Schema.atom_enum(@phases)) |> Zoi.default(@phases),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
@@ -38,8 +40,9 @@ defmodule Jidoka.Turn.Plan do
   @doc "Compiles an agent specification into executable turn data."
   @spec new(Jidoka.Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
   def new(%Jidoka.Agent.Spec{} = spec) do
-    with :ok <- Jidoka.Agent.Spec.validate_operation_policies(spec) do
-      Schema.parse(@schema, new_attrs(spec))
+    with :ok <- Jidoka.Agent.Spec.validate_operation_policies(spec),
+         {:ok, context_policy} <- Policy.resolve(spec) do
+      Schema.parse(@schema, new_attrs(spec, context_policy))
     end
   end
 
@@ -52,7 +55,7 @@ defmodule Jidoka.Turn.Plan do
     end
   end
 
-  defp new_attrs(%Jidoka.Agent.Spec{} = spec) do
+  defp new_attrs(%Jidoka.Agent.Spec{} = spec, %Policy{} = context_policy) do
     defaults = spec.runtime_defaults
 
     %{
@@ -68,6 +71,7 @@ defmodule Jidoka.Turn.Plan do
             :timeout_ms,
             default_value(defaults, :timeout, Config.default_turn_timeout_ms())
           ),
+      context_policy: context_policy,
       phases: default_value(defaults, :phases, @phases),
       metadata: default_value(defaults, :metadata, %{})
     }

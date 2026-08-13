@@ -36,6 +36,8 @@ defmodule Jidoka.Projection.Turn do
       agent_state: Agent.project(state.agent_state),
       memory: Memory.project(state.memory),
       prompt: Portable.project(state.prompt),
+      context_projection: Portable.project(state.context_projection),
+      context_projection_error: Portable.project(state.context_projection_error),
       llm_result: Portable.project(state.llm_result),
       operation_plan: Portable.project(state.operation_plan),
       pending_effects: Enum.map(state.pending_effects, &Effect.project/1),

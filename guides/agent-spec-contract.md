@@ -99,7 +99,7 @@ them first, then validate the normalized value against the final schema.
 | `memory` | `Jidoka.Agent.Spec.Memory.t()` or `nil` | `nil` | Optional conversation memory policy. Runtime stores are injected separately. |
 | `operations` | `[Jidoka.Agent.Spec.Operation.t()]` | `[]` | Model-callable operation definitions (data only; the operation source supplies the capability). |
 | `controls` | `Jidoka.Agent.Spec.Controls.t()` | `Controls.new!()` | Policy controls (input/operation/output, `max_turns`, `timeout_ms`). |
-| `runtime_defaults` | map | `%{}` | Default knobs consumed by `Turn.Plan.new/1` (`:workflow_profile`, `:max_model_turns`, `:timeout_ms`). |
+| `runtime_defaults` | map | `%{}` | Default knobs consumed by `Turn.Plan.new/1` (`:workflow_profile`, `:max_model_turns`, `:timeout_ms`, `:context_policy`). |
 | `execution_profile` | string or `nil` | `nil` | Inert trusted-profile selector. The host resolves it; the spec cannot contain backend controls. |
 | `extensions` | `[Jidoka.Extension.Request.t()]` | `[]` | Ordered, inert extension requests. A trusted host resolves them later. |
 | `metadata` | map | `%{}` | Caller-defined metadata; opaque to Jidoka. |
@@ -191,7 +191,11 @@ A [`Jidoka.Agent.Spec.Controls`](`Jidoka.Agent.Spec.Controls`) struct with
 
 Plain maps. `runtime_defaults` feeds defaults into
 [`Jidoka.Turn.Plan.new/1`](`Jidoka.Turn.Plan`). `metadata` is opaque caller
-data.
+data. A `context_policy` map accepts `input_budget`, `output_reserve`,
+`minimum_recent_turns`, and `bytes_per_token`. Prompt projection removes only
+complete old turns. It keeps the active turn and the configured recent-turn
+floor. It returns an error before a model call when required content cannot
+fit. The complete transcript stays in session conversation state.
 
 ## Common Patterns
 

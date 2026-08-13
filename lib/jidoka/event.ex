@@ -16,6 +16,7 @@ defmodule Jidoka.Event do
   @event_defaults %{
     turn_started: %{category: :workflow, phase: :start, status: :started},
     prompt_assembled: %{category: :workflow, phase: :assemble_prompt, status: :completed},
+    context_compacted: %{category: :workflow, phase: :assemble_prompt, status: :completed},
     effect_planned: %{category: :effect, status: :planned},
     effect_started: %{category: :effect, phase: :interpret_effect, status: :started},
     effect_replayed: %{category: :effect, phase: :interpret_effect, status: :replayed},

@@ -64,15 +64,15 @@ defmodule Jidoka.Turn.Result do
       model: Config.model_ref(state.spec.model),
       input: state.request.input,
       context_keys: context_keys(Jidoka.Context.data(state.request.context)),
-      prompt: prompt_debug(state.prompt),
+      prompt: prompt_debug(state.prompt, state.context_projection),
       diagnostics: state.diagnostics,
       started_at_ms: state.started_at_ms
     }
   end
 
-  defp prompt_debug(nil), do: nil
+  defp prompt_debug(nil, _context_projection), do: nil
 
-  defp prompt_debug(%{} = prompt) do
+  defp prompt_debug(%{} = prompt, context_projection) do
     operations = Map.get(prompt, :operations, Map.get(prompt, "operations", []))
 
     %{
@@ -88,7 +88,8 @@ defmodule Jidoka.Turn.Result do
       operation_count: length(operations),
       result: Map.get(prompt, :result, Map.get(prompt, "result")),
       memory: Map.get(prompt, :memory, Map.get(prompt, "memory")),
-      generation: Map.get(prompt, :generation, Map.get(prompt, "generation"))
+      generation: Map.get(prompt, :generation, Map.get(prompt, "generation")),
+      context_projection: Portable.project(context_projection)
     }
   end
 

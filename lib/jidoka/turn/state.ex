@@ -15,6 +15,8 @@ defmodule Jidoka.Turn.State do
               agent_state: Zoi.lazy({:"Elixir.Jidoka.Agent.State", :schema, []}),
               memory: Zoi.lazy({:"Elixir.Jidoka.Memory.RecallResult", :schema, []}) |> Zoi.nullish(),
               prompt: Zoi.any() |> Zoi.nullish(),
+              context_projection: Zoi.map() |> Zoi.nullish(),
+              context_projection_error: Zoi.any() |> Zoi.nullish(),
               llm_result: Zoi.lazy({:"Elixir.Jidoka.Effect.LLMDecision", :schema, []}) |> Zoi.nullish(),
               operation_plan: Zoi.lazy({:"Elixir.Jidoka.Effect.OperationRequest", :schema, []}) |> Zoi.nullish(),
               pending_effects: Zoi.array(Zoi.lazy({:"Elixir.Jidoka.Effect.Intent", :schema, []})) |> Zoi.default([]),

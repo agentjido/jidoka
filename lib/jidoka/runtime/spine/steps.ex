@@ -4,6 +4,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Config
+  alias Jidoka.ContextWindow
   alias Jidoka.Effect
   alias Jidoka.Id
   alias Jidoka.Portable
@@ -15,15 +16,12 @@ defmodule Jidoka.Runtime.Spine.Steps do
     %Turn.State{} = state = append_request_message(state)
     %Turn.State{} = state = append_memory_recalled(state)
 
-    messages =
+    prefix =
       [
         Agent.Message.system(state.spec.instructions),
         memory_message(state.spec.memory, state.memory)
       ]
       |> Enum.reject(&is_nil/1)
-      |> Kernel.++(state.agent_state.messages)
-
-    messages = Enum.map(messages, &Agent.Message.to_map/1)
 
     operations =
       Enum.map(state.spec.operations, fn %Operation{} = operation ->
@@ -39,7 +37,6 @@ defmodule Jidoka.Runtime.Spine.Steps do
 
     prompt = %{
       model: Config.model_ref(state.spec.model),
-      messages: messages,
       operations: operations,
       result: result_contract(state.spec.result),
       memory: memory_contract(state.memory),
@@ -48,21 +45,16 @@ defmodule Jidoka.Runtime.Spine.Steps do
       loop_index: state.loop_index
     }
 
-    %Turn.State{
-      state
-      | prompt: prompt
-    }
-    |> transition()
-    |> transition_event(:prompt_assembled,
-      agent_id: state.spec.id,
-      request_id: state.request.request_id,
-      loop_index: state.loop_index
-    )
-    |> Turn.Transition.commit()
+    state
+    |> project_context(prompt, prefix)
+    |> append_prompt_event()
   end
 
   @doc "Plans the next model effect from assembled turn state."
   @spec plan_model_effect(Turn.State.t()) :: Turn.State.t()
+  def plan_model_effect(%Turn.State{context_projection_error: error} = state) when not is_nil(error),
+    do: state
+
   def plan_model_effect(%Turn.State{} = state) do
     payload = %{
       agent_id: state.spec.id,
@@ -106,6 +98,63 @@ defmodule Jidoka.Runtime.Spine.Steps do
   defp transition_event(%Turn.Transition{} = transition, event, attrs) do
     Turn.Transition.event(transition, event, attrs)
   end
+
+  defp project_context(%Turn.State{} = state, prompt, prefix) do
+    case ContextWindow.project(
+           prompt,
+           prefix,
+           state.agent_state.messages,
+           state.plan.context_policy,
+           state.request.request_id
+         ) do
+      {:ok, projected_prompt, evidence} ->
+        %Turn.State{
+          state
+          | prompt: projected_prompt,
+            context_projection: evidence,
+            context_projection_error: nil
+        }
+
+      {:error, reason, evidence} ->
+        %Turn.State{
+          state
+          | prompt: nil,
+            context_projection: evidence,
+            context_projection_error: reason,
+            diagnostics: state.diagnostics ++ [reason]
+        }
+    end
+  end
+
+  defp append_prompt_event(%Turn.State{} = state) do
+    transition =
+      state
+      |> transition()
+      |> maybe_append_compaction_event()
+      |> transition_event(:prompt_assembled,
+        agent_id: state.spec.id,
+        request_id: state.request.request_id,
+        loop_index: state.loop_index,
+        data: %{context_projection: state.context_projection}
+      )
+
+    Turn.Transition.commit(transition)
+  end
+
+  defp maybe_append_compaction_event(
+         %Turn.Transition{state: %Turn.State{context_projection: %{status: :compacted}}} = transition
+       ) do
+    state = transition.state
+
+    transition_event(transition, :context_compacted,
+      agent_id: state.spec.id,
+      request_id: state.request.request_id,
+      loop_index: state.loop_index,
+      data: state.context_projection
+    )
+  end
+
+  defp maybe_append_compaction_event(%Turn.Transition{} = transition), do: transition
 
   defp result_contract(nil), do: nil
 
