@@ -25,11 +25,19 @@ defmodule Jidoka.Adapter.ReqLLM.ToolProjection do
   @doc "Builds a registry and ReqLLM tools from an assembled prompt."
   @spec from_prompt(map()) :: {:ok, [ReqLLM.Tool.t()]} | {:error, term()}
   def from_prompt(prompt) when is_map(prompt) do
+    with {:ok, registry} <- registry_from_prompt(prompt) do
+      tools(registry)
+    end
+  end
+
+  @doc false
+  @spec registry_from_prompt(map()) :: {:ok, Registry.t()} | {:error, term()}
+  def registry_from_prompt(prompt) when is_map(prompt) do
     prompt
     |> Schema.get_key(:operations, [])
     |> prompt_operations()
     |> case do
-      {:ok, operations} -> operations |> Registry.new() |> with_tools()
+      {:ok, operations} -> Registry.new(operations)
       error -> error
     end
   end
@@ -66,9 +74,6 @@ defmodule Jidoka.Adapter.ReqLLM.ToolProjection do
       "jidoka_#{readable}_#{hash}"
     end
   end
-
-  defp with_tools({:ok, registry}), do: tools(registry)
-  defp with_tools({:error, reason}), do: {:error, reason}
 
   defp tool(%Operation{} = operation) do
     metadata = operation.metadata || %{}

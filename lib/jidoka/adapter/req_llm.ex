@@ -126,13 +126,15 @@ defmodule Jidoka.Adapter.ReqLLM do
     if stream_enabled?(opts) do
       generate_streaming_response(model, messages, llm_opts, intent, opts)
     else
-      generate_text_response(model, messages, llm_opts)
+      generate_text_response(model, messages, llm_opts, intent)
     end
   end
 
-  defp generate_text_response(model, messages, llm_opts) do
+  defp generate_text_response(model, messages, llm_opts, %Effect.Intent{} = intent) do
     with {:ok, response} <- ReqLLM.Generation.generate_text(model, messages, llm_opts) do
-      decision(response, model)
+      ResponseAdapter.decision(response, model, ReqLLM.Response.text(response),
+        prompt: Schema.get_key(intent.payload, :prompt)
+      )
     end
   end
 
@@ -149,7 +151,8 @@ defmodule Jidoka.Adapter.ReqLLM do
                on_thinking: &handle_stream_thinking_delta(stream_state_key, intent, opts, &1)
              ),
            text <- response_text(stream_state_key, response),
-           {:ok, decision} <- ResponseAdapter.decision(response, model, text) do
+           {:ok, decision} <-
+             ResponseAdapter.decision(response, model, text, prompt: Schema.get_key(intent.payload, :prompt)) do
         emit_remaining_final_delta(stream_state_key, intent, decision, opts)
         {:ok, decision}
       end
