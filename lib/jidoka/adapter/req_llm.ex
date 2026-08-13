@@ -16,6 +16,7 @@ defmodule Jidoka.Adapter.ReqLLM do
   alias Jidoka.Event
   alias Jidoka.Adapter.ReqLLM.PromptAdapter
   alias Jidoka.Adapter.ReqLLM.ResponseAdapter
+  alias Jidoka.Adapter.ReqLLM.ToolProjection
   alias Jidoka.Runtime.EventDispatcher
   alias Jidoka.Schema
 
@@ -49,13 +50,15 @@ defmodule Jidoka.Adapter.ReqLLM do
   @spec generate(Effect.Intent.t(), Effect.Journal.t(), [option()]) ::
           {:ok, Effect.LLMDecision.t()} | {:error, term()}
   def generate(%Effect.Intent{kind: :llm, payload: payload} = intent, _journal, opts) do
-    llm_opts =
-      payload
-      |> generation_opts()
-      |> Keyword.merge(provider_opts(opts))
-
     with {:ok, model} <- fetch_model(payload, opts),
-         {:ok, messages} <- build_messages(payload) do
+         {:ok, messages} <- build_messages(payload),
+         {:ok, tools} <- tools(payload) do
+      llm_opts =
+        payload
+        |> generation_opts()
+        |> Keyword.merge(provider_opts(opts))
+        |> put_tools(tools)
+
       generate_response(model, messages, llm_opts, intent, opts)
     end
   end
@@ -70,6 +73,16 @@ defmodule Jidoka.Adapter.ReqLLM do
       {:ok, prompt} when is_map(prompt) -> PromptAdapter.build(prompt)
       {:ok, prompt} -> {:error, {:invalid_prompt_payload, prompt}}
       :error -> PromptAdapter.build(payload_or_prompt)
+    end
+  end
+
+  @doc false
+  @spec tools(map()) :: {:ok, [ReqLLM.Tool.t()]} | {:error, term()}
+  def tools(payload_or_prompt) when is_map(payload_or_prompt) do
+    case Schema.fetch_key(payload_or_prompt, :prompt) do
+      {:ok, prompt} when is_map(prompt) -> ToolProjection.from_prompt(prompt)
+      {:ok, prompt} -> {:error, {:invalid_prompt_payload, prompt}}
+      :error -> ToolProjection.from_prompt(payload_or_prompt)
     end
   end
 
@@ -103,8 +116,11 @@ defmodule Jidoka.Adapter.ReqLLM do
   end
 
   defp provider_opts(opts) do
-    Keyword.drop(opts, [:model, :stream, :stream_to, :on_event])
+    Keyword.drop(opts, [:model, :stream, :stream_to, :on_event, :tools])
   end
+
+  defp put_tools(opts, []), do: Keyword.delete(opts, :tools)
+  defp put_tools(opts, tools), do: Keyword.put(opts, :tools, tools)
 
   defp generate_response(model, messages, llm_opts, %Effect.Intent{} = intent, opts) do
     if stream_enabled?(opts) do

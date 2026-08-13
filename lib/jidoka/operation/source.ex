@@ -10,6 +10,7 @@ defmodule Jidoka.Operation.Source do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Operation.Capability
+  alias Jidoka.Operation.Registry
 
   @type source :: struct()
   @type compiled :: %{
@@ -59,10 +60,10 @@ defmodule Jidoka.Operation.Source do
     sources = List.wrap(sources)
 
     with {:ok, entries} <- compile_sources(sources, opts),
-         :ok <- validate_unique_names(entries) do
+         {:ok, registry} <- registry(entries) do
       {:ok,
        %{
-         operations: Enum.flat_map(entries, & &1.operations),
+         operations: Registry.operations(registry),
          capability: routed_capability(entries),
          metadata: Enum.flat_map(entries, & &1.metadata)
        }}
@@ -82,18 +83,10 @@ defmodule Jidoka.Operation.Source do
     end)
   end
 
-  defp validate_unique_names(entries) do
-    entries
-    |> Enum.flat_map(& &1.operations)
-    |> Enum.reduce_while(MapSet.new(), fn %Operation{name: name}, seen ->
-      if MapSet.member?(seen, name) do
-        {:halt, {:error, {:duplicate_operation_source_name, name}}}
-      else
-        {:cont, MapSet.put(seen, name)}
-      end
-    end)
-    |> case do
-      %MapSet{} -> :ok
+  defp registry(entries) do
+    case Registry.new([], Enum.flat_map(entries, & &1.operations)) do
+      {:ok, registry} -> {:ok, registry}
+      {:error, {:duplicate_operation_name, name}} -> {:error, {:duplicate_operation_source_name, name}}
       {:error, reason} -> {:error, reason}
     end
   end

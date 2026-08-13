@@ -3,6 +3,7 @@ defmodule Jidoka.Turn.Plan do
 
   alias Jidoka.Config
   alias Jidoka.ContextWindow.Policy
+  alias Jidoka.Operation.Registry
   alias Jidoka.Schema
 
   @phases [
@@ -40,7 +41,9 @@ defmodule Jidoka.Turn.Plan do
   @doc "Compiles an agent specification into executable turn data."
   @spec new(Jidoka.Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
   def new(%Jidoka.Agent.Spec{} = spec) do
-    with :ok <- Jidoka.Agent.Spec.validate_operation_policies(spec),
+    with {:ok, registry} <- Registry.new(spec.operations),
+         spec = %Jidoka.Agent.Spec{spec | operations: Registry.operations(registry)},
+         :ok <- Jidoka.Agent.Spec.validate_operation_policies(spec),
          {:ok, context_policy} <- Policy.resolve(spec) do
       Schema.parse(@schema, new_attrs(spec, context_policy))
     end

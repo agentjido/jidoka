@@ -14,6 +14,9 @@ defmodule Jidoka.Turn.Execution do
   alias Jidoka.Instructions
   alias Jidoka.Memory
   alias Jidoka.ModelPolicy
+  alias Jidoka.Operation.Registry
+  alias Jidoka.Operation.Registry.Capability, as: RegistryCapability
+  alias Jidoka.Operation.Source
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Limits
   alias Jidoka.Adapter.ReqLLM
@@ -48,6 +51,8 @@ defmodule Jidoka.Turn.Execution do
   @spec prepare(plan_input(), request_input(), opts()) :: {:ok, prepared()} | {:error, term()}
   def prepare(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- plan(spec_or_plan),
+         {:ok, operation_setup} <- prepare_operation_setup(plan, opts),
+         plan = operation_setup.plan,
          opts = runtime_opts(plan, opts),
          {:ok, limits} <- Limits.resolve(plan, opts),
          plan = Limits.apply_plan(plan, limits),
@@ -57,6 +62,8 @@ defmodule Jidoka.Turn.Execution do
          {:ok, plan} <- Instructions.resolve(plan, request, opts),
          {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts),
          {:ok, capabilities} <- normalize_capabilities(opts) do
+      capabilities = attach_operation_registry(capabilities, operation_setup)
+
       {:ok,
        %{
          plan: plan,
@@ -81,11 +88,14 @@ defmodule Jidoka.Turn.Execution do
           | {:error, term()}
   def prepare_resume(snapshot_input, opts \\ []) do
     with {:ok, snapshot} <- Snapshot.from_input(snapshot_input),
+         {:ok, operation_setup} <- prepare_resume_operation_setup(snapshot, opts),
+         snapshot = operation_setup.snapshot,
          opts = runtime_opts(snapshot, opts),
          {:ok, limits} <- Limits.resolve(snapshot.turn_state.plan, opts),
          snapshot = apply_snapshot_limits(snapshot, limits),
          opts = Keyword.put(opts, :runtime_limits, limits),
          {:ok, capabilities} <- normalize_capabilities(opts) do
+      capabilities = attach_operation_registry(capabilities, operation_setup)
       {:ok, %{snapshot: snapshot, capabilities: capabilities, opts: opts}}
     end
   end
@@ -179,6 +189,54 @@ defmodule Jidoka.Turn.Execution do
         :error -> attrs
       end
     end)
+  end
+
+  defp prepare_operation_setup(%Turn.Plan{spec: %Agent.Spec{} = spec} = plan, opts) do
+    with {:ok, compiled} <- compile_operation_sources(opts),
+         {:ok, registry} <- Registry.new(spec.operations, compiled.operations) do
+      spec = %Agent.Spec{spec | operations: Registry.operations(registry)}
+
+      with :ok <- Agent.Spec.validate_operation_policies(spec) do
+        {:ok,
+         %{
+           plan: %Turn.Plan{plan | spec: spec},
+           registry: registry,
+           extension_capability: compiled.capability
+         }}
+      end
+    end
+  end
+
+  defp prepare_resume_operation_setup(%Snapshot{} = snapshot, opts) do
+    with {:ok, compiled} <- compile_operation_sources(opts),
+         {:ok, registry} <- Registry.new(snapshot.turn_state.plan.spec.operations),
+         {:ok, registry} <- Registry.mark_extensions(registry, compiled.operations) do
+      {:ok,
+       %{
+         snapshot: snapshot,
+         registry: registry,
+         extension_capability: compiled.capability
+       }}
+    end
+  end
+
+  defp compile_operation_sources(opts) do
+    case Keyword.get(opts, :operation_sources, []) do
+      [] -> {:ok, %{operations: [], capability: nil, metadata: []}}
+      nil -> {:ok, %{operations: [], capability: nil, metadata: []}}
+      sources -> Source.compile(sources, Keyword.get(opts, :operation_source_opts, opts))
+    end
+  end
+
+  defp attach_operation_registry(%Capabilities{} = capabilities, operation_setup) do
+    wrapped =
+      RegistryCapability.wrap(
+        operation_setup.registry,
+        capabilities.operations,
+        operation_setup.extension_capability
+      )
+
+    %Capabilities{capabilities | operations: wrapped}
   end
 
   defp apply_snapshot_limits(%Snapshot{} = snapshot, %Limits.Applied{} = limits) do

@@ -4,13 +4,16 @@ defmodule Jidoka.Turn.State.OperationPlanner do
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Id
+  alias Jidoka.Operation.Registry
   alias Jidoka.Turn
 
   @spec plan_turn(term(), Effect.LLMDecision.t(), String.t(), map()) ::
           {:ok, term()} | {:error, term()}
   def plan_turn(state, %Effect.LLMDecision{} = decision, name, arguments) do
     with {:ok, tool_call} <- one_tool_call(decision),
-         {:ok, operation} <- fetch_operation(state, name),
+         {:ok, registry} <- registry(state),
+         {:ok, operation} <- Registry.fetch(registry, name),
+         {:ok, arguments} <- Registry.validate_arguments(registry, name, arguments),
          :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
       {:ok, put_operation_effect(state, operation, decision, tool_call, name, arguments)}
     end
@@ -28,16 +31,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
     end
   end
 
-  defp operation_for(%{spec: %{operations: operations}}, name) do
-    Enum.find(operations, &(&1.name == name))
-  end
-
-  defp fetch_operation(state, name) do
-    case operation_for(state, name) do
-      nil -> {:error, {:unknown_operation, name}}
-      operation -> {:ok, operation}
-    end
-  end
+  defp registry(%{spec: %{operations: operations}}), do: Registry.new(operations)
 
   defp plan_batch_effects(state, operations, calls, batch_size) do
     operations
@@ -105,26 +99,24 @@ defmodule Jidoka.Turn.State.OperationPlanner do
          index,
          batch_size
        ) do
-    case operation_for(state, source_request.name) do
-      nil ->
-        {:error, {:unknown_operation, source_request.name}}
+    with {:ok, registry} <- registry(state),
+         {:ok, operation} <- Registry.fetch(registry, source_request.name),
+         {:ok, arguments} <-
+           Registry.validate_arguments(registry, source_request.name, source_request.arguments),
+         :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
+      operation_request =
+        Effect.OperationRequest.new!(
+          name: source_request.name,
+          arguments: arguments,
+          request_id: state.request.request_id,
+          loop_index: state.loop_index,
+          provider_call_id: source_request.provider_call_id,
+          provider_metadata: source_request.provider_metadata,
+          tool_call: tool_call,
+          metadata: Map.merge(source_request.metadata, %{batch_index: index, batch_size: batch_size})
+        )
 
-      operation ->
-        with :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
-          operation_request =
-            Effect.OperationRequest.new!(
-              name: source_request.name,
-              arguments: source_request.arguments,
-              request_id: state.request.request_id,
-              loop_index: state.loop_index,
-              provider_call_id: source_request.provider_call_id,
-              provider_metadata: source_request.provider_metadata,
-              tool_call: tool_call,
-              metadata: Map.merge(source_request.metadata, %{batch_index: index, batch_size: batch_size})
-            )
-
-          {:ok, operation_effect(state, operation, operation_request, index, batch_size)}
-        end
+      {:ok, operation_effect(state, operation, operation_request, index, batch_size)}
     end
   end
 

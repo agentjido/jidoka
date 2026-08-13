@@ -2,11 +2,11 @@ defmodule Jidoka.Runtime.Spine.Steps do
   @moduledoc "Pure phase functions used by the Runic turn workflow."
 
   alias Jidoka.Agent
-  alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Config
   alias Jidoka.ContextWindow
   alias Jidoka.Effect
   alias Jidoka.Id
+  alias Jidoka.Operation.Registry
   alias Jidoka.Portable
   alias Jidoka.Turn
 
@@ -23,17 +23,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
       ]
       |> Enum.reject(&is_nil/1)
 
-    operations =
-      Enum.map(state.spec.operations, fn %Operation{} = operation ->
-        metadata = operation.metadata || %{}
-
-        %{
-          name: operation.name,
-          description: operation.description,
-          idempotency: operation.idempotency,
-          parameters_schema: Map.get(metadata, "parameters_schema") || Map.get(metadata, :parameters_schema)
-        }
-      end)
+    operations = state.spec.operations |> Registry.new!() |> Registry.prompt_operations()
 
     prompt = %{
       model: Config.model_ref(state.spec.model),

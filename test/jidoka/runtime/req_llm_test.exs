@@ -5,6 +5,7 @@ defmodule Jidoka.Adapter.ReqLLMTest do
 
   alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Adapter.ReqLLM.ResponseAdapter
+  alias Jidoka.Adapter.ReqLLM.ToolProjection
   alias Jidoka.Effect
 
   test "uses the supported ReqLLM adapter line" do
@@ -52,6 +53,39 @@ defmodule Jidoka.Adapter.ReqLLMTest do
 
     assert {:error, {:unsupported_effect_kind, :operation}} =
              capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
+  end
+
+  test "projects assembled operation contracts into ReqLLM tools" do
+    prompt = %{
+      operations: [
+        %{
+          name: "coding.read",
+          description: "Read a file.",
+          idempotency: :pure,
+          strict: true,
+          provider_options: %{openai: %{defer_loading: true}},
+          parameters_schema: %{
+            "type" => "object",
+            "properties" => %{"path" => %{"type" => "string"}},
+            "required" => ["path"],
+            "additionalProperties" => false
+          }
+        }
+      ]
+    }
+
+    assert {:ok, [%Elixir.ReqLLM.Tool{} = tool]} = ReqLLM.tools(%{prompt: prompt})
+    assert Elixir.ReqLLM.Tool.valid_name?(tool.name)
+    assert tool.name == ToolProjection.provider_name("coding.read")
+    assert tool.description == "Read a file."
+    assert tool.strict
+    assert tool.provider_options == %{openai: %{defer_loading: true}}
+    assert tool.parameter_schema == hd(prompt.operations).parameters_schema
+
+    assert %{"function" => %{"parameters" => parameters}} =
+             Elixir.ReqLLM.Tool.to_schema(tool, :openai)
+
+    assert parameters == hd(prompt.operations).parameters_schema
   end
 
   test "ignores a decoded structured object after parsing its streamed JSON text" do

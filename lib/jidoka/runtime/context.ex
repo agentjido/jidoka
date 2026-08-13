@@ -4,6 +4,7 @@ defmodule Jidoka.Runtime.Context do
   alias Jidoka.Agent.Spec.Operation, as: OperationSpec
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Operation.Registry
   alias Jidoka.Schema
   alias Jidoka.Turn
 
@@ -157,7 +158,12 @@ defmodule Jidoka.Runtime.Context do
   end
 
   defp operation_for(%Turn.State{spec: %{operations: operations}}, name) do
-    Enum.find(operations, &(&1.name == name))
+    with {:ok, registry} <- Registry.new(operations),
+         {:ok, operation} <- Registry.fetch(registry, name) do
+      operation
+    else
+      _error -> nil
+    end
   end
 
   defp operation_kind(%OperationSpec{} = operation), do: OperationSpec.kind(operation)
