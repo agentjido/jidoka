@@ -78,6 +78,9 @@ defmodule Jidoka.Session do
 
   @doc """
   Runs one turn for a session and returns the full session result.
+
+  Each call continues the last successfully committed conversation. Pass
+  `fresh_conversation: true` to start a new conversation in the same session.
   """
   @spec run(session_input(), request_input(), opts()) :: run_result()
   def run(session_or_id, request_input, opts \\ []) when is_list(opts) do
@@ -121,6 +124,9 @@ defmodule Jidoka.Session do
 
   The updated session is returned with the text so caller-managed sessions do
   not lose durable state when no store is configured.
+
+  Pass `fresh_conversation: true` to replace the committed conversation only
+  after this call completes successfully.
   """
   @spec chat(session_input(), String.t(), opts()) :: chat_result()
   def chat(session_or_id, input, opts \\ []) when is_binary(input) and is_list(opts) do

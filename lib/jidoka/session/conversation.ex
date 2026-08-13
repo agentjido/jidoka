@@ -7,12 +7,15 @@ defmodule Jidoka.Session.Conversation do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Context
   alias Jidoka.ExecutionEnvironment.Contract
   alias Jidoka.Schema
   alias Jidoka.Turn
 
   @credential_words ~w(authorization credential credentials password secret token)
   @credential_compounds ~w(apikey privatekey)
+  @continuation_revision_key "jidoka_continuation_revision"
+  @fresh_conversation_key "jidoka_fresh_conversation"
 
   @schema Zoi.struct(
             __MODULE__,
@@ -89,6 +92,55 @@ defmodule Jidoka.Session.Conversation do
     end
   end
 
+  @doc "Builds one request from the current committed conversation revision."
+  @spec prepare_request(t(), Turn.Request.t(), keyword()) ::
+          {:ok, Turn.Request.t()} | {:error, term()}
+  def prepare_request(%__MODULE__{} = conversation, %Turn.Request{} = request, opts) when is_list(opts) do
+    with {:ok, fresh?} <- fresh_option(opts),
+         {:ok, context} <- continuation_context(conversation, request, fresh?) do
+      metadata =
+        request.metadata
+        |> Map.put(@continuation_revision_key, conversation.continuation_revision)
+        |> Map.put(@fresh_conversation_key, fresh?)
+
+      agent_state = if fresh?, do: Agent.State.new!(), else: conversation.agent_state
+
+      {:ok, %Turn.Request{request | agent_state: agent_state, context: context, metadata: metadata}}
+    end
+  end
+
+  @doc false
+  @spec validate_request_revision(t(), Turn.Request.t(), String.t()) :: :ok | {:error, term()}
+  def validate_request_revision(
+        %__MODULE__{continuation_revision: current},
+        %Turn.Request{metadata: metadata},
+        session_id
+      ) do
+    case Map.get(metadata, @continuation_revision_key, Map.get(metadata, :jidoka_continuation_revision)) do
+      nil -> :ok
+      ^current -> :ok
+      expected -> {:error, {:stale_conversation_revision, session_id, expected, current}}
+    end
+  end
+
+  @doc false
+  @spec base_for_request(t(), Turn.Request.t() | nil) :: t()
+  def base_for_request(%__MODULE__{} = conversation, %Turn.Request{metadata: metadata}) do
+    if fresh_request_metadata?(metadata),
+      do: new!(),
+      else: conversation
+  end
+
+  def base_for_request(%__MODULE__{} = conversation, nil), do: conversation
+
+  @doc false
+  @spec next_revision(t(), Turn.Request.t() | nil) :: non_neg_integer()
+  def next_revision(%__MODULE__{} = conversation, %Turn.Request{metadata: metadata}) do
+    if fresh_request_metadata?(metadata), do: 1, else: conversation.continuation_revision + 1
+  end
+
+  def next_revision(%__MODULE__{} = conversation, nil), do: conversation.continuation_revision
+
   @doc false
   @spec from_legacy(Turn.Result.t() | map() | nil, [Turn.Request.t() | map()]) ::
           {:ok, t()} | {:error, term()}
@@ -113,6 +165,27 @@ defmodule Jidoka.Session.Conversation do
       {:keep, durable} -> durable
       :drop -> %{}
     end
+  end
+
+  defp fresh_option(opts) do
+    case Keyword.get(opts, :fresh_conversation, false) do
+      value when is_boolean(value) -> {:ok, value}
+      value -> {:error, {:invalid_fresh_conversation_option, value}}
+    end
+  end
+
+  defp continuation_context(conversation, request, fresh?) do
+    previous = if fresh?, do: %{}, else: conversation.context_state
+    data = Map.merge(previous, Context.data(request.context))
+
+    Context.from_data(data,
+      request_id: request.request_id,
+      request_metadata: request.metadata
+    )
+  end
+
+  defp fresh_request_metadata?(metadata) do
+    Map.get(metadata, @fresh_conversation_key, Map.get(metadata, :jidoka_fresh_conversation, false))
   end
 
   defp validate_completion_identity(%__MODULE__{turn_count: 0, last_completed_request_id: nil}), do: :ok

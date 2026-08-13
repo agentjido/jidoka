@@ -7,6 +7,7 @@ defmodule Jidoka.Session.Transitions do
   """
 
   alias Jidoka.Session.Data
+  alias Jidoka.Session.Conversation
   alias Jidoka.Session.Lease
   alias Jidoka.Snapshot
   alias Jidoka.Turn
@@ -22,11 +23,14 @@ defmodule Jidoka.Session.Transitions do
   end
 
   def put(
-        %Data{session_id: session_id, revision: current_revision},
+        %Data{session_id: session_id, revision: current_revision} = current,
         %Data{session_id: session_id, revision: incoming_revision} = incoming
       )
-      when incoming_revision >= current_revision,
-      do: {:ok, incoming}
+      when incoming_revision >= current_revision do
+    with :ok <- validate_conversation_transition(current, incoming) do
+      {:ok, incoming}
+    end
+  end
 
   def put(%Data{} = current, %Data{} = incoming) do
     {:error, {:stale_session_revision, current.session_id, incoming.session_id, current.revision, incoming.revision}}
@@ -36,6 +40,7 @@ defmodule Jidoka.Session.Transitions do
   @spec claim(Data.t(), Turn.Request.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
   def claim(%Data{} = session, %Turn.Request{} = request, opts) do
     with :ok <- ensure_claimable(session),
+         :ok <- Conversation.validate_request_revision(session.conversation, request, session.session_id),
          {:ok, lease} <- acquire_lease(request.request_id, opts) do
       {:ok,
        session
@@ -48,7 +53,10 @@ defmodule Jidoka.Session.Transitions do
   @doc "Claims a caller-managed session without a store lease."
   @spec claim_without_lease(Data.t(), Turn.Request.t()) :: {:ok, Data.t()} | {:error, term()}
   def claim_without_lease(%Data{} = session, %Turn.Request{} = request) do
-    with :ok <- ensure_claimable(session), do: {:ok, Data.put_request(session, request)}
+    with :ok <- ensure_claimable(session),
+         :ok <- Conversation.validate_request_revision(session.conversation, request, session.session_id) do
+      {:ok, Data.put_request(session, request)}
+    end
   end
 
   @doc "Claims a hibernated or waiting session for resume."
@@ -102,7 +110,8 @@ defmodule Jidoka.Session.Transitions do
     now_ms = clock_ms(opts)
 
     with :ok <- validate_active_lease(current, lease_id, now_ms),
-         :ok <- validate_commit_target(current, completed) do
+         :ok <- validate_commit_target(current, completed),
+         :ok <- validate_conversation_transition(current, completed) do
       committed =
         %Data{
           completed
@@ -196,6 +205,36 @@ defmodule Jidoka.Session.Transitions do
 
   defp validate_commit_target(%Data{} = current, %Data{} = completed),
     do: {:error, {:session_commit_mismatch, current.session_id, completed.session_id}}
+
+  defp validate_conversation_transition(
+         %Data{conversation: current},
+         %Data{conversation: incoming}
+       )
+       when incoming.continuation_revision == current.continuation_revision,
+       do: :ok
+
+  defp validate_conversation_transition(
+         %Data{session_id: session_id, conversation: current},
+         %Data{status: :finished, conversation: incoming, requests: requests}
+       ) do
+    expected = Conversation.next_revision(current, List.last(requests))
+
+    if incoming.continuation_revision == expected,
+      do: :ok,
+      else:
+        {:error,
+         {:invalid_conversation_commit_revision, session_id, current.continuation_revision,
+          incoming.continuation_revision, expected}}
+  end
+
+  defp validate_conversation_transition(
+         %Data{session_id: session_id, conversation: current},
+         %Data{conversation: incoming}
+       ) do
+    {:error,
+     {:invalid_conversation_commit_revision, session_id, current.continuation_revision, incoming.continuation_revision,
+      current.continuation_revision}}
+  end
 
   defp merge_environment(nil, completed), do: completed
   defp merge_environment(current, nil), do: current

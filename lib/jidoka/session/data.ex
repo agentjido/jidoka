@@ -299,7 +299,7 @@ defmodule Jidoka.Session.Data do
   end
 
   defp complete_conversation(%Conversation{} = conversation, %Turn.Request{} = request, result),
-    do: Conversation.complete!(conversation, request, result)
+    do: conversation |> Conversation.base_for_request(request) |> Conversation.complete!(request, result)
 
   defp complete_conversation(nil, %Turn.Request{} = request, result),
     do: Conversation.complete!(Conversation.new!(), request, result)

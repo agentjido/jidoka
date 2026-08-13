@@ -10,6 +10,7 @@ defmodule Jidoka.Session.Execution do
   alias Jidoka.Agent
   alias Jidoka.Cancellation
   alias Jidoka.Session.Replay
+  alias Jidoka.Session.Conversation
   alias Jidoka.Session.EnvironmentRuntime
   alias Jidoka.Session.LeaseHeartbeat
   alias Jidoka.Session.Data, as: Session
@@ -17,6 +18,7 @@ defmodule Jidoka.Session.Execution do
   alias Jidoka.Session.Lineage
   alias Jidoka.Session.Sequence
   alias Jidoka.Session.Store
+  alias Jidoka.Session.Transitions
   alias Jidoka.Memory
   alias Jidoka.Snapshot
   alias Jidoka.Runtime.Capabilities
@@ -66,7 +68,8 @@ defmodule Jidoka.Session.Execution do
          {:ok, session} <- EnvironmentRuntime.prepare(session, opts),
          {:ok, session} <- persist_prepared_environment(session_input, session, opts),
          opts = Keyword.put(opts, :session_id, session.session_id),
-         {:ok, prepared} <- TurnExecution.prepare(session.spec, request_input, opts),
+         {:ok, request} <- continuation_request(session, request_input, opts),
+         {:ok, prepared} <- TurnExecution.prepare(session.spec, request, opts),
          {:ok, session} <- claim_session(session_input, session, prepared.request, prepared.opts) do
       runtime_opts = Keyword.put(prepared.opts, :session_id, session.session_id)
 
@@ -699,9 +702,21 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp claim_session(_session_input, %Session{} = session, %Turn.Request{} = request, opts) do
-    session
-    |> Session.put_request(request)
-    |> persist_session(opts)
+    with {:ok, claimed} <- Transitions.claim_without_lease(session, request) do
+      persist_session(claimed, opts)
+    end
+  end
+
+  defp continuation_request(%Session{} = session, request_input, opts) do
+    with {:ok, request} <- Turn.Request.from_input(request_input, session_request_opts(opts)) do
+      Conversation.prepare_request(session.conversation, request, opts)
+    end
+  end
+
+  defp session_request_opts(opts) do
+    opts
+    |> Keyword.take([:id_generator, :request_id, :context, :metadata])
+    |> Enum.reject(fn {_key, value} -> is_nil(value) end)
   end
 
   defp resolve_session(%Session{} = session, _opts), do: {:ok, session}

@@ -21,7 +21,7 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
     "scope" => "session-a"
   }
 
-  test "partial characterization: session records, scoped memory, and explicit assistant/tool-state carry" do
+  test "session continuation is canonical, durable, and isolated from scoped memory" do
     {:ok, session_pid} = SessionStore.start_link()
     {:ok, memory_pid} = MemoryStore.start_link()
     session_store = {SessionStore, pid: session_pid}
@@ -110,15 +110,15 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
              }
            ] = first_result.agent_state.operation_results
 
-    ordinary_second_llm = fn %Effect.Intent{payload: payload}, _journal, _context ->
+    continued_second_llm = fn %Effect.Intent{payload: payload}, _journal, _context ->
       prompt = Schema.get_key(payload, :prompt)
       messages = Schema.get_key(prompt, :messages, [])
 
       assert Schema.get_key(prompt, :memory).count == 1
       assert message_with_content?(messages, "Session A prefers concise evidence.")
-      refute message_with_content?(messages, "A1 assistant evidence")
-      refute message_with_content?(messages, "A1 user request")
-      refute tool_observation?(messages, @operation_name, @operation_output)
+      assert message_with_content?(messages, "A1 assistant evidence")
+      assert message_with_content?(messages, "A1 user request")
+      assert tool_observation?(messages, @operation_name, @operation_output)
       assert message_with_content?(messages, "A2 user request")
 
       {:ok, %{type: :final, content: "A2 fresh assistant evidence"}}
@@ -130,65 +130,72 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
                Turn.Request.new!(input: "A2 user request", request_id: "parity-a2"),
                store: session_store,
                memory_store: memory_store,
-               llm: ordinary_second_llm,
+               llm: continued_second_llm,
                operations: operations
              )
 
     assert Enum.map(after_a2.requests, & &1.input) == ["A1 user request", "A2 user request"]
     assert after_a2.result == ordinary_second_result
-    refute state_message_with_content?(ordinary_second_result, "A1 assistant evidence")
+    assert state_message_with_content?(ordinary_second_result, "A1 assistant evidence")
+    assert state_message_with_content?(ordinary_second_result, "A1 user request")
     assert state_message_with_content?(ordinary_second_result, "A2 fresh assistant evidence")
 
-    refute tool_observation?(
+    assert tool_observation?(
              ordinary_second_result.agent_state.messages,
              @operation_name,
              @operation_output
            )
 
-    assert ordinary_second_result.agent_state.operation_results == []
+    assert [%Effect.OperationResult{operation: @operation_name}] =
+             ordinary_second_result.agent_state.operation_results
 
-    explicit_carry_llm = fn %Effect.Intent{payload: payload}, _journal, _context ->
+    canonical_third_llm = fn %Effect.Intent{payload: payload}, _journal, _context ->
       prompt = Schema.get_key(payload, :prompt)
       messages = Schema.get_key(prompt, :messages, [])
 
       assert Schema.get_key(prompt, :memory).count == 1
       assert message_with_content?(messages, "Session A prefers concise evidence.")
       assert message_with_content?(messages, "A1 assistant evidence")
-      refute message_with_content?(messages, "A1 user request")
+      assert message_with_content?(messages, "A1 user request")
+      assert message_with_content?(messages, "A2 user request")
+      assert message_with_content?(messages, "A2 fresh assistant evidence")
       assert tool_observation?(messages, @operation_name, @operation_output)
-      assert message_with_content?(messages, "A3 user request with explicit state")
+      assert message_with_content?(messages, "A3 user request")
+      refute message_with_content?(messages, "caller-injected history")
 
       {:ok, %{type: :final, content: "A3 continued assistant evidence"}}
     end
 
-    explicit_request =
+    caller_request =
       Turn.Request.new!(
-        input: "A3 user request with explicit state",
+        input: "A3 user request",
         request_id: "parity-a3",
-        agent_state: first_result.agent_state
+        agent_state: Agent.State.new!(messages: [Agent.Message.assistant("caller-injected history")])
       )
 
-    assert {:ok, %SessionData{} = after_a3, %Turn.Result{} = explicit_result} =
-             Session.run("parity-session-a", explicit_request,
+    assert {:ok, %SessionData{} = after_a3, %Turn.Result{} = third_result} =
+             Session.run("parity-session-a", caller_request,
                store: session_store,
                memory_store: memory_store,
-               llm: explicit_carry_llm,
+               llm: canonical_third_llm,
                operations: operations
              )
 
     assert Enum.map(after_a3.requests, & &1.input) == [
              "A1 user request",
              "A2 user request",
-             "A3 user request with explicit state"
+             "A3 user request"
            ]
 
-    assert after_a3.result == explicit_result
-    assert state_message_with_content?(explicit_result, "A1 assistant evidence")
-    assert state_message_with_content?(explicit_result, "A3 continued assistant evidence")
-    refute state_message_with_content?(explicit_result, "A1 user request")
+    assert after_a3.result == third_result
+    assert state_message_with_content?(third_result, "A1 assistant evidence")
+    assert state_message_with_content?(third_result, "A1 user request")
+    assert state_message_with_content?(third_result, "A2 fresh assistant evidence")
+    assert state_message_with_content?(third_result, "A3 continued assistant evidence")
+    refute state_message_with_content?(third_result, "caller-injected history")
 
     assert tool_observation?(
-             explicit_result.agent_state.messages,
+             third_result.agent_state.messages,
              @operation_name,
              @operation_output
            )
@@ -199,11 +206,11 @@ defmodule Jidoka.Parity.SessionHistoryVsScopedMemoryContinuityTest do
                arguments: @operation_arguments,
                output: @operation_output
              }
-           ] = explicit_result.agent_state.operation_results
+           ] = third_result.agent_state.operation_results
 
-    assert memory_event_count(explicit_result) == 1
+    assert memory_event_count(third_result) == 1
 
-    assert {:ok, %SessionData{result: ^explicit_result} = stored_after_a3} =
+    assert {:ok, %SessionData{result: ^third_result} = stored_after_a3} =
              Session.get(session_store, "parity-session-a")
 
     assert stored_after_a3 == after_a3
