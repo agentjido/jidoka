@@ -77,6 +77,26 @@ Three rules anchor the model:
    them through `Effect.Result`. The journal records both.
 3. The final `Turn.Result` is projected from the terminal `Turn.State`.
 
+### Loop Vocabulary And Counts
+
+Jidoka uses four terms for loop work:
+
+| Term | Exact meaning | Count rule |
+| --- | --- | --- |
+| User turn | One user request plus all model and tool work needed for its terminal result. | One successful `Jidoka.turn/3` result is one completed user turn. |
+| Model step | One logical model decision inside a user turn. It returns a final answer or one tool-call group. | Count `:llm` intents in the turn journal. Provider retries and replay do not add steps. |
+| Tool-call group | The one or more operation calls returned by one model step. All calls in a group must be independent. | Group operation intents by `request_id` and `loop_index`. A singular call is a group of one. |
+| Dependent tool sequence | Two or more tool-call groups where a later model step can use an earlier result. | Count each group separately. It is still one user turn. |
+
+`Jidoka.Loop.counts/1` returns portable logical counts. For example, three
+independent calls followed by a final answer are one user turn, two model
+steps, one tool-call group, and three tool calls. Two dependent calls followed
+by a final answer are one user turn, three model steps, two tool-call groups,
+and two tool calls.
+
+The existing `max_model_turns` option name remains for compatibility. It limits
+model steps, not user turns or tool calls.
+
 ## Fields
 
 ### `Jidoka.Turn.Plan`
@@ -87,7 +107,7 @@ Compiled execution defaults for one turn.
 | --- | --- | --- | --- |
 | `spec` | `Agent.Spec.t()` | required | The immutable spec the plan was compiled from. |
 | `workflow_profile` | `:chat \| :tool_loop \| :structured_result \| :controlled_tool_loop` | `:tool_loop` | Selects the Runic profile. |
-| `max_model_turns` | positive integer | `spec.controls.max_turns` or `Jidoka.Config.default_max_model_turns/0` | Upper bound on model rounds. |
+| `max_model_turns` | positive integer | `spec.controls.max_turns` or `Jidoka.Config.default_max_model_turns/0` | Compatibility name for the upper bound on model steps in this user turn. |
 | `timeout_ms` | positive integer | `spec.controls.timeout_ms` or `Jidoka.Config.default_turn_timeout_ms/0` | Hard wall-clock limit. |
 | `phases` | `[atom()]` | full phase list | Runic phase order for the turn. |
 | `metadata` | map | `%{}` | Plan-level metadata. |
@@ -177,7 +197,7 @@ Ephemeral value threaded through the workflow.
 | `result` / `result_parts` / `result_value` | string / content parts / term | Final assistant text, typed output, and validated structured value. |
 | `result_repair_count` | non-negative integer | Repair attempts so far. |
 | `status` | `:running \| :waiting \| :finished` | Loop state. |
-| `loop_index` | non-negative integer | Current model round. |
+| `loop_index` | non-negative integer | Zero-based model-step index. |
 | `started_at_ms` | integer or `nil` | Wall-clock start. |
 | `journal` | `Effect.Journal.t()` | Recorded intents and results. |
 | `events` | `[Jidoka.Event.t()]` | Append-only event log. |

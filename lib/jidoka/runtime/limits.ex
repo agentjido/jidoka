@@ -40,7 +40,12 @@ defmodule Jidoka.Runtime.Limits.Applied do
 end
 
 defmodule Jidoka.Runtime.Limits.Observed do
-  @moduledoc "Portable usage facts observed while Jidoka applies runtime limits."
+  @moduledoc """
+  Portable usage facts observed while Jidoka applies runtime limits.
+
+  `model_steps` is the canonical logical model-decision count. `model_turns`
+  remains an equal compatibility field for existing projections.
+  """
 
   alias Jidoka.ExecutionEnvironment.Contract
   alias Jidoka.Schema
@@ -48,7 +53,11 @@ defmodule Jidoka.Runtime.Limits.Observed do
   @schema Zoi.struct(
             __MODULE__,
             %{
+              user_turns: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              model_steps: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               model_turns: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              tool_call_groups: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
+              tool_calls: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               sequence_duration_ms: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               usage: Zoi.map() |> Zoi.default(%{}),
               environment:
@@ -274,9 +283,15 @@ defmodule Jidoka.Runtime.Limits do
   @doc "Builds final sequence evidence from completed steps and terminal data."
   @spec evidence(Applied.t(), [Sequence.Step.t()], non_neg_integer(), term()) :: Evidence.t()
   def evidence(%Applied{} = applied, steps, duration_ms, terminal_reason) do
+    counts = steps |> Enum.map(& &1.result) |> Jidoka.Loop.counts()
+
     observed =
       Observed.new!(
-        model_turns: Enum.reduce(steps, 0, &(&2 + model_turn_count(&1.result))),
+        user_turns: counts.user_turns,
+        model_steps: counts.model_steps,
+        model_turns: counts.model_steps,
+        tool_call_groups: counts.tool_call_groups,
+        tool_calls: counts.tool_calls,
         sequence_duration_ms: max(duration_ms, 0),
         usage: aggregate_usage(steps),
         environment: applied.environment
@@ -375,10 +390,6 @@ defmodule Jidoka.Runtime.Limits do
     do: Map.update(usage, key, value, &(&1 + value))
 
   defp merge_numeric_usage({_key, _value}, usage), do: usage
-
-  defp model_turn_count(%Turn.Result{journal: journal}) do
-    Enum.count(journal.results, fn {_id, result} -> result.kind == :llm end)
-  end
 
   defp numeric(map, key) do
     case Map.get(map, key, Map.get(map, Atom.to_string(key), 0)) do

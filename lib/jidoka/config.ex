@@ -35,7 +35,10 @@ defmodule Jidoka.Config do
   end
 
   @doc """
-  Returns the globally configured default maximum model turns.
+  Returns the globally configured default maximum model steps.
+
+  The `model_turns` name is retained for configuration compatibility. One
+  model step is one logical model decision inside a user turn.
   """
   @spec default_max_model_turns() :: pos_integer()
   def default_max_model_turns do
@@ -55,8 +58,8 @@ defmodule Jidoka.Config do
   end
 
   @doc """
-  Returns the default concurrency bound for operation batches planned by one
-  model turn.
+  Returns the default concurrency bound for a tool-call group planned by one
+  model step.
   """
   @spec default_max_parallel_operations() :: pos_integer()
   def default_max_parallel_operations do

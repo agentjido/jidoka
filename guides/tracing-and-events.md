@@ -83,6 +83,9 @@ sampling, and redaction when callers want a timeline.
   `phase`, `status`, `agent_id`, `request_id`, `loop_index`, `effect_id`,
   `effect_kind`, `operation`, `data`, and `error`. Defaults are filled
   from a table keyed by event name.
+- `loop_index` is the zero-based model-step index. Operation events that share
+  `request_id` and `loop_index` form one tool-call group. `seq` only orders
+  events and is not a model-step or tool-call counter.
 - Event names include workflow lifecycle (`:turn_started`,
   `:prompt_assembled`, `:turn_finished`, `:turn_failed`,
   `:turn_hibernated`), effect lifecycle (`:effect_planned`,

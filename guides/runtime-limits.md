@@ -24,14 +24,16 @@ result.limits.exceeded
 ## Contract
 
 `Jidoka.Runtime.Limits.Applied` contains the limits that Jidoka used.
-`Jidoka.Runtime.Limits.Observed` contains model-call count, sequence duration,
-normalized usage, and environment facts. `Jidoka.Runtime.Limits.Exceeded`
+`Jidoka.Runtime.Limits.Observed` contains completed user-turn, model-step,
+tool-call-group, and tool-call counts plus sequence duration, normalized usage,
+and environment facts. `model_turns` remains an equal compatibility alias for
+`model_steps`. `Jidoka.Runtime.Limits.Exceeded`
 identifies the limit that stopped work. `Jidoka.Runtime.Limits.Evidence` keeps
 these values together on `Jidoka.Session.Sequence.Result.limits`.
 
 | Field | Meaning |
 | --- | --- |
-| `max_model_turns` | Maximum model rounds in one turn. |
+| `max_model_turns` | Compatibility name for the maximum model steps in one user turn. |
 | `turn_timeout_ms` | Maximum wall time for one turn. |
 | `capability_timeout_ms` | Maximum wall time for one model, tool, extension, or environment call. |
 | `sequence_timeout_ms` | Maximum wall time for the ordered sequence. |
@@ -64,3 +66,7 @@ kills a blocked worker. Do not use provider calls in limit tests.
 
 Jidoka reports provider usage. It does not look up prices. A provider that does
 not report a usage fact cannot contribute that fact to a budget.
+
+Logical counts do not include provider transport retries. A parallel group of
+three calls adds one tool-call group and three tool calls. Two dependent calls
+requested by two model steps add two groups and two calls.

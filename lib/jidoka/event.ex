@@ -5,6 +5,10 @@ defmodule Jidoka.Event do
   Events are neutral turn data. Runtime, trace, streaming, and UI modules
   may project or consume them, but workflow/state modules should only emit the
   event data itself.
+
+  `loop_index` is the zero-based `t:Jidoka.Loop.model_step_index/0`. Operation
+  events with the same `request_id` and `loop_index` belong to one tool-call
+  group. Event `seq` is separate: it orders all events in the user turn.
   """
 
   alias Jidoka.Schema
