@@ -10,7 +10,10 @@ defmodule Jidoka.Effect.Journal do
             %{
               intents: Zoi.map(Zoi.string(), Zoi.lazy({Effect.Intent, :schema, []})) |> Zoi.default(%{}),
               results: Zoi.map(Zoi.string(), Zoi.lazy({Effect.Result, :schema, []})) |> Zoi.default(%{}),
-              policy_decisions: Zoi.map(Zoi.string(), Zoi.lazy({Decision, :schema, []})) |> Zoi.default(%{})
+              policy_decisions: Zoi.map(Zoi.string(), Zoi.lazy({Decision, :schema, []})) |> Zoi.default(%{}),
+              operation_groups:
+                Zoi.map(Zoi.string(), Zoi.lazy({Effect.OperationGroup, :schema, []}))
+                |> Zoi.default(%{})
             },
             coerce: true
           )
@@ -42,6 +45,17 @@ defmodule Jidoka.Effect.Journal do
   def put_result(%__MODULE__{} = journal, %Effect.Result{} = result) do
     %__MODULE__{journal | results: Map.put(journal.results, result.intent_id, result)}
   end
+
+  @doc "Records one durable operation-group manifest."
+  @spec put_operation_group(t(), Effect.OperationGroup.t()) :: t()
+  def put_operation_group(%__MODULE__{} = journal, %Effect.OperationGroup{} = group) do
+    %__MODULE__{journal | operation_groups: Map.put(journal.operation_groups, group.id, group)}
+  end
+
+  @doc "Returns a recorded operation-group manifest by identifier."
+  @spec operation_group(t(), String.t()) :: Effect.OperationGroup.t() | nil
+  def operation_group(%__MODULE__{operation_groups: groups}, group_id) when is_binary(group_id),
+    do: Map.get(groups, group_id)
 
   @doc "Returns the recorded result for an intent, if it exists."
   @spec result_for(t(), Effect.Intent.t()) :: Effect.Result.t() | nil

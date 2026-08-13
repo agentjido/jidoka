@@ -16,7 +16,9 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.Context, as: RuntimeContext
   alias Jidoka.Runtime.Controls
+  alias Jidoka.Runtime.DurableCheckpoint
   alias Jidoka.Runtime.EffectTrace
+  alias Jidoka.Runtime.OperationGroupCheckpoint
   alias Jidoka.Runtime.OperationInvoker
   alias Jidoka.Turn
 
@@ -157,7 +159,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     state = EffectTrace.append(state, intent, :capability_call_started, [], opts)
 
-    with :ok <- durable_checkpoint(state, intent, :intent, opts),
+    with :ok <- DurableCheckpoint.persist(state, intent, :intent, opts),
          {:ok, result} <- call_capability(state, intent, capabilities, journal, opts),
          {:ok, state} <- checkpoint_effect_result(state, intent, result, journal, opts) do
       {:ok, result, state}
@@ -178,7 +180,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
       |> EffectTrace.append_capability_result(intent, result, opts)
       |> EffectTrace.append_effect_result(intent, result, opts)
 
-    with :ok <- durable_checkpoint(state, intent, :result, opts), do: {:ok, state}
+    with :ok <- DurableCheckpoint.persist(state, intent, :result, opts), do: {:ok, state}
   end
 
   defp run_effect_controls(
@@ -324,7 +326,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     with {:ok, state, runnable_intents, replayed_results} <-
            preflight_operation_batch(state, intents, capabilities, opts),
          {:ok, state, batch_results} <-
-           execute_preflighted_operation_batch(state, runnable_intents, capabilities, opts) do
+           execute_preflighted_operation_batch(state, intents, runnable_intents, capabilities, opts) do
       ordered_results =
         Enum.map(intents, fn intent ->
           Map.fetch!(Map.merge(replayed_results, batch_results), intent.id)
@@ -415,50 +417,86 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp execute_preflighted_operation_batch(%Turn.State{} = state, [], _capabilities, _opts) do
+  defp execute_preflighted_operation_batch(
+         %Turn.State{} = state,
+         _group_intents,
+         [],
+         _capabilities,
+         _opts
+       ) do
     {:ok, state, %{}}
   end
 
   defp execute_preflighted_operation_batch(
          %Turn.State{} = state,
-         intents,
+         group_intents,
+         runnable_intents,
          %Capabilities{} = capabilities,
          opts
        ) do
-    journal = Enum.reduce(intents, state.journal, &Effect.Journal.put_intent(&2, &1))
-    state = %Turn.State{state | journal: journal}
-    state = Enum.reduce(intents, state, &EffectTrace.append(&2, &1, :capability_call_started, [], opts))
-
-    with :ok <- durable_checkpoint(state, hd(intents), :intent, opts) do
-      execute_durable_operation_batch(state, intents, capabilities, journal, opts)
+    with {:ok, coordinator} <- OperationGroupCheckpoint.start(state, group_intents, opts) do
+      try do
+        execute_checkpointed_operation_batch(
+          coordinator,
+          state,
+          runnable_intents,
+          capabilities,
+          opts
+        )
+      after
+        OperationGroupCheckpoint.stop(coordinator)
+      end
     end
   end
 
-  defp execute_durable_operation_batch(state, intents, capabilities, journal, opts) do
-    case execute_operation_batch(state, intents, capabilities, journal, opts) do
-      {:ok, results} ->
-        state =
-          results
-          |> Map.values()
-          |> Enum.reduce(state, fn result, %Turn.State{} = state ->
-            %Turn.State{state | journal: Effect.Journal.put_result(state.journal, result)}
-          end)
+  defp execute_checkpointed_operation_batch(coordinator, state, intents, capabilities, opts) do
+    batch_opts =
+      opts
+      |> Keyword.put(
+        :operation_group_before_call,
+        &OperationGroupCheckpoint.before_call(coordinator, &1, opts)
+      )
+      |> Keyword.put(
+        :operation_group_after_result,
+        &OperationGroupCheckpoint.after_result(coordinator, &1, &2, opts)
+      )
 
-        state =
-          Enum.reduce(intents, state, fn intent, state ->
-            result = Map.fetch!(results, intent.id)
+    case execute_operation_batch(state, intents, capabilities, state.journal, batch_opts) do
+      {:ok, results} -> finalize_checkpointed_operation_batch(coordinator, intents, results, opts)
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
-            state
-            |> EffectTrace.append_capability_result(intent, result, opts)
-            |> EffectTrace.append_effect_result(intent, result, opts)
-          end)
+  defp finalize_checkpointed_operation_batch(coordinator, intents, results, opts) do
+    state = OperationGroupCheckpoint.state(coordinator)
+    missing = Enum.reject(intents, &Effect.Journal.result_for(state.journal, &1))
 
-        with :ok <- durable_checkpoint(state, hd(intents), :result, opts) do
-          {:ok, state, results}
-        end
+    cond do
+      missing == [] ->
+        {:ok, state, results}
 
-      {:error, reason} ->
-        {:error, reason}
+      is_function(Keyword.get(opts, :durable_checkpoint), 3) ->
+        {:error, {:operation_batch_checkpoint_callbacks_not_used, Enum.map(missing, & &1.id)}}
+
+      true ->
+        checkpoint_untracked_results(coordinator, missing, results, opts)
+    end
+  end
+
+  defp checkpoint_untracked_results(coordinator, intents, results, opts) do
+    Enum.reduce_while(intents, :ok, fn intent, :ok ->
+      result = Map.fetch!(results, intent.id)
+
+      with {:ok, _journal} <- OperationGroupCheckpoint.before_call(coordinator, intent, opts),
+           :ok <- OperationGroupCheckpoint.after_result(coordinator, intent, result, opts) do
+        {:cont, :ok}
+      else
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      :ok -> {:ok, OperationGroupCheckpoint.state(coordinator), results}
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -477,20 +515,5 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     exception -> {:error, {:operation_batch_execution_failed, exception}}
   catch
     kind, reason -> {:error, {:operation_batch_execution_failed, {kind, reason}}}
-  end
-
-  defp durable_checkpoint(%Turn.State{} = state, %Effect.Intent{} = intent, stage, opts) do
-    case Keyword.get(opts, :durable_checkpoint) do
-      checkpoint when is_function(checkpoint, 3) ->
-        case checkpoint.(state, intent, stage) do
-          :ok -> :ok
-          {:ok, _stored} -> :ok
-          {:error, _reason} = error -> error
-          other -> {:error, {:invalid_durable_checkpoint_result, other}}
-        end
-
-      _checkpoint ->
-        :ok
-    end
   end
 end

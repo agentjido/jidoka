@@ -8,6 +8,7 @@ defmodule Jidoka.Projection.Effect do
           Effect.Journal.t()
           | Effect.Intent.t()
           | Effect.LLMDecision.t()
+          | Effect.OperationGroup.t()
           | Effect.OperationRequest.t()
           | Effect.OperationResult.t()
           | Effect.Result.t()
@@ -19,7 +20,22 @@ defmodule Jidoka.Projection.Effect do
         journal.results
         |> Map.values()
         |> Enum.sort_by(& &1.intent_id)
+        |> Enum.map(&project/1),
+      operation_groups:
+        journal.operation_groups
+        |> Map.values()
+        |> Enum.sort_by(& &1.id)
         |> Enum.map(&project/1)
+    }
+  end
+
+  def project(%Effect.OperationGroup{} = group) do
+    %{
+      id: group.id,
+      intent_ids: group.intent_ids,
+      started_intent_ids: group.started_intent_ids,
+      completed_intent_ids: group.completed_intent_ids,
+      status: group.status
     }
   end
 

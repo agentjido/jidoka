@@ -43,6 +43,7 @@ defmodule Jidoka.Projection do
   def project(%Effect.Journal{} = value), do: Projection.Effect.project(value)
   def project(%Effect.Intent{} = value), do: Projection.Effect.project(value)
   def project(%Effect.LLMDecision{} = value), do: Projection.Effect.project(value)
+  def project(%Effect.OperationGroup{} = value), do: Projection.Effect.project(value)
   def project(%Effect.OperationRequest{} = value), do: Projection.Effect.project(value)
   def project(%Effect.OperationResult{} = value), do: Projection.Effect.project(value)
   def project(%Effect.Result{} = value), do: Projection.Effect.project(value)

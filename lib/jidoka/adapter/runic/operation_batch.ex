@@ -48,6 +48,9 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
         %Effect.Result{} = result ->
           {:cont, {:ok, Map.put(acc, intent.id, result)}}
 
+        {:operation_group_checkpoint_failed, reason} ->
+          {:halt, {:error, reason}}
+
         other ->
           {:halt,
            {:error,
@@ -72,8 +75,13 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
          %Effect.Journal{} = journal,
          opts
        ) do
-    case call_operation_capability(state, intent, capabilities, journal, opts) do
-      {:ok, %Effect.Result{} = result} -> result
+    with {:ok, journal} <- before_operation_call(intent, journal, opts),
+         {:ok, %Effect.Result{} = result} <-
+           call_operation_capability(state, intent, capabilities, journal, opts),
+         :ok <- after_operation_result(intent, result, opts) do
+      result
+    else
+      {:error, reason} -> {:operation_group_checkpoint_failed, reason}
     end
   end
 
@@ -100,6 +108,20 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
   end
 
   defp batch_timeout(state, opts), do: CapabilityInvoker.capability_timeout(state, opts)
+
+  defp before_operation_call(intent, journal, opts) do
+    case Keyword.get(opts, :operation_group_before_call) do
+      callback when is_function(callback, 1) -> callback.(intent)
+      _callback -> {:ok, journal}
+    end
+  end
+
+  defp after_operation_result(intent, result, opts) do
+    case Keyword.get(opts, :operation_group_after_result) do
+      callback when is_function(callback, 2) -> callback.(intent, result)
+      _callback -> :ok
+    end
+  end
 
   defp effect_operation(%Effect.Intent{kind: :operation, payload: payload}) do
     Map.get(payload, :name) || Map.get(payload, "name")
