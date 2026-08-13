@@ -55,6 +55,7 @@ defmodule Jidoka.Parity.TokenItemAndSemanticEventStreamingTest do
 
     assert callback_values == mailbox_events
     assert Enum.all?(mailbox_events, &(&1.request_id == request_id))
+    assert Enum.map(mailbox_events, & &1.seq) == Enum.to_list(0..(length(mailbox_events) - 1))
 
     assert [thinking_delta, content_delta] =
              Enum.filter(mailbox_events, &(&1.event == :llm_delta))

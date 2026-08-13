@@ -9,6 +9,7 @@ defmodule Jidoka.Application do
   def start(_type, _args) do
     children =
       [
+        Jidoka.Runtime.EventSequence,
         {Task.Supervisor, name: Jidoka.Chat.TaskSupervisor},
         {DynamicSupervisor, name: Jidoka.Chat.RequestSupervisor, strategy: :one_for_one},
         {Task.Supervisor, name: Jidoka.Session.Sequence.TaskSupervisor},

@@ -12,6 +12,19 @@ defmodule Jidoka.StreamTest do
 
     assert Stream.text_delta(content) == "hello"
     assert Stream.thinking_delta(thinking) == "checking"
+    assert Stream.model_record(content).type == :text_delta
+    assert Stream.model_record(thinking).type == :reasoning_delta
+  end
+
+  test "model record helper retains normalized non-text records" do
+    event =
+      Event.new!(
+        event: :llm_delta,
+        data: %{type: :tool_call, call: %{name: "coding.read", arguments: %{}}}
+      )
+
+    assert Stream.model_record(event) == event.data
+    assert Stream.model_record(Event.build(:turn_finished)) == nil
   end
 
   test "delta helpers ignore string-keyed event data" do
@@ -129,9 +142,8 @@ defmodule Jidoka.StreamTest do
         end
       end)
       |> Enum.take_while(&(&1 != :done))
-      |> Enum.map(& &1.event)
 
-    assert events == [
+    assert Enum.map(events, & &1.event) == [
              :turn_started,
              :prompt_assembled,
              :effect_planned,
@@ -143,6 +155,8 @@ defmodule Jidoka.StreamTest do
              :effect_completed,
              :turn_finished
            ]
+
+    assert Enum.map(events, & &1.seq) == Enum.to_list(0..(length(events) - 1))
   end
 
   test "chat_async returns a request handle that can be streamed and awaited" do

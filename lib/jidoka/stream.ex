@@ -71,6 +71,20 @@ defmodule Jidoka.Stream do
 
   def thinking_delta(_event), do: nil
 
+  @doc "Returns the provider-neutral model record carried by an `:llm_delta` event."
+  @spec model_record(Event.t()) :: map() | nil
+  def model_record(%Event{event: :llm_delta, data: %{type: type} = data}) when is_atom(type),
+    do: data
+
+  def model_record(%Event{event: :llm_delta, data: %{chunk_type: :content} = data}),
+    do: Map.put(data, :type, :text_delta)
+
+  def model_record(%Event{event: :llm_delta, data: %{chunk_type: type} = data})
+      when type in [:thinking, :reasoning],
+      do: Map.put(data, :type, :reasoning_delta)
+
+  def model_record(%Event{}), do: nil
+
   @doc """
   Emits one event to the stream sinks configured for a running turn.
 

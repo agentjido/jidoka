@@ -2,6 +2,7 @@ defmodule Jidoka.Runtime.EventDispatcher do
   @moduledoc false
 
   alias Jidoka.Event
+  alias Jidoka.Runtime.EventSequence
 
   @message_tag :jidoka_turn_event
   @terminal_events [:turn_finished, :turn_failed, :turn_hibernated]
@@ -14,6 +15,7 @@ defmodule Jidoka.Runtime.EventDispatcher do
 
   @spec emit(Event.t(), keyword()) :: :ok
   def emit(%Event{} = event, opts) when is_list(opts) do
+    event = EventSequence.stamp(event)
     emit_to_mailbox(event, Keyword.get(opts, :stream_to))
     emit_to_callback(event, Keyword.get(opts, :on_event))
     Jidoka.Extension.RuntimeEvents.emit_runtime(event, opts)
