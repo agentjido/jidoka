@@ -2,7 +2,7 @@ defmodule Jidoka.CodingPack do
   @moduledoc "Removable first-party coding-pack registration and host factory."
 
   alias Jidoka.Agent.Spec.Operation
-  alias Jidoka.CodingPack.{Error, Instructions, Tools, Workspace}
+  alias Jidoka.CodingPack.{Error, Instructions, ParameterSchema, Tools, Workspace}
   alias Jidoka.Extension.{Binding, Registration, Request}
 
   @pack_id "jido.coding_pack"
@@ -78,7 +78,7 @@ defmodule Jidoka.CodingPack do
          :ok <- known_tool_ids(Map.keys(defaults) ++ Map.keys(replacements) ++ disabled),
          true <- is_list(disabled) and Enum.all?(disabled, &is_binary/1),
          entries = defaults |> Map.merge(replacements) |> Map.drop(disabled),
-         :ok <- validate_entries(entries) do
+         {:ok, entries} <- prepare_entries(entries) do
       ordered = Enum.sort_by(entries, &elem(&1, 0))
 
       {:ok,
@@ -148,13 +148,16 @@ defmodule Jidoka.CodingPack do
     if unknown == [], do: :ok, else: {:error, Error.new(:unknown_coding_tool_id, %{ids: unknown})}
   end
 
-  defp validate_entries(entries) do
-    Enum.reduce_while(entries, :ok, fn
-      {id, %{operation: %Operation{name: name}, handler: handler}}, :ok
+  defp prepare_entries(entries) do
+    Enum.reduce_while(entries, {:ok, %{}}, fn
+      {id, %{operation: %Operation{name: name} = operation, handler: handler} = entry}, {:ok, prepared}
       when name == id and (is_function(handler, 2) or is_function(handler, 3)) ->
-        {:cont, :ok}
+        case ParameterSchema.wrap(operation, handler) do
+          {:ok, handler} -> {:cont, {:ok, Map.put(prepared, id, %{entry | handler: handler})}}
+          {:error, %Error{} = error} -> {:halt, {:error, error}}
+        end
 
-      {id, _entry}, :ok ->
+      {id, _entry}, {:ok, _prepared} ->
         {:halt, {:error, Error.new(:coding_tool_entry_invalid, %{id: id})}}
     end)
   end

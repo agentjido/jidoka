@@ -17,6 +17,7 @@ defmodule Jidoka.CodingPack.Search do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(workspace),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "read",
@@ -25,6 +26,31 @@ defmodule Jidoka.CodingPack.Search do
           }
         ),
       handler: fn arguments, _context -> run(workspace, arguments) end
+    }
+  end
+
+  defp input_schema(workspace) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "mode" => %{"type" => "string", "enum" => ["path", "text"]},
+        "path" => %{"type" => "string", "minLength" => 1},
+        "pattern" => %{"type" => "string", "minLength" => 1},
+        "glob" => %{"type" => "string"},
+        "case_sensitive" => %{"type" => "boolean"},
+        "max_results" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => workspace.limits.max_search_results
+        },
+        "max_bytes" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => workspace.limits.max_result_bytes
+        }
+      },
+      "required" => ["pattern"],
+      "additionalProperties" => false
     }
   end
 

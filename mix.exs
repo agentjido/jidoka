@@ -59,6 +59,7 @@ defmodule Jidoka.MixProject do
       # Runtime support
       {:crontab, "~> 1.2"},
       {:jason, "~> 1.4"},
+      {:jsv, "~> 0.22"},
       {:llm_db, "~> 2026.7.0"},
       {:lua, "~> 1.0.0-rc.0"},
       {:req_llm, "~> 1.12"},

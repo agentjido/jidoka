@@ -17,6 +17,7 @@ defmodule Jidoka.CodingPack.Verify do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "verify",
@@ -27,6 +28,28 @@ defmodule Jidoka.CodingPack.Verify do
       handler: fn arguments, context ->
         run(workspace, port, arguments, cancellation: Jidoka.Context.get_runtime(context, :cancellation))
       end
+    }
+  end
+
+  defp input_schema do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "helper_id" => %{"type" => "string", "minLength" => 1},
+        "target" => %{"type" => "string", "minLength" => 1},
+        "edit_ids" => %{
+          "type" => "array",
+          "items" => %{"type" => "string", "minLength" => 1},
+          "maxItems" => 50
+        },
+        "checkpoint_ids" => %{
+          "type" => "array",
+          "items" => %{"type" => "string", "minLength" => 1},
+          "maxItems" => 50
+        }
+      },
+      "required" => ["helper_id"],
+      "additionalProperties" => false
     }
   end
 

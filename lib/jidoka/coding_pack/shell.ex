@@ -19,6 +19,7 @@ defmodule Jidoka.CodingPack.Shell do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(workspace),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "shell",
@@ -34,6 +35,35 @@ defmodule Jidoka.CodingPack.Shell do
           )
         end
       end
+    }
+  end
+
+  defp input_schema(workspace) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "command" => %{"type" => "string", "minLength" => 1},
+        "args" => %{
+          "type" => "array",
+          "items" => %{"type" => "string"},
+          "maxItems" => workspace.limits.max_shell_args
+        },
+        "stdin" => %{"type" => "string"},
+        "cwd" => %{"type" => "string", "minLength" => 1},
+        "timeout_ms" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => workspace.limits.max_shell_timeout_ms
+        },
+        "max_output_bytes" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => workspace.limits.max_shell_output_bytes
+        },
+        "network" => %{"type" => "boolean"}
+      },
+      "required" => ["command"],
+      "additionalProperties" => false
     }
   end
 

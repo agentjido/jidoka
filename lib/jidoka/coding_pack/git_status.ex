@@ -17,6 +17,7 @@ defmodule Jidoka.CodingPack.GitStatus do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(workspace),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "git",
@@ -25,6 +26,21 @@ defmodule Jidoka.CodingPack.GitStatus do
           }
         ),
       handler: fn arguments, _context -> run(workspace, port, arguments) end
+    }
+  end
+
+  defp input_schema(workspace) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "paths" => %{"type" => "array", "items" => %{"type" => "string", "minLength" => 1}},
+        "max_entries" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => workspace.limits.max_search_results
+        }
+      },
+      "additionalProperties" => false
     }
   end
 

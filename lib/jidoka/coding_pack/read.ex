@@ -17,6 +17,7 @@ defmodule Jidoka.CodingPack.Read do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(workspace),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "read",
@@ -25,6 +26,34 @@ defmodule Jidoka.CodingPack.Read do
           }
         ),
       handler: fn arguments, _context -> run(workspace, arguments) end
+    }
+  end
+
+  defp input_schema(workspace) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "path" => %{"type" => "string", "minLength" => 1},
+        "start_line" => %{"type" => "integer", "minimum" => 1},
+        "end_line" => %{"type" => "integer", "minimum" => 1},
+        "offset" => %{"type" => "integer", "minimum" => 0},
+        "length" => %{"type" => "integer", "minimum" => 1},
+        "max_bytes" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => workspace.limits.max_result_bytes
+        }
+      },
+      "required" => ["path"],
+      "additionalProperties" => false,
+      "not" => %{
+        "anyOf" => [
+          %{"required" => ["start_line", "offset"]},
+          %{"required" => ["start_line", "length"]},
+          %{"required" => ["end_line", "offset"]},
+          %{"required" => ["end_line", "length"]}
+        ]
+      }
     }
   end
 

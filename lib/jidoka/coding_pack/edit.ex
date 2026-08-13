@@ -19,6 +19,7 @@ defmodule Jidoka.CodingPack.Edit do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "write",
@@ -34,6 +35,21 @@ defmodule Jidoka.CodingPack.Edit do
           )
         end
       end
+    }
+  end
+
+  defp input_schema do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "path" => %{"type" => "string", "minLength" => 1},
+        "old_text" => %{"type" => "string", "minLength" => 1},
+        "new_text" => %{"type" => "string"},
+        "expected_occurrences" => %{"type" => "integer", "minimum" => 1},
+        "expected_before_sha256" => %{"type" => "string", "pattern" => "^sha256:[0-9a-f]{64}$"}
+      },
+      "required" => ["path", "old_text", "new_text"],
+      "additionalProperties" => false
     }
   end
 

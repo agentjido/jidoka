@@ -17,6 +17,7 @@ defmodule Jidoka.CodingPack.GitDiff do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(workspace),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "git",
@@ -25,6 +26,23 @@ defmodule Jidoka.CodingPack.GitDiff do
           }
         ),
       handler: fn arguments, _context -> run(workspace, port, arguments) end
+    }
+  end
+
+  defp input_schema(workspace) do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "paths" => %{"type" => "array", "items" => %{"type" => "string", "minLength" => 1}},
+        "staged" => %{"type" => "boolean"},
+        "context_lines" => %{"type" => "integer", "minimum" => 0, "maximum" => 20},
+        "max_bytes" => %{
+          "type" => "integer",
+          "minimum" => 1,
+          "maximum" => workspace.limits.max_shell_output_bytes
+        }
+      },
+      "additionalProperties" => false
     }
   end
 

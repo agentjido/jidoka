@@ -19,6 +19,7 @@ defmodule Jidoka.CodingPack.Write do
           metadata: %{
             "kind" => "tool",
             "source" => "coding_pack",
+            "parameters_schema" => input_schema(),
             "policy_resource" => %{
               "kind" => "coding_workspace",
               "access" => "write",
@@ -34,6 +35,20 @@ defmodule Jidoka.CodingPack.Write do
           )
         end
       end
+    }
+  end
+
+  defp input_schema do
+    %{
+      "type" => "object",
+      "properties" => %{
+        "path" => %{"type" => "string", "minLength" => 1},
+        "content" => %{"type" => "string"},
+        "overwrite" => %{"type" => "boolean"},
+        "expected_before_sha256" => %{"type" => "string", "pattern" => "^sha256:[0-9a-f]{64}$"}
+      },
+      "required" => ["path", "content"],
+      "additionalProperties" => false
     }
   end
 
