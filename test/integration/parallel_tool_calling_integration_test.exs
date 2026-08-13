@@ -36,6 +36,18 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
              %Effect.OperationResult{operation: "slow_b", output: %{"operation" => "slow_b"}}
            ] = result.agent_state.operation_results
 
+    assert [user, assistant_calls, first_tool, second_tool, final] = result.agent_state.messages
+    assert user.role == :user
+    assert assistant_calls.role == :assistant
+    assert first_tool.role == :tool
+    assert second_tool.role == :tool
+    assert final.role == :assistant
+
+    calls = hd(assistant_calls.interaction.tool_call_groups).calls
+    assert calls == [first_tool.tool_call, second_tool.tool_call]
+    assert Enum.map(calls, & &1.call_index) == [0, 1]
+    assert length(Enum.uniq(Enum.map(result.agent_state.messages, & &1.id))) == 5
+
     events = timeline(result.events)
 
     first_completed =

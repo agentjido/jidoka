@@ -43,6 +43,16 @@ defmodule Jidoka.Id do
     prefix <> "_" <> uuid7()
   end
 
+  @doc "Builds a stable prefixed identifier from deterministic semantic parts."
+  @spec stable(prefix(), [term()]) :: String.t()
+  def stable(prefix, parts) when is_binary(prefix) and is_list(parts) do
+    digest =
+      :crypto.hash(:sha256, :erlang.term_to_binary(parts))
+      |> Base.url_encode64(padding: false)
+
+    prefix <> "_" <> digest
+  end
+
   @doc "Generates a UUIDv7 identifier."
   @spec uuid7() :: String.t()
   def uuid7 do

@@ -49,7 +49,7 @@ defmodule Jidoka.DebugTest do
              }
            } = result.metadata
 
-    assert Enum.map(messages, & &1.role) == [:system, :user, :tool]
+    assert Enum.map(messages, & &1.role) == [:system, :user, :assistant, :tool]
 
     assert {:ok,
             %RequestSummary{
@@ -65,7 +65,7 @@ defmodule Jidoka.DebugTest do
             } = summary} = Debug.request(result)
 
     assert Enum.any?(summary.timeline, &(&1.event == :turn_finished))
-    assert summary.prompt.message_count == 3
+    assert summary.prompt.message_count == 4
     assert summary.usage.llm_calls == 2
   end
 

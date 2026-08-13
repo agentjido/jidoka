@@ -1,6 +1,9 @@
 defmodule Jidoka.Turn.State do
   @moduledoc "Ephemeral data value passed through the Jidoka turn workflow."
 
+  alias Jidoka.Agent
+  alias Jidoka.Effect
+  alias Jidoka.Id
   alias Jidoka.Schema
 
   @schema Zoi.struct(
@@ -144,18 +147,18 @@ defmodule Jidoka.Turn.State do
   defp apply_llm_result(%__MODULE__{} = state, output) when is_map(output) do
     state = pop_pending_effect(state)
 
-    case Jidoka.Effect.LLMDecision.from_input(output) do
-      {:ok, %Jidoka.Effect.LLMDecision{type: :final} = decision} ->
-        apply_final_result(state, decision)
+    with {:ok, decision} <- Effect.LLMDecision.from_input(output),
+         {:ok, decision} <- attach_model_interaction(state, decision) do
+      case decision do
+        %Effect.LLMDecision{type: :final} = decision ->
+          apply_final_result(state, decision)
 
-      {:ok, %Jidoka.Effect.LLMDecision{type: :operation, name: name, arguments: arguments} = decision} ->
-        Jidoka.Turn.State.OperationPlanner.plan_turn(state, decision, name, arguments)
+        %Effect.LLMDecision{type: :operation, name: name, arguments: arguments} = decision ->
+          Jidoka.Turn.State.OperationPlanner.plan_turn(state, decision, name, arguments)
 
-      {:ok, %Jidoka.Effect.LLMDecision{type: :operations, operations: operations} = decision} ->
-        Jidoka.Turn.State.OperationPlanner.plan_turns(state, decision, operations)
-
-      {:error, reason} ->
-        {:error, reason}
+        %Effect.LLMDecision{type: :operations, operations: operations} = decision ->
+          Jidoka.Turn.State.OperationPlanner.plan_turns(state, decision, operations)
+      end
     end
   end
 
@@ -195,9 +198,8 @@ defmodule Jidoka.Turn.State do
     {:error, {:effect_result_mismatch, effect, result}}
   end
 
-  defp append_message(%Jidoka.Agent.State{messages: messages} = state, message) do
-    %Jidoka.Agent.State{state | messages: messages ++ [message]}
-  end
+  defp append_message(%Agent.State{} = state, %Agent.Message{} = message),
+    do: Agent.Transcript.append(state, message)
 
   defp append_operation_result(%Jidoka.Agent.State{operation_results: results} = state, result) do
     %Jidoka.Agent.State{state | operation_results: results ++ [result]}
@@ -227,7 +229,12 @@ defmodule Jidoka.Turn.State do
   end
 
   defp finish_turn(%__MODULE__{} = state, content, parts, value) do
-    message = Jidoka.Agent.Message.assistant(content, parts: parts)
+    message =
+      Agent.Message.assistant(content,
+        id: Id.stable("msg", [state.request.request_id, :assistant_final, state.loop_index]),
+        request_id: state.request.request_id,
+        parts: parts
+      )
 
     {:ok,
      %__MODULE__{
@@ -278,14 +285,16 @@ defmodule Jidoka.Turn.State do
 
   defp put_repair_message(%__MODULE__{} = state, repair_count, reason) do
     message =
-      Jidoka.Agent.Message.user(
+      Agent.Message.user(
         "The previous final result did not match the declared result schema. " <>
           "Return a corrected final JSON object with a valid result field. " <>
           "Repair attempt #{repair_count}. Validation error: #{repair_reason(reason)}",
         metadata: %{
           "jidoka_result_repair" => true,
           "repair_count" => repair_count
-        }
+        },
+        id: Id.stable("msg", [state.request.request_id, :result_repair, repair_count]),
+        request_id: state.request.request_id
       )
 
     %__MODULE__{state | agent_state: append_message(state.agent_state, message)}
@@ -343,5 +352,15 @@ defmodule Jidoka.Turn.State do
 
   defp transition_event(%Jidoka.Turn.Transition{} = transition, event, attrs) do
     Jidoka.Turn.Transition.event(transition, event, attrs)
+  end
+
+  defp attach_model_interaction(%__MODULE__{} = state, %Effect.LLMDecision{} = decision) do
+    interaction_id =
+      Id.stable("interaction", [state.spec.id, state.request.request_id, state.loop_index])
+
+    Effect.LLMDecision.with_interaction(decision,
+      interaction_id: interaction_id,
+      group_id: Id.stable("group", [interaction_id, 0])
+    )
   end
 end

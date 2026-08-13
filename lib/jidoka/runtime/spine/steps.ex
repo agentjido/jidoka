@@ -5,12 +5,14 @@ defmodule Jidoka.Runtime.Spine.Steps do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Config
   alias Jidoka.Effect
+  alias Jidoka.Id
   alias Jidoka.Portable
   alias Jidoka.Turn
 
   @doc "Assembles prompt data and plans memory effects without external calls."
   @spec assemble_prompt(Turn.State.t()) :: Turn.State.t()
   def assemble_prompt(%Turn.State{} = state) do
+    %Turn.State{} = state = append_request_message(state)
     %Turn.State{} = state = append_memory_recalled(state)
 
     messages =
@@ -19,9 +21,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
         memory_message(state.spec.memory, state.memory)
       ]
       |> Enum.reject(&is_nil/1)
-      |> Kernel.++(state.request.agent_state.messages)
-      |> Kernel.++([request_message(state.request)])
-      |> Kernel.++(current_turn_messages(state))
+      |> Kernel.++(state.agent_state.messages)
 
     messages = Enum.map(messages, &Agent.Message.to_map/1)
 
@@ -191,8 +191,17 @@ defmodule Jidoka.Runtime.Spine.Steps do
     |> Map.reject(fn {_key, value} -> is_nil(value) end)
   end
 
-  defp current_turn_messages(%Turn.State{} = state) do
-    Enum.drop(state.agent_state.messages, length(state.request.agent_state.messages))
+  defp append_request_message(%Turn.State{} = state) do
+    message =
+      state.request
+      |> request_message()
+      |> Map.put(:id, Id.stable("msg", [state.request.request_id, :user]))
+      |> Map.put(:request_id, state.request.request_id)
+
+    %Turn.State{
+      state
+      | agent_state: Agent.Transcript.append(state.agent_state, message)
+    }
   end
 
   defp request_message(%Turn.Request{content: []} = request),

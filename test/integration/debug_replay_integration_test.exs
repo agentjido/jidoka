@@ -60,7 +60,7 @@ defmodule Jidoka.DebugReplayIntegrationTest do
             } = summary} = Debug.latest(session)
 
     assert result.metadata.debug.request_id == summary.request_id
-    assert Enum.map(summary.prompt.messages, & &1.role) == [:system, :user, :tool]
+    assert Enum.map(summary.prompt.messages, & &1.role) == [:system, :user, :assistant, :tool]
     assert [%{operation: "account_lookup", output: %{account_id: "acct_100"}}] = summary.operation_results
     assert summary.usage.llm_calls == 2
     assert summary.usage.total_tokens == 12

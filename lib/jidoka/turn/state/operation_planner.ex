@@ -3,19 +3,16 @@ defmodule Jidoka.Turn.State.OperationPlanner do
 
   alias Jidoka.Agent
   alias Jidoka.Effect
+  alias Jidoka.Id
   alias Jidoka.Turn
 
   @spec plan_turn(term(), Effect.LLMDecision.t(), String.t(), map()) ::
           {:ok, term()} | {:error, term()}
   def plan_turn(state, %Effect.LLMDecision{} = decision, name, arguments) do
-    case operation_for(state, name) do
-      nil ->
-        {:error, {:unknown_operation, name}}
-
-      operation ->
-        with :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
-          {:ok, put_operation_effect(state, operation, decision, name, arguments)}
-        end
+    with {:ok, tool_call} <- one_tool_call(decision),
+         {:ok, operation} <- fetch_operation(state, name),
+         :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
+      {:ok, put_operation_effect(state, operation, decision, tool_call, name, arguments)}
     end
   end
 
@@ -23,22 +20,11 @@ defmodule Jidoka.Turn.State.OperationPlanner do
           {:ok, term()} | {:error, term()}
   def plan_turns(state, %Effect.LLMDecision{} = decision, operations) do
     batch_size = length(operations)
+    calls = tool_calls(decision)
 
-    operations
-    |> Enum.with_index()
-    |> Enum.reduce_while({:ok, []}, fn {operation_request, index}, {:ok, effects} ->
-      case plan_operation_effect(state, operation_request.name, operation_request.arguments, index, batch_size) do
-        {:ok, effect} -> {:cont, {:ok, [effect | effects]}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:ok, effects} ->
-        effects = Enum.reverse(effects)
-        {:ok, put_operation_effects(state, decision, operations, effects)}
-
-      {:error, reason} ->
-        {:error, reason}
+    with :ok <- validate_tool_call_count(calls, batch_size),
+         {:ok, effects} <- plan_batch_effects(state, operations, calls, batch_size) do
+      {:ok, put_operation_effects(state, decision, operations, effects)}
     end
   end
 
@@ -46,13 +32,39 @@ defmodule Jidoka.Turn.State.OperationPlanner do
     Enum.find(operations, &(&1.name == name))
   end
 
-  defp put_operation_effect(state, operation, decision, name, arguments) do
+  defp fetch_operation(state, name) do
+    case operation_for(state, name) do
+      nil -> {:error, {:unknown_operation, name}}
+      operation -> {:ok, operation}
+    end
+  end
+
+  defp plan_batch_effects(state, operations, calls, batch_size) do
+    operations
+    |> Enum.zip(calls)
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, []}, fn {{operation_request, tool_call}, index}, {:ok, effects} ->
+      case plan_operation_effect(state, operation_request, tool_call, index, batch_size) do
+        {:ok, effect} -> {:cont, {:ok, [effect | effects]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> then(fn
+      {:ok, effects} -> {:ok, Enum.reverse(effects)}
+      error -> error
+    end)
+  end
+
+  defp put_operation_effect(state, operation, decision, tool_call, name, arguments) do
     operation_request =
       Effect.OperationRequest.new!(
         name: name,
         arguments: arguments,
         request_id: state.request.request_id,
-        loop_index: state.loop_index
+        loop_index: state.loop_index,
+        provider_call_id: tool_call.provider_call_id,
+        provider_metadata: tool_call.provider_metadata,
+        tool_call: tool_call
       )
 
     effect = operation_effect(state, operation, operation_request, 0, 1)
@@ -61,9 +73,12 @@ defmodule Jidoka.Turn.State.OperationPlanner do
   end
 
   defp put_operation_effects(state, %Effect.LLMDecision{} = decision, operation_requests, effects) do
+    agent_state = append_tool_call_message(state, decision)
+
     planned_state = %{
       state
       | llm_result: decision,
+        agent_state: agent_state,
         operation_plan: List.first(operation_requests),
         pending_effects: effects
     }
@@ -83,20 +98,29 @@ defmodule Jidoka.Turn.State.OperationPlanner do
     |> Turn.Transition.commit()
   end
 
-  defp plan_operation_effect(state, name, arguments, index, batch_size) do
-    case operation_for(state, name) do
+  defp plan_operation_effect(
+         state,
+         %Effect.OperationRequest{} = source_request,
+         %Effect.ToolCall{} = tool_call,
+         index,
+         batch_size
+       ) do
+    case operation_for(state, source_request.name) do
       nil ->
-        {:error, {:unknown_operation, name}}
+        {:error, {:unknown_operation, source_request.name}}
 
       operation ->
         with :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
           operation_request =
             Effect.OperationRequest.new!(
-              name: name,
-              arguments: arguments,
+              name: source_request.name,
+              arguments: source_request.arguments,
               request_id: state.request.request_id,
               loop_index: state.loop_index,
-              metadata: %{batch_index: index, batch_size: batch_size}
+              provider_call_id: source_request.provider_call_id,
+              provider_metadata: source_request.provider_metadata,
+              tool_call: tool_call,
+              metadata: Map.merge(source_request.metadata, %{batch_index: index, batch_size: batch_size})
             )
 
           {:ok, operation_effect(state, operation, operation_request, index, batch_size)}
@@ -165,5 +189,38 @@ defmodule Jidoka.Turn.State.OperationPlanner do
   defp stable_key(parts) do
     :crypto.hash(:sha256, :erlang.term_to_binary(parts))
     |> Base.url_encode64(padding: false)
+  end
+
+  defp tool_calls(%Effect.LLMDecision{
+         interaction: %Effect.ModelInteraction{tool_call_groups: groups}
+       }),
+       do: Enum.flat_map(groups, & &1.calls)
+
+  defp tool_calls(%Effect.LLMDecision{}), do: []
+
+  defp one_tool_call(decision) do
+    case tool_calls(decision) do
+      [call] -> {:ok, call}
+      calls -> {:error, {:tool_call_count_mismatch, 1, length(calls)}}
+    end
+  end
+
+  defp validate_tool_call_count(calls, expected) do
+    if length(calls) == expected,
+      do: :ok,
+      else: {:error, {:tool_call_count_mismatch, expected, length(calls)}}
+  end
+
+  defp append_tool_call_message(state, %Effect.LLMDecision{
+         interaction: %Effect.ModelInteraction{} = interaction
+       }) do
+    message =
+      Agent.Message.assistant_tool_calls(interaction,
+        id: Id.stable("msg", [state.request.request_id, :assistant_tool_calls, interaction.interaction_id]),
+        request_id: state.request.request_id,
+        metadata: %{"loop_index" => state.loop_index}
+      )
+
+    Agent.Transcript.append(state.agent_state, message)
   end
 end

@@ -17,6 +17,7 @@ defmodule Jidoka.Effect.OperationRequest do
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               provider_call_id: Schema.non_empty_string() |> Zoi.nullish(),
               provider_metadata: Zoi.map() |> Zoi.default(%{}),
+              tool_call: Zoi.lazy({Jidoka.Effect.ToolCall, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true

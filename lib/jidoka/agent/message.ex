@@ -7,6 +7,7 @@ defmodule Jidoka.Agent.Message do
   """
 
   alias Jidoka.ContentPart
+  alias Jidoka.Effect
   alias Jidoka.Schema
 
   @roles [:system, :user, :assistant, :tool]
@@ -14,6 +15,8 @@ defmodule Jidoka.Agent.Message do
   @schema Zoi.struct(
             __MODULE__,
             %{
+              id: Schema.non_empty_string() |> Zoi.nullish(),
+              request_id: Schema.non_empty_string() |> Zoi.nullish(),
               role: Schema.atom_enum(@roles),
               content: Zoi.string() |> Zoi.nullish(),
               parts:
@@ -21,6 +24,8 @@ defmodule Jidoka.Agent.Message do
                 |> Zoi.default([]),
               operation: Schema.non_empty_string() |> Zoi.nullish(),
               output: Zoi.any() |> Zoi.nullish(),
+              interaction: Zoi.lazy({Effect.ModelInteraction, :schema, []}) |> Zoi.nullish(),
+              tool_call: Zoi.lazy({Effect.ToolCall, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -75,14 +80,30 @@ defmodule Jidoka.Agent.Message do
   @spec assistant(String.t() | [ContentPart.input()], keyword()) :: t()
   def assistant(content, opts \\ []), do: message!(:assistant, content, opts)
 
+  @doc "Builds an assistant message that records one complete tool-call group."
+  @spec assistant_tool_calls(Effect.ModelInteraction.t(), keyword()) :: t()
+  def assistant_tool_calls(%Effect.ModelInteraction{} = interaction, opts \\ []) do
+    new!(
+      id: Keyword.get(opts, :id),
+      request_id: Keyword.get(opts, :request_id),
+      role: :assistant,
+      content: tool_call_content(interaction),
+      interaction: interaction,
+      metadata: Keyword.get(opts, :metadata, %{})
+    )
+  end
+
   @doc "Builds a tool result message for an operation output."
   @spec tool(String.t(), term(), keyword()) :: t()
   def tool(operation, output, opts \\ []) when is_binary(operation) do
     new!(
       role: :tool,
+      id: Keyword.get(opts, :id),
+      request_id: Keyword.get(opts, :request_id),
       content: Keyword.get(opts, :content, inspect(output)),
       operation: operation,
       output: output,
+      tool_call: Keyword.get(opts, :tool_call),
       metadata: Keyword.get(opts, :metadata, %{})
     )
   end
@@ -93,7 +114,7 @@ defmodule Jidoka.Agent.Message do
     message
     |> Map.from_struct()
     |> message_content(message)
-    |> Map.delete(:parts)
+    |> Map.drop([:parts, :id, :request_id, :interaction, :tool_call])
     |> Enum.reject(fn
       {_key, nil} -> true
       {:metadata, metadata} when metadata == %{} -> true
@@ -105,6 +126,8 @@ defmodule Jidoka.Agent.Message do
   defp message!(role, content, opts) when role in @roles and is_list(opts) do
     new!(
       role: role,
+      id: Keyword.get(opts, :id),
+      request_id: Keyword.get(opts, :request_id),
       content: content,
       parts: Keyword.get(opts, :parts, []),
       metadata: Keyword.get(opts, :metadata, %{})
@@ -181,6 +204,16 @@ defmodule Jidoka.Agent.Message do
 
   defp message_content(map, %__MODULE__{parts: []}), do: map
   defp message_content(map, %__MODULE__{parts: parts}), do: Map.put(map, :content, parts)
+
+  defp tool_call_content(%Effect.ModelInteraction{} = interaction) do
+    operations =
+      for group <- interaction.tool_call_groups,
+          call <- group.calls do
+        %{"name" => call.name, "arguments" => call.arguments}
+      end
+
+    Jason.encode!(%{"type" => "operations", "operations" => operations})
+  end
 
   defp empty_to_nil(""), do: nil
   defp empty_to_nil(value), do: value

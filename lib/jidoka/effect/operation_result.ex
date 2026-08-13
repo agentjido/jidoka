@@ -21,6 +21,7 @@ defmodule Jidoka.Effect.OperationResult do
               request_id: Schema.non_empty_string() |> Zoi.nullish(),
               loop_index: Zoi.integer() |> Zoi.gte(0) |> Zoi.default(0),
               effect_id: Schema.non_empty_string() |> Zoi.nullish(),
+              tool_call: Zoi.lazy({Effect.ToolCall, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -58,7 +59,8 @@ defmodule Jidoka.Effect.OperationResult do
         content: inspect(output),
         request_id: request.request_id,
         loop_index: request.loop_index,
-        effect_id: intent.id
+        effect_id: intent.id,
+        tool_call: request.tool_call
       )
     end
   end
@@ -66,6 +68,25 @@ defmodule Jidoka.Effect.OperationResult do
   @doc "Converts an operation result to a tool message for the model."
   @spec to_message(t()) :: Agent.Message.t()
   def to_message(%__MODULE__{} = result) do
-    Agent.Message.tool(result.operation, result.output, content: result.content || inspect(result.output))
+    Agent.Message.tool(result.operation, result.output,
+      id: message_id(result),
+      request_id: result.request_id,
+      content: result.content || inspect(result.output),
+      tool_call: result.tool_call
+    )
+  end
+
+  defp message_id(%__MODULE__{tool_call: %Effect.ToolCall{} = call, request_id: request_id}) do
+    Jidoka.Id.stable("msg", [
+      request_id,
+      :tool_result,
+      call.interaction_id,
+      call.group_id,
+      call.call_index
+    ])
+  end
+
+  defp message_id(%__MODULE__{request_id: request_id, effect_id: effect_id}) do
+    Jidoka.Id.stable("msg", [request_id, :tool_result, effect_id])
   end
 end

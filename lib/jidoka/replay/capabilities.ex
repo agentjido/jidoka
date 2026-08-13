@@ -85,5 +85,7 @@ defmodule Jidoka.Replay.Capabilities do
   defp semantic_data(value) when is_list(value), do: Enum.map(value, &semantic_data/1)
   defp semantic_data(value), do: value
 
-  defp volatile_key?(key), do: to_string(key) in ~w(run_id cell_id session_id request_id intent_id effect_id)
+  defp volatile_key?(key) do
+    to_string(key) in ~w(run_id cell_id session_id request_id intent_id effect_id interaction_id group_id)
+  end
 end

@@ -93,6 +93,65 @@ defmodule Jidoka.Turn.StateTest do
     assert first.idempotency_key != second.idempotency_key
   end
 
+  test "stores one assistant call group and matched tool results in call order" do
+    {state, intent} = state_with_pending_llm(operations: ["weather", "calendar"])
+
+    assert {:ok, planned} =
+             Turn.State.apply_effect_result(
+               state,
+               Effect.Result.ok(intent, %{
+                 type: :operations,
+                 operations: [
+                   %{
+                     name: "weather",
+                     arguments: %{"city" => "Paris"},
+                     provider_call_id: "provider_weather"
+                   },
+                   %{
+                     name: "calendar",
+                     arguments: %{"day" => "today"},
+                     provider_call_id: "provider_calendar"
+                   }
+                 ]
+               })
+             )
+
+    assert [%Agent.Message{role: :assistant, interaction: interaction}] =
+             planned.agent_state.messages
+
+    assert [weather_call, calendar_call] = hd(interaction.tool_call_groups).calls
+    assert [weather_effect, calendar_effect] = planned.pending_effects
+    assert weather_effect.payload.tool_call == weather_call
+    assert calendar_effect.payload.tool_call == calendar_call
+
+    assert {:ok, observed_weather} =
+             Turn.State.apply_effect_result(
+               planned,
+               Effect.Result.ok(weather_effect, %{"temperature" => 72})
+             )
+
+    assert {:ok, observed_calendar} =
+             Turn.State.apply_effect_result(
+               observed_weather,
+               Effect.Result.ok(calendar_effect, %{"events" => []})
+             )
+
+    assert [assistant_message, weather_message, calendar_message] =
+             observed_calendar.agent_state.messages
+
+    assert assistant_message.interaction == interaction
+    assert weather_message.tool_call == weather_call
+    assert calendar_message.tool_call == calendar_call
+
+    replayed =
+      observed_calendar.agent_state
+      |> Agent.Transcript.append(assistant_message)
+      |> Agent.Transcript.append(weather_message)
+
+    assert replayed.messages == observed_calendar.agent_state.messages
+    assert Agent.Transcript.valid?(replayed)
+  end
+
   test "propagates failed effects and reports unexpected results" do
     {state, intent} = state_with_pending_llm()
     operation_intent = Effect.Intent.new(:operation, %{name: "weather", arguments: %{}})

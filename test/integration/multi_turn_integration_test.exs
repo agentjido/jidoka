@@ -101,7 +101,19 @@ defmodule Jidoka.MultiTurnIntegrationTest do
     assert [%Effect.OperationResult{operation: "lookup_order"}] =
              first_result.agent_state.operation_results
 
-    assert length(first_result.agent_state.messages) == 2
+    assert Enum.map(first_result.agent_state.messages, & &1.role) == [
+             :user,
+             :assistant,
+             :tool,
+             :assistant
+           ]
+
+    assert [user, assistant_call, tool_result, assistant_final] = first_result.agent_state.messages
+    assert user.content == "Check order order_123"
+    assert assistant_call.interaction.interaction_id == tool_result.tool_call.interaction_id
+    assert hd(hd(assistant_call.interaction.tool_call_groups).calls) == tool_result.tool_call
+    assert assistant_final.content == "Order order_123 has shipped via UPS."
+    assert Enum.uniq(Enum.map(first_result.agent_state.messages, & &1.id)) |> length() == 4
     assert_received {:operation_called, "lookup_order", %{"order_id" => "order_123"}, :idempotent}
 
     second_turn_llm = fn intent, %Effect.Journal{} = journal, _ctx ->
@@ -158,7 +170,19 @@ defmodule Jidoka.MultiTurnIntegrationTest do
              "refund_order"
            ]
 
-    assert length(second_result.agent_state.messages) == 4
+    assert Enum.map(second_result.agent_state.messages, & &1.role) == [
+             :user,
+             :assistant,
+             :tool,
+             :assistant,
+             :user,
+             :assistant,
+             :tool,
+             :assistant
+           ]
+
+    assert Enum.count(second_result.agent_state.messages, &(&1.content == "Refund it for the customer.")) == 1
+    assert Enum.uniq(Enum.map(second_result.agent_state.messages, & &1.id)) |> length() == 8
 
     assert_received {:operation_called, "refund_order", %{"order_id" => "order_123", "reason" => "customer_request"},
                      :unsafe_once}

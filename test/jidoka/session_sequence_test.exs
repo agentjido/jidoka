@@ -30,8 +30,14 @@ defmodule Jidoka.SessionSequenceTest do
     llm = fn %Effect.Intent{payload: payload}, %Effect.Journal{} = journal, _context ->
       messages = payload |> Schema.get_key(:prompt) |> Schema.get_key(:messages, [])
 
+      current_user_message =
+        messages
+        |> Enum.filter(&(Schema.get_key(&1, :role) in [:user, "user"]))
+        |> List.last()
+        |> Schema.get_key(:content)
+
       cond do
-        message_with_content?(messages, "Store Atlas") and count_results(journal, :llm) == 0 ->
+        current_user_message == "Store Atlas" and count_results(journal, :llm) == 0 ->
           {:ok,
            %{
              type: :operation,
@@ -39,15 +45,15 @@ defmodule Jidoka.SessionSequenceTest do
              arguments: %{"id" => "project-1"}
            }}
 
-        message_with_content?(messages, "Store Atlas") ->
+        current_user_message == "Store Atlas" ->
           {:ok, %{type: :final, content: "Stored Atlas"}}
 
-        message_with_content?(messages, "Recall Atlas") ->
+        current_user_message == "Recall Atlas" ->
           assert message_with_content?(messages, "Stored Atlas")
           assert tool_observation?(messages, "lookup_project")
           {:ok, %{type: :final, content: "Atlas"}}
 
-        message_with_content?(messages, "Confirm Atlas") ->
+        current_user_message == "Confirm Atlas" ->
           assert message_with_content?(messages, "Stored Atlas")
           assert message_with_content?(messages, "Atlas")
           {:ok, %{type: :final, content: "Confirmed Atlas"}}
