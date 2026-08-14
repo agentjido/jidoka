@@ -1,0 +1,294 @@
+{
+  "version": 1,
+  "provider": "openai",
+  "model": "openai:gpt-4.1-mini",
+  "native": {
+    "single": {
+      "id": "resp_fixture_single",
+      "object": "response",
+      "model": "gpt-4.1-mini",
+      "status": "completed",
+      "output": [
+        {
+          "type": "function_call",
+          "id": "fc_fixture_single",
+          "call_id": "openai-call-1",
+          "name": "jidoka_coding_read_125uvSq2N9EB",
+          "arguments": "{\"path\":\"one\"}",
+          "status": "completed"
+        }
+      ],
+      "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+    },
+    "parallel": {
+      "id": "resp_fixture_parallel",
+      "object": "response",
+      "model": "gpt-4.1-mini",
+      "status": "completed",
+      "output": [
+        {
+          "type": "function_call",
+          "id": "fc_fixture_parallel_1",
+          "call_id": "openai-parallel-1",
+          "name": "jidoka_coding_read_125uvSq2N9EB",
+          "arguments": "{\"path\":\"one\"}",
+          "status": "completed"
+        },
+        {
+          "type": "function_call",
+          "id": "fc_fixture_parallel_2",
+          "call_id": "openai-parallel-2",
+          "name": "jidoka_coding_read_125uvSq2N9EB",
+          "arguments": "{\"path\":\"two\"}",
+          "status": "completed"
+        }
+      ],
+      "usage": {"input_tokens": 4, "output_tokens": 4, "total_tokens": 8}
+    },
+    "dependent": [
+      {
+        "id": "resp_fixture_dependent_1",
+        "object": "response",
+        "model": "gpt-4.1-mini",
+        "status": "completed",
+        "output": [
+          {
+            "type": "function_call",
+            "id": "fc_fixture_dependent_1",
+            "call_id": "openai-dependent-1",
+            "name": "jidoka_coding_read_125uvSq2N9EB",
+            "arguments": "{\"path\":\"lib/rate_limiter.ex\"}",
+            "status": "completed"
+          }
+        ],
+        "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+      },
+      {
+        "id": "resp_fixture_dependent_2",
+        "object": "response",
+        "model": "gpt-4.1-mini",
+        "status": "completed",
+        "output": [
+          {
+            "type": "function_call",
+            "id": "fc_fixture_dependent_2",
+            "call_id": "openai-dependent-2",
+            "name": "jidoka_coding_edit_UpHiYr6gxXNi",
+            "arguments": "{\"path\":\"lib/rate_limiter.ex\",\"old_text\":\"limit: 5\",\"new_text\":\"limit: 10\"}",
+            "status": "completed"
+          }
+        ],
+        "usage": {"input_tokens": 5, "output_tokens": 3, "total_tokens": 8}
+      }
+    ],
+    "stream": {
+      "events": [
+        {
+          "event": "response.output_text.delta",
+          "data": {"type": "response.output_text.delta", "delta": "hel"}
+        },
+        {
+          "event": "response.output_item.done",
+          "data": {
+            "type": "response.output_item.done",
+            "output_index": 0,
+            "item": {
+              "type": "function_call",
+              "id": "fc_fixture_stream",
+              "call_id": "openai-stream-1",
+              "name": "jidoka_coding_read_125uvSq2N9EB",
+              "arguments": "{\"path\":\"stream.ex\"}",
+              "status": "completed"
+            }
+          }
+        },
+        {
+          "event": "response.completed",
+          "data": {
+            "type": "response.completed",
+            "response": {
+              "id": "resp_fixture_stream",
+              "status": "completed",
+              "output": [],
+              "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+            }
+          }
+        }
+      ],
+      "response": {
+        "id": "resp_fixture_stream",
+        "object": "response",
+        "model": "gpt-4.1-mini",
+        "status": "completed",
+        "output": [
+          {
+            "type": "message",
+            "id": "msg_fixture_stream",
+            "role": "assistant",
+            "status": "completed",
+            "content": [{"type": "output_text", "text": "hel", "annotations": []}]
+          },
+          {
+            "type": "function_call",
+            "id": "fc_fixture_stream",
+            "call_id": "openai-stream-1",
+            "name": "jidoka_coding_read_125uvSq2N9EB",
+            "arguments": "{\"path\":\"stream.ex\"}",
+            "status": "completed"
+          }
+        ],
+        "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+      }
+    },
+    "invalid": {
+      "id": "resp_fixture_invalid",
+      "object": "response",
+      "model": "gpt-4.1-mini",
+      "status": "completed",
+      "output": [
+        {
+          "type": "function_call",
+          "id": "fc_fixture_invalid",
+          "call_id": "openai-invalid-1",
+          "name": "unknown_tool",
+          "arguments": "{\"path\":\"one\"}",
+          "status": "completed"
+        }
+      ],
+      "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+    },
+    "truncated": {
+      "id": "resp_fixture_truncated",
+      "object": "response",
+      "model": "gpt-4.1-mini",
+      "status": "incomplete",
+      "incomplete_details": {"reason": "max_output_tokens"},
+      "output": [
+        {
+          "type": "message",
+          "id": "msg_fixture_truncated",
+          "role": "assistant",
+          "status": "incomplete",
+          "content": [{"type": "output_text", "text": "partial", "annotations": []}]
+        }
+      ],
+      "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+    }
+  },
+  "fallback": {
+    "single": {
+      "id": "resp_fixture_fallback_single",
+      "object": "response",
+      "model": "gpt-4.1-mini",
+      "status": "completed",
+      "output": [
+        {
+          "type": "message",
+          "id": "msg_fixture_fallback_single",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "{\"type\":\"operation\",\"name\":\"coding.read\",\"arguments\":{\"path\":\"one\"}}",
+              "annotations": []
+            }
+          ]
+        }
+      ],
+      "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+    },
+    "parallel": {
+      "id": "resp_fixture_fallback_parallel",
+      "object": "response",
+      "model": "gpt-4.1-mini",
+      "status": "completed",
+      "output": [
+        {
+          "type": "message",
+          "id": "msg_fixture_fallback_parallel",
+          "role": "assistant",
+          "status": "completed",
+          "content": [
+            {
+              "type": "output_text",
+              "text": "{\"type\":\"operations\",\"operations\":[{\"name\":\"coding.read\",\"arguments\":{\"path\":\"one\"}},{\"name\":\"coding.read\",\"arguments\":{\"path\":\"two\"}}]}",
+              "annotations": []
+            }
+          ]
+        }
+      ],
+      "usage": {"input_tokens": 4, "output_tokens": 4, "total_tokens": 8}
+    },
+    "dependent": [
+      {
+        "id": "resp_fixture_fallback_dependent_1",
+        "object": "response",
+        "model": "gpt-4.1-mini",
+        "status": "completed",
+        "output": [
+          {
+            "type": "message",
+            "id": "msg_fixture_fallback_dependent_1",
+            "role": "assistant",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "{\"type\":\"operation\",\"name\":\"coding.read\",\"arguments\":{\"path\":\"lib/rate_limiter.ex\"}}",
+                "annotations": []
+              }
+            ]
+          }
+        ],
+        "usage": {"input_tokens": 3, "output_tokens": 2, "total_tokens": 5}
+      },
+      {
+        "id": "resp_fixture_fallback_dependent_2",
+        "object": "response",
+        "model": "gpt-4.1-mini",
+        "status": "completed",
+        "output": [
+          {
+            "type": "message",
+            "id": "msg_fixture_fallback_dependent_2",
+            "role": "assistant",
+            "status": "completed",
+            "content": [
+              {
+                "type": "output_text",
+                "text": "{\"type\":\"operation\",\"name\":\"coding.edit\",\"arguments\":{\"path\":\"lib/rate_limiter.ex\",\"old_text\":\"limit: 5\",\"new_text\":\"limit: 10\"}}",
+                "annotations": []
+              }
+            ]
+          }
+        ],
+        "usage": {"input_tokens": 5, "output_tokens": 3, "total_tokens": 8}
+      }
+    ]
+  },
+  "errors": {
+    "authentication": {
+      "status": 401,
+      "body": {
+        "error": {
+          "message": "fixture unauthorized",
+          "type": "invalid_request_error",
+          "code": "invalid_api_key"
+        }
+      }
+    },
+    "rate_limit": {
+      "status": 429,
+      "headers": {"retry-after": ["1"]},
+      "body": {
+        "error": {
+          "message": "fixture limited",
+          "type": "rate_limit_error",
+          "code": "rate_limit_exceeded"
+        }
+      }
+    },
+    "timeout_ms": 5
+  }
+}

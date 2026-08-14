@@ -1,0 +1,253 @@
+{
+  "version": 1,
+  "provider": "anthropic",
+  "model": "anthropic:claude-sonnet-4-5-20250929",
+  "native": {
+    "single": {
+      "id": "msg_fixture_single",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "anthropic-call-1",
+          "name": "jidoka_coding_read_125uvSq2N9EB",
+          "input": {"path": "one"}
+        }
+      ],
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "usage": {"input_tokens": 3, "output_tokens": 2}
+    },
+    "parallel": {
+      "id": "msg_fixture_parallel",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "anthropic-parallel-1",
+          "name": "jidoka_coding_read_125uvSq2N9EB",
+          "input": {"path": "one"}
+        },
+        {
+          "type": "tool_use",
+          "id": "anthropic-parallel-2",
+          "name": "jidoka_coding_read_125uvSq2N9EB",
+          "input": {"path": "two"}
+        }
+      ],
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "usage": {"input_tokens": 4, "output_tokens": 4}
+    },
+    "dependent": [
+      {
+        "id": "msg_fixture_dependent_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-4-5-20250929",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "anthropic-dependent-1",
+            "name": "jidoka_coding_read_125uvSq2N9EB",
+            "input": {"path": "lib/rate_limiter.ex"}
+          }
+        ],
+        "stop_reason": "tool_use",
+        "stop_sequence": null,
+        "usage": {"input_tokens": 3, "output_tokens": 2}
+      },
+      {
+        "id": "msg_fixture_dependent_2",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-4-5-20250929",
+        "content": [
+          {
+            "type": "tool_use",
+            "id": "anthropic-dependent-2",
+            "name": "jidoka_coding_edit_UpHiYr6gxXNi",
+            "input": {
+              "path": "lib/rate_limiter.ex",
+              "old_text": "limit: 5",
+              "new_text": "limit: 10"
+            }
+          }
+        ],
+        "stop_reason": "tool_use",
+        "stop_sequence": null,
+        "usage": {"input_tokens": 5, "output_tokens": 3}
+      }
+    ],
+    "stream": {
+      "events": [
+        {
+          "data": {
+            "type": "content_block_delta",
+            "index": 0,
+            "delta": {"type": "text_delta", "text": "hel"}
+          }
+        },
+        {
+          "data": {
+            "type": "content_block_start",
+            "index": 1,
+            "content_block": {
+              "type": "tool_use",
+              "id": "anthropic-stream-1",
+              "name": "jidoka_coding_read_125uvSq2N9EB"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "content_block_delta",
+            "index": 1,
+            "delta": {
+              "type": "input_json_delta",
+              "partial_json": "{\"path\":\"stream.ex\"}"
+            }
+          }
+        },
+        {
+          "data": {
+            "type": "message_delta",
+            "delta": {"stop_reason": "tool_use"},
+            "usage": {"output_tokens": 2}
+          }
+        }
+      ],
+      "response": {
+        "id": "msg_fixture_stream",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-4-5-20250929",
+        "content": [
+          {"type": "text", "text": "hel"},
+          {
+            "type": "tool_use",
+            "id": "anthropic-stream-1",
+            "name": "jidoka_coding_read_125uvSq2N9EB",
+            "input": {"path": "stream.ex"}
+          }
+        ],
+        "stop_reason": "tool_use",
+        "stop_sequence": null,
+        "usage": {"input_tokens": 3, "output_tokens": 2}
+      }
+    },
+    "invalid": {
+      "id": "msg_fixture_invalid",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [
+        {
+          "type": "tool_use",
+          "id": "anthropic-invalid-1",
+          "name": "unknown_tool",
+          "input": {"path": "one"}
+        }
+      ],
+      "stop_reason": "tool_use",
+      "stop_sequence": null,
+      "usage": {"input_tokens": 3, "output_tokens": 2}
+    },
+    "truncated": {
+      "id": "msg_fixture_truncated",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [{"type": "text", "text": "partial"}],
+      "stop_reason": "max_tokens",
+      "stop_sequence": null,
+      "usage": {"input_tokens": 3, "output_tokens": 2}
+    }
+  },
+  "fallback": {
+    "single": {
+      "id": "msg_fixture_fallback_single",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"type\":\"operation\",\"name\":\"coding.read\",\"arguments\":{\"path\":\"one\"}}"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {"input_tokens": 3, "output_tokens": 2}
+    },
+    "parallel": {
+      "id": "msg_fixture_fallback_parallel",
+      "type": "message",
+      "role": "assistant",
+      "model": "claude-sonnet-4-5-20250929",
+      "content": [
+        {
+          "type": "text",
+          "text": "{\"type\":\"operations\",\"operations\":[{\"name\":\"coding.read\",\"arguments\":{\"path\":\"one\"}},{\"name\":\"coding.read\",\"arguments\":{\"path\":\"two\"}}]}"
+        }
+      ],
+      "stop_reason": "end_turn",
+      "stop_sequence": null,
+      "usage": {"input_tokens": 4, "output_tokens": 4}
+    },
+    "dependent": [
+      {
+        "id": "msg_fixture_fallback_dependent_1",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-4-5-20250929",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"type\":\"operation\",\"name\":\"coding.read\",\"arguments\":{\"path\":\"lib/rate_limiter.ex\"}}"
+          }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": {"input_tokens": 3, "output_tokens": 2}
+      },
+      {
+        "id": "msg_fixture_fallback_dependent_2",
+        "type": "message",
+        "role": "assistant",
+        "model": "claude-sonnet-4-5-20250929",
+        "content": [
+          {
+            "type": "text",
+            "text": "{\"type\":\"operation\",\"name\":\"coding.edit\",\"arguments\":{\"path\":\"lib/rate_limiter.ex\",\"old_text\":\"limit: 5\",\"new_text\":\"limit: 10\"}}"
+          }
+        ],
+        "stop_reason": "end_turn",
+        "stop_sequence": null,
+        "usage": {"input_tokens": 5, "output_tokens": 3}
+      }
+    ]
+  },
+  "errors": {
+    "authentication": {
+      "status": 401,
+      "body": {
+        "type": "error",
+        "error": {"type": "authentication_error", "message": "fixture unauthorized"}
+      }
+    },
+    "rate_limit": {
+      "status": 429,
+      "headers": {"retry-after": ["1"]},
+      "body": {
+        "type": "error",
+        "error": {"type": "rate_limit_error", "message": "fixture limited"}
+      }
+    },
+    "timeout_ms": 5
+  }
+}

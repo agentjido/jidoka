@@ -1,0 +1,353 @@
+{
+  "version": 1,
+  "provider": "google",
+  "model": "google:gemini-2.5-flash",
+  "native": {
+    "single": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "functionCall": {
+                  "name": "jidoka_coding_read_125uvSq2N9EB",
+                  "args": {"path": "one"}
+                },
+                "thoughtSignature": "fixture-signature-single"
+              }
+            ]
+          },
+          "finishReason": "STOP",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 3,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 5
+      },
+      "modelVersion": "gemini-2.5-flash",
+      "responseId": "google_fixture_single"
+    },
+    "parallel": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "functionCall": {
+                  "name": "jidoka_coding_read_125uvSq2N9EB",
+                  "args": {"path": "one"}
+                },
+                "thoughtSignature": "fixture-signature-parallel-1"
+              },
+              {
+                "functionCall": {
+                  "name": "jidoka_coding_read_125uvSq2N9EB",
+                  "args": {"path": "two"}
+                },
+                "thoughtSignature": "fixture-signature-parallel-2"
+              }
+            ]
+          },
+          "finishReason": "STOP",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 4,
+        "candidatesTokenCount": 4,
+        "totalTokenCount": 8
+      },
+      "modelVersion": "gemini-2.5-flash",
+      "responseId": "google_fixture_parallel"
+    },
+    "dependent": [
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "name": "jidoka_coding_read_125uvSq2N9EB",
+                    "args": {"path": "lib/rate_limiter.ex"}
+                  },
+                  "thoughtSignature": "fixture-signature-dependent-1"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 2,
+          "totalTokenCount": 5
+        },
+        "modelVersion": "gemini-2.5-flash",
+        "responseId": "google_fixture_dependent_1"
+      },
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "functionCall": {
+                    "name": "jidoka_coding_edit_UpHiYr6gxXNi",
+                    "args": {
+                      "path": "lib/rate_limiter.ex",
+                      "old_text": "limit: 5",
+                      "new_text": "limit: 10"
+                    }
+                  },
+                  "thoughtSignature": "fixture-signature-dependent-2"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 5,
+          "candidatesTokenCount": 3,
+          "totalTokenCount": 8
+        },
+        "modelVersion": "gemini-2.5-flash",
+        "responseId": "google_fixture_dependent_2"
+      }
+    ],
+    "stream": {
+      "events": [
+        {
+          "candidates": [
+            {
+              "content": {"role": "model", "parts": [{"text": "hel"}]},
+              "index": 0
+            }
+          ]
+        },
+        {
+          "candidates": [
+            {
+              "content": {
+                "role": "model",
+                "parts": [
+                  {
+                    "functionCall": {
+                      "name": "jidoka_coding_read_125uvSq2N9EB",
+                      "args": {"path": "stream.ex"}
+                    },
+                    "thoughtSignature": "fixture-signature-stream"
+                  }
+                ]
+              },
+              "finishReason": "STOP",
+              "index": 0
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 3,
+            "candidatesTokenCount": 2,
+            "totalTokenCount": 5
+          }
+        }
+      ],
+      "response": {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {"text": "hel"},
+                {
+                  "functionCall": {
+                    "name": "jidoka_coding_read_125uvSq2N9EB",
+                    "args": {"path": "stream.ex"}
+                  },
+                  "thoughtSignature": "fixture-signature-stream"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 2,
+          "totalTokenCount": 5
+        },
+        "modelVersion": "gemini-2.5-flash",
+        "responseId": "google_fixture_stream"
+      }
+    },
+    "invalid": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "functionCall": {"name": "unknown_tool", "args": {"path": "one"}},
+                "thoughtSignature": "fixture-signature-invalid"
+              }
+            ]
+          },
+          "finishReason": "STOP",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 3,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 5
+      },
+      "modelVersion": "gemini-2.5-flash",
+      "responseId": "google_fixture_invalid"
+    },
+    "truncated": {
+      "candidates": [
+        {
+          "content": {"role": "model", "parts": [{"text": "partial"}]},
+          "finishReason": "MAX_TOKENS",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 3,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 5
+      },
+      "modelVersion": "gemini-2.5-flash",
+      "responseId": "google_fixture_truncated"
+    }
+  },
+  "fallback": {
+    "single": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"type\":\"operation\",\"name\":\"coding.read\",\"arguments\":{\"path\":\"one\"}}"
+              }
+            ]
+          },
+          "finishReason": "STOP",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 3,
+        "candidatesTokenCount": 2,
+        "totalTokenCount": 5
+      },
+      "modelVersion": "gemini-2.5-flash",
+      "responseId": "google_fixture_fallback_single"
+    },
+    "parallel": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "{\"type\":\"operations\",\"operations\":[{\"name\":\"coding.read\",\"arguments\":{\"path\":\"one\"}},{\"name\":\"coding.read\",\"arguments\":{\"path\":\"two\"}}]}"
+              }
+            ]
+          },
+          "finishReason": "STOP",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 4,
+        "candidatesTokenCount": 4,
+        "totalTokenCount": 8
+      },
+      "modelVersion": "gemini-2.5-flash",
+      "responseId": "google_fixture_fallback_parallel"
+    },
+    "dependent": [
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"type\":\"operation\",\"name\":\"coding.read\",\"arguments\":{\"path\":\"lib/rate_limiter.ex\"}}"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 3,
+          "candidatesTokenCount": 2,
+          "totalTokenCount": 5
+        },
+        "modelVersion": "gemini-2.5-flash",
+        "responseId": "google_fixture_fallback_dependent_1"
+      },
+      {
+        "candidates": [
+          {
+            "content": {
+              "role": "model",
+              "parts": [
+                {
+                  "text": "{\"type\":\"operation\",\"name\":\"coding.edit\",\"arguments\":{\"path\":\"lib/rate_limiter.ex\",\"old_text\":\"limit: 5\",\"new_text\":\"limit: 10\"}}"
+                }
+              ]
+            },
+            "finishReason": "STOP",
+            "index": 0
+          }
+        ],
+        "usageMetadata": {
+          "promptTokenCount": 5,
+          "candidatesTokenCount": 3,
+          "totalTokenCount": 8
+        },
+        "modelVersion": "gemini-2.5-flash",
+        "responseId": "google_fixture_fallback_dependent_2"
+      }
+    ]
+  },
+  "errors": {
+    "authentication": {
+      "status": 401,
+      "body": {
+        "error": {
+          "code": 401,
+          "message": "fixture unauthorized",
+          "status": "UNAUTHENTICATED"
+        }
+      }
+    },
+    "rate_limit": {
+      "status": 429,
+      "headers": {"retry-after": ["1"]},
+      "body": {
+        "error": {
+          "code": 429,
+          "message": "fixture limited",
+          "status": "RESOURCE_EXHAUSTED"
+        }
+      }
+    },
+    "timeout_ms": 5
+  }
+}
