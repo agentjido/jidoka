@@ -5,9 +5,9 @@ JidokaExamples.Loader.load!(__DIR__)
 
 alias JidokaExamples.GettingStarted.Scenario
 
-IO.puts("[1/4] Compiled one agent with a model and one instruction.")
-IO.puts("[2/4] Preflight the request without calling the model.")
-IO.puts("[3/4] Send: What can you help me with?")
+IO.puts("[1/5] Compiled one agent with a model and one instruction.")
+IO.puts("[2/5] Preflight the first request without calling the model.")
+IO.puts("[3/5] Start one session and send two messages.")
 
 result =
   case Scenario.run([]) do
@@ -20,7 +20,15 @@ IO.puts("      Declared model: #{result.model}")
 IO.puts("      Prompt roles: #{inspect(Enum.map(result.messages, & &1.role))}")
 IO.puts("      Available operations: #{inspect(result.operations)}")
 IO.puts("      Preflight diagnostics: #{length(result.diagnostics)}")
-IO.puts("[4/4] Final answer: #{result.answer}")
+IO.puts("[4/5] Session: #{result.session_id} · turns: #{result.turn_count}")
+
+Enum.zip(result.inputs, result.answers)
+|> Enum.each(fn {input, answer} ->
+  IO.puts("      User: #{input}")
+  IO.puts("      Assistant: #{answer}")
+end)
+
+IO.puts("[5/5] The second answer used the first committed turn.")
 
 IO.puts("""
 

@@ -109,11 +109,21 @@ import Config
 config :req_llm, load_dotenv: false
 ```
 
-Call `chat/3` when you need only the final text:
+Start one session and pass the returned session to each later call. This is the
+normal conversation path:
 
 ```elixir
-{:ok, text} = Jidoka.chat(MyApp.Assistant, "What can you help me with?")
+{:ok, session} = Jidoka.Session.start(MyApp.Assistant, "assistant-123")
+
+{:ok, session, _text} =
+  Jidoka.Session.chat(session, "Remember that my team is called Platform.")
+
+{:ok, session, text} =
+  Jidoka.Session.chat(session, "What is my team called?")
 ```
+
+Always keep the updated session. Each successful call commits its conversation
+and agent state for the next call.
 
 Call `turn/3` when you also need usage, events, and the effect journal:
 
@@ -178,7 +188,7 @@ action, adds the result to agent state, and asks the model for the final answer.
 | --- | --- |
 | Final assistant text | `Jidoka.chat/3` |
 | Full result, usage, events, and journal | `Jidoka.turn/3` |
-| Multi-turn conversation state | `Jidoka.session/2` and `Jidoka.chat/3` |
+| Multi-turn conversation state | `Jidoka.Session.start/2` and repeated `Jidoka.Session.chat/3` calls |
 | Async UI request and event stream | `Jidoka.chat_async/3`, `Jidoka.stream/2`, `Jidoka.await/2`, and `Jidoka.cancel/2` |
 | Resume a paused turn | `Jidoka.resume/2` |
 | Approve or deny pending work | `Jidoka.approve/3` and `Jidoka.deny/3` |
@@ -239,13 +249,13 @@ summary.replay_diagnostics.status
 Use a session when the same agent must keep state across turns:
 
 ```elixir
-{:ok, session} = Jidoka.session(MyApp.Assistant, "support-thread-123")
+{:ok, session} = Jidoka.Session.start(MyApp.Assistant, "support-thread-123")
 
 {:ok, session, _text} =
-  Jidoka.chat(session, "Remember that my team is called Platform.")
+  Jidoka.Session.chat(session, "Remember that my team is called Platform.")
 
 {:ok, session, text} =
-  Jidoka.chat(session, "What is my team called?")
+  Jidoka.Session.chat(session, "What is my team called?")
 ```
 
 Controls can stop a turn before unsafe work. A stopped turn returns a snapshot:

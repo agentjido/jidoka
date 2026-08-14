@@ -51,7 +51,7 @@ defmodule Jidoka.CheckDocs do
 
   @hidden_module_link ~r/\]\(`Jidoka\.(?:Adapter|Runtime|Harness|Projection|(?:Turn|Session|Review)\.Execution)[^`]*`\)/
   @internal_invocation ~r/Jidoka\.(?:Harness|Turn\.Execution|Session\.Execution|Review\.Execution|Runtime\.(?:TurnRunner|EffectInterpreter)|Projection)\.[a-z_][a-z0-9_!?]*\(/
-  @generated_invocation ~r/\b(?!Jidoka\.)[A-Z][A-Za-z0-9_.]*\.(?:chat|run_turn)\(/
+  @generated_invocation ~r/(?<![A-Za-z0-9_.])(?!Jidoka(?:\.|$))[A-Z][A-Za-z0-9_.]*\.(?:chat|run_turn)\(/
 
   def run do
     markdown_files = files(@markdown_patterns)

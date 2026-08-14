@@ -101,6 +101,10 @@ A session status is one of `:new`, `:running`, `:hibernated`, `:waiting`,
 `:finished`, `:cancelled`, or `:error`. Jidoka computes it from snapshots,
 pending reviews, the latest result, and typed cancellation evidence.
 
+The session schema version is the serialized-data contract. It is not a turn
+counter. Conversation `turn_count` and `continuation_revision` can increase
+while `schema_version` stays at `1`.
+
 ## How To
 
 ### Step 1: Start A Session
@@ -191,12 +195,17 @@ result.events
 result.value
 ```
 
-`Jidoka.Session.chat/3` is the text-only API. It is the right default for
-product code.
+`Jidoka.Session.chat/3` is the text-only API. Repeated calls are the normal
+conversation path.
 
 ```elixir
+{:ok, session, _text} =
+  Jidoka.Session.chat(session.session_id, "Remember account A1001.",
+    store: store
+  )
+
 {:ok, session, text} =
-  Jidoka.Session.chat(session.session_id, "And what is its status?",
+  Jidoka.Session.chat(session, "Which account did I mention?",
     store: store
   )
 ```
@@ -204,10 +213,10 @@ product code.
 Both functions accept either a session struct or a session id. With a store
 the id is enough; without a store, hold onto the returned struct.
 
-Separate calls to `run/3` or `chat/3` record session history, but they do not
-automatically put the prior semantic agent state into a later request. Use one
-`run_sequence/3` call for ordered semantic continuation. Advanced callers can
-still supply explicit state to a one-turn request when they own that policy.
+Each successful `run/3` or `chat/3` call commits conversation and semantic agent
+state for the next call. A failed, cancelled, or hibernated call does not
+replace the last successful continuation. Use `run_sequence/3` when the caller
+already has a complete ordered request list and needs one terminal result.
 
 ### Step 3: Hibernate And Resume
 

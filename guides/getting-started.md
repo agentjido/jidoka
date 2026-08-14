@@ -77,17 +77,28 @@ end
 Generation settings are optional. Jidoka uses
 `Jidoka.Config.default_generation/0` unless the agent overrides them.
 
-## Run A Chat
+## Run A Conversation
 
-Use `chat/3` when you only need the assistant's final text:
+Start one session, then pass the returned session to each later
+`Jidoka.Session.chat/3` call:
 
 ```elixir
-{:ok, text} = Jidoka.chat(MyApp.Assistant, "What can you help me with?")
+{:ok, session} = Jidoka.Session.start(MyApp.Assistant, "assistant-123")
+
+{:ok, session, first_answer} =
+  Jidoka.Session.chat(session, "Remember that my team is called Platform.")
+
+{:ok, session, second_answer} =
+  Jidoka.Session.chat(session, "What is my team called?")
 ```
 
+The returned session is the committed state for the next turn. Do not reuse an
+older session value. Add a store when the conversation must survive a process
+or node restart. See [Sessions And Stores](sessions-and-stores.md).
+
+Use `Jidoka.chat/3` for one request that does not need conversation state.
 Agent modules also generate convenience functions such as
-`MyApp.Assistant.chat/2`. Use the `Jidoka` facade in shared application code so
-the main execution path stays visible.
+`MyApp.Assistant.chat/2`.
 
 ## Inspect The Prompt
 

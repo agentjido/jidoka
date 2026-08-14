@@ -1,8 +1,8 @@
 # Getting Started Agent
 
-This Livebook defines the smallest useful Jidoka flow: inspect one agent,
-preview one prompt, and get one answer. It does not use a provider key or
-network access.
+This Livebook defines the smallest useful Jidoka conversation: inspect one
+agent, preview one prompt, then run two turns in one session. It does not use a
+provider key or network access.
 
 ```elixir
 package_root = Path.expand("../..", __DIR__)
@@ -56,18 +56,21 @@ input = "What can you help me with?"
 }
 ```
 
-## Run One Chat
+## Run Two Chats In One Session
 
-The scenario injects one deterministic model function. A production call uses
-the model declared by the agent.
+The scenario injects one deterministic model function and calls
+`Jidoka.Session.chat/3` twice. A production call uses the model declared by the
+agent.
 
 ```elixir
 {:ok, report} = Scenario.run(input: input)
 
 %{
-  answer: report.answer,
-  input: report.input,
-  model: report.model
+  answers: report.answers,
+  inputs: report.inputs,
+  model: report.model,
+  session_id: report.session_id,
+  turn_count: report.turn_count
 }
 ```
 

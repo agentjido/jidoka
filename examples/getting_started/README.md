@@ -2,24 +2,26 @@
 
 ## Purpose
 
-This is the smallest complete Jidoka example. It defines one agent, sends one
-text request, and returns one final answer.
+This is the smallest complete Jidoka conversation. It defines one agent,
+starts one session, and sends two messages with repeated
+`Jidoka.Session.chat/3` calls.
 
 ## Features
 
 ```text
 agent definition
   -> prompt preflight
-  -> one model call
-  -> final text answer
+  -> session start
+  -> first chat
+  -> second chat with committed context
 ```
 
 The example is deterministic. It does not need a provider key, network
-request, recorded response, tool, session, or store.
+request, recorded response, tool, or store.
 
 The preflight report is also the local-inspection proof: it exposes the exact
-prompt and confirms that no model or operation ran. The chat then injects one
-provider-free model function through the normal production turn path.
+first prompt and confirms that no model or operation ran. The chats then inject
+one provider-free model function through the normal production turn path.
 
 ## Read It In This Order
 
@@ -47,8 +49,8 @@ prompt, and run the same deterministic chat.
 
 ## Expected Result
 
-The command prints the normalized agent id, prompt messages, and this fixed
-answer: `I can explain Jidoka agents and help you build one.`
+The command prints the normalized agent id, session id, turn count, and two
+fixed answers. The second answer is `Your team is called Platform.`
 
 ## Next Guide
 
