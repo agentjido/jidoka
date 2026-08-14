@@ -1,0 +1,36 @@
+defmodule RateLimiter do
+  @moduledoc "A deterministic fixed-window rate limiter."
+
+  @type bucket :: %{started_at: non_neg_integer(), count: pos_integer()}
+  @type t :: %{
+          limit: pos_integer(),
+          window_ms: pos_integer(),
+          buckets: %{optional(term()) => bucket()}
+        }
+
+  @spec new(pos_integer(), pos_integer()) :: t()
+  def new(limit, window_ms) when limit > 0 and window_ms > 0 do
+    %{limit: limit, window_ms: window_ms, buckets: %{}}
+  end
+
+  @spec allow(t(), term(), non_neg_integer()) :: {:ok, t()} | {:error, :rate_limited, t()}
+  def allow(%{limit: limit, window_ms: window_ms, buckets: buckets} = limiter, key, now_ms)
+      when is_integer(now_ms) and now_ms >= 0 do
+    started_at = div(now_ms, window_ms) * window_ms
+
+    case Map.get(buckets, key) do
+      %{started_at: ^started_at, count: count} when count >= limit ->
+        {:error, :rate_limited, limiter}
+
+      %{started_at: ^started_at, count: count} ->
+        {:ok, put_bucket(limiter, key, started_at, count + 1)}
+
+      _previous_or_missing ->
+        {:ok, put_bucket(limiter, key, started_at, 1)}
+    end
+  end
+
+  defp put_bucket(limiter, key, started_at, count) do
+    put_in(limiter, [:buckets, key], %{started_at: started_at, count: count})
+  end
+end

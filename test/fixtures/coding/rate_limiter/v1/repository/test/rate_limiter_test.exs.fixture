@@ -1,0 +1,20 @@
+defmodule RateLimiterTest do
+  use ExUnit.Case, async: true
+
+  test "allows requests until the key reaches its limit" do
+    limiter = RateLimiter.new(2, 1_000)
+
+    assert {:ok, limiter} = RateLimiter.allow(limiter, :api, 100)
+    assert {:ok, limiter} = RateLimiter.allow(limiter, :api, 900)
+    assert {:error, :rate_limited, ^limiter} = RateLimiter.allow(limiter, :api, 999)
+  end
+
+  test "keeps keys independent and resets at a window boundary" do
+    limiter = RateLimiter.new(1, 1_000)
+
+    assert {:ok, limiter} = RateLimiter.allow(limiter, :api, 999)
+    assert {:ok, limiter} = RateLimiter.allow(limiter, :admin, 999)
+    assert {:error, :rate_limited, limiter} = RateLimiter.allow(limiter, :api, 999)
+    assert {:ok, _limiter} = RateLimiter.allow(limiter, :api, 1_000)
+  end
+end

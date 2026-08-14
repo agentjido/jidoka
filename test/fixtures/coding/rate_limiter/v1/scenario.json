@@ -1,0 +1,81 @@
+{
+  "version": 1,
+  "id": "rate-limiter-three-turn",
+  "turns": [
+    {
+      "id": "inspect",
+      "prompt": "Inspect lib/rate_limiter.ex and test/rate_limiter_test.exs. Explain the required behavior. Do not change files."
+    },
+    {
+      "id": "implement",
+      "prompt": "Implement the deterministic fixed-window rate limiter in lib/rate_limiter.ex. Do not change tests or project files."
+    },
+    {
+      "id": "verify",
+      "prompt": "Run mix test. Report the changed paths, the before and after repository digests, and the verification result."
+    }
+  ],
+  "repository": {
+    "initial_files": [
+      ".gitignore",
+      "lib/rate_limiter.ex",
+      "mix.exs",
+      "test/rate_limiter_test.exs",
+      "test/test_helper.exs"
+    ],
+    "allowed_changes": [
+      "lib/rate_limiter.ex"
+    ],
+    "protected_paths": [
+      ".gitignore",
+      "mix.exs",
+      "test/rate_limiter_test.exs",
+      "test/test_helper.exs"
+    ],
+    "required_verification": {
+      "command": "mix test",
+      "argv": ["mix", "test"],
+      "timeout_ms": 15000
+    }
+  },
+  "operations": {
+    "requirements": [
+      {
+        "id": "inspect_implementation",
+        "kind": "read",
+        "path": "lib/rate_limiter.ex"
+      },
+      {
+        "id": "inspect_tests",
+        "kind": "read",
+        "path": "test/rate_limiter_test.exs"
+      },
+      {
+        "id": "edit_implementation",
+        "kind": "edit",
+        "path": "lib/rate_limiter.ex"
+      },
+      {
+        "id": "verify_tests",
+        "kind": "verify",
+        "command": "mix test",
+        "status": "passed"
+      }
+    ],
+    "order": [
+      ["inspect_implementation", "edit_implementation"],
+      ["inspect_tests", "edit_implementation"],
+      ["edit_implementation", "verify_tests"]
+    ]
+  },
+  "expected_git": {
+    "branch": "main",
+    "commit_count": 1,
+    "staged_paths": [],
+    "unstaged_paths": ["lib/rate_limiter.ex"]
+  },
+  "digests": {
+    "before": "sha256:cba213ba38ff23f20272da58dca8a1d64ec22669d89798f678dde1c6fb8ea914",
+    "after": "sha256:d7258bc3d0080ae0722c476a96b072ded6b678f76145d278891f15d9c04a9106"
+  }
+}
