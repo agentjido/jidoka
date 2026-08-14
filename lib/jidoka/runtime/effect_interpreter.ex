@@ -76,7 +76,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
         {:ok, result, EffectTrace.append(state, intent, :effect_replayed, [], opts)}
 
       nil ->
-        with {:ok, state} <- reserve_operation_intent(state, intent),
+        with {:ok, %Turn.State{} = state} <- reserve_operation_intent(state, intent),
              :ok <- validate_incomplete_effect_replay(state, intent) do
           journal = Effect.Journal.put_intent(state.journal, intent)
           state = %Turn.State{state | journal: journal}

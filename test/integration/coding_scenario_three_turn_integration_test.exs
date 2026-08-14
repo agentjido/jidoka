@@ -224,7 +224,10 @@ defmodule Jidoka.CodingScenarioThreeTurnIntegrationTest do
     assert successful_edit.output["write_method"] == "atomic_replace"
     assert first_verify.operation == "coding.verify"
     assert first_verify.output["status"] == "passed"
-    assert first_verify.output["stdout"] =~ "Result: 2 passed"
+
+    assert first_verify.output["stdout"] =~
+             ~r/(?:2 tests, 0 failures|Result: 2 passed)/
+
     assert Oracle.observe!(fixture)["after_digest"] == fixture.scenario["digests"]["after"]
 
     changed_requirement =

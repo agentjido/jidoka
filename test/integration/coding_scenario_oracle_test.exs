@@ -34,7 +34,9 @@ defmodule CodingScenario.OracleTest do
 
     assert evidence["changed_paths"] == ["lib/rate_limiter.ex"]
     assert evidence["verification"]["status"] == "passed"
-    assert evidence["verification"]["output"] =~ "Result: 2 passed"
+
+    assert evidence["verification"]["output"] =~
+             ~r/(?:2 tests, 0 failures|Result: 2 passed)/
   end
 
   test "rejects an extra repository change", %{tmp_dir: tmp_dir} do

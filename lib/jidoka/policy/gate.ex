@@ -83,7 +83,7 @@ defmodule Jidoka.Policy.Gate do
 
   def check(%Request{}, _policy, _opts), do: {:error, :missing_policy_capability}
 
-  defp request_decision(state, intent, policy, opts) do
+  defp request_decision(%Turn.State{} = state, intent, policy, opts) do
     request = build_request(state, intent)
     context = Context.from_data!(Context.data(state.request.context))
 

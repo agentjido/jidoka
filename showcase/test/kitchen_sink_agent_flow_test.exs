@@ -217,7 +217,7 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
               details: %{
                 cause: {:invalid_mcp_client, String},
                 effect_kind: :operation,
-                operation: :operation
+                operation: "mcp_showcase_notes"
               }
             }} =
              Agent.run_turn(
