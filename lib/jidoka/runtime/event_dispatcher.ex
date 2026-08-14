@@ -15,7 +15,7 @@ defmodule Jidoka.Runtime.EventDispatcher do
 
   @spec emit(Event.t(), keyword()) :: :ok
   def emit(%Event{} = event, opts) when is_list(opts) do
-    event = EventSequence.stamp(event)
+    event = if Keyword.get(opts, :sequence, true), do: EventSequence.stamp(event), else: event
     emit_to_mailbox(event, Keyword.get(opts, :stream_to))
     emit_to_callback(event, Keyword.get(opts, :on_event))
     Jidoka.Extension.RuntimeEvents.emit_runtime(event, opts)
