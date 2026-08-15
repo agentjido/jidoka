@@ -152,6 +152,7 @@ defmodule Jidoka.Chat.RequestController do
         {:DOWN, owner_monitor, :process, owner, _reason},
         %{owner: owner, owner_monitor: owner_monitor} = state
       ) do
+    _shutdown = Task.shutdown(state.task, :brutal_kill)
     {:stop, :normal, finish_race(state, {:error, :owner_exited})}
   end
 
@@ -313,7 +314,9 @@ defmodule Jidoka.Chat.RequestController do
   defp finish(state, result) do
     cancel_timeout(state)
     Enum.each(state.awaiters, &GenServer.reply(&1, result))
-    %{state | status: :finished, result: result, awaiters: []}
+    Enum.each(state.cancellers, &GenServer.reply(&1, {:error, :request_already_finished}))
+
+    %{state | status: :finished, result: result, awaiters: [], cancellers: []}
   end
 
   defp cancel_timeout(%{timeout_ref: ref}) when is_reference(ref), do: Process.cancel_timer(ref)

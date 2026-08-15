@@ -151,6 +151,27 @@ defmodule Jidoka.EventOrderTest do
     assert :ok = Order.validate(events)
   end
 
+  test "request timeout resolves a pending cancellation call" do
+    parent = self()
+
+    assert {:ok, request} =
+             Jidoka.Chat.Async.start_fun(
+               :ordered_target,
+               "Timeout during cancellation",
+               [request_id: "controller-cancel-timeout", request_timeout_ms: 100],
+               fn _opts ->
+                 send(parent, :cancel_timeout_worker_started)
+                 Process.sleep(:infinity)
+               end
+             )
+
+    assert_receive :cancel_timeout_worker_started, 1_000
+    cancellation = Task.async(fn -> Jidoka.cancel(request, grace_ms: 1_000) end)
+
+    assert {:error, :request_already_finished} = Task.await(cancellation, 1_000)
+    assert {:error, :request_timeout} = Jidoka.await(request, timeout: 1_000)
+  end
+
   test "owner exit races produce one terminal result" do
     parent = self()
 
@@ -161,7 +182,10 @@ defmodule Jidoka.EventOrderTest do
                    :ordered_target,
                    "Race owner",
                    [stream: true, request_id: "controller-owner-race", stream_to: parent],
-                   fn _opts -> Process.sleep(:infinity) end
+                   fn _opts ->
+                     send(parent, {:owner_worker, self()})
+                     Process.sleep(:infinity)
+                   end
                  )
 
         send(parent, {:owner_request, request})
@@ -169,6 +193,7 @@ defmodule Jidoka.EventOrderTest do
       end)
 
     assert_receive {:owner_request, _request}, 1_000
+    assert_receive {:owner_worker, worker}, 1_000
     Process.exit(owner, :kill)
     assert_receive {:jidoka_turn_event, %Event{event: terminal} = event}, 1_000
     assert Order.terminal?(event)
@@ -178,6 +203,7 @@ defmodule Jidoka.EventOrderTest do
     refute_receive {:jidoka_turn_event, %Event{event: :turn_hibernated}}, 100
     assert event.request_id == "controller-owner-race"
     assert event.data.reason == inspect(:owner_exited)
+    refute eventually_alive?(worker)
   end
 
   defp collect_request_events(request_id, fun) do
@@ -196,5 +222,17 @@ defmodule Jidoka.EventOrderTest do
 
   defp event(name, seq) do
     Event.build(name, [], request_id: "ordered-request", seq: seq)
+  end
+
+  defp eventually_alive?(pid, attempts \\ 20)
+  defp eventually_alive?(pid, 0), do: Process.alive?(pid)
+
+  defp eventually_alive?(pid, attempts) do
+    if Process.alive?(pid) do
+      Process.sleep(10)
+      eventually_alive?(pid, attempts - 1)
+    else
+      false
+    end
   end
 end
