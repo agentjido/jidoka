@@ -23,7 +23,8 @@ defmodule Jidoka do
   * `resume/2` continues from a hibernated snapshot;
   * `pending_reviews/1`, `approve/3`, and `deny/3` cover common approval flows;
   * `export/2` writes portable JSON/YAML agent data;
-  * `inspect/2`, `preflight/3`, and `project/1` expose debugging views.
+  * `inspect/2`, `preflight/3`, `project/1`, and `project_events/1` expose
+    debugging views and the portable request-stream projection.
   """
 
   alias Jidoka.Agent
@@ -448,10 +449,23 @@ defmodule Jidoka do
 
   `project/1` is the data-facing companion to `inspect/2`. It returns compact,
   deterministic maps that are useful for tests, golden files, traces, and UI
-  rendering.
+  rendering. For an ordered request stream, prefer `project_events/1`.
   """
   @spec project(term()) :: term()
   def project(value), do: Jidoka.Projection.project(value)
+
+  @doc """
+  Projects one ordered request stream into portable Console-facing maps.
+
+  This is the documented root facade for Jido Console. Each record keeps the
+  request, turn, and event identities, redacts sensitive values, enforces
+  size bounds, and drops PIDs, references, functions, and private runtime
+  structs. The result is JSON-compatible.
+  """
+  @spec project_events([Jidoka.Event.t()] | Jidoka.Event.t()) ::
+          {:ok, [map()]} | {:ok, map()} | {:error, term()}
+  def project_events(%Jidoka.Event{} = event), do: Jidoka.Projection.Stream.project(event)
+  def project_events(events) when is_list(events), do: Jidoka.Projection.Stream.project_events(events)
 
   @doc """
   Normalizes any error term into a Splode-backed `Jidoka.Error` exception.
