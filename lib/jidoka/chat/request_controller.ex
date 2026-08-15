@@ -6,6 +6,7 @@ defmodule Jidoka.Chat.RequestController do
   alias Jidoka.Cancellation
   alias Jidoka.Cancellation.Token
   alias Jidoka.Event
+  alias Jidoka.Event.Order
   alias Jidoka.Runtime.EventDispatcher
 
   @task_supervisor Jidoka.Chat.TaskSupervisor
@@ -57,6 +58,7 @@ defmodule Jidoka.Chat.RequestController do
     runtime_opts = Keyword.fetch!(opts, :runtime_opts)
     fun = Keyword.fetch!(opts, :fun)
     token = Token.new()
+    timeout_ms = positive_integer(Keyword.get(runtime_opts, :request_timeout_ms), nil)
 
     worker_opts =
       runtime_opts
@@ -66,6 +68,7 @@ defmodule Jidoka.Chat.RequestController do
       |> Keyword.put(:cancellation, token)
 
     task = Task.Supervisor.async_nolink(@task_supervisor, fn -> fun.(worker_opts) end)
+    timeout_ref = if timeout_ms, do: Process.send_after(self(), :request_timeout, timeout_ms)
 
     {:ok,
      %{
@@ -86,7 +89,8 @@ defmodule Jidoka.Chat.RequestController do
        cancellers: [],
        cancellation_members: %{},
        next_seq: 0,
-       agent_id: nil
+       agent_id: nil,
+       timeout_ref: timeout_ref
      }}
   end
 
@@ -139,9 +143,25 @@ defmodule Jidoka.Chat.RequestController do
 
   def handle_info(
         {:DOWN, owner_monitor, :process, owner, _reason},
-        %{owner: owner, owner_monitor: owner_monitor} = state
+        %{owner: owner, owner_monitor: owner_monitor, status: :finished} = state
       ) do
     {:stop, :normal, state}
+  end
+
+  def handle_info(
+        {:DOWN, owner_monitor, :process, owner, _reason},
+        %{owner: owner, owner_monitor: owner_monitor} = state
+      ) do
+    _shutdown = Task.shutdown(state.task, :brutal_kill)
+    {:stop, :normal, finish_race(state, {:error, :owner_exited})}
+  end
+
+  def handle_info(:request_timeout, %{status: :finished} = state), do: {:noreply, state}
+
+  def handle_info(:request_timeout, state) do
+    _shutdown = Task.shutdown(state.task, :brutal_kill)
+    terminate_cancellation_members(state)
+    {:noreply, finish_race(state, {:error, :request_timeout})}
   end
 
   def handle_info({:DOWN, monitor_ref, :process, pid, _reason}, state) do
@@ -188,7 +208,14 @@ defmodule Jidoka.Chat.RequestController do
 
   defp accept_event(%{terminal?: true} = state, _event), do: state
 
-  defp accept_event(%{cancellation_requested?: true} = state, %Event{} = event) do
+  defp accept_event(state, %Event{} = event) do
+    case Order.classify(event, state.request_id) do
+      :accept -> accept_classified_event(state, event)
+      {:reject, _reason} -> state
+    end
+  end
+
+  defp accept_classified_event(%{cancellation_requested?: true} = state, %Event{} = event) do
     if EventDispatcher.terminal?(event) do
       state
       |> maybe_forward_cancel_event(event)
@@ -198,7 +225,7 @@ defmodule Jidoka.Chat.RequestController do
     end
   end
 
-  defp accept_event(state, %Event{} = event) do
+  defp accept_classified_event(state, %Event{} = event) do
     state = forward_event(state, event)
 
     cond do
@@ -276,10 +303,24 @@ defmodule Jidoka.Chat.RequestController do
     finish(%{state | cancellers: []}, {:cancelled, cancellation})
   end
 
-  defp finish(state, result) do
-    Enum.each(state.awaiters, &GenServer.reply(&1, result))
-    %{state | status: :finished, result: result, awaiters: []}
+  defp finish_race(%{status: :finished} = state, _result), do: state
+
+  defp finish_race(state, result) do
+    state
+    |> ensure_terminal_for_result(result)
+    |> finish(result)
   end
+
+  defp finish(state, result) do
+    cancel_timeout(state)
+    Enum.each(state.awaiters, &GenServer.reply(&1, result))
+    Enum.each(state.cancellers, &GenServer.reply(&1, {:error, :request_already_finished}))
+
+    %{state | status: :finished, result: result, awaiters: [], cancellers: []}
+  end
+
+  defp cancel_timeout(%{timeout_ref: ref}) when is_reference(ref), do: Process.cancel_timer(ref)
+  defp cancel_timeout(_state), do: false
 
   defp ensure_cancellation_terminal(%{terminal?: true} = state), do: state
 
@@ -326,7 +367,14 @@ defmodule Jidoka.Chat.RequestController do
   end
 
   defp forward_event(state, %Event{} = event) do
-    :ok = EventDispatcher.emit(event, stream_to: state.stream_to, on_event: state.on_event)
+    event = %Event{event | seq: state.next_seq, request_id: state.request_id}
+
+    :ok =
+      EventDispatcher.emit(event,
+        stream_to: state.stream_to,
+        on_event: state.on_event,
+        sequence: false
+      )
 
     %{
       state

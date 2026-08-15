@@ -95,6 +95,14 @@ sampling, and redaction when callers want a timeline.
   (`:control_allowed/blocked/interrupted/failed`), review lifecycle
   (`:approval_requested/responded/applied`), result validation, memory, and
   `:llm_delta` for streamed tokens.
+- [`Jidoka.Event.Order`](`Jidoka.Event.Order`) defines the public request-stream
+  order contract. The async request controller is the one sequence owner. One
+  request stream uses one non-empty `request_id`, starts with `seq: 0`,
+  increments `seq` by one, and has exactly one terminal `:turn_finished`,
+  `:turn_failed`, or `:turn_hibernated` event. Completion, cancellation,
+  timeout, and owner-exit races still emit that one terminal. An event that
+  cannot be classified onto the request is rejected and cannot create a second
+  terminal.
 - Categories are `:workflow`, `:effect`, `:runtime`, `:operation`,
   `:control`, `:approval`, `:result`, and `:memory`. Phases partition the
   workflow into `:start`, `:control`, `:review`, `:memory`,
@@ -241,6 +249,12 @@ caring about which snapshot produced which events.
 
 Use the in-memory sink and a deterministic LLM to assert on the projected
 timeline.
+
+For a collected live stream, check the order contract directly:
+
+```elixir
+:ok = Jidoka.Event.Order.validate(events)
+```
 
 ```elixir
 test "in-memory sink records projected entries" do
