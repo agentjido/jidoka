@@ -37,6 +37,7 @@ defmodule Jidoka.Session.Sequence.RequestController do
   catch
     :exit, {:timeout, _call} -> {:error, :timeout}
     :exit, {:noproc, _call} -> {:error, :request_expired}
+    :exit, {:normal, _call} -> {:error, :request_expired}
   end
 
   @doc false
@@ -48,6 +49,7 @@ defmodule Jidoka.Session.Sequence.RequestController do
   catch
     :exit, {:timeout, _call} -> {:error, :cancellation_timeout}
     :exit, {:noproc, _call} -> {:error, :request_expired}
+    :exit, {:normal, _call} -> {:error, :request_expired}
   end
 
   @doc false

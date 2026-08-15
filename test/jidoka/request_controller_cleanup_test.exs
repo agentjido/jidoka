@@ -40,6 +40,53 @@ defmodule Jidoka.RequestControllerCleanupTest do
     assert {:error, :request_expired} = Jidoka.cancel(request)
   end
 
+  test "a terminal event waits for the matching worker result" do
+    parent = self()
+
+    assert {:ok, request} =
+             Jidoka.Chat.Async.start_fun(
+               :cleanup_target,
+               "Defer terminal",
+               [
+                 stream: true,
+                 request_id: "cleanup-terminal-result",
+                 request_timeout_ms: 100
+               ],
+               fn opts ->
+                 :ok =
+                   Jidoka.Stream.emit(
+                     Event.build(:turn_finished, [], request_id: "cleanup-terminal-result"),
+                     opts
+                   )
+
+                 send(parent, :terminal_candidate_sent)
+                 Process.sleep(:infinity)
+               end
+             )
+
+    assert_receive :terminal_candidate_sent, 1_000
+    refute_receive {:jidoka_turn_event, %Event{event: :turn_finished}}, 20
+
+    assert {:error, :request_timeout} = Jidoka.await(request, timeout: 1_000)
+    assert_receive {:jidoka_turn_event, %Event{event: :turn_failed} = event}, 1_000
+    assert event.data.reason == inspect(:request_timeout)
+    refute_receive {:jidoka_turn_event, %Event{event: :turn_finished}}, 20
+  end
+
+  test "small retention cannot expire a chat controller before its startup handshake" do
+    for index <- 1..25 do
+      assert {:ok, request} =
+               Jidoka.Chat.Async.start_fun(
+                 :cleanup_target,
+                 "Fast completion",
+                 [request_id: "cleanup-startup-#{index}", request_retention_ms: 1],
+                 fn _opts -> {:ok, index} end
+               )
+
+      assert request.request_id == "cleanup-startup-#{index}"
+    end
+  end
+
   test "error, timeout, and worker-exit controllers expire within the same bound" do
     for {name, fun, expected} <- [
           {:rejection, fn _opts -> {:error, :policy_denied} end, {:error, :policy_denied}},
