@@ -14,12 +14,18 @@ defmodule Jidoka.ExecutionEnvironment.RestrictedContractTest do
     attrs = valid_attrs()
     roots = Enum.reject(attrs.roots, &(&1.kind == :temporary))
 
-    assert {:error, {:missing_required_roots, _kinds}} =
+    assert {:error, {:missing_required_roots, [:temporary]}} =
              attrs |> Map.put(:roots, roots) |> RestrictedContract.new!() |> RestrictedContract.compatible?()
 
     assert {:error, :private_home_required} =
              attrs
              |> put_in([:environment, :private_home], false)
+             |> RestrictedContract.new!()
+             |> RestrictedContract.compatible?()
+
+    assert {:error, :cancellation_required} =
+             attrs
+             |> put_in([:cancellation, :enabled], false)
              |> RestrictedContract.new!()
              |> RestrictedContract.compatible?()
   end

@@ -96,9 +96,11 @@ defmodule Jidoka.ExecutionEnvironment.RestrictedContract do
       |> Enum.map(&root_kind/1)
       |> Enum.sort()
 
+    missing = @root_kinds -- kinds
+
     cond do
-      kinds != Enum.sort(@root_kinds) ->
-        {:error, {:missing_required_roots, kinds}}
+      missing != [] ->
+        {:error, {:missing_required_roots, missing}}
 
       field(field(contract, :environment), :private_home) != true ->
         {:error, :private_home_required}
@@ -158,6 +160,8 @@ defmodule Jidoka.ExecutionEnvironment.RestrictedContract do
   defp field(map, key) when is_map(map) do
     Map.get(map, key, Map.get(map, Atom.to_string(key)))
   end
+
+  defp field(_other, _key), do: nil
 
   defp cleanup_schema do
     Zoi.map(%{
