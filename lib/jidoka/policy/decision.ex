@@ -2,15 +2,16 @@ defmodule Jidoka.Policy.Decision do
   @moduledoc """
   Portable evidence from the authoritative host policy gate.
 
-  A decision allows, denies, or pauses one protected effect for review. The
-  rule identifier and evidence describe the host rule that made the decision.
+  A decision allows, denies, requires consent, marks a request unsupported, or
+  pauses one protected effect for review. The rule identifier and evidence
+  describe the host rule that made the decision.
   """
 
   alias Jidoka.Policy.Request
   alias Jidoka.Schema
 
   @version 1
-  @outcomes [:allow, :deny, :require_review]
+  @outcomes [:allow, :deny, :consent_required, :unsupported, :require_review]
 
   @schema Zoi.struct(
             __MODULE__,
@@ -26,7 +27,7 @@ defmodule Jidoka.Policy.Decision do
           )
           |> Zoi.refine({__MODULE__, :validate_portable, []})
 
-  @type outcome :: :allow | :deny | :require_review
+  @type outcome :: :allow | :deny | :consent_required | :unsupported | :require_review
   @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)

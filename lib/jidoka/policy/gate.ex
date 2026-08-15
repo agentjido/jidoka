@@ -104,6 +104,14 @@ defmodule Jidoka.Policy.Gate do
     {:deny, decision, append_decision_event(state, intent, decision, :policy_denied, opts)}
   end
 
+  defp apply_decision(state, intent, %Decision{outcome: :consent_required} = decision, opts) do
+    {:deny, decision, append_decision_event(state, intent, decision, :policy_consent_required, opts)}
+  end
+
+  defp apply_decision(state, intent, %Decision{outcome: :unsupported} = decision, opts) do
+    {:deny, decision, append_decision_event(state, intent, decision, :policy_unsupported, opts)}
+  end
+
   defp apply_decision(state, intent, %Decision{outcome: :require_review} = decision, opts) do
     if approved?(intent) do
       {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
@@ -203,6 +211,8 @@ defmodule Jidoka.Policy.Gate do
 
   defp allowed(%Decision{outcome: :allow}), do: :ok
   defp allowed(%Decision{outcome: :deny, reason: reason}), do: {:error, {:policy_denied, reason}}
+  defp allowed(%Decision{outcome: :consent_required, reason: reason}), do: {:error, {:policy_consent_required, reason}}
+  defp allowed(%Decision{outcome: :unsupported, reason: reason}), do: {:error, {:policy_unsupported, reason}}
   defp allowed(%Decision{outcome: :require_review}), do: {:error, :policy_review_required}
 
   defp invoke(policy, request, context, opts) do

@@ -31,6 +31,8 @@ defmodule Jidoka.Event do
     capability_call_failed: %{category: :runtime, phase: :interpret_effect, status: :failed},
     policy_allowed: %{category: :policy, phase: :policy, status: :completed},
     policy_denied: %{category: :policy, phase: :policy, status: :failed},
+    policy_consent_required: %{category: :policy, phase: :policy, status: :pending},
+    policy_unsupported: %{category: :policy, phase: :policy, status: :failed},
     policy_review_requested: %{category: :policy, phase: :policy, status: :pending},
     control_allowed: %{category: :control, phase: :control, status: :completed},
     control_blocked: %{category: :control, phase: :control, status: :failed},
