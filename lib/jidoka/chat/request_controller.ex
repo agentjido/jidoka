@@ -13,6 +13,7 @@ defmodule Jidoka.Chat.RequestController do
   @request_supervisor Jidoka.Chat.RequestSupervisor
   @stream_message_tag :jidoka_turn_event
   @default_grace_ms 100
+  @default_retention_ms 30_000
 
   @type start_opts :: [
           request_id: String.t(),
@@ -36,6 +37,7 @@ defmodule Jidoka.Chat.RequestController do
   catch
     :exit, {:timeout, _call} -> {:error, :timeout}
     :exit, {:noproc, _call} -> {:error, :request_expired}
+    :exit, {:normal, _call} -> {:error, :request_expired}
   end
 
   @spec cancel(pid(), keyword()) :: {:ok, Cancellation.t()} | {:error, term()}
@@ -46,6 +48,7 @@ defmodule Jidoka.Chat.RequestController do
   catch
     :exit, {:timeout, _call} -> {:error, :cancellation_timeout}
     :exit, {:noproc, _call} -> {:error, :request_expired}
+    :exit, {:normal, _call} -> {:error, :request_expired}
   end
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts)
@@ -59,6 +62,7 @@ defmodule Jidoka.Chat.RequestController do
     fun = Keyword.fetch!(opts, :fun)
     token = Token.new()
     timeout_ms = positive_integer(Keyword.get(runtime_opts, :request_timeout_ms), nil)
+    retention_ms = positive_integer(Keyword.get(runtime_opts, :request_retention_ms), @default_retention_ms)
 
     worker_opts =
       runtime_opts
@@ -83,6 +87,7 @@ defmodule Jidoka.Chat.RequestController do
        status: :running,
        result: nil,
        terminal?: false,
+       pending_terminal: nil,
        cancellation_requested?: false,
        cancellation_forced?: false,
        awaiters: [],
@@ -90,13 +95,16 @@ defmodule Jidoka.Chat.RequestController do
        cancellation_members: %{},
        next_seq: 0,
        agent_id: nil,
-       timeout_ref: timeout_ref
+       timeout_ref: timeout_ref,
+       retention_ms: retention_ms,
+       expiry_ref: nil,
+       runtime_ready?: false
      }}
   end
 
   @impl true
   def handle_call(:runtime, _from, state) do
-    {:reply, {:ok, state.task, state.token}, state}
+    {:reply, {:ok, state.task, state.token}, mark_runtime_ready(state)}
   end
 
   def handle_call(:await, _from, %{status: :finished} = state) do
@@ -156,6 +164,10 @@ defmodule Jidoka.Chat.RequestController do
     {:stop, :normal, finish_race(state, {:error, :owner_exited})}
   end
 
+  def handle_info({:expire_request, expiry_ref}, %{status: :finished, expiry_ref: expiry_ref} = state) do
+    {:stop, :normal, state}
+  end
+
   def handle_info(:request_timeout, %{status: :finished} = state), do: {:noreply, state}
 
   def handle_info(:request_timeout, state) do
@@ -207,6 +219,7 @@ defmodule Jidoka.Chat.RequestController do
   end
 
   defp accept_event(%{terminal?: true} = state, _event), do: state
+  defp accept_event(%{pending_terminal: %Event{}} = state, _event), do: state
 
   defp accept_event(state, %Event{} = event) do
     case Order.classify(event, state.request_id) do
@@ -226,17 +239,16 @@ defmodule Jidoka.Chat.RequestController do
   end
 
   defp accept_classified_event(state, %Event{} = event) do
-    state = forward_event(state, event)
-
     cond do
       Event.cancelled?(event) ->
+        state = forward_event(state, event)
         %{state | terminal?: true, cancellation_requested?: true}
 
       EventDispatcher.terminal?(event) ->
-        %{state | terminal?: true}
+        %{state | pending_terminal: event}
 
       true ->
-        state
+        forward_event(state, event)
     end
   end
 
@@ -311,12 +323,22 @@ defmodule Jidoka.Chat.RequestController do
     |> finish(result)
   end
 
+  defp finish(%{status: :finished} = state, _result), do: state
+
   defp finish(state, result) do
     cancel_timeout(state)
+    terminate_cancellation_members(state)
     Enum.each(state.awaiters, &GenServer.reply(&1, result))
     Enum.each(state.cancellers, &GenServer.reply(&1, {:error, :request_already_finished}))
 
-    %{state | status: :finished, result: result, awaiters: [], cancellers: []}
+    %{
+      state
+      | status: :finished,
+        result: result,
+        awaiters: [],
+        cancellers: []
+    }
+    |> maybe_schedule_expiry()
   end
 
   defp cancel_timeout(%{timeout_ref: ref}) when is_reference(ref), do: Process.cancel_timer(ref)
@@ -326,13 +348,31 @@ defmodule Jidoka.Chat.RequestController do
 
   defp ensure_cancellation_terminal(state) do
     state
+    |> Map.put(:pending_terminal, nil)
     |> emit_cancellation_event(state.cancellation_forced?)
     |> Map.put(:terminal?, true)
   end
 
   defp ensure_terminal_for_result(%{terminal?: true} = state, _result), do: state
 
+  defp ensure_terminal_for_result(%{pending_terminal: %Event{} = event} = state, result) do
+    if event.event == terminal_event(result) do
+      state
+      |> Map.put(:pending_terminal, nil)
+      |> forward_event(event)
+      |> Map.put(:terminal?, true)
+    else
+      state
+      |> Map.put(:pending_terminal, nil)
+      |> emit_terminal_for_result(result)
+    end
+  end
+
   defp ensure_terminal_for_result(state, result) do
+    emit_terminal_for_result(state, result)
+  end
+
+  defp emit_terminal_for_result(state, result) do
     event =
       Event.build(terminal_event(result), [],
         seq: state.next_seq,
@@ -345,6 +385,20 @@ defmodule Jidoka.Chat.RequestController do
     |> forward_event(event)
     |> Map.put(:terminal?, true)
   end
+
+  defp mark_runtime_ready(state) do
+    state
+    |> Map.put(:runtime_ready?, true)
+    |> maybe_schedule_expiry()
+  end
+
+  defp maybe_schedule_expiry(%{status: :finished, runtime_ready?: true, expiry_ref: nil} = state) do
+    expiry_ref = make_ref()
+    Process.send_after(self(), {:expire_request, expiry_ref}, state.retention_ms)
+    %{state | expiry_ref: expiry_ref}
+  end
+
+  defp maybe_schedule_expiry(state), do: state
 
   defp terminal_event({:ok, _result}), do: :turn_finished
   defp terminal_event({:hibernate, _snapshot}), do: :turn_hibernated

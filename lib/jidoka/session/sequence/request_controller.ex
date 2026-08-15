@@ -13,6 +13,7 @@ defmodule Jidoka.Session.Sequence.RequestController do
   @task_supervisor Jidoka.Session.Sequence.TaskSupervisor
   @request_supervisor Jidoka.Session.Sequence.RequestSupervisor
   @default_grace_ms 100
+  @default_retention_ms 30_000
 
   @type start_opts :: [
           request_id: String.t(),
@@ -36,6 +37,7 @@ defmodule Jidoka.Session.Sequence.RequestController do
   catch
     :exit, {:timeout, _call} -> {:error, :timeout}
     :exit, {:noproc, _call} -> {:error, :request_expired}
+    :exit, {:normal, _call} -> {:error, :request_expired}
   end
 
   @doc false
@@ -47,6 +49,7 @@ defmodule Jidoka.Session.Sequence.RequestController do
   catch
     :exit, {:timeout, _call} -> {:error, :cancellation_timeout}
     :exit, {:noproc, _call} -> {:error, :request_expired}
+    :exit, {:normal, _call} -> {:error, :request_expired}
   end
 
   @doc false
@@ -62,6 +65,7 @@ defmodule Jidoka.Session.Sequence.RequestController do
     session = Keyword.fetch!(opts, :session)
     request_inputs = Keyword.fetch!(opts, :request_inputs)
     runtime_opts = Keyword.fetch!(opts, :runtime_opts)
+    retention_ms = positive_integer(Keyword.get(runtime_opts, :request_retention_ms), @default_retention_ms)
     token = Token.new()
     controller = self()
 
@@ -95,7 +99,9 @@ defmodule Jidoka.Session.Sequence.RequestController do
        awaiters: [],
        cancellers: [],
        cancellation_members: %{},
-       progress: %{session: session, steps: [], index: 1, request: nil}
+       progress: %{session: session, steps: [], index: 1, request: nil},
+       retention_ms: retention_ms,
+       expiry_ref: nil
      }}
   end
 
@@ -169,6 +175,10 @@ defmodule Jidoka.Session.Sequence.RequestController do
     monitor_ref = Process.monitor(pid)
 
     {:noreply, %{state | cancellation_members: Map.put(state.cancellation_members, pid, monitor_ref)}}
+  end
+
+  def handle_info({:expire_request, expiry_ref}, %{status: :finished, expiry_ref: expiry_ref} = state) do
+    {:stop, :normal, state}
   end
 
   def handle_info({:force_cancel, _ref}, %{status: :finished} = state), do: {:noreply, state}
@@ -326,9 +336,15 @@ defmodule Jidoka.Session.Sequence.RequestController do
   defp request_id(%Turn.Request{request_id: request_id}), do: request_id
   defp request_id(_request), do: nil
 
+  defp finish(%{status: :finished} = state, _result), do: state
+
   defp finish(state, result) do
+    terminate_cancellation_members(state)
     Enum.each(state.awaiters, &GenServer.reply(&1, result))
-    %{state | status: :finished, result: result, awaiters: []}
+    expiry_ref = make_ref()
+    Process.send_after(self(), {:expire_request, expiry_ref}, state.retention_ms)
+
+    %{state | status: :finished, result: result, awaiters: [], expiry_ref: expiry_ref}
   end
 
   defp positive_integer(value, _default) when is_integer(value) and value > 0, do: value

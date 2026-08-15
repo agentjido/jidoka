@@ -104,6 +104,13 @@ Key facts:
   bounded cleanup. Capabilities can call
   `Jidoka.Cancellation.requested?/1` with their runtime context when they
   support their own cooperative cleanup.
+- The request controller keeps a terminal result for 30 seconds so a caller
+  can await it again. It then stops. `:request_retention_ms` can set a
+  smaller positive bound. After expiry, await and cancel return
+  `:request_expired` and do not restart work. Owner exit, timeout, error,
+  and cancellation stop the controller and its registered members. A
+  cleanup race cannot create a second terminal event or a second live
+  controller.
 
 ## How To
 
