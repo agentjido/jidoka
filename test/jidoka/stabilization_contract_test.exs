@@ -112,6 +112,7 @@ defmodule Jidoka.StabilizationContractTest do
       preflight: 2,
       preflight: 3,
       project: 1,
+      project_events: 1,
       recover_session: 1,
       recover_session: 2,
       reset_handoff: 1,
