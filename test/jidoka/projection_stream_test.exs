@@ -56,6 +56,50 @@ defmodule Jidoka.ProjectionStreamTest do
     assert {:error, :unknown_projection_overflow} = Jidoka.project_events(event)
   end
 
+  test "operation identity is kept in projected events" do
+    event =
+      Event.build(:effect_completed, [],
+        request_id: "req-operation",
+        seq: 0,
+        effect_id: "effect-1",
+        effect_kind: :operation,
+        operation: "search"
+      )
+
+    assert {:ok, projected} = Jidoka.project_events(event)
+    assert projected.effect_id == "effect-1"
+    assert projected.effect_kind == "operation"
+    assert projected.operation == "search"
+  end
+
+  test "canonical LLM delta fields use the normal data bound" do
+    delta = String.duplicate("x", 5_000)
+
+    event =
+      Event.build(:llm_delta, [],
+        request_id: "req-delta",
+        seq: 0,
+        data: %{type: :text_delta, delta: delta, chunk_type: :content}
+      )
+
+    assert {:ok, projected} = Jidoka.project_events(event)
+    assert projected.data["type"] == "text_delta"
+    assert projected.data["delta"] == delta
+    assert projected.data["chunk_type"] == "content"
+    refute Map.has_key?(projected.data, "unknown")
+  end
+
+  test "oversized errors are rejected" do
+    event =
+      Event.build(:turn_failed, [],
+        request_id: "req-error",
+        seq: 0,
+        error: %{message: String.duplicate("x", 70_000)}
+      )
+
+    assert {:error, :projection_too_large} = Jidoka.project_events(event)
+  end
+
   test "events without a request identity are rejected" do
     event = Event.build(:turn_started, [], seq: 0)
     assert {:error, :missing_request_id} = Jidoka.project_events([event])
