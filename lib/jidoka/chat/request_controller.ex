@@ -13,6 +13,7 @@ defmodule Jidoka.Chat.RequestController do
   @request_supervisor Jidoka.Chat.RequestSupervisor
   @stream_message_tag :jidoka_turn_event
   @default_grace_ms 100
+  @default_retention_ms 30_000
 
   @type start_opts :: [
           request_id: String.t(),
@@ -59,6 +60,7 @@ defmodule Jidoka.Chat.RequestController do
     fun = Keyword.fetch!(opts, :fun)
     token = Token.new()
     timeout_ms = positive_integer(Keyword.get(runtime_opts, :request_timeout_ms), nil)
+    retention_ms = positive_integer(Keyword.get(runtime_opts, :request_retention_ms), @default_retention_ms)
 
     worker_opts =
       runtime_opts
@@ -90,7 +92,9 @@ defmodule Jidoka.Chat.RequestController do
        cancellation_members: %{},
        next_seq: 0,
        agent_id: nil,
-       timeout_ref: timeout_ref
+       timeout_ref: timeout_ref,
+       retention_ms: retention_ms,
+       expiry_ref: nil
      }}
   end
 
@@ -154,6 +158,10 @@ defmodule Jidoka.Chat.RequestController do
       ) do
     _shutdown = Task.shutdown(state.task, :brutal_kill)
     {:stop, :normal, finish_race(state, {:error, :owner_exited})}
+  end
+
+  def handle_info({:expire_request, expiry_ref}, %{status: :finished, expiry_ref: expiry_ref} = state) do
+    {:stop, :normal, state}
   end
 
   def handle_info(:request_timeout, %{status: :finished} = state), do: {:noreply, state}
@@ -311,12 +319,24 @@ defmodule Jidoka.Chat.RequestController do
     |> finish(result)
   end
 
+  defp finish(%{status: :finished} = state, _result), do: state
+
   defp finish(state, result) do
     cancel_timeout(state)
+    terminate_cancellation_members(state)
     Enum.each(state.awaiters, &GenServer.reply(&1, result))
     Enum.each(state.cancellers, &GenServer.reply(&1, {:error, :request_already_finished}))
+    expiry_ref = make_ref()
+    Process.send_after(self(), {:expire_request, expiry_ref}, state.retention_ms)
 
-    %{state | status: :finished, result: result, awaiters: [], cancellers: []}
+    %{
+      state
+      | status: :finished,
+        result: result,
+        awaiters: [],
+        cancellers: [],
+        expiry_ref: expiry_ref
+    }
   end
 
   defp cancel_timeout(%{timeout_ref: ref}) when is_reference(ref), do: Process.cancel_timer(ref)
