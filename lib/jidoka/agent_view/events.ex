@@ -1,15 +1,20 @@
 defmodule Jidoka.AgentView.Events do
   @moduledoc false
 
+  require Logger
+
+  alias Jidoka.Error
   alias Jidoka.Event
+  alias Jidoka.Event.Order
   alias Jidoka.Stream, as: EventStream
   alias Jidoka.Turn
 
   @spec apply_event(map(), Event.t() | term()) :: map()
   def apply_event(%{} = view, %Event{} = event) do
-    view
-    |> apply_stream_delta(event)
-    |> append_runtime_event(event)
+    case classify_event(view, event) do
+      :accept -> apply_current_event(view, event)
+      {:reject, reason} -> reject_event(view, event, reason)
+    end
   end
 
   def apply_event(%{} = view, _event), do: view
@@ -28,6 +33,70 @@ defmodule Jidoka.AgentView.Events do
     |> operation_events()
     |> Enum.reject(&MapSet.member?(existing_ids, &1.id))
     |> then(&(events ++ &1))
+  end
+
+  defp classify_event(%{} = view, %Event{} = event) do
+    metadata = Map.get(view, :metadata, %{})
+    active_request_id = Map.get(metadata, :active_request_id)
+    lifecycle = Map.get(metadata, :request_lifecycle)
+
+    cond do
+      lifecycle != :running -> {:reject, :request_not_running}
+      not is_binary(active_request_id) -> {:reject, :missing_active_request}
+      event.request_id != active_request_id -> {:reject, :foreign_request}
+      true -> :accept
+    end
+  end
+
+  defp apply_current_event(%{} = view, %Event{} = event) do
+    if Order.terminal?(event) do
+      view
+      |> append_runtime_event(event)
+      |> apply_terminal(event)
+    else
+      view
+      |> apply_stream_delta(event)
+      |> append_runtime_event(event)
+    end
+  end
+
+  defp apply_terminal(%{} = view, %Event{event: :turn_finished}) do
+    terminal_view(view, :turn_finished, :idle, nil, nil)
+  end
+
+  defp apply_terminal(%{} = view, %Event{event: :turn_hibernated}) do
+    terminal_view(view, :turn_hibernated, :interrupted, nil, "Agent hibernated for review.")
+  end
+
+  defp apply_terminal(%{} = view, %Event{event: :turn_failed} = event) do
+    reason = Event.failure_reason(event) || :turn_failed
+    status = if Event.cancelled?(event), do: :interrupted, else: :error
+    terminal_view(view, :turn_failed, status, reason, Error.format(reason))
+  end
+
+  defp terminal_view(%{} = view, terminal_event, status, error, error_text) do
+    %{
+      view
+      | streaming_message: nil,
+        status: status,
+        error: error,
+        error_text: error_text,
+        metadata:
+          view.metadata
+          |> Map.put(:request_lifecycle, :terminal)
+          |> Map.put(:request_terminal_event, terminal_event)
+    }
+  end
+
+  defp reject_event(%{} = view, %Event{} = event, reason) do
+    Logger.debug("Ignored AgentView event",
+      reason: reason,
+      request_id: event.request_id,
+      active_request_id: view |> Map.get(:metadata, %{}) |> Map.get(:active_request_id),
+      lifecycle: view |> Map.get(:metadata, %{}) |> Map.get(:request_lifecycle)
+    )
+
+    view
   end
 
   defp apply_stream_delta(%{} = view, %Event{} = event) do

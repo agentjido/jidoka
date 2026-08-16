@@ -148,7 +148,7 @@ defmodule JidokaShowcaseWeb.AgentLive do
 
   def finish_turn(socket, view_module, request_id, result, model) when is_atom(view_module) do
     if current_request?(socket, request_id) do
-      view = view_module.after_turn(socket.assigns.agent_view, result)
+      view = view_module.after_turn(socket.assigns.agent_view, result, request_id)
 
       Phoenix.Component.assign(socket,
         agent_view: view,
@@ -166,7 +166,7 @@ defmodule JidokaShowcaseWeb.AgentLive do
     case pending_snapshot(socket.assigns.agent_view) do
       {:ok, snapshot} ->
         model = opts |> Keyword.get(:model, default_model()) |> to_string() |> String.trim()
-        request_id = view_module.request_id()
+        request_id = snapshot.turn_state.request.request_id
         parent = self()
         response = review_response(snapshot, decision)
 
@@ -184,7 +184,7 @@ defmodule JidokaShowcaseWeb.AgentLive do
         end)
 
         Phoenix.Component.assign(socket,
-          agent_view: %{socket.assigns.agent_view | status: :running, error_text: nil},
+          agent_view: view_module.activate_request(socket.assigns.agent_view, request_id),
           active_request_id: request_id,
           form: form("", model)
         )
@@ -258,7 +258,7 @@ defmodule JidokaShowcaseWeb.AgentLive do
     agent_pid = Keyword.fetch!(opts, :agent_pid)
     example = Keyword.fetch!(opts, :example)
     running = view_module.before_turn(socket.assigns.agent_view, question)
-    request_id = view_module.request_id()
+    request_id = view_module.active_request_id(running)
     parent = self()
     session_id = socket.assigns.session_id
     context = Keyword.get(opts, :context, %{})

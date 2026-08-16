@@ -113,7 +113,7 @@ defmodule Jidoka.AgentViewTest do
 
   test "streamed events update an in-flight assistant draft and debug activity" do
     {:ok, view} = DemoView.initial(%{conversation_id: "case_123"})
-    running = DemoView.before_turn(view, "Need help")
+    running = DemoView.before_turn(view, "Need help", "req_agent_view")
 
     delta =
       Event.new!(
@@ -142,16 +142,24 @@ defmodule Jidoka.AgentViewTest do
     assert view.runtime_context == %{tenant: "acme"}
 
     idle = RuntimeView.before_turn(view, "   ")
-    assert idle.status == :idle
-    assert idle.visible_messages == []
+    assert idle == view
 
-    errored = RuntimeView.after_turn(view, {:error, :failed})
+    errored =
+      view
+      |> RuntimeView.activate_request("req_error")
+      |> RuntimeView.after_turn({:error, :failed})
+
     assert errored.status == :error
     assert errored.error == :failed
     assert is_binary(errored.error_text)
 
     snapshot = snapshot()
-    interrupted = RuntimeView.after_turn(view, {:hibernate, snapshot})
+
+    interrupted =
+      view
+      |> RuntimeView.activate_request("req_hibernate")
+      |> RuntimeView.after_turn({:hibernate, snapshot})
+
     assert interrupted.status == :interrupted
     assert interrupted.metadata.last_snapshot.snapshot_id == snapshot.snapshot_id
 
@@ -162,7 +170,10 @@ defmodule Jidoka.AgentViewTest do
         data: %{chunk_type: :thinking, delta: "Analyzing"}
       )
 
-    updated = RuntimeView.apply_event(view, thinking)
+    updated =
+      view
+      |> RuntimeView.activate_request("req_thinking")
+      |> RuntimeView.apply_event(thinking)
 
     assert [%{role: :assistant, content: "Thinking...", thinking: "Analyzing"}] =
              RuntimeView.visible_messages(updated)
@@ -178,6 +189,7 @@ defmodule Jidoka.AgentViewTest do
 
     updated =
       updated
+      |> RuntimeView.activate_request("req_duplicate")
       |> RuntimeView.apply_event(event)
       |> RuntimeView.apply_event(event)
       |> RuntimeView.apply_event(%{ignored: true})
@@ -190,6 +202,60 @@ defmodule Jidoka.AgentViewTest do
     assert_raise ArgumentError, ~r/must pass `agent:`/, fn ->
       MissingAgentView.agent_module(%{})
     end
+  end
+
+  test "only the active request can change the view lifecycle" do
+    {:ok, view} = DemoView.initial(%{conversation_id: "case_scoped"})
+
+    current =
+      view
+      |> DemoView.before_turn("Old request", "req_old")
+      |> DemoView.before_turn("Current request", "req_current")
+
+    stale_delta =
+      Event.new!(
+        event: :llm_delta,
+        request_id: "req_old",
+        data: %{chunk_type: :content, delta: "stale"}
+      )
+
+    assert DemoView.apply_event(current, stale_delta) == current
+    assert DemoView.after_turn(current, {:error, :stale_result}, "req_old") == current
+    assert DemoView.before_turn(current, "   ") == current
+
+    active_delta =
+      Event.new!(
+        event: :llm_delta,
+        request_id: "req_current",
+        data: %{chunk_type: :content, delta: "current"}
+      )
+
+    streaming = DemoView.apply_event(current, active_delta)
+    assert streaming.streaming_message.content == "current"
+
+    terminal = Event.build(:turn_finished, [], request_id: "req_current")
+    finished = DemoView.apply_event(streaming, terminal)
+
+    assert finished.status == :idle
+    assert finished.streaming_message == nil
+    assert finished.metadata.request_lifecycle == :terminal
+
+    contradictory =
+      Event.build(:turn_failed, [], request_id: "req_current", data: %{reason: :late_failure})
+
+    assert DemoView.apply_event(finished, contradictory) == finished
+    assert DemoView.after_turn(finished, {:error, :late_failure}, "req_current") == finished
+
+    result =
+      Turn.Result.new!(
+        content: "Current result",
+        agent_state: Agent.State.new!(),
+        journal: Effect.Journal.new!()
+      )
+
+    settled = DemoView.after_turn(finished, {:ok, result}, "req_current")
+    assert settled.metadata.request_lifecycle == :settled
+    assert DemoView.active_request_id(settled) == nil
   end
 
   defp snapshot do

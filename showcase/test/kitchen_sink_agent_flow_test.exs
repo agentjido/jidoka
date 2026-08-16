@@ -377,7 +377,10 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
              |> request(context)
              |> Agent.run_turn(agent_run_opts(refund_llm, context, memory_store))
 
-    interrupted = View.after_turn(view, {:hibernate, snapshot})
+    interrupted =
+      view
+      |> View.activate_request(snapshot.turn_state.request.request_id)
+      |> View.after_turn({:hibernate, snapshot})
 
     assert interrupted.status == :interrupted
     assert interrupted.metadata.last_snapshot.cursor.phase == :review
