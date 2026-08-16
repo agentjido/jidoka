@@ -62,9 +62,10 @@ defmodule Jidoka.CodingPack.Search do
     with :ok <- read_access(workspace),
          {:ok, input} <- input(arguments, workspace),
          {:ok, base} <- resolve_base(workspace, input.path),
-         {:ok, base_ignore} <- base_ignore(workspace, base.relative),
+         {:ok, ignore} <- Ignore.compile(workspace, opts),
+         {:ok, base_ignore} <- base_ignore(ignore, base.relative),
          :ok <- included(base_ignore),
-         {:ok, entries, facts} <- enumerate(workspace, base.relative, opts),
+         {:ok, entries, facts} <- enumerate(workspace, ignore, base.relative, opts),
          {:ok, result} <- search(Map.put(input, :base, base.relative), entries, facts, workspace, opts) do
       {:ok, result}
     else
@@ -107,27 +108,27 @@ defmodule Jidoka.CodingPack.Search do
     end
   end
 
-  defp enumerate(workspace, base, opts) do
+  defp enumerate(workspace, ignore, base, opts) do
     state = %{entries: [], visited: 0, ignored: 0, binary: 0, oversized: 0}
 
-    case walk_directory(workspace, base, state, opts) do
+    case walk_directory(workspace, ignore, base, state, opts) do
       {:ok, state} -> {:ok, Enum.sort_by(state.entries, & &1.relative), Map.delete(state, :entries)}
       {:error, %Error{} = error} -> {:error, error}
     end
   end
 
-  defp walk_directory(workspace, directory, state, opts) do
+  defp walk_directory(workspace, ignore, directory, state, opts) do
     absolute = absolute(workspace, directory)
 
     case list_dir(opts).(absolute) do
-      {:ok, names} -> walk_names(workspace, directory, Enum.sort(names), state, opts)
+      {:ok, names} -> walk_names(workspace, ignore, directory, Enum.sort(names), state, opts)
       {:error, reason} -> {:error, Error.new(:coding_search_io_error, %{path: directory, reason: inspect(reason)})}
     end
   end
 
-  defp walk_names(_workspace, _directory, [], state, _opts), do: {:ok, state}
+  defp walk_names(_workspace, _ignore, _directory, [], state, _opts), do: {:ok, state}
 
-  defp walk_names(workspace, directory, [name | rest], state, opts) do
+  defp walk_names(workspace, ignore, directory, [name | rest], state, opts) do
     relative = join(directory, name)
     visited = state.visited + 1
 
@@ -136,30 +137,30 @@ defmodule Jidoka.CodingPack.Search do
     else
       state = %{state | visited: visited}
 
-      case entry(workspace, relative, state, opts) do
-        {:ok, state} -> walk_names(workspace, directory, rest, state, opts)
+      case entry(workspace, ignore, relative, state, opts) do
+        {:ok, state} -> walk_names(workspace, ignore, directory, rest, state, opts)
         {:error, %Error{} = error} -> {:error, error}
       end
     end
   end
 
-  defp entry(workspace, relative, state, opts) do
-    with {:ok, ignore} <- Ignore.decision(workspace, relative) do
-      if ignore.ignored? do
+  defp entry(workspace, evaluator, relative, state, opts) do
+    with {:ok, decision} <- Ignore.decision(evaluator, relative) do
+      if decision.ignored? do
         {:ok, %{state | ignored: state.ignored + 1}}
       else
-        include_entry(workspace, relative, state, opts)
+        include_entry(workspace, evaluator, relative, state, opts)
       end
     end
   end
 
-  defp include_entry(workspace, relative, state, opts) do
+  defp include_entry(workspace, ignore, relative, state, opts) do
     path = absolute(workspace, relative)
 
     case lstat(opts).(path) do
       {:ok, %{type: :directory}} ->
         state = %{state | entries: [%{relative: relative, type: :directory, absolute: path} | state.entries]}
-        walk_directory(workspace, relative, state, opts)
+        walk_directory(workspace, ignore, relative, state, opts)
 
       {:ok, %{type: :regular}} ->
         {:ok, %{state | entries: [%{relative: relative, type: :regular, absolute: path} | state.entries]}}
@@ -334,10 +335,10 @@ defmodule Jidoka.CodingPack.Search do
   defp included(decision),
     do: {:error, Error.new(:coding_path_ignored, %{path: decision.path, pattern: decision.pattern})}
 
-  defp base_ignore(_workspace, "."),
+  defp base_ignore(_ignore, "."),
     do: {:ok, %{ignored?: false, path: ".", pattern: nil}}
 
-  defp base_ignore(workspace, relative), do: Ignore.decision(workspace, relative)
+  defp base_ignore(ignore, relative), do: Ignore.decision(ignore, relative)
 
   defp ceiling(nil, limit), do: {:ok, limit}
   defp ceiling(value, limit) when is_integer(value) and value > 0 and value <= limit, do: {:ok, value}

@@ -83,6 +83,25 @@ defmodule Jidoka.CodingPack.SearchTest do
     assert result["truncated"]
   end
 
+  test "loads each ignore file once for one search", %{root: root, workspace: workspace} do
+    File.write!(Path.join(root, ".gitignore"), "*.tmp\n")
+    {:ok, reads} = Agent.start_link(fn -> 0 end)
+
+    read_rule = fn path ->
+      Agent.update(reads, &(&1 + 1))
+      File.read(path)
+    end
+
+    assert {:ok, _result} =
+             Search.run(
+               workspace,
+               %{"mode" => "path", "pattern" => "**/*"},
+               ignore_rule_read_file: read_rule
+             )
+
+    assert Agent.get(reads, & &1) == 1
+  end
+
   test "rejects invalid input, unsafe links, and IO failures", %{root: root, outside: outside, workspace: workspace} do
     File.ln_s!(Path.join(outside, "secret.ex"), Path.join(root, "escape.ex"))
 

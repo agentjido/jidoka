@@ -83,6 +83,21 @@ defmodule Jidoka.CodingPack.WorkspaceTest do
     assert {:ok, %{ignored?: true, pattern: "private"}} = Ignore.decision(workspace, "private/value.txt")
   end
 
+  test "compiled ignore evaluators keep one rule snapshot", %{root: root} do
+    ignore_file = Path.join(root, ".gitignore")
+    File.write!(ignore_file, "*.log\n")
+    File.write!(Path.join(root, "value.log"), "data")
+    workspace = Workspace.new!(root: root)
+
+    assert {:ok, evaluator} = Ignore.compile(workspace)
+    File.write!(ignore_file, "!*.log\n")
+
+    assert {:ok, %{ignored?: true}} = Ignore.decision(evaluator, "value.log")
+
+    assert {:ok, updated_evaluator} = Ignore.compile(workspace)
+    assert {:ok, %{ignored?: false}} = Ignore.decision(updated_evaluator, "value.log")
+  end
+
   test "rejects bad ignore patterns", %{root: root} do
     File.write!(Path.join(root, ".gitignore"), "[bad\n")
     File.write!(Path.join(root, "value.txt"), "data")
