@@ -13,6 +13,7 @@ defmodule Jidoka.Operation.Source.Handoff do
   alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Handoff
+  alias Jidoka.Operation.Source
   alias Jidoka.Schema
 
   @type forward_context ::
@@ -87,6 +88,14 @@ defmodule Jidoka.Operation.Source.Handoff do
     case new(attrs) do
       {:ok, source} -> source
       {:error, reason} -> raise ArgumentError, "invalid handoff source: #{inspect(reason)}"
+    end
+  end
+
+  @impl true
+  def compile(%__MODULE__{} = source, opts) do
+    with {:ok, operations} <- operations(source, opts),
+         {:ok, capability} <- capability(source, opts) do
+      Source.compiled(operations, capability)
     end
   end
 

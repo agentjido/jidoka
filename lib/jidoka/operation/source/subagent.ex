@@ -12,6 +12,7 @@ defmodule Jidoka.Operation.Source.Subagent do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Operation.Source
   alias Jidoka.Schema
 
   @result_modes [:text, :structured]
@@ -86,6 +87,14 @@ defmodule Jidoka.Operation.Source.Subagent do
     case new(attrs) do
       {:ok, source} -> source
       {:error, reason} -> raise ArgumentError, "invalid subagent source: #{inspect(reason)}"
+    end
+  end
+
+  @impl true
+  def compile(%__MODULE__{} = source, opts) do
+    with {:ok, operations} <- operations(source, opts),
+         {:ok, capability} <- capability(source, opts) do
+      Source.compiled(operations, capability)
     end
   end
 

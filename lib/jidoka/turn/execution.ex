@@ -25,6 +25,8 @@ defmodule Jidoka.Turn.Execution do
   alias Jidoka.Snapshot
   alias Jidoka.Turn
 
+  @operation_source_digest_key "operation_source_digest"
+
   @type plan_input :: module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
   @type request_input ::
           Turn.Request.t() | String.t() | [Jidoka.ContentPart.input()] | keyword() | map()
@@ -195,11 +197,12 @@ defmodule Jidoka.Turn.Execution do
     with {:ok, compiled} <- compile_operation_sources(opts),
          {:ok, registry} <- Registry.new(spec.operations, compiled.operations) do
       spec = %Agent.Spec{spec | operations: Registry.operations(registry)}
+      plan = put_operation_source_digest(%Turn.Plan{plan | spec: spec}, compiled.digest)
 
       with :ok <- Agent.Spec.validate_operation_policies(spec) do
         {:ok,
          %{
-           plan: %Turn.Plan{plan | spec: spec},
+           plan: plan,
            registry: registry,
            extension_capability: compiled.capability
          }}
@@ -209,6 +212,7 @@ defmodule Jidoka.Turn.Execution do
 
   defp prepare_resume_operation_setup(%Snapshot{} = snapshot, opts) do
     with {:ok, compiled} <- compile_operation_sources(opts),
+         :ok <- validate_operation_source_digest(snapshot, compiled.digest),
          {:ok, registry} <- Registry.new(snapshot.turn_state.plan.spec.operations),
          {:ok, registry} <- Registry.mark_extensions(registry, compiled.operations) do
       {:ok,
@@ -222,9 +226,25 @@ defmodule Jidoka.Turn.Execution do
 
   defp compile_operation_sources(opts) do
     case Keyword.get(opts, :operation_sources, []) do
-      [] -> {:ok, %{operations: [], capability: nil, metadata: []}}
-      nil -> {:ok, %{operations: [], capability: nil, metadata: []}}
+      [] -> {:ok, %{operations: [], routes_by_name: %{}, capability: nil, metadata: [], digest: nil}}
+      nil -> {:ok, %{operations: [], routes_by_name: %{}, capability: nil, metadata: [], digest: nil}}
       sources -> Source.compile(sources, Keyword.get(opts, :operation_source_opts, opts))
+    end
+  end
+
+  defp put_operation_source_digest(%Turn.Plan{} = plan, nil), do: plan
+
+  defp put_operation_source_digest(%Turn.Plan{} = plan, digest) do
+    %Turn.Plan{plan | metadata: Map.put(plan.metadata, @operation_source_digest_key, digest)}
+  end
+
+  defp validate_operation_source_digest(%Snapshot{} = snapshot, actual) do
+    expected = Map.get(snapshot.turn_state.plan.metadata, @operation_source_digest_key)
+
+    cond do
+      is_nil(expected) -> :ok
+      expected == actual -> :ok
+      true -> {:error, {:operation_source_digest_mismatch, expected, actual}}
     end
   end
 

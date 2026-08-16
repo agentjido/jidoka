@@ -2,9 +2,19 @@ defmodule Jidoka.Agent.ToolSources.Subagent do
   @moduledoc false
 
   alias Jidoka.Agent.Dsl.Subagent
+  alias Jidoka.Agent.ToolSources.Common
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Subagent, as: SubagentSource
   alias Jidoka.Review.Approval
+
+  @spec compiled!(term()) :: Jidoka.Operation.Source.Compiled.t()
+  def compiled!(%Subagent{} = subagent) do
+    source = source!(subagent)
+
+    Common.compile_source!(source, subagent.approval, fn source, _operations ->
+      metadata(source, subagent)
+    end)
+  end
 
   @spec source!(term()) :: SubagentSource.t()
   def source!(%Subagent{} = subagent) do
@@ -33,7 +43,10 @@ defmodule Jidoka.Agent.ToolSources.Subagent do
   @spec metadata!(term()) :: [map()]
   def metadata!(%Subagent{} = subagent) do
     source = source!(subagent)
+    metadata(source, subagent)
+  end
 
+  defp metadata(source, subagent) do
     [
       %{
         "source" => "subagent",

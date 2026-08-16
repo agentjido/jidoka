@@ -23,6 +23,7 @@ defmodule Jidoka.Operation.Source.Catalog do
   alias Jidoka.Effect
   alias Jidoka.Operation.Source.Catalog.Normalize
   alias Jidoka.Operation.Source.Catalog.Parameters
+  alias Jidoka.Operation.Source
   alias Jidoka.Schema
   alias Jidoka.Workflow.Lua
   alias Jidoka.Workflow.Lua.Policy, as: LuaPolicy
@@ -112,6 +113,14 @@ defmodule Jidoka.Operation.Source.Catalog do
     case new(attrs) do
       {:ok, source} -> source
       {:error, reason} -> raise ArgumentError, "invalid catalog source: #{inspect(reason)}"
+    end
+  end
+
+  @impl true
+  def compile(%__MODULE__{} = source, opts) do
+    with {:ok, operations} <- operations(source, opts),
+         {:ok, capability} <- capability(source, opts) do
+      Source.compiled(operations, capability)
     end
   end
 

@@ -7,6 +7,15 @@ defmodule Jidoka.Agent.ToolSources.Workflow do
   alias Jidoka.Operation.Source.Workflow, as: WorkflowSource
   alias Jidoka.Review.Approval
 
+  @spec compiled!(term()) :: Jidoka.Operation.Source.Compiled.t()
+  def compiled!(%Workflow{} = workflow) do
+    source = source!(workflow)
+
+    Common.compile_source!(source, workflow.approval, fn source, _operations ->
+      metadata(source, workflow)
+    end)
+  end
+
   @spec source!(term()) :: WorkflowSource.t()
   def source!(%Workflow{} = workflow) do
     WorkflowSource.new!(
@@ -37,7 +46,10 @@ defmodule Jidoka.Agent.ToolSources.Workflow do
   @spec metadata!(term()) :: [map()]
   def metadata!(%Workflow{} = workflow) do
     source = source!(workflow)
+    metadata(source, workflow)
+  end
 
+  defp metadata(source, workflow) do
     [
       %{
         "source" => "workflow",

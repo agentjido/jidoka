@@ -43,6 +43,20 @@ defmodule Jidoka.MCPTest do
 
     def list_tools(:bad_list_response, _opts), do: :bad_response
 
+    def list_tools(:counted_mcp, _opts) do
+      count = Process.get({__MODULE__, :discovery_count}, 0) + 1
+      Process.put({__MODULE__, :discovery_count}, count)
+
+      {:ok,
+       [
+         %{
+           name: "counted_tool",
+           description: "Counts source discovery calls.",
+           input_schema: %{"type" => "object"}
+         }
+       ]}
+    end
+
     def list_tools(:inline_mcp, opts) do
       send(self(), {:inline_list_tools_opts, opts})
 
@@ -130,6 +144,17 @@ defmodule Jidoka.MCPTest do
               tool: "lookup_policy",
               result: %{"policy" => "Use MCP through Jidoka.", "topic" => "runtime"}
             }} = capability.(intent, Effect.Journal.new!(), ctx)
+  end
+
+  test "MCP source compilation performs discovery once" do
+    Process.put({FakeMCPClient, :discovery_count}, 0)
+    source = MCP.new!(endpoint: :counted_mcp, client: FakeMCPClient)
+
+    assert {:ok, compiled} = Source.compile(source, discover_mcp?: true)
+
+    assert Process.get({FakeMCPClient, :discovery_count}) == 1
+    assert Enum.map(compiled.operations, & &1.name) == ["mcp_counted_mcp_counted_tool"]
+    assert Map.keys(compiled.routes_by_name) == ["mcp_counted_mcp_counted_tool"]
   end
 
   test "MCP sources normalize defaults, runtime client overrides, and malformed responses" do

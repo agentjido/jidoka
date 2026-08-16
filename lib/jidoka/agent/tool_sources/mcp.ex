@@ -7,6 +7,18 @@ defmodule Jidoka.Agent.ToolSources.MCP do
   alias Jidoka.Operation.Source.MCP, as: MCPSource
   alias Jidoka.Review.Approval
 
+  @spec compiled!(term()) :: Jidoka.Operation.Source.Compiled.t()
+  def compiled!(%MCPTools{} = mcp_tools) do
+    source = source!(mcp_tools)
+
+    Common.compile_source!(
+      source,
+      mcp_tools.approval,
+      fn source, operations -> metadata(source, mcp_tools, operations) end,
+      discover_mcp?: mcp_tools.discover == true
+    )
+  end
+
   @spec source!(term()) :: MCPSource.t()
   def source!(%MCPTools{} = mcp_tools) do
     MCPSource.new!(
@@ -40,7 +52,10 @@ defmodule Jidoka.Agent.ToolSources.MCP do
   @spec metadata!(term()) :: [map()]
   def metadata!(%MCPTools{} = mcp_tools) do
     source = source!(mcp_tools)
+    metadata(source, mcp_tools, nil)
+  end
 
+  defp metadata(source, mcp_tools, operations) do
     [
       %{
         "source" => "mcp",
@@ -52,10 +67,16 @@ defmodule Jidoka.Agent.ToolSources.MCP do
         "protocol_version" => source.protocol_version,
         "capabilities" => source.capabilities,
         "timeouts" => source.timeouts,
-        "tools" => Enum.map(source.tools, & &1.name),
+        "tools" => metadata_tool_names(source, operations),
         "approval" => Approval.source_policy_map(mcp_tools.approval)
       }
       |> Common.reject_nil_values()
     ]
+  end
+
+  defp metadata_tool_names(source, nil), do: Enum.map(source.tools, & &1.name)
+
+  defp metadata_tool_names(_source, operations) do
+    Enum.map(operations, &Map.get(&1.metadata, "remote_tool", &1.name))
   end
 end

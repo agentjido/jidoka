@@ -11,6 +11,7 @@ defmodule Jidoka.Operation.Source.JidoAction do
 
   alias Jidoka.Adapter.Jido.Actions
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Operation.Source
 
   @enforce_keys [:actions, :operations]
   defstruct actions: [], operations: [], metadata: []
@@ -29,6 +30,11 @@ defmodule Jidoka.Operation.Source.JidoAction do
       operations: operations,
       metadata: Keyword.get(opts, :metadata, [])
     }
+  end
+
+  @impl true
+  def compile(%__MODULE__{actions: actions, operations: operations, metadata: metadata}, opts) do
+    Source.compiled(operations, Actions.operations(actions, opts), metadata)
   end
 
   @impl true

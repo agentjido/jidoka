@@ -256,6 +256,67 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
              result.agent_state.operation_results
   end
 
+  test "resume rejects a changed operation source digest" do
+    initial_source =
+      Local.new!(
+        operations: [
+          %{
+            name: "reviewed_source_operation",
+            kind: :handoff,
+            idempotency: :unsafe_once,
+            metadata: %{"source" => "handoff", "version" => 1},
+            handler: fn _arguments, _context -> {:ok, %{version: 1}} end
+          }
+        ]
+      )
+
+    spec =
+      Agent.Spec.new!(
+        id: "source_digest_agent",
+        instructions: "Use the reviewed source operation.",
+        model: %{provider: :test, id: "model"},
+        controls: %{
+          operations: [
+            %{
+              control: HandoffReviewControl,
+              match: %{name: "reviewed_source_operation"}
+            }
+          ]
+        }
+      )
+
+    request = Turn.Request.new!(input: "Run the reviewed source.", context: %{test_pid: self()})
+
+    assert {:hibernate, %Snapshot{} = snapshot} =
+             Jidoka.turn(spec, request,
+               operation_sources: initial_source,
+               llm: llm("reviewed_source_operation", %{}, "Finished."),
+               clock: clock(20_000)
+             )
+
+    changed_source =
+      Local.new!(
+        operations: [
+          %{
+            name: "reviewed_source_operation",
+            kind: :handoff,
+            idempotency: :unsafe_once,
+            metadata: %{"source" => "handoff", "version" => 2},
+            handler: fn _arguments, _context -> {:ok, %{version: 2}} end
+          }
+        ]
+      )
+
+    assert {:error, {:operation_source_digest_mismatch, expected, actual}} =
+             Jidoka.Turn.Execution.prepare_resume(snapshot,
+               operation_sources: changed_source
+             )
+
+    assert is_binary(expected)
+    assert is_binary(actual)
+    refute expected == actual
+  end
+
   test "deferred source families are exposed as tools DSL entities" do
     entity_names =
       Jidoka.Agent.Dsl.Sections.Tools.section().entities

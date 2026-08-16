@@ -10,6 +10,7 @@ defmodule Jidoka.Operation.Source.Local do
   @behaviour Jidoka.Operation.Source
 
   alias Jidoka.Agent.Spec.Operation
+  alias Jidoka.Operation.Source
   alias Jidoka.Runtime.LocalOperations
   alias Jidoka.Schema
 
@@ -78,6 +79,14 @@ defmodule Jidoka.Operation.Source.Local do
 
       {:error, reason} ->
         raise ArgumentError, "invalid local operation source: #{inspect(reason)}"
+    end
+  end
+
+  @impl true
+  def compile(%__MODULE__{} = source, opts) do
+    with {:ok, operations} <- operations(source, opts),
+         {:ok, capability} <- capability(source, opts) do
+      Source.compiled(operations, capability)
     end
   end
 

@@ -17,7 +17,6 @@ defmodule Jidoka.Agent.ToolSources do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Agent.ToolSources
   alias Jidoka.Operation.Source
-  alias Jidoka.Operation.Source.Defined
   alias Jidoka.Operation.Source.JidoAction
 
   @spec entities(module()) :: [struct()]
@@ -120,55 +119,35 @@ defmodule Jidoka.Agent.ToolSources do
         %MCPTools{} = mcp_tools, skills ->
           {[
              wrap!(agent_module, [:tools, :mcp_tools], fn ->
-               Defined.new!(
-                 ToolSources.MCP.source!(mcp_tools),
-                 ToolSources.MCP.operations!(mcp_tools),
-                 ToolSources.MCP.metadata!(mcp_tools)
-               )
+               ToolSources.MCP.compiled!(mcp_tools)
              end)
            ], skills}
 
         %Catalog{} = catalog, skills ->
           {[
              wrap!(agent_module, [:tools, :catalog], fn ->
-               Defined.new!(
-                 ToolSources.Catalog.source!(catalog),
-                 ToolSources.Catalog.operations!(catalog),
-                 ToolSources.Catalog.metadata!(catalog)
-               )
+               ToolSources.Catalog.compiled!(catalog)
              end)
            ], skills}
 
         %Subagent{} = subagent, skills ->
           {[
              wrap!(agent_module, [:tools, :subagent], fn ->
-               Defined.new!(
-                 ToolSources.Subagent.source!(subagent),
-                 ToolSources.Subagent.operations!(subagent),
-                 ToolSources.Subagent.metadata!(subagent)
-               )
+               ToolSources.Subagent.compiled!(subagent)
              end)
            ], skills}
 
         %Handoff{} = handoff, skills ->
           {[
              wrap!(agent_module, [:tools, :handoff], fn ->
-               Defined.new!(
-                 ToolSources.Handoff.source!(handoff),
-                 ToolSources.Handoff.operations!(handoff),
-                 ToolSources.Handoff.metadata!(handoff)
-               )
+               ToolSources.Handoff.compiled!(handoff)
              end)
            ], skills}
 
         %Workflow{} = workflow, skills ->
           {[
              wrap!(agent_module, [:tools, :workflow], fn ->
-               Defined.new!(
-                 ToolSources.Workflow.source!(workflow),
-                 ToolSources.Workflow.operations!(workflow),
-                 ToolSources.Workflow.metadata!(workflow)
-               )
+               ToolSources.Workflow.compiled!(workflow)
              end)
            ], skills}
 
