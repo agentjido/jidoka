@@ -6,25 +6,16 @@ defmodule Jidoka.Turn.Plan do
   alias Jidoka.Operation.Registry
   alias Jidoka.Schema
 
-  @phases [
-    :assemble_prompt,
-    :plan_model_effect,
-    :apply_model_result,
-    :plan_operation_effects,
-    :apply_operation_results
-  ]
-  @workflow_profiles [:chat, :tool_loop, :structured_result, :controlled_tool_loop]
+  @removed_runtime_defaults [:phases, :workflow_profile]
 
   @schema Zoi.struct(
             __MODULE__,
             %{
               spec: Zoi.lazy({:"Elixir.Jidoka.Agent.Spec", :schema, []}),
-              workflow_profile: Schema.atom_enum(@workflow_profiles) |> Zoi.default(:tool_loop),
               max_model_turns: Zoi.integer() |> Zoi.positive() |> Zoi.default(8),
               timeout_ms: Zoi.integer() |> Zoi.positive() |> Zoi.default(30_000),
               model_candidates: Zoi.array(Zoi.lazy({LLMDB.Model, :schema, []})) |> Zoi.default([]),
               context_policy: Zoi.lazy({Policy, :schema, []}) |> Zoi.default(Policy.new!()),
-              phases: Zoi.array(Schema.atom_enum(@phases)) |> Zoi.default(@phases),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -42,7 +33,8 @@ defmodule Jidoka.Turn.Plan do
   @doc "Compiles an agent specification into executable turn data."
   @spec new(Jidoka.Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
   def new(%Jidoka.Agent.Spec{} = spec) do
-    with {:ok, registry} <- Registry.new(spec.operations),
+    with :ok <- reject_removed_runtime_defaults(spec.runtime_defaults),
+         {:ok, registry} <- Registry.new(spec.operations),
          spec = %Jidoka.Agent.Spec{spec | operations: Registry.operations(registry)},
          :ok <- Jidoka.Agent.Spec.validate_operation_policies(spec),
          model_candidates = [spec.model],
@@ -75,12 +67,21 @@ defmodule Jidoka.Turn.Plan do
     end
   end
 
+  @doc false
+  @spec normalize_legacy(map()) :: map()
+  def normalize_legacy(plan) when is_map(plan) do
+    Enum.reduce(@removed_runtime_defaults, plan, fn field, plan ->
+      plan
+      |> Map.delete(field)
+      |> Map.delete(Atom.to_string(field))
+    end)
+  end
+
   defp new_attrs(%Jidoka.Agent.Spec{} = spec, model_candidates, %Policy{} = context_policy) do
     defaults = spec.runtime_defaults
 
     %{
       spec: spec,
-      workflow_profile: default_value(defaults, :workflow_profile, :tool_loop),
       max_model_turns:
         spec.controls.max_turns ||
           default_value(defaults, :max_model_turns, Config.default_max_model_turns()),
@@ -93,12 +94,20 @@ defmodule Jidoka.Turn.Plan do
           ),
       model_candidates: model_candidates,
       context_policy: context_policy,
-      phases: default_value(defaults, :phases, @phases),
       metadata: default_value(defaults, :metadata, %{})
     }
   end
 
   defp default_value(defaults, key, fallback) do
     Map.get(defaults, key, Map.get(defaults, Atom.to_string(key), fallback))
+  end
+
+  defp reject_removed_runtime_defaults(defaults) when is_map(defaults) do
+    removed =
+      Enum.filter(@removed_runtime_defaults, fn key ->
+        Map.has_key?(defaults, key) or Map.has_key?(defaults, Atom.to_string(key))
+      end)
+
+    if removed == [], do: :ok, else: {:error, {:removed_turn_plan_defaults, removed}}
   end
 end

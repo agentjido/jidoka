@@ -61,9 +61,6 @@ sessions, or stores.
 ```elixir
 {:ok, plan} = Jidoka.plan(MyApp.Assistant)
 
-plan.workflow_profile
-#=> :tool_loop
-
 plan.max_model_turns
 #=> 8
 ```

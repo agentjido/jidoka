@@ -221,19 +221,26 @@ defmodule Jidoka.Snapshot do
 
   defp normalize_portable_events(attrs), do: attrs
 
-  defp normalize_turn_state_events(%Turn.State{} = state), do: state
-
   defp normalize_turn_state_events(%{} = turn_state) do
     turn_state
     |> Map.delete(:spec)
     |> Map.delete("spec")
     |> Map.delete(:operation_plan)
     |> Map.delete("operation_plan")
+    |> normalize_legacy_turn_plan()
     |> normalize_event_list(:events)
     |> normalize_event_list("events")
   end
 
   defp normalize_turn_state_events(turn_state), do: turn_state
+
+  defp normalize_legacy_turn_plan(%{plan: plan} = state) when is_map(plan),
+    do: %{state | plan: Turn.Plan.normalize_legacy(plan)}
+
+  defp normalize_legacy_turn_plan(%{"plan" => plan} = state) when is_map(plan),
+    do: %{state | "plan" => Turn.Plan.normalize_legacy(plan)}
+
+  defp normalize_legacy_turn_plan(state), do: state
 
   defp normalize_event_list(%{} = turn_state, key) do
     case Map.fetch(turn_state, key) do

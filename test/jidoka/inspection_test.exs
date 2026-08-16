@@ -39,7 +39,7 @@ defmodule Jidoka.InspectionTest do
              },
              plan: %{
                spec_id: "inspection_agent",
-               workflow_profile: :tool_loop
+               phases: [:assemble_prompt, :plan_model_effect]
              }
            } = Jidoka.inspect(Agent)
   end

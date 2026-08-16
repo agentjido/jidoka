@@ -106,14 +106,14 @@ Compiled execution defaults for one turn.
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `spec` | `Agent.Spec.t()` | required | The immutable spec the plan was compiled from. |
-| `workflow_profile` | `:chat \| :tool_loop \| :structured_result \| :controlled_tool_loop` | `:tool_loop` | Selects the Runic profile. |
 | `max_model_turns` | positive integer | `spec.controls.max_turns` or `Jidoka.Config.default_max_model_turns/0` | Compatibility name for the upper bound on model steps in this user turn. |
 | `timeout_ms` | positive integer | `spec.controls.timeout_ms` or `Jidoka.Config.default_turn_timeout_ms/0` | Hard wall-clock limit. |
-| `phases` | `[atom()]` | full phase list | Runic phase order for the turn. |
 | `metadata` | map | `%{}` | Plan-level metadata. |
 
 Built by [`Jidoka.Turn.Plan.new/1`](`Jidoka.Turn.Plan`) which also runs
 `Spec.validate_operation_policies/1` before returning.
+The Runic compiler owns the fixed phase sequence. `Jidoka.project/1` derives
+phase labels from that compiler instead of storing them in the plan.
 
 ### `Jidoka.Turn.Request`
 

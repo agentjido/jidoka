@@ -75,6 +75,7 @@ defmodule Jidoka.Turn.State do
     attrs
     |> Schema.normalize_attrs()
     |> drop_legacy_copies()
+    |> normalize_legacy_plan()
     |> normalize_limit_data()
     |> normalize_pending_effects()
     |> Schema.put_default(:journal, Jidoka.Effect.Journal.new!())
@@ -91,6 +92,14 @@ defmodule Jidoka.Turn.State do
   end
 
   defp drop_legacy_copies(attrs), do: attrs
+
+  defp normalize_legacy_plan(%{plan: plan} = attrs) when is_map(plan),
+    do: %{attrs | plan: Jidoka.Turn.Plan.normalize_legacy(plan)}
+
+  defp normalize_legacy_plan(%{"plan" => plan} = attrs) when is_map(plan),
+    do: %{attrs | "plan" => Jidoka.Turn.Plan.normalize_legacy(plan)}
+
+  defp normalize_legacy_plan(attrs), do: attrs
 
   defp normalize_limit_data(%{} = attrs) do
     attrs

@@ -372,6 +372,28 @@ defmodule Jidoka.DataStructsTest do
     assert {:ok, %Turn.Plan{}} = Turn.Plan.new(controlled_spec)
   end
 
+  test "turn plans reject removed phase defaults and project fixed compiler phases" do
+    spec =
+      Agent.Spec.new!(
+        id: "removed_plan_defaults",
+        instructions: "Use the fixed turn process.",
+        model: %{provider: :test, id: "model"},
+        runtime_defaults: %{workflow_profile: :chat, phases: [:assemble_prompt]}
+      )
+
+    assert {:error, {:removed_turn_plan_defaults, [:phases, :workflow_profile]}} =
+             Turn.Plan.new(spec)
+
+    plan =
+      spec
+      |> Map.put(:runtime_defaults, %{})
+      |> Turn.Plan.new!()
+
+    refute Map.has_key?(Map.from_struct(plan), :workflow_profile)
+    refute Map.has_key?(Map.from_struct(plan), :phases)
+    assert Jidoka.project(plan).phases == Jidoka.Adapter.Runic.TurnCompiler.phases()
+  end
+
   test "operation controls can match by source, idempotency, and metadata" do
     operation =
       Operation.new!(
@@ -818,6 +840,13 @@ defmodule Jidoka.DataStructsTest do
       |> Map.from_struct()
       |> Map.put(:spec, conflicting_spec)
       |> Map.put(:operation_plan, %{name: "stale", arguments: %{}})
+      |> Map.put(
+        :plan,
+        state.plan
+        |> Map.from_struct()
+        |> Map.put(:workflow_profile, :chat)
+        |> Map.put(:phases, [:stale_phase])
+      )
 
     legacy_snapshot = snapshot |> Map.from_struct() |> Map.put(:turn_state, legacy_state)
 
@@ -825,6 +854,8 @@ defmodule Jidoka.DataStructsTest do
     assert restored.turn_state.plan.spec.id == "snapshot_agent"
     refute Map.has_key?(Map.from_struct(restored.turn_state), :spec)
     refute Map.has_key?(Map.from_struct(restored.turn_state), :operation_plan)
+    refute Map.has_key?(Map.from_struct(restored.turn_state.plan), :workflow_profile)
+    refute Map.has_key?(Map.from_struct(restored.turn_state.plan), :phases)
   end
 
   test "agent snapshot restore keeps model interaction and tool-call identifiers" do

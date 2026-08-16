@@ -9,10 +9,9 @@ defmodule Jidoka.Projection.Turn do
   def project(%Turn.Plan{} = plan) do
     %{
       spec_id: plan.spec.id,
-      workflow_profile: plan.workflow_profile,
       max_model_turns: plan.max_model_turns,
       timeout_ms: plan.timeout_ms,
-      phases: plan.phases,
+      phases: Jidoka.Adapter.Runic.TurnCompiler.phases(),
       metadata: Portable.project(plan.metadata)
     }
   end

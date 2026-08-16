@@ -99,7 +99,7 @@ them first, then validate the normalized value against the final schema.
 | `memory` | `Jidoka.Agent.Spec.Memory.t()` or `nil` | `nil` | Optional conversation memory policy. Runtime stores are injected separately. |
 | `operations` | `[Jidoka.Agent.Spec.Operation.t()]` | `[]` | Model-callable operation definitions (data only; the operation source supplies the capability). |
 | `controls` | `Jidoka.Agent.Spec.Controls.t()` | `Controls.new!()` | Policy controls (input/operation/output, `max_turns`, `timeout_ms`). |
-| `runtime_defaults` | map | `%{}` | Default knobs consumed by `Turn.Plan.new/1` (`:workflow_profile`, `:max_model_turns`, `:timeout_ms`, `:context_policy`). |
+| `runtime_defaults` | map | `%{}` | Default knobs consumed by `Turn.Plan.new/1` (`:max_model_turns`, `:timeout_ms`, `:context_policy`). |
 | `execution_profile` | string or `nil` | `nil` | Inert trusted-profile selector. The host resolves it; the spec cannot contain backend controls. |
 | `extensions` | `[Jidoka.Extension.Request.t()]` | `[]` | Ordered, inert extension requests. A trusted host resolves them later. |
 | `metadata` | map | `%{}` | Caller-defined metadata; opaque to Jidoka. |
@@ -215,7 +215,7 @@ A spec test is the cheapest unit test in the system: build it, assert on its
 fields, optionally compile a plan.
 
 ```elixir
-test "compiles a tool_loop plan from a minimal spec" do
+test "compiles a fixed turn plan from a minimal spec" do
   spec =
     Spec.new!(
       id: "echo",
@@ -224,7 +224,6 @@ test "compiles a tool_loop plan from a minimal spec" do
     )
 
   assert {:ok, plan} = Jidoka.Turn.Plan.new(spec)
-  assert plan.workflow_profile == :tool_loop
   assert plan.max_model_turns == Jidoka.Config.default_max_model_turns()
 end
 ```

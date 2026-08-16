@@ -8,6 +8,12 @@ defmodule Jidoka.Adapter.Runic.TurnCompiler do
   alias Jidoka.Runtime.Spine.Steps
   alias Runic.Workflow
 
+  @phases [:assemble_prompt, :plan_model_effect]
+
+  @doc "Returns the fixed pure phase sequence."
+  @spec phases() :: [atom()]
+  def phases, do: @phases
+
   @doc "Compiles a turn plan into the pure Runic model-turn workflow."
   @spec model_turn_workflow(Turn.Plan.t()) :: Workflow.t()
   def model_turn_workflow(%Turn.Plan{} = _plan) do

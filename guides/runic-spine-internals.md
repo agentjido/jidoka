@@ -210,8 +210,8 @@ per loop iteration:
 6. `Turn.State.apply_effect_result/2` folds the result into state.
 7. Either loop again (status `:running`) or run output controls and finish.
 
-If a new step changes ordering, it must be reflected in the runner and in the
-phase list on `Turn.Plan` (see `plan.phases` in `Jidoka.project/1`).
+If a new step changes ordering, it must be reflected in the runner and in
+`TurnCompiler.phases/0`, which owns the phase labels in `Jidoka.project/1`.
 
 ## Common Patterns
 
@@ -258,9 +258,9 @@ assumptions the rest of the runtime relies on.
    `maybe_hibernate_before_effect/3`). Steps must remain hibernate-agnostic.
 6. **`Turn.State.events` only grows.** Events are appended with monotonically
    increasing `seq`. No step should drop or reorder events.
-7. **Phase ordering is stable.** The phase list in `Turn.Plan.phases` is part
-   of the public projection. Reordering steps requires updating `phases` and
-   the runner together.
+7. **Phase ordering is stable.** `TurnCompiler.phases/0` supplies the public
+   projection. Reordering steps requires updating that function and the runner
+   together.
 
 ## Testing
 
@@ -317,7 +317,7 @@ stable across event metadata churn.
 - `Jidoka.Runtime.TurnRunner` - effect shell
   that runs the workflow and interprets intents.
 - [`Jidoka.Turn.Plan`](`Jidoka.Turn.Plan`) - executable data compiled from a
-  spec; carries `phases`, `max_model_turns`, `timeout_ms`.
+  spec; carries `max_model_turns` and `timeout_ms`.
 - [`Jidoka.Turn.State`](`Jidoka.Turn.State`) - mutable-per-turn accumulator
   used by steps.
 - [`Jidoka.Turn.Transition`](`Jidoka.Turn.Transition`) - the only sanctioned

@@ -238,7 +238,6 @@ if Mix.env() in [:dev, :test] do
 
     defp workflow_rows(plan) do
       [
-        %{property: "profile", value: Map.get(plan, :workflow_profile)},
         %{property: "phases", value: plan |> Map.get(:phases, []) |> Render.format_list()},
         %{property: "metadata", value: plan |> Map.get(:metadata, %{}) |> Render.inspect_value(12)}
       ]
