@@ -401,6 +401,7 @@ defmodule Jidoka.Chat.RequestController do
   defp maybe_schedule_expiry(state), do: state
 
   defp terminal_event({:ok, _result}), do: :turn_finished
+  defp terminal_event({:ok, _session, _text}), do: :turn_finished
   defp terminal_event({:hibernate, _snapshot}), do: :turn_hibernated
   defp terminal_event({:hibernate, _session, _snapshot}), do: :turn_hibernated
   defp terminal_event(_result), do: :turn_failed

@@ -63,6 +63,22 @@ defmodule Jidoka.EventOrderTest do
     assert Enum.count(events, &Order.terminal?/1) == 1
   end
 
+  test "a session-shaped success tuple still emits turn_finished" do
+    assert {:ok, request} =
+             Jidoka.Chat.Async.start_fun(
+               :ordered_target,
+               "Session shape",
+               [stream: true, request_id: "controller-session-ok"],
+               fn _opts -> {:ok, %{id: "ses_1"}, "done"} end
+             )
+
+    stream = Jidoka.stream(request, stream_event_timeout_ms: 100)
+    assert {:ok, %{id: "ses_1"}, "done"} = Jidoka.await(request, timeout: 1_000)
+    events = Enum.to_list(stream)
+    assert List.last(events).event == :turn_finished
+    assert :ok = Order.validate(events)
+  end
+
   test "foreign and late events cannot create a second terminal result" do
     parent = self()
 
