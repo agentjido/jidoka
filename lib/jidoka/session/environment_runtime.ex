@@ -112,7 +112,9 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   @doc "Closes the active handle and applies the configured retention rule."
   @spec finish(lease() | nil, atom(), keyword()) ::
-          {:ok, Environment.t() | nil} | {:error, term()}
+          {:ok, Environment.t() | nil}
+          | {:error, Environment.t(), term()}
+          | {:error, term()}
   def finish(nil, _terminal, _opts), do: {:ok, nil}
 
   def finish(%{manager: manager, handle: handle, tracker: tracker}, terminal, opts) do
@@ -131,12 +133,14 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
             {:error, _reason} = error ->
               notify_observer(closed, opts)
-              error
+              {:error, reason} = error
+              {:error, closed, reason}
           end
 
         {:error, _reason} = error ->
           notify_observer(environment, opts)
-          error
+          {:error, reason} = error
+          {:error, environment, reason}
       end
 
     Agent.stop(tracker)

@@ -4,6 +4,7 @@ defmodule Jidoka.HarnessSessionTest do
   alias Jidoka.Agent
   alias Jidoka.Harness
   alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Execution
   alias Jidoka.Session.Lineage
   alias Jidoka.Session.Lease
   alias Jidoka.Session.Store
@@ -98,6 +99,34 @@ defmodule Jidoka.HarnessSessionTest do
     assert {:ok, ^session} = Harness.store_get_session(store, "sess_1")
     assert {:ok, [%Session{session_id: "sess_1"}]} = Harness.store_list_sessions(store)
     assert {:ok, []} = Harness.pending_reviews(store)
+  end
+
+  test "internal failures retain the same session that was persisted" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    reason = :forced_model_failure
+    failing_llm = fn _intent, _journal, _context -> {:error, reason} end
+
+    assert {:ok, %Session{}} =
+             Harness.start_session(spec(), session_id: "sess_internal_error", store: store)
+
+    assert {:error, %Session{} = failed, %Jidoka.Error.ExecutionError{details: %{cause: ^reason}} = error} =
+             Execution.run_session_internal(
+               "sess_internal_error",
+               "Fail",
+               store: store,
+               llm: failing_llm
+             )
+
+    assert failed.status == :error
+    assert failed.error == error
+    assert {:ok, ^failed} = Store.get_session(store, "sess_internal_error")
+
+    assert {:ok, %Session{}} =
+             Harness.start_session(spec(), session_id: "sess_public_error", store: store)
+
+    assert {:error, %Jidoka.Error.ExecutionError{details: %{cause: ^reason}}} =
+             Harness.run_session("sess_public_error", "Fail", store: store, llm: failing_llm)
   end
 
   test "in-memory stores atomically claim a session before running a turn" do

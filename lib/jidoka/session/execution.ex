@@ -39,6 +39,12 @@ defmodule Jidoka.Session.Execution do
           | {:hibernate, Session.t(), Snapshot.t()}
           | {:error, term()}
 
+  @type internal_session_run_result ::
+          {:ok, Session.t(), Turn.Result.t()}
+          | {:hibernate, Session.t(), Snapshot.t()}
+          | {:error, Session.t(), term()}
+          | {:error, term()}
+
   @type session_sequence_result ::
           {:ok, Sequence.Result.t()}
           | {:error, term()}
@@ -64,6 +70,15 @@ defmodule Jidoka.Session.Execution do
   """
   @spec run_session(session_input(), request_input(), runtime_opts()) :: session_run_result()
   def run_session(session_input, request_input, opts \\ []) do
+    session_input
+    |> run_session_internal(request_input, opts)
+    |> public_session_result()
+  end
+
+  @doc false
+  @spec run_session_internal(session_input(), request_input(), runtime_opts()) ::
+          internal_session_run_result()
+  def run_session_internal(session_input, request_input, opts \\ []) do
     with :ok <- validate_store_mode(opts),
          {:ok, session} <- resolve_session(session_input, opts),
          :ok <- ensure_runnable_session(session),
@@ -184,6 +199,14 @@ defmodule Jidoka.Session.Execution do
   """
   @spec resume_session(session_input(), runtime_opts()) :: session_run_result()
   def resume_session(session_input, opts \\ []) do
+    session_input
+    |> resume_session_internal(opts)
+    |> public_session_result()
+  end
+
+  @doc false
+  @spec resume_session_internal(session_input(), runtime_opts()) :: internal_session_run_result()
+  def resume_session_internal(session_input, opts \\ []) do
     with :ok <- validate_store_mode(opts),
          {:ok, session} <- resolve_session(session_input, opts),
          {:ok, session} <- EnvironmentRuntime.prepare(session, opts),
@@ -207,14 +230,17 @@ defmodule Jidoka.Session.Execution do
   def recover_session(session_id, opts \\ []) when is_binary(session_id) and is_list(opts) do
     opts = Keyword.put(opts, :session_id, session_id)
 
-    with :ok <- validate_store_mode(opts),
-         {:ok, store} <- fetch_store(opts),
-         {:ok, session} <- Store.recover_session(store, session_id, lease_store_opts(opts)),
-         {:ok, session} <- EnvironmentRuntime.restore(session, opts) do
-      with_session_environment(session, opts, fn environment_session, environment_opts ->
-        recover_claimed_session(environment_session, environment_opts)
-      end)
-    end
+    result =
+      with :ok <- validate_store_mode(opts),
+           {:ok, store} <- fetch_store(opts),
+           {:ok, session} <- Store.recover_session(store, session_id, lease_store_opts(opts)),
+           {:ok, session} <- EnvironmentRuntime.restore(session, opts) do
+        with_session_environment(session, opts, fn environment_session, environment_opts ->
+          recover_claimed_session(environment_session, environment_opts)
+        end)
+      end
+
+    public_session_result(result)
   end
 
   @doc """
@@ -312,7 +338,7 @@ defmodule Jidoka.Session.Execution do
       {:error, reason} ->
         session
         |> put_session_error(reason)
-        |> persist_session_result(opts, fn _session -> {:error, reason} end)
+        |> persist_session_result(opts, fn session -> {:error, session, reason} end)
     end
   end
 
@@ -400,7 +426,7 @@ defmodule Jidoka.Session.Execution do
       |> Keyword.put(:session_sequence_terminal, rest == [])
       |> Keyword.put(:fresh_conversation, index == 1 and Keyword.get(opts, :fresh_conversation, false))
 
-    case run_session(sequence_session_input(state.session, opts), request, run_opts) do
+    case run_session_internal(sequence_session_input(state.session, opts), request, run_opts) do
       {:ok, session, %Turn.Result{} = result} ->
         operation_results =
           Enum.drop(result.agent_state.operation_results, state.operation_count)
@@ -455,6 +481,9 @@ defmodule Jidoka.Session.Execution do
           snapshot,
           nil
         )
+
+      {:error, session, reason} ->
+        sequence_run_error(%{state | session: session}, request, reason, index, opts)
 
       {:error, reason} ->
         sequence_run_error(state, request, reason, index, opts)
@@ -649,13 +678,14 @@ defmodule Jidoka.Session.Execution do
       {:error, reason} ->
         session
         |> put_session_error(reason)
-        |> persist_session_result(opts, fn _session -> {:error, reason} end)
+        |> persist_session_result(opts, fn session -> {:error, session, reason} end)
     end
   end
 
   defp persist_session_result(%Session{} = session, opts, callback) do
-    with {:ok, session} <- persist_session(session, opts) do
-      callback.(session)
+    case persist_session(session, opts) do
+      {:ok, session} -> callback.(session)
+      {:error, reason} -> {:error, session, reason}
     end
   end
 
@@ -665,10 +695,14 @@ defmodule Jidoka.Session.Execution do
          %Turn.Result{} = result,
          opts
        ) do
-    with {:ok, session} <- persist_session(session, opts) do
-      capture_opts = Keyword.put(opts, :session_id, session.session_id)
-      _capture = Memory.Runtime.capture_turn(session.spec, request, result, capture_opts)
-      {:ok, session, result}
+    case persist_session(session, opts) do
+      {:ok, session} ->
+        capture_opts = Keyword.put(opts, :session_id, session.session_id)
+        _capture = Memory.Runtime.capture_turn(session.spec, request, result, capture_opts)
+        {:ok, session, result}
+
+      {:error, reason} ->
+        {:error, session, reason}
     end
   end
 
@@ -904,38 +938,49 @@ defmodule Jidoka.Session.Execution do
         end
 
       {:error, reason} ->
-        {:error, reason}
+        {:error, session, reason}
     end
   end
 
   defp with_session_environment(%Session{} = session, opts, run) when is_function(run, 2) do
-    with {:ok, session, runtime_opts, lease} <- EnvironmentRuntime.acquire(session, opts) do
-      result =
-        session
-        |> run.(runtime_opts)
-        |> checkpoint_terminal_environment(runtime_opts)
+    case EnvironmentRuntime.acquire(session, opts) do
+      {:ok, session, runtime_opts, lease} ->
+        result =
+          session
+          |> run.(runtime_opts)
+          |> checkpoint_terminal_environment(runtime_opts)
 
-      terminal = environment_terminal(result, runtime_opts)
+        terminal = environment_terminal(result, runtime_opts)
 
-      case EnvironmentRuntime.finish(lease, terminal, runtime_opts) do
-        {:ok, nil} -> result
-        {:ok, environment} -> persist_result_environment(result, environment, runtime_opts)
-        {:error, finish_reason} -> combine_environment_finish_error(result, finish_reason)
-      end
+        case EnvironmentRuntime.finish(lease, terminal, runtime_opts) do
+          {:ok, nil} ->
+            result
+
+          {:ok, environment} ->
+            persist_result_environment(result, environment, runtime_opts)
+
+          {:error, environment, finish_reason} ->
+            result
+            |> persist_result_environment(environment, runtime_opts)
+            |> combine_environment_finish_error(finish_reason)
+        end
+
+      {:error, reason} ->
+        {:error, session, reason}
     end
   end
 
-  defp checkpoint_terminal_environment({:ok, _session, _result} = result, opts) do
+  defp checkpoint_terminal_environment({:ok, session, _result} = result, opts) do
     case EnvironmentRuntime.checkpoint(opts) do
       {:ok, _environment} -> result
-      {:error, reason} -> {:error, {:execution_environment_checkpoint_failed, reason}}
+      {:error, reason} -> {:error, session, {:execution_environment_checkpoint_failed, reason}}
     end
   end
 
-  defp checkpoint_terminal_environment({:hibernate, _session, _snapshot} = result, opts) do
+  defp checkpoint_terminal_environment({:hibernate, session, _snapshot} = result, opts) do
     case EnvironmentRuntime.checkpoint(opts) do
       {:ok, _environment} -> result
-      {:error, reason} -> {:error, {:execution_environment_checkpoint_failed, reason}}
+      {:error, reason} -> {:error, session, {:execution_environment_checkpoint_failed, reason}}
     end
   end
 
@@ -951,6 +996,10 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp environment_terminal({:error, reason}, _opts) do
+    if Cancellation.cancelled_reason?(reason), do: :cancelled, else: :error
+  end
+
+  defp environment_terminal({:error, _session, reason}, _opts) do
     if Cancellation.cancelled_reason?(reason), do: :cancelled, else: :error
   end
 
@@ -975,12 +1024,17 @@ defmodule Jidoka.Session.Execution do
     persist_session_result(session, opts, fn session -> {:hibernate, session, snapshot} end)
   end
 
-  defp persist_result_environment({:error, reason} = result, environment, opts) do
+  defp persist_result_environment({:error, %Session{} = session, reason}, environment, opts) do
+    session = Session.put_environment(session, environment)
+    persist_session_result(session, opts, fn session -> {:error, session, reason} end)
+  end
+
+  defp persist_result_environment({:error, reason}, environment, opts) do
     case Keyword.fetch(opts, :store) do
       {:ok, store} ->
-        with {:ok, session} <- Store.get_session(store, Keyword.fetch!(opts, :session_id)),
-             {:ok, _stored} <- Store.put_session(store, Session.put_environment(session, environment)) do
-          result
+        with {:ok, session} <- Store.get_session(store, Keyword.fetch!(opts, :session_id)) do
+          session = Session.put_environment(session, environment)
+          persist_session_result(session, opts, fn session -> {:error, session, reason} end)
         end
 
       :error ->
@@ -988,11 +1042,23 @@ defmodule Jidoka.Session.Execution do
     end
   end
 
+  defp combine_environment_finish_error({:error, %Session{} = session, reason}, finish_reason),
+    do: {:error, session, {:primary_and_environment_finish_failed, reason, finish_reason}}
+
   defp combine_environment_finish_error({:error, reason}, finish_reason),
     do: {:error, {:primary_and_environment_finish_failed, reason, finish_reason}}
 
+  defp combine_environment_finish_error({:ok, %Session{} = session, _result}, finish_reason),
+    do: {:error, session, {:execution_environment_finish_failed, finish_reason}}
+
+  defp combine_environment_finish_error({:hibernate, %Session{} = session, _snapshot}, finish_reason),
+    do: {:error, session, {:execution_environment_finish_failed, finish_reason}}
+
   defp combine_environment_finish_error(_result, finish_reason),
     do: {:error, {:execution_environment_finish_failed, finish_reason}}
+
+  defp public_session_result({:error, %Session{}, reason}), do: {:error, reason}
+  defp public_session_result(result), do: result
 
   defp durable_runtime_opts(
          %Session{lease: %Lease{} = lease} = session,
