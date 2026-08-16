@@ -208,6 +208,11 @@ built-in classifier retries transport errors, timeouts, rate limits, and HTTP
 5xx errors. Use `classify:` with a one-argument function or module to replace
 this rule.
 
+The `models` list is the complete route set. Prompt preparation reserves output
+space and uses the smallest finite input capacity in that set. A selector can
+reorder or reduce the list. Jidoka returns a typed model-policy error if the
+selector returns an undeclared model.
+
 Each LLM effect result and completion event records `:model_attempts`. Each
 entry has the provider, model, attempt number, status, and failure class. The
 successful entry has `winner: true`. Raw provider errors are not copied into

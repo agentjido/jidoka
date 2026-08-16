@@ -202,4 +202,56 @@ defmodule Jidoka.ModelPolicyTest do
     assert ModelPolicy.classify(%{status: 503}) == :transient
     assert ModelPolicy.classify(:bad_request) == :permanent
   end
+
+  test "rejects selector models outside the declared candidate set" do
+    rogue = %{provider: :openai, id: "rogue"}
+    llm = fn _intent, _journal, _context -> flunk("an undeclared model reached the provider") end
+
+    assert {:error, error} =
+             Jidoka.turn(spec(), "Run",
+               llm: llm,
+               model_policy: [
+                 models: [@primary, @fallback],
+                 select: fn _models, _context -> rogue end
+               ]
+             )
+
+    assert %{
+             phase: :model,
+             details: %{
+               cause: %{
+                 type: "tuple",
+                 values: [
+                   :undeclared_model_policy_selection,
+                   "openai:rogue",
+                   ["anthropic:fallback", "openai:primary"]
+                 ]
+               }
+             }
+           } = Jidoka.Error.to_map(error)
+  end
+
+  test "selector routes use the declared model data" do
+    declared =
+      %{provider: :openai, id: "primary", limits: %{context: 1_000, input: 800}}
+
+    selected =
+      %{provider: :openai, id: "primary", limits: %{context: 50_000, input: 40_000}}
+
+    llm = fn intent, _journal, _context ->
+      assert intent.payload.model.limits.input == 800
+      {:ok, %{type: :final, content: "declared route"}}
+    end
+
+    assert {:ok, result} =
+             Jidoka.turn(spec(), "Run",
+               llm: llm,
+               model_policy: [
+                 models: [declared],
+                 select: fn _models, _context -> selected end
+               ]
+             )
+
+    assert result.content == "declared route"
+  end
 end

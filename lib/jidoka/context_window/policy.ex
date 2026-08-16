@@ -49,14 +49,21 @@ defmodule Jidoka.ContextWindow.Policy do
 
   @doc "Resolves policy defaults from an agent specification and model limits."
   @spec resolve(Agent.Spec.t()) :: {:ok, t()} | {:error, term()}
-  def resolve(%Agent.Spec{} = spec) do
+  def resolve(%Agent.Spec{} = spec), do: resolve(spec, [spec.model])
+
+  @doc "Resolves one input budget for all declared candidate models."
+  @spec resolve(Agent.Spec.t(), [LLMDB.Model.t()]) :: {:ok, t()} | {:error, term()}
+  def resolve(%Agent.Spec{} = spec, [_model | _rest] = model_candidates) do
     with {:ok, configured} <- configured_policy(spec.runtime_defaults),
          output_reserve = configured_value(configured, :output_reserve, generation_reserve(spec)),
          {:ok, configured} <- new(Map.put(configured, :output_reserve, output_reserve)),
-         {:ok, input_budget} <- resolved_input_budget(configured, spec.model) do
+         {:ok, input_budget} <- resolved_input_budget(configured, model_candidates) do
       new(%{configured | input_budget: input_budget})
     end
   end
+
+  def resolve(%Agent.Spec{}, model_candidates),
+    do: {:error, {:invalid_context_model_candidates, model_candidates}}
 
   defp configured_policy(defaults) when is_map(defaults) do
     configured =
@@ -86,10 +93,13 @@ defmodule Jidoka.ContextWindow.Policy do
     end
   end
 
-  defp resolved_input_budget(%__MODULE__{} = policy, model) do
-    with {:ok, model_budget} <- model_input_budget(model, policy.output_reserve) do
-      {:ok, minimum_budget(policy.input_budget, model_budget)}
-    end
+  defp resolved_input_budget(%__MODULE__{} = policy, model_candidates) do
+    Enum.reduce_while(model_candidates, {:ok, policy.input_budget}, fn model, {:ok, budget} ->
+      case model_input_budget(model, policy.output_reserve) do
+        {:ok, model_budget} -> {:cont, {:ok, minimum_budget(budget, model_budget)}}
+        {:error, reason} -> {:halt, {:error, {:invalid_context_model_capacity, model_ref(model), reason}}}
+      end
+    end)
   end
 
   defp model_input_budget(%{limits: nil}, _output_reserve), do: {:ok, nil}
@@ -117,6 +127,9 @@ defmodule Jidoka.ContextWindow.Policy do
   defp minimum_budget(nil, right), do: right
   defp minimum_budget(left, nil), do: left
   defp minimum_budget(left, right), do: min(left, right)
+
+  defp model_ref(%LLMDB.Model{} = model), do: Jidoka.Config.model_ref(model)
+  defp model_ref(model), do: inspect(model)
 
   defp normalize_aliases(attrs) when is_map(attrs) do
     attrs

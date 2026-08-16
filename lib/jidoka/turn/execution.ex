@@ -56,6 +56,7 @@ defmodule Jidoka.Turn.Execution do
          {:ok, operation_setup} <- prepare_operation_setup(plan, opts),
          plan = operation_setup.plan,
          opts = runtime_opts(plan, opts),
+         {:ok, plan, opts} <- prepare_model_policy(plan, opts),
          {:ok, limits} <- Limits.resolve(plan, opts),
          plan = Limits.apply_plan(plan, limits),
          opts = Keyword.put(opts, :runtime_limits, limits),
@@ -93,6 +94,7 @@ defmodule Jidoka.Turn.Execution do
          {:ok, operation_setup} <- prepare_resume_operation_setup(snapshot, opts),
          snapshot = operation_setup.snapshot,
          opts = runtime_opts(snapshot, opts),
+         {:ok, snapshot, opts} <- prepare_snapshot_model_policy(snapshot, opts),
          {:ok, limits} <- Limits.resolve(snapshot.turn_state.plan, opts),
          snapshot = apply_snapshot_limits(snapshot, limits),
          opts = Keyword.put(opts, :runtime_limits, limits),
@@ -263,6 +265,22 @@ defmodule Jidoka.Turn.Execution do
     plan = Limits.apply_plan(snapshot.turn_state.plan, limits)
     state = %{snapshot.turn_state | plan: plan, spec: plan.spec, limits: Map.from_struct(limits)}
     %{snapshot | turn_state: state}
+  end
+
+  defp prepare_model_policy(%Turn.Plan{} = plan, opts) do
+    with {:ok, model_policy} <- ModelPolicy.normalize(Keyword.get(opts, :model_policy)),
+         {:ok, model_candidates} <- ModelPolicy.declared_models(model_policy, plan.spec.model),
+         {:ok, plan} <- Turn.Plan.put_model_candidates(plan, model_candidates) do
+      {:ok, plan, Keyword.put(opts, :model_policy, model_policy)}
+    end
+  end
+
+  defp prepare_snapshot_model_policy(%Snapshot{} = snapshot, opts) do
+    with {:ok, plan, opts} <- prepare_model_policy(snapshot.turn_state.plan, opts) do
+      %Turn.State{} = state = snapshot.turn_state
+      state = %Turn.State{state | plan: plan, spec: plan.spec}
+      {:ok, %Snapshot{snapshot | turn_state: state}, opts}
+    end
   end
 
   defp request_opts(opts) do
