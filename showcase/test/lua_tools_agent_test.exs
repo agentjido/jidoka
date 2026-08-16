@@ -113,6 +113,32 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
              result["customers"] |> Enum.map(& &1["name"])
   end
 
+  test "customer search accepts each selector alone" do
+    selectors = %{
+      "query" => "Ada",
+      "name" => "Ada",
+      "company" => "Northwind",
+      "tier" => "enterprise",
+      "status" => "active",
+      "tag" => "logistics",
+      "value" => "Ada"
+    }
+
+    for {selector, value} <- selectors do
+      assert {:ok, %{"count" => count}} = SearchCustomers.run(%{selector => value}, %{})
+      assert count > 0
+    end
+  end
+
+  test "customer search rejects a missing selector" do
+    assert {:error, {:invalid_customer_search_selectors, []}} = SearchCustomers.run(%{}, %{})
+  end
+
+  test "customer search rejects multiple selectors and names them" do
+    assert {:error, {:invalid_customer_search_selectors, [:name, :tier]}} =
+             SearchCustomers.run(%{"name" => "Ada", "tier" => "enterprise"}, %{})
+  end
+
   test "output control rejects final answers that did not execute Lua" do
     context = %{
       boundary: :output,
