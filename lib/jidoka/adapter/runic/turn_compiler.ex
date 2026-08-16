@@ -4,6 +4,7 @@ defmodule Jidoka.Adapter.Runic.TurnCompiler do
   require Runic
 
   alias Jidoka.Turn
+  alias Jidoka.Turn.Prepared
   alias Jidoka.Runtime.Spine.Steps
   alias Runic.Workflow
 
@@ -11,7 +12,7 @@ defmodule Jidoka.Adapter.Runic.TurnCompiler do
   @spec model_turn_workflow(Turn.Plan.t()) :: Workflow.t()
   def model_turn_workflow(%Turn.Plan{} = _plan) do
     assemble_prompt =
-      Runic.step(&Steps.assemble_prompt/1,
+      Runic.step(&Prepared.prepare_state!/1,
         name: :assemble_prompt
       )
 

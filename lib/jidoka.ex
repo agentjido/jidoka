@@ -427,10 +427,11 @@ defmodule Jidoka do
   def inspect(value, opts \\ []), do: Inspection.inspect(value, opts)
 
   @doc """
-  Assembles the prompt for a turn without calling an LLM or tools.
+  Assembles the prompt for a turn without calling an adapter, store, LLM, or tool.
 
-  Use preflight to debug prompt assembly, tool metadata, memory injection, and
-  request normalization before running live effects.
+  Pass `:resolved_instructions`, `:resolved_operations`, or `:resolved_memory`
+  when the turn uses data that an external source must resolve. Preflight
+  returns an unresolved-input error when this data is missing.
   """
   @spec preflight(plan_input() | module(), request_input(), runtime_opts()) ::
           {:ok, Inspection.Preflight.t()} | {:error, term()}

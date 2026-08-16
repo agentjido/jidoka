@@ -21,8 +21,17 @@ defmodule Jidoka.MemoryIntegrationTest do
                id_generator: fn "mem" -> "mem_ada" end
              )
 
+    request =
+      Turn.Request.new!(
+        input: "How should I answer?",
+        request_id: "turn_memory_preflight"
+      )
+
+    assert {:ok, resolved_memory} =
+             Memory.Runtime.recall(spec, request, memory_store: memory_store)
+
     assert {:ok, preflight} =
-             Jidoka.preflight(spec, "How should I answer?", memory_store: memory_store)
+             Jidoka.preflight(spec, request, resolved_memory: resolved_memory)
 
     assert %{memory: %{count: 1, entries: [%{content: "Ada prefers concise answers."}]}} =
              preflight.prompt

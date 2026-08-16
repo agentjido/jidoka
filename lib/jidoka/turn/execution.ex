@@ -33,6 +33,7 @@ defmodule Jidoka.Turn.Execution do
   @type opts :: keyword()
   @type result :: TurnRunner.run_result()
   @type prepared :: %{
+          prepared_turn: Turn.Prepared.t(),
           plan: Turn.Plan.t(),
           request: Turn.Request.t(),
           capabilities: Capabilities.t(),
@@ -43,8 +44,8 @@ defmodule Jidoka.Turn.Execution do
   @spec run(plan_input(), request_input(), opts()) :: result()
   def run(spec_or_plan, request_input, opts \\ []) do
     with {:ok, prepared} <- prepare(spec_or_plan, request_input, opts) do
-      prepared.plan
-      |> TurnRunner.run(prepared.request, prepared.capabilities, prepared.opts)
+      prepared.prepared_turn
+      |> TurnRunner.run(prepared.capabilities, prepared.opts)
       |> maybe_capture_memory(prepared.plan.spec, prepared.request, prepared.opts)
     end
   end
@@ -64,11 +65,13 @@ defmodule Jidoka.Turn.Execution do
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
          {:ok, plan} <- Instructions.resolve(plan, request, opts),
          {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts),
+         {:ok, prepared_turn} <- Turn.Prepared.new(plan, request, memory: memory, limits: limits),
          {:ok, capabilities} <- normalize_capabilities(opts) do
       capabilities = attach_operation_registry(capabilities, operation_setup)
 
       {:ok,
        %{
+         prepared_turn: prepared_turn,
          plan: plan,
          request: request,
          capabilities: capabilities,

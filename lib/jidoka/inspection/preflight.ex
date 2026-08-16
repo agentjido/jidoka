@@ -2,9 +2,9 @@ defmodule Jidoka.Inspection.Preflight do
   @moduledoc """
   Data returned by `Jidoka.preflight/3`.
 
-  Preflight is intentionally effect-free. It shows the normalized agent, plan,
-  request, and prompt that would be used by a turn without calling the LLM or
-  any operations.
+  Preflight is effect-free. It shows the normalized agent, plan, request, and
+  prompt from explicit resolved inputs. It does not call an adapter, store,
+  provider, or operation source.
   """
 
   alias Jidoka.Schema
