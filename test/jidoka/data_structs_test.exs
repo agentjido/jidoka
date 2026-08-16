@@ -799,7 +799,32 @@ defmodule Jidoka.DataStructsTest do
     assert {:ok, %Snapshot{} = restored} = Snapshot.deserialize(serialized)
     assert restored.snapshot_id == snapshot.snapshot_id
     assert restored.cursor.phase == :after_prompt
-    assert restored.turn_state.spec.id == "snapshot_agent"
+    assert restored.turn_state.plan.spec.id == "snapshot_agent"
+  end
+
+  test "legacy snapshots discard copied turn authorities" do
+    state = base_state()
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+
+    conflicting_spec =
+      Agent.Spec.new!(
+        id: "conflicting_agent",
+        instructions: "This copied value is not authoritative.",
+        model: %{provider: :test, id: "other-model"}
+      )
+
+    legacy_state =
+      state
+      |> Map.from_struct()
+      |> Map.put(:spec, conflicting_spec)
+      |> Map.put(:operation_plan, %{name: "stale", arguments: %{}})
+
+    legacy_snapshot = snapshot |> Map.from_struct() |> Map.put(:turn_state, legacy_state)
+
+    assert {:ok, restored} = Snapshot.new(legacy_snapshot)
+    assert restored.turn_state.plan.spec.id == "snapshot_agent"
+    refute Map.has_key?(Map.from_struct(restored.turn_state), :spec)
+    refute Map.has_key?(Map.from_struct(restored.turn_state), :operation_plan)
   end
 
   test "agent snapshot restore keeps model interaction and tool-call identifiers" do

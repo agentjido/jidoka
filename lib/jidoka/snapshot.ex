@@ -130,7 +130,7 @@ defmodule Jidoka.Snapshot do
       new(
         schema_version: @schema_version,
         snapshot_id: snapshot_id,
-        agent_id: state.spec.id,
+        agent_id: state.plan.spec.id,
         cursor: %Turn.Cursor{cursor | loop_index: state.loop_index},
         turn_state: state,
         environment: Keyword.get(opts, :environment),
@@ -225,6 +225,10 @@ defmodule Jidoka.Snapshot do
 
   defp normalize_turn_state_events(%{} = turn_state) do
     turn_state
+    |> Map.delete(:spec)
+    |> Map.delete("spec")
+    |> Map.delete(:operation_plan)
+    |> Map.delete("operation_plan")
     |> normalize_event_list(:events)
     |> normalize_event_list("events")
   end

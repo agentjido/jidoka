@@ -433,7 +433,7 @@ defmodule Jidoka.Inspection do
 
   defp preflight_from_state(%Turn.State{} = state) do
     Preflight.new(
-      agent: Jidoka.Projection.project(state.spec),
+      agent: Jidoka.Projection.project(state.plan.spec),
       plan: Jidoka.Projection.project(state.plan),
       request: Jidoka.Projection.project(state.request),
       prompt: Jidoka.Projection.project(state.prompt),

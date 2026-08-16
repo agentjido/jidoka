@@ -304,7 +304,7 @@ defmodule Jidoka.Runtime.TurnRunner do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:turn_finished,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: result_parts_data(state.result_parts)
@@ -319,7 +319,7 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   defp emit_turn_started(%Turn.State{} = state, opts) do
     Event.build(:turn_started, state.events,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index
     )
@@ -330,7 +330,7 @@ defmodule Jidoka.Runtime.TurnRunner do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:turn_hibernated,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: %{cursor: cursor_contract(cursor)}

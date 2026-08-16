@@ -126,7 +126,7 @@ defmodule Jidoka.Turn.Execution do
 
   defp runtime_opts(%Turn.Plan{spec: %Agent.Spec{} = spec}, opts), do: runtime_opts(spec, opts)
 
-  defp runtime_opts(%Snapshot{turn_state: %{spec: %Agent.Spec{} = spec}}, opts),
+  defp runtime_opts(%Snapshot{turn_state: %{plan: %{spec: %Agent.Spec{} = spec}}}, opts),
     do: runtime_opts(spec, opts)
 
   defp runtime_opts(%Agent.Spec{} = spec, opts) do
@@ -266,7 +266,7 @@ defmodule Jidoka.Turn.Execution do
 
   defp apply_snapshot_limits(%Snapshot{} = snapshot, %Limits.Applied{} = limits) do
     plan = Limits.apply_plan(snapshot.turn_state.plan, limits)
-    state = %{snapshot.turn_state | plan: plan, spec: plan.spec, limits: Map.from_struct(limits)}
+    state = %{snapshot.turn_state | plan: plan, limits: Map.from_struct(limits)}
     %{snapshot | turn_state: state}
   end
 
@@ -281,7 +281,7 @@ defmodule Jidoka.Turn.Execution do
   defp prepare_snapshot_model_policy(%Snapshot{} = snapshot, opts) do
     with {:ok, plan, opts} <- prepare_model_policy(snapshot.turn_state.plan, opts) do
       %Turn.State{} = state = snapshot.turn_state
-      state = %Turn.State{state | plan: plan, spec: plan.spec}
+      state = %Turn.State{state | plan: plan}
       {:ok, %Snapshot{snapshot | turn_state: state}, opts}
     end
   end

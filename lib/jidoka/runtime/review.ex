@@ -249,7 +249,7 @@ defmodule Jidoka.Runtime.Review do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:approval_requested,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       operation: interrupt.operation,
@@ -272,7 +272,7 @@ defmodule Jidoka.Runtime.Review do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:approval_responded,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       operation: interrupt.operation,

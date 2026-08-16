@@ -30,7 +30,7 @@ defmodule Jidoka.Projection.Turn do
 
   def project(%Turn.State{} = state) do
     %{
-      spec_id: state.spec.id,
+      spec_id: state.plan.spec.id,
       plan: project(state.plan),
       request: project(state.request),
       agent_state: Agent.project(state.agent_state),
@@ -39,7 +39,6 @@ defmodule Jidoka.Projection.Turn do
       context_projection: Portable.project(state.context_projection),
       context_projection_error: Portable.project(state.context_projection_error),
       llm_result: Portable.project(state.llm_result),
-      operation_plan: Portable.project(state.operation_plan),
       pending_effects: Enum.map(state.pending_effects, &Effect.project/1),
       pending_interrupt: Review.project(state.pending_interrupt),
       result: state.result,

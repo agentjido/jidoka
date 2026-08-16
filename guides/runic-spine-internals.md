@@ -144,7 +144,7 @@ defmodule MyExt.Steps do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:prompt_assembled,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: %{annotated_by: :my_ext}
@@ -185,7 +185,7 @@ canonical pattern:
 effect =
   Effect.Intent.new(:llm, payload,
     idempotency: :idempotent,
-    idempotency_key: stable_key([state.spec.id, state.request.request_id,
+    idempotency_key: stable_key([state.plan.spec.id, state.request.request_id,
                                  :llm, state.loop_index, state.prompt])
   )
 

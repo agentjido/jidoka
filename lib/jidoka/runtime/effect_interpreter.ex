@@ -221,7 +221,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          Error.normalize(reason,
            operation: EffectTrace.operation(intent),
            phase: :control,
-           agent_id: state.spec.id,
+           agent_id: state.plan.spec.id,
            request_id: EffectTrace.request_id(state, intent),
            intent_id: intent.id,
            effect_kind: intent.kind
@@ -252,7 +252,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          Error.normalize({:policy_denied, decision.rule_id, decision.reason},
            operation: EffectTrace.operation(intent) || intent.kind,
            phase: :control,
-           agent_id: state.spec.id,
+           agent_id: state.plan.spec.id,
            request_id: EffectTrace.request_id(state, intent),
            intent_id: intent.id,
            effect_kind: intent.kind
@@ -266,7 +266,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          Error.normalize(reason,
            operation: EffectTrace.operation(intent) || intent.kind,
            phase: :control,
-           agent_id: state.spec.id,
+           agent_id: state.plan.spec.id,
            request_id: EffectTrace.request_id(state, intent),
            intent_id: intent.id,
            effect_kind: intent.kind

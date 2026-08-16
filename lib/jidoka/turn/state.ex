@@ -9,7 +9,6 @@ defmodule Jidoka.Turn.State do
   @schema Zoi.struct(
             __MODULE__,
             %{
-              spec: Zoi.lazy({:"Elixir.Jidoka.Agent.Spec", :schema, []}),
               plan: Zoi.lazy({:"Elixir.Jidoka.Turn.Plan", :schema, []}),
               request: Zoi.lazy({:"Elixir.Jidoka.Turn.Request", :schema, []}),
               agent_state: Zoi.lazy({:"Elixir.Jidoka.Agent.State", :schema, []}),
@@ -18,7 +17,6 @@ defmodule Jidoka.Turn.State do
               context_projection: Zoi.map() |> Zoi.nullish(),
               context_projection_error: Zoi.any() |> Zoi.nullish(),
               llm_result: Zoi.lazy({:"Elixir.Jidoka.Effect.LLMDecision", :schema, []}) |> Zoi.nullish(),
-              operation_plan: Zoi.lazy({:"Elixir.Jidoka.Effect.OperationRequest", :schema, []}) |> Zoi.nullish(),
               pending_effects: Zoi.array(Zoi.lazy({:"Elixir.Jidoka.Effect.Intent", :schema, []})) |> Zoi.default([]),
               pending_interrupt: Zoi.lazy({:"Elixir.Jidoka.Review.Interrupt", :schema, []}) |> Zoi.nullish(),
               result: Zoi.string() |> Zoi.nullish(),
@@ -76,10 +74,23 @@ defmodule Jidoka.Turn.State do
   defp prepare_attrs(attrs) do
     attrs
     |> Schema.normalize_attrs()
+    |> drop_legacy_copies()
     |> normalize_limit_data()
     |> normalize_pending_effects()
     |> Schema.put_default(:journal, Jidoka.Effect.Journal.new!())
   end
+
+  # Turn.Plan and pending effects are authoritative. Durable states from older
+  # versions can contain these derived copies, so current decoding ignores them.
+  defp drop_legacy_copies(%{} = attrs) do
+    attrs
+    |> Map.delete(:spec)
+    |> Map.delete("spec")
+    |> Map.delete(:operation_plan)
+    |> Map.delete("operation_plan")
+  end
+
+  defp drop_legacy_copies(attrs), do: attrs
 
   defp normalize_limit_data(%{} = attrs) do
     attrs
@@ -210,14 +221,10 @@ defmodule Jidoka.Turn.State do
         |> append_operation_result(observation)
 
       state =
-        %__MODULE__{
-          state
-          | operation_plan: nil,
-            agent_state: agent_state
-        }
+        %__MODULE__{state | agent_state: agent_state}
         |> transition()
         |> transition_event(:operation_observed,
-          agent_id: state.spec.id,
+          agent_id: state.plan.spec.id,
           request_id: state.request.request_id,
           loop_index: state.loop_index,
           operation: observation.operation,
@@ -252,17 +259,17 @@ defmodule Jidoka.Turn.State do
   end
 
   defp apply_final_result(
-         %__MODULE__{spec: %Jidoka.Agent.Spec{result: nil}} = state,
+         %__MODULE__{plan: %{spec: %Jidoka.Agent.Spec{result: nil}}} = state,
          %Jidoka.Effect.LLMDecision{content: content, parts: parts}
        ) do
     finish_turn(state, content, parts, nil)
   end
 
   defp apply_final_result(
-         %__MODULE__{spec: %Jidoka.Agent.Spec{result: %Jidoka.Agent.Spec.Result{} = result}} = state,
+         %__MODULE__{plan: %{spec: %Jidoka.Agent.Spec{result: %Jidoka.Agent.Spec.Result{} = result}}} = state,
          %Jidoka.Effect.LLMDecision{} = decision
        ) do
-    case Jidoka.Agent.Spec.validate_result(state.spec, structured_final_value(decision)) do
+    case Jidoka.Agent.Spec.validate_result(state.plan.spec, structured_final_value(decision)) do
       {:ok, value} ->
         state =
           append_result_validated(state, value)
@@ -390,7 +397,7 @@ defmodule Jidoka.Turn.State do
     state
     |> transition()
     |> transition_event(:result_validated,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: %{result: value}
@@ -407,7 +414,7 @@ defmodule Jidoka.Turn.State do
     state
     |> transition()
     |> transition_event(:result_repair_requested,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: %{
@@ -427,7 +434,7 @@ defmodule Jidoka.Turn.State do
 
   defp attach_model_interaction(%__MODULE__{} = state, %Effect.LLMDecision{} = decision) do
     interaction_id =
-      Id.stable("interaction", [state.spec.id, state.request.request_id, state.loop_index])
+      Id.stable("interaction", [state.plan.spec.id, state.request.request_id, state.loop_index])
 
     Effect.LLMDecision.with_interaction(decision,
       interaction_id: interaction_id,

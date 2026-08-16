@@ -62,8 +62,8 @@ defmodule Jidoka.Turn.Result do
   defp debug_metadata(%Turn.State{} = state) do
     %{
       request_id: state.request.request_id,
-      agent_id: state.spec.id,
-      model: Config.model_ref(state.spec.model),
+      agent_id: state.plan.spec.id,
+      model: Config.model_ref(state.plan.spec.model),
       input: state.request.input,
       context_keys: context_keys(Jidoka.Context.data(state.request.context)),
       prompt: prompt_debug(state.prompt, state.context_projection),

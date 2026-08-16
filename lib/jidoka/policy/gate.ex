@@ -156,7 +156,7 @@ defmodule Jidoka.Policy.Gate do
       request_id: EffectTrace.request_id(state, intent),
       intent_id: intent.id,
       advice: metadata_value(intent.metadata, :policy_advice) || %{},
-      metadata: %{"agent_id" => state.spec.id, "loop_index" => state.loop_index}
+      metadata: %{"agent_id" => state.plan.spec.id, "loop_index" => state.loop_index}
     )
   end
 
@@ -177,7 +177,7 @@ defmodule Jidoka.Policy.Gate do
   defp resource(_state, %Effect.Intent{kind: :llm}), do: %{"class" => "model"}
 
   defp declared_resource(state, operation_name, arguments) do
-    state.spec.operations
+    state.plan.spec.operations
     |> Enum.find(&(&1.name == operation_name))
     |> case do
       %{metadata: metadata} when is_map(metadata) ->
@@ -311,12 +311,12 @@ defmodule Jidoka.Policy.Gate do
     gate_id = RuntimeReview.gate_id([intent.id, :host_policy_gate, decision.rule_id])
 
     Interrupt.new!(
-      id: Interrupt.stable_id([state.spec.id, state.request.request_id, intent.id, gate_id, decision.rule_id]),
+      id: Interrupt.stable_id([state.plan.spec.id, state.request.request_id, intent.id, gate_id, decision.rule_id]),
       boundary: :operation,
       control: __MODULE__,
       control_name: "host_policy_gate",
       reason: decision.reason || :policy_review_required,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       effect_id: intent.id,

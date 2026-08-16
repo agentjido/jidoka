@@ -34,7 +34,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
 
       with {:ok, implicit_controls} <- implicit_approval_controls(operation, operation_match, opts) do
         controls =
-          state.spec.controls.operations
+          state.plan.spec.controls.operations
           |> Enum.filter(&OperationControl.matches?(&1, operation_match))
           |> Kernel.++(implicit_controls)
 
@@ -147,7 +147,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
         operation_metadata: operation_match.metadata,
         idempotency: intent.idempotency,
         idempotency_key: intent.idempotency_key,
-        spec: state.spec,
+        spec: state.plan.spec,
         plan: state.plan,
         request: state.request,
         input: state.request.input,
@@ -186,7 +186,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(control_event(interrupt),
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       operation: request.name,
@@ -211,7 +211,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
         state
         |> Turn.Transition.new!()
         |> Turn.Transition.event(:approval_applied,
-          agent_id: state.spec.id,
+          agent_id: state.plan.spec.id,
           request_id: request.request_id || state.request.request_id,
           loop_index: request.loop_index,
           effect_id: intent.id,
@@ -243,7 +243,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
     Interrupt.new!(
       id:
         Interrupt.stable_id([
-          state.spec.id,
+          state.plan.spec.id,
           state.request.request_id,
           intent.id,
           gate_id,
@@ -254,7 +254,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
       control: control.control,
       control_name: control_name(control.control),
       reason: reason,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       effect_id: intent.id,
@@ -316,7 +316,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
   defp interrupt_id(nil), do: nil
   defp interrupt_id(%Interrupt{id: id}), do: id
 
-  defp operation_for(%Turn.State{spec: %{operations: operations}}, name) do
+  defp operation_for(%Turn.State{plan: %{spec: %{operations: operations}}}, name) do
     Enum.find(operations, &(&1.name == name))
   end
 

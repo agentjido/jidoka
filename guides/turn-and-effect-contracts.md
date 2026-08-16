@@ -186,12 +186,11 @@ Ephemeral value threaded through the workflow.
 
 | Field | Type | Purpose |
 | --- | --- | --- |
-| `spec` / `plan` / `request` | spec, plan, request structs | Inputs to the loop. |
+| `plan` / `request` | plan and request structs | Inputs to the loop. The plan owns the immutable agent specification. |
 | `agent_state` | `Agent.State.t()` | Mutable accumulator (messages, operation results). |
 | `memory` | `Memory.RecallResult.t() \| nil` | Most recent recall. |
 | `prompt` | provider-neutral prompt or `nil` | Materialized prompt after assembly. |
 | `llm_result` | `Effect.LLMDecision.t() \| nil` | Last decoded LLM decision. |
-| `operation_plan` | `Effect.OperationRequest.t() \| nil` | First pending operation request, kept for inspection compatibility. |
 | `pending_effects` | `[Effect.Intent.t()]` | Effects awaiting interpretation. Operation batches are stored here in model order. |
 | `pending_interrupt` | `Review.Interrupt.t() \| nil` | Review boundary, if any. |
 | `result` / `result_parts` / `result_value` | string / content parts / term | Final assistant text, typed output, and validated structured value. |
@@ -202,6 +201,9 @@ Ephemeral value threaded through the workflow.
 | `journal` | `Effect.Journal.t()` | Recorded intents and results. |
 | `events` | `[Jidoka.Event.t()]` | Append-only event log. |
 | `diagnostics` | list | Append-only diagnostic blobs. |
+
+The legacy decoder discards copied `spec` and `operation_plan` fields. It uses
+`plan.spec` and `pending_effects` as the current authorities.
 
 Mutations go through [`Jidoka.Turn.Transition`](`Jidoka.Turn.Transition`).
 

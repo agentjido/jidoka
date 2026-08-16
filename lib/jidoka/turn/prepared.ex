@@ -33,7 +33,6 @@ defmodule Jidoka.Turn.Prepared do
          :ok <- validate_limits(limits),
          {:ok, base_state} <-
            Turn.State.new(
-             spec: plan.spec,
              plan: plan,
              request: request,
              agent_state: request.agent_state,

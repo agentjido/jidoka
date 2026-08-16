@@ -19,7 +19,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
     end
   end
 
-  defp registry(%{spec: %{operations: operations}}), do: Registry.new(operations)
+  defp registry(%{plan: %{spec: %{operations: operations}}}), do: Registry.new(operations)
 
   defp plan_batch_effects(state, operations, calls, batch_size) do
     operations
@@ -37,21 +37,20 @@ defmodule Jidoka.Turn.State.OperationPlanner do
     end)
   end
 
-  defp put_operation_effects(state, %Effect.LLMDecision{} = decision, operation_requests, effects) do
+  defp put_operation_effects(state, %Effect.LLMDecision{} = decision, _operation_requests, effects) do
     agent_state = append_tool_call_message(state, decision)
 
     planned_state = %{
       state
       | llm_result: decision,
         agent_state: agent_state,
-        operation_plan: List.first(operation_requests),
         pending_effects: effects
     }
 
     effects
     |> Enum.reduce(transition(planned_state), fn effect, transition ->
       transition_event(transition, :effect_planned,
-        agent_id: state.spec.id,
+        agent_id: state.plan.spec.id,
         request_id: state.request.request_id,
         loop_index: state.loop_index,
         effect_id: effect.id,
@@ -74,7 +73,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
          {:ok, operation} <- Registry.fetch(registry, source_request.name),
          {:ok, arguments} <-
            Registry.validate_arguments(registry, source_request.name, source_request.arguments),
-         :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
+         :ok <- Agent.Spec.validate_operation_policy(state.plan.spec, operation) do
       operation_request =
         Effect.OperationRequest.new!(
           name: source_request.name,
@@ -114,7 +113,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
   defp operation_effect_identity(state, name, arguments, _index, 1) do
     idempotency_key =
       stable_key([
-        state.spec.id,
+        state.plan.spec.id,
         state.request.request_id,
         :operation,
         state.loop_index,
@@ -128,7 +127,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
   defp operation_effect_identity(state, name, arguments, index, batch_size) do
     idempotency_key =
       stable_key([
-        state.spec.id,
+        state.plan.spec.id,
         state.request.request_id,
         :operation,
         state.loop_index,

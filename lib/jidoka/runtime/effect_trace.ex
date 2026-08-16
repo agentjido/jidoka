@@ -33,7 +33,7 @@ defmodule Jidoka.Runtime.EffectTrace do
   def append(%Turn.State{} = state, %Effect.Intent{} = intent, event, attrs, opts) do
     trace_attrs =
       [
-        agent_id: state.spec.id,
+        agent_id: state.plan.spec.id,
         request_id: request_id(state, intent),
         loop_index: loop_index(state, intent),
         effect_id: intent.id,
