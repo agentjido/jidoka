@@ -5,7 +5,8 @@ defmodule Jidoka.Policy.Gate do
   The runtime records a decision before it calls the protected capability. The
   default host policy allows normal model and operation effects for backward
   compatibility. It denies environment and process-extension effects unless a
-  host supplies an explicit policy capability.
+  host supplies an explicit policy capability. Human review is defined only
+  for operation effects; a review decision for another effect kind fails closed.
   """
 
   alias Jidoka.Cancellation
@@ -74,7 +75,7 @@ defmodule Jidoka.Policy.Gate do
     context = Context.from_data!(%{"request_id" => request.request_id})
 
     with {:ok, %Decision{} = decision} <- invoke(policy, request, context, opts),
-         :ok <- allowed(decision) do
+         :ok <- allowed(request, decision) do
       {:ok, stamp(decision, opts)}
     else
       {:error, _reason} = error -> error
@@ -112,7 +113,12 @@ defmodule Jidoka.Policy.Gate do
     {:deny, decision, append_decision_event(state, intent, decision, :policy_unsupported, opts)}
   end
 
-  defp apply_decision(state, intent, %Decision{outcome: :require_review} = decision, opts) do
+  defp apply_decision(
+         state,
+         %Effect.Intent{kind: :operation} = intent,
+         %Decision{outcome: :require_review} = decision,
+         opts
+       ) do
     if approved?(intent) do
       {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
     else
@@ -120,6 +126,15 @@ defmodule Jidoka.Policy.Gate do
       state = append_decision_event(state, intent, decision, :policy_review_requested, opts)
       {:review, decision, interrupt, state}
     end
+  end
+
+  defp apply_decision(
+         _state,
+         %Effect.Intent{kind: effect_kind},
+         %Decision{outcome: :require_review},
+         _opts
+       ) do
+    {:error, {:unsupported_policy_decision, :require_review, effect_kind}}
   end
 
   defp build_request(state, %Effect.Intent{kind: kind} = intent) do
@@ -205,11 +220,20 @@ defmodule Jidoka.Policy.Gate do
 
   defp stamp(%Decision{} = decision, _opts), do: decision
 
-  defp allowed(%Decision{outcome: :allow}), do: :ok
-  defp allowed(%Decision{outcome: :deny, reason: reason}), do: {:error, {:policy_denied, reason}}
-  defp allowed(%Decision{outcome: :consent_required, reason: reason}), do: {:error, {:policy_consent_required, reason}}
-  defp allowed(%Decision{outcome: :unsupported, reason: reason}), do: {:error, {:policy_unsupported, reason}}
-  defp allowed(%Decision{outcome: :require_review}), do: {:error, :policy_review_required}
+  defp allowed(_request, %Decision{outcome: :allow}), do: :ok
+  defp allowed(_request, %Decision{outcome: :deny, reason: reason}), do: {:error, {:policy_denied, reason}}
+
+  defp allowed(_request, %Decision{outcome: :consent_required, reason: reason}),
+    do: {:error, {:policy_consent_required, reason}}
+
+  defp allowed(_request, %Decision{outcome: :unsupported, reason: reason}),
+    do: {:error, {:policy_unsupported, reason}}
+
+  defp allowed(%Request{effect_class: :operation}, %Decision{outcome: :require_review}),
+    do: {:error, :policy_review_required}
+
+  defp allowed(%Request{effect_class: effect_kind}, %Decision{outcome: :require_review}),
+    do: {:error, {:unsupported_policy_decision, :require_review, effect_kind}}
 
   defp invoke(policy, request, context, opts) do
     with :ok <- Cancellation.check(opts) do

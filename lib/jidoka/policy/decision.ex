@@ -3,8 +3,9 @@ defmodule Jidoka.Policy.Decision do
   Portable evidence from the authoritative host policy gate.
 
   A decision allows, denies, requires consent, marks a request unsupported, or
-  pauses one protected effect for review. The rule identifier and evidence
-  describe the host rule that made the decision.
+  pauses one protected operation effect for review. A gate rejects
+  `:require_review` for every other effect kind. The rule identifier and
+  evidence describe the host rule that made the decision.
   """
 
   alias Jidoka.Policy.Request

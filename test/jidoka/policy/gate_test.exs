@@ -167,6 +167,37 @@ defmodule Jidoka.Policy.GateTest do
     refute_receive :policy_called
   end
 
+  test "rejects review decisions for non-operation effects" do
+    intent = Effect.Intent.new(:llm, %{model: "test", messages: []})
+
+    review = fn _request, _context ->
+      {:ok, Decision.new!(outcome: :require_review, rule_id: "host.llm.review")}
+    end
+
+    assert {:error, {:unsupported_policy_decision, :require_review, :llm}} =
+             Gate.authorize(state(intent), intent, review, [])
+
+    request = Request.new!(effect_class: :llm, action: "model.invoke", request_id: "request-1")
+
+    assert {:error, {:unsupported_policy_decision, :require_review, :llm}} =
+             Gate.check(request, review)
+  end
+
+  test "keeps allow and deny decisions for model effects" do
+    intent = Effect.Intent.new(:llm, %{model: "test", messages: []})
+
+    for outcome <- [:allow, :deny] do
+      policy = fn _request, _context ->
+        {:ok, Decision.new!(outcome: outcome, rule_id: "host.llm.#{outcome}")}
+      end
+
+      result = Gate.authorize(state(intent), intent, policy, [])
+
+      assert elem(result, 0) == outcome
+      assert %Decision{outcome: ^outcome} = elem(result, 1)
+    end
+  end
+
   test "policy data rejects live values and default lifecycle policy fails closed" do
     assert {:error, _reason} =
              Decision.new(outcome: :allow, rule_id: "bad", evidence: %{owner: self()})
