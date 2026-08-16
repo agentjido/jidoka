@@ -2,27 +2,23 @@ defmodule Jidoka.Workflow.ParametersSchema do
   @moduledoc false
 
   @spec from_zoi(term()) :: map() | nil
-  def from_zoi(%Zoi.Types.Map{fields: fields}) when is_list(fields) do
-    properties =
-      Map.new(fields, fn {field, schema} ->
-        {to_string(field), from_zoi(schema) || %{"type" => "object"}}
-      end)
-
-    %{
-      "type" => "object",
-      "properties" => properties,
-      "required" => Map.keys(properties)
-    }
+  def from_zoi(%_{} = schema) do
+    schema
+    |> Zoi.to_json_schema()
+    |> normalize_json_value()
+  rescue
+    _exception -> nil
   end
 
-  def from_zoi(%Zoi.Types.Array{inner: inner}), do: %{"type" => "array", "items" => from_zoi(inner) || %{}}
-  def from_zoi(%Zoi.Types.String{}), do: %{"type" => "string"}
-  def from_zoi(%Zoi.Types.Number{}), do: %{"type" => "number"}
-  def from_zoi(%Zoi.Types.Integer{}), do: %{"type" => "integer"}
-  def from_zoi(%Zoi.Types.Float{}), do: %{"type" => "number"}
-  def from_zoi(%Zoi.Types.Boolean{}), do: %{"type" => "boolean"}
-  def from_zoi(%Zoi.Types.Atom{}), do: %{"type" => "string"}
-  def from_zoi(%Zoi.Types.Any{}), do: %{}
-  def from_zoi(%_{}), do: %{}
   def from_zoi(_schema), do: nil
+
+  defp normalize_json_value(%Regex{} = regex), do: Regex.source(regex)
+
+  defp normalize_json_value(%{} = value) do
+    Map.new(value, fn {key, nested} -> {to_string(key), normalize_json_value(nested)} end)
+  end
+
+  defp normalize_json_value(value) when is_list(value), do: Enum.map(value, &normalize_json_value/1)
+  defp normalize_json_value(value) when is_atom(value) and value not in [true, false, nil], do: Atom.to_string(value)
+  defp normalize_json_value(value), do: value
 end

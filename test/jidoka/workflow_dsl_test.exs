@@ -779,34 +779,50 @@ defmodule Jidoka.WorkflowDslTest do
              Spec.new(id: "invalid_restored", module: __MODULE__, mode: :dsl, steps: [invalid_restored])
   end
 
-  test "workflow parameter schemas project common Zoi input types" do
+  test "workflow parameter schemas preserve Zoi JSON Schema semantics" do
     schema =
       Zoi.object(%{
-        text: Zoi.string(),
-        count: Zoi.integer(),
-        score: Zoi.float(),
-        enabled: Zoi.boolean(),
-        tag: Zoi.atom(),
-        anything: Zoi.any(),
-        values: Zoi.array(Zoi.number())
+        name: Zoi.string(),
+        nickname: Zoi.string() |> Zoi.optional(),
+        count: Zoi.integer() |> Zoi.gte(1) |> Zoi.default(2),
+        tags: Zoi.array(Zoi.string()) |> Zoi.min(1),
+        nested:
+          Zoi.object(%{
+            required_value: Zoi.boolean(),
+            optional_value: Zoi.string() |> Zoi.optional()
+          })
       })
 
-    assert %{
-             "type" => "object",
-             "required" => required,
-             "properties" => %{
-               "text" => %{"type" => "string"},
-               "count" => %{"type" => "integer"},
-               "score" => %{"type" => "number"},
-               "enabled" => %{"type" => "boolean"},
-               "tag" => %{"type" => "string"},
-               "anything" => %{},
-               "values" => %{"type" => "array", "items" => %{"type" => "number"}}
-             }
-           } = ParametersSchema.from_zoi(schema)
+    published = ParametersSchema.from_zoi(schema)
 
-    assert MapSet.new(required) ==
-             MapSet.new(["text", "count", "score", "enabled", "tag", "anything", "values"])
+    assert published["type"] == "object"
+    assert MapSet.new(published["required"]) == MapSet.new(["name", "count", "tags", "nested"])
+    refute "nickname" in published["required"]
+    assert published["properties"]["count"] == %{"default" => 2, "minimum" => 1, "type" => "integer"}
+    assert published["properties"]["tags"]["items"] == %{"type" => "string"}
+    assert published["properties"]["tags"]["minItems"] == 1
+    assert published["properties"]["nested"]["required"] == ["required_value"]
+
+    validator = JSV.build!(published, warnings: :silent)
+
+    assert {:ok, _value} =
+             JSV.validate(
+               %{
+                 "name" => "Ada",
+                 "count" => 2,
+                 "tags" => ["workflow"],
+                 "nested" => %{"required_value" => true}
+               },
+               validator,
+               cast: false
+             )
+
+    assert {:error, _reason} =
+             JSV.validate(
+               %{"name" => "Ada", "count" => 0, "tags" => [], "nested" => %{}},
+               validator,
+               cast: false
+             )
 
     assert ParametersSchema.from_zoi(:not_a_schema) == nil
   end
