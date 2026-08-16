@@ -9,6 +9,7 @@ defmodule Jidoka.Policy.GateTest do
   alias Jidoka.Policy.Request
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.EffectInterpreter
+  alias Jidoka.Runtime.Review, as: RuntimeReview
   alias Jidoka.Turn
 
   test "allows one protected operation before one capability call" do
@@ -101,7 +102,7 @@ defmodule Jidoka.Policy.GateTest do
   end
 
   test "normalizes every malformed policy callback result into a typed failure" do
-    intent = operation_intent(%{})
+    %Effect.Intent{} = intent = operation_intent(%{})
 
     policies = [
       {:return, fn _request, _context -> {:malformed, :tuple} end},
@@ -154,17 +155,29 @@ defmodule Jidoka.Policy.GateTest do
 
     assert_receive :policy_called
 
-    approved = %Effect.Intent{
-      intent
-      | metadata: Map.put(intent.metadata, "approved_interrupt_id", interrupt.id)
-    }
-
-    resumed_state = Turn.State.set_pending_effects(interrupted_state, [approved])
+    response = Jidoka.Review.Response.new!(interrupt_id: interrupt.id, decision: :approved)
+    assert {:ok, resumed_state} = RuntimeReview.apply_response(interrupted_state, interrupt, response)
 
     assert {:ok, %Effect.Result{status: :ok}, _state} =
              EffectInterpreter.interpret_pending(resumed_state, capabilities)
 
     refute_receive :policy_called
+  end
+
+  test "a legacy scalar approval does not authorize a host gate" do
+    %Effect.Intent{} = intent = operation_intent(%{})
+
+    policy = fn _request, _context ->
+      {:ok, Decision.new!(outcome: :require_review, rule_id: "host.review")}
+    end
+
+    legacy = %Effect.Intent{
+      intent
+      | metadata: Map.put(intent.metadata, "approved_interrupt_id", "legacy-interrupt")
+    }
+
+    assert {:review, %Decision{}, %Jidoka.Review.Interrupt{}, _state} =
+             Gate.authorize(state(legacy), legacy, policy, [])
   end
 
   test "rejects review decisions for non-operation effects" do

@@ -12,6 +12,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
   alias Jidoka.Runtime.Controls.Decision
   alias Jidoka.Runtime.Controls.OperationContext
   alias Jidoka.Runtime.Context, as: RuntimeContext
+  alias Jidoka.Runtime.Review, as: RuntimeReview
   alias Jidoka.Turn
 
   @doc "Applies matching operation controls to an operation intent."
@@ -20,11 +21,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
   def run(state, intent, opts \\ [])
 
   def run(%Turn.State{} = state, %Effect.Intent{kind: :operation} = intent, opts) do
-    if approved_interrupt_id(intent) do
-      {:ok, append_approval_reused_event(state, intent)}
-    else
-      run_unapproved(state, intent, opts)
-    end
+    run_unapproved(state, intent, opts)
   end
 
   def run(%Turn.State{} = state, %Effect.Intent{}, _opts), do: {:ok, state}
@@ -56,31 +53,70 @@ defmodule Jidoka.Runtime.Controls.Operation do
          opts
        )
        when is_list(controls) do
-    Enum.reduce_while(controls, {:ok, state}, fn control, {:ok, state} ->
-      case call_control(control, state, request, operation, operation_match, intent, opts)
-           |> Decision.normalize() do
-        :allow ->
-          {:cont, {:ok, append_control_event(state, control, request, operation_match)}}
+    controls
+    |> Enum.with_index()
+    |> Enum.reduce_while({:ok, state}, fn {control, index}, {:ok, state} ->
+      gate_id = control_gate_id(intent, control, index)
+      interrupt = operation_interrupt(control, state, request, operation_match, intent, reason: nil, gate_id: gate_id)
 
-        {:block, reason} ->
-          {:halt, {:error, {:control_blocked, control.control, :operation, reason}}}
+      cond do
+        RuntimeReview.gate_completed?(current_intent(state, intent), gate_id) ->
+          {:cont, {:ok, state}}
 
-        {:interrupt, reason} ->
-          interrupt =
-            operation_interrupt(control, state, request, operation_match, intent, reason)
-
+        RuntimeReview.approved_gate?(current_intent(state, intent), gate_id, interrupt.id) ->
           state =
-            append_control_event(state, control, request, operation_match, interrupt)
+            state
+            |> append_approval_reused_event(intent, interrupt.id)
+            |> RuntimeReview.complete_gate(intent, gate_id)
 
-          {:halt, {:interrupt, interrupt, state}}
+          {:cont, {:ok, state}}
 
-        {:error, reason} ->
-          {:halt, {:error, {:control_failed, control.control, :operation, reason}}}
-
-        {:invalid, decision} ->
-          {:halt, {:error, {:invalid_control_decision, control.control, :operation, decision}}}
+        true ->
+          run_control(
+            control,
+            gate_id,
+            state,
+            request,
+            operation,
+            operation_match,
+            intent,
+            opts
+          )
       end
     end)
+  end
+
+  defp run_control(control, gate_id, state, request, operation, operation_match, intent, opts) do
+    case call_control(control, state, request, operation, operation_match, intent, opts)
+         |> Decision.normalize() do
+      :allow ->
+        state =
+          state
+          |> append_control_event(control, request, operation_match)
+          |> RuntimeReview.complete_gate(intent, gate_id)
+
+        {:cont, {:ok, state}}
+
+      {:block, reason} ->
+        {:halt, {:error, {:control_blocked, control.control, :operation, reason}}}
+
+      {:interrupt, reason} ->
+        interrupt =
+          operation_interrupt(control, state, request, operation_match, intent,
+            reason: reason,
+            gate_id: gate_id
+          )
+
+        state = append_control_event(state, control, request, operation_match, interrupt)
+
+        {:halt, {:interrupt, interrupt, state}}
+
+      {:error, reason} ->
+        {:halt, {:error, {:control_failed, control.control, :operation, reason}}}
+
+      {:invalid, decision} ->
+        {:halt, {:error, {:invalid_control_decision, control.control, :operation, decision}}}
+    end
   end
 
   defp call_control(
@@ -169,7 +205,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
     |> Turn.Transition.commit()
   end
 
-  defp append_approval_reused_event(%Turn.State{} = state, %Effect.Intent{} = intent) do
+  defp append_approval_reused_event(%Turn.State{} = state, %Effect.Intent{} = intent, interrupt_id) do
     case Effect.OperationRequest.from_input(intent.payload) do
       {:ok, request} ->
         state
@@ -182,7 +218,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
           effect_kind: intent.kind,
           operation: request.name,
           data: %{
-            interrupt_id: approved_interrupt_id(intent),
+            interrupt_id: interrupt_id,
             operation: request.name
           }
         )
@@ -199,14 +235,18 @@ defmodule Jidoka.Runtime.Controls.Operation do
          %Effect.OperationRequest{} = request,
          operation_match,
          %Effect.Intent{} = intent,
-         reason
+         opts
        ) do
+    reason = Keyword.fetch!(opts, :reason)
+    gate_id = Keyword.fetch!(opts, :gate_id)
+
     Interrupt.new!(
       id:
         Interrupt.stable_id([
           state.spec.id,
           state.request.request_id,
           intent.id,
+          gate_id,
           control.control,
           request.name
         ]),
@@ -225,6 +265,7 @@ defmodule Jidoka.Runtime.Controls.Operation do
       idempotency: intent.idempotency,
       idempotency_key: intent.idempotency_key,
       metadata: %{
+        "gate_id" => gate_id,
         "operation_match" => control.match,
         "control_metadata" => control.metadata
       }
@@ -355,11 +396,20 @@ defmodule Jidoka.Runtime.Controls.Operation do
   defp normalize_source(source) when is_binary(source), do: source
   defp normalize_source(_source), do: nil
 
-  defp approved_interrupt_id(%Effect.Intent{metadata: metadata}) when is_map(metadata) do
-    get_any(metadata, [:approved_interrupt_id, "approved_interrupt_id"])
+  defp control_gate_id(intent, control, index) do
+    RuntimeReview.gate_id([
+      intent.id,
+      :operation_control,
+      index,
+      control.control,
+      control.match,
+      control.metadata
+    ])
   end
 
-  defp approved_interrupt_id(_intent), do: nil
+  defp current_intent(state, fallback) do
+    Enum.find(state.pending_effects, &(&1.id == fallback.id)) || fallback
+  end
 
   defp get_any(map, keys) do
     Enum.find_value(keys, &Map.get(map, &1))

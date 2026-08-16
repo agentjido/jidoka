@@ -18,6 +18,7 @@ defmodule Jidoka.Policy.Gate do
   alias Jidoka.Policy.Request
   alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.EffectTrace
+  alias Jidoka.Runtime.Review, as: RuntimeReview
   alias Jidoka.Turn
 
   @task_supervisor Jidoka.Runtime.TaskSupervisor
@@ -119,12 +120,21 @@ defmodule Jidoka.Policy.Gate do
          %Decision{outcome: :require_review} = decision,
          opts
        ) do
-    if approved?(intent) do
-      {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
-    else
-      interrupt = review_interrupt(state, intent, decision)
-      state = append_decision_event(state, intent, decision, :policy_review_requested, opts)
-      {:review, decision, interrupt, state}
+    interrupt = review_interrupt(state, intent, decision)
+    gate_id = interrupt.metadata["gate_id"]
+    intent = current_intent(state, intent)
+
+    cond do
+      RuntimeReview.gate_completed?(intent, gate_id) ->
+        {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
+
+      RuntimeReview.approved_gate?(intent, gate_id, interrupt.id) ->
+        state = RuntimeReview.complete_gate(state, intent, gate_id)
+        {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
+
+      true ->
+        state = append_decision_event(state, intent, decision, :policy_review_requested, opts)
+        {:review, decision, interrupt, state}
     end
   end
 
@@ -298,9 +308,10 @@ defmodule Jidoka.Policy.Gate do
 
   defp review_interrupt(state, intent, decision) do
     operation = EffectTrace.operation(intent) || action(intent)
+    gate_id = RuntimeReview.gate_id([intent.id, :host_policy_gate, decision.rule_id])
 
     Interrupt.new!(
-      id: Interrupt.stable_id([state.spec.id, state.request.request_id, intent.id, decision.rule_id]),
+      id: Interrupt.stable_id([state.spec.id, state.request.request_id, intent.id, gate_id, decision.rule_id]),
       boundary: :operation,
       control: __MODULE__,
       control_name: "host_policy_gate",
@@ -314,12 +325,13 @@ defmodule Jidoka.Policy.Gate do
       arguments: %{},
       idempotency: intent.idempotency,
       idempotency_key: intent.idempotency_key,
-      metadata: %{"policy_rule_id" => decision.rule_id}
+      metadata: %{"gate_id" => gate_id, "policy_rule_id" => decision.rule_id}
     )
   end
 
-  defp approved?(%Effect.Intent{metadata: metadata}),
-    do: not is_nil(metadata_value(metadata, :approved_interrupt_id))
+  defp current_intent(state, fallback) do
+    Enum.find(state.pending_effects, &(&1.id == fallback.id)) || fallback
+  end
 
   defp metadata_value(metadata, key) when is_map(metadata),
     do: Map.get(metadata, key) || Map.get(metadata, Atom.to_string(key))
