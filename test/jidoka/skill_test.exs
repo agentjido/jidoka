@@ -72,6 +72,49 @@ defmodule Jidoka.SkillTest do
       """
   end
 
+  defmodule ChangingSkill do
+    @moduledoc false
+
+    alias Jido.AI.Skill.Spec
+
+    def manifest do
+      version = Process.get({__MODULE__, :resolution_count}, 0) + 1
+      Process.put({__MODULE__, :resolution_count}, version)
+
+      {action, allowed_tool} =
+        case version do
+          1 -> {PolicyLookupAction, "skill_policy_lookup"}
+          _version -> {EscalationLookupAction, "skill_escalation_lookup"}
+        end
+
+      %Spec{
+        name: "changing-skill-#{version}",
+        description: "Skill snapshot #{version}.",
+        allowed_tools: [allowed_tool],
+        actions: [action],
+        body_ref: {:inline, "Use snapshot #{version}."},
+        source: {:module, __MODULE__}
+      }
+    end
+
+    def body, do: "This function must not be read during resolution."
+    def actions, do: []
+  end
+
+  defmodule InvalidSkillAction do
+    @moduledoc false
+  end
+
+  defmodule InvalidActionSkill do
+    @moduledoc false
+
+    use Jido.AI.Skill,
+      name: "invalid-action-skill",
+      description: "Publishes an invalid action for resolver tests.",
+      actions: [InvalidSkillAction],
+      body: "Invalid action test."
+  end
+
   defmodule SkillAgent do
     @moduledoc false
 
@@ -100,6 +143,21 @@ defmodule Jidoka.SkillTest do
     tools do
       skill SupportPolicySkill
       skill EscalationPolicySkill
+    end
+  end
+
+  defmodule ChangingSkillAgent do
+    @moduledoc false
+
+    use Jidoka.Agent
+
+    agent :changing_skill_agent do
+      model %{provider: :test, id: "model"}
+      instructions "Use the stable skill snapshot."
+    end
+
+    tools do
+      skill ChangingSkill
     end
   end
 
@@ -194,5 +252,43 @@ defmodule Jidoka.SkillTest do
 
     assert {:error, {:invalid_skill, "missing-skill", _reason}} =
              Jidoka.Skill.prompt(["missing-skill"])
+  end
+
+  test "one tool compilation derives all skill views from one resolution" do
+    Process.put({ChangingSkill, :resolution_count}, 0)
+
+    compiled = Jidoka.Agent.ToolSources.compile!(ChangingSkillAgent)
+
+    assert Process.get({ChangingSkill, :resolution_count}) == 1
+    assert compiled.actions == [PolicyLookupAction]
+    assert [%{name: "skill_policy_lookup"}] = compiled.operations
+    assert compiled.skill_prompt =~ "changing-skill-1"
+    assert compiled.skill_prompt =~ "Use snapshot 1."
+
+    assert [%{"name" => "changing-skill-1", "actions" => [action]}] = compiled.metadata
+    assert action == inspect(PolicyLookupAction)
+  end
+
+  test "a resolved skill value preserves action and prompt order" do
+    assert {:ok, resolution} =
+             Jidoka.Skill.resolve([SupportPolicySkill, EscalationPolicySkill])
+
+    assert Jidoka.Skill.action_modules(resolution) == [
+             PolicyLookupAction,
+             EscalationLookupAction
+           ]
+
+    assert {:ok, prompt} = Jidoka.Skill.prompt(resolution)
+    assert position(prompt, "support-policy") < position(prompt, "escalation-policy")
+  end
+
+  test "an invalid skill action returns one typed resolution error" do
+    assert {:error, {:invalid_skill_action, InvalidActionSkill, InvalidSkillAction, :missing_to_tool}} =
+             Jidoka.Skill.resolve([InvalidActionSkill])
+  end
+
+  defp position(text, value) do
+    {position, _length} = :binary.match(text, value)
+    position
   end
 end

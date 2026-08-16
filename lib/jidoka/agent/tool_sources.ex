@@ -18,6 +18,7 @@ defmodule Jidoka.Agent.ToolSources do
   alias Jidoka.Agent.ToolSources
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Defined
+  alias Jidoka.Operation.Source.JidoAction
 
   @spec entities(module()) :: [struct()]
   def entities(agent_module) when is_atom(agent_module) do
@@ -27,155 +28,64 @@ defmodule Jidoka.Agent.ToolSources do
   @spec action_modules(module()) :: [module()]
   def action_modules(agent_module) when is_atom(agent_module) do
     agent_module
-    |> entities()
-    |> Enum.flat_map(&action_modules_from_entity/1)
+    |> compile!()
+    |> Map.fetch!(:actions)
   end
 
   @spec skill_prompt!(module()) :: String.t() | nil
   def skill_prompt!(agent_module) when is_atom(agent_module) do
-    wrap!(agent_module, [:tools, :skill], fn ->
-      ToolSources.Skill.prompt!(skill_refs(agent_module), skill_load_paths(agent_module))
-    end)
+    agent_module
+    |> compile!()
+    |> Map.fetch!(:skill_prompt)
   end
 
   @spec operation_capability(module(), keyword()) ::
           Jidoka.Operation.Capability.t()
   def operation_capability(agent_module, opts \\ []) when is_atom(agent_module) do
     agent_module
-    |> compiled!(opts)
+    |> compile!(opts)
     |> Map.fetch!(:capability)
   end
 
   @spec operations!(module()) :: [Operation.t()]
   def operations!(agent_module) when is_atom(agent_module) do
     agent_module
-    |> compiled!([])
+    |> compile!()
     |> Map.fetch!(:operations)
   end
 
   @spec source_metadata!(module()) :: [map()]
   def source_metadata!(agent_module) when is_atom(agent_module) do
-    compiled_metadata = agent_module |> compiled!([]) |> Map.fetch!(:metadata)
-
-    load_path_metadata =
-      agent_module
-      |> entities()
-      |> Enum.flat_map(fn
-        %SkillPath{} = skill_path ->
-          wrap!(agent_module, [:tools, :load_path], fn ->
-            ToolSources.Skill.load_path_metadata!(skill_path, agent_base_dir(agent_module))
-          end)
-
-        _entity ->
-          []
-      end)
-
-    compiled_metadata ++ load_path_metadata
+    agent_module
+    |> compile!()
+    |> Map.fetch!(:metadata)
   end
 
   @spec validate!(module()) :: :ok
   def validate!(agent_module) when is_atom(agent_module) do
-    _compiled = compiled!(agent_module, [])
+    _compiled = compile!(agent_module)
     :ok
   end
 
-  defp action_modules_from_entity(%Tool{} = tool), do: ToolSources.Action.action_modules(tool)
+  @spec compile!(module(), keyword()) :: map()
+  def compile!(agent_module, opts \\ []) when is_atom(agent_module) and is_list(opts) do
+    entities = entities(agent_module)
+    load_paths = skill_load_paths(agent_module, entities)
 
-  defp action_modules_from_entity(%AshResource{} = ash_resource),
-    do: ToolSources.AshResource.action_modules(ash_resource)
+    skill_resolution =
+      wrap!(agent_module, [:tools, :skill], fn ->
+        ToolSources.Skill.resolve!(skill_refs(entities), load_paths)
+      end)
 
-  defp action_modules_from_entity(%Browser{} = browser), do: ToolSources.Browser.action_modules(browser)
-  defp action_modules_from_entity(%SkillRef{} = skill_ref), do: ToolSources.Skill.action_modules(skill_ref)
-  defp action_modules_from_entity(_entity), do: []
+    sources = operation_sources!(agent_module, entities, skill_resolution.skills)
 
-  defp operation_sources!(agent_module) do
-    agent_module
-    |> entities()
-    |> Enum.flat_map(fn
-      %Tool{} = tool ->
-        [wrap!(agent_module, [:tools, :action], fn -> ToolSources.Action.source!(tool) end)]
-
-      %AshResource{} = ash_resource ->
-        [
-          wrap!(agent_module, [:tools, :ash_resource], fn ->
-            ToolSources.AshResource.source!(ash_resource)
-          end)
-        ]
-
-      %Browser{} = browser ->
-        [wrap!(agent_module, [:tools, :browser], fn -> ToolSources.Browser.source!(browser) end)]
-
-      %MCPTools{} = mcp_tools ->
-        [
-          wrap!(agent_module, [:tools, :mcp_tools], fn ->
-            Defined.new!(
-              ToolSources.MCP.source!(mcp_tools),
-              ToolSources.MCP.operations!(mcp_tools),
-              ToolSources.MCP.metadata!(mcp_tools)
-            )
-          end)
-        ]
-
-      %Catalog{} = catalog ->
-        [
-          wrap!(agent_module, [:tools, :catalog], fn ->
-            Defined.new!(
-              ToolSources.Catalog.source!(catalog),
-              ToolSources.Catalog.operations!(catalog),
-              ToolSources.Catalog.metadata!(catalog)
-            )
-          end)
-        ]
-
-      %Subagent{} = subagent ->
-        [
-          wrap!(agent_module, [:tools, :subagent], fn ->
-            Defined.new!(
-              ToolSources.Subagent.source!(subagent),
-              ToolSources.Subagent.operations!(subagent),
-              ToolSources.Subagent.metadata!(subagent)
-            )
-          end)
-        ]
-
-      %Handoff{} = handoff ->
-        [
-          wrap!(agent_module, [:tools, :handoff], fn ->
-            Defined.new!(
-              ToolSources.Handoff.source!(handoff),
-              ToolSources.Handoff.operations!(handoff),
-              ToolSources.Handoff.metadata!(handoff)
-            )
-          end)
-        ]
-
-      %Workflow{} = workflow ->
-        [
-          wrap!(agent_module, [:tools, :workflow], fn ->
-            Defined.new!(
-              ToolSources.Workflow.source!(workflow),
-              ToolSources.Workflow.operations!(workflow),
-              ToolSources.Workflow.metadata!(workflow)
-            )
-          end)
-        ]
-
-      %SkillRef{} = skill_ref ->
-        [
-          wrap!(agent_module, [:tools, :skill], fn ->
-            ToolSources.Skill.source!(skill_ref, skill_load_paths(agent_module))
-          end)
-        ]
-
-      _entity ->
-        []
-    end)
-  end
-
-  defp compiled!(agent_module, opts) do
-    case Source.compile(operation_sources!(agent_module), opts) do
+    case Source.compile(sources, opts) do
       {:ok, compiled} ->
-        compiled
+        Map.merge(compiled, %{
+          actions: action_modules_from_sources(sources),
+          skill_prompt: ToolSources.Skill.prompt(skill_resolution),
+          metadata: compiled.metadata ++ load_path_metadata!(agent_module, entities)
+        })
 
       {:error, {:duplicate_operation_source_name, name}} ->
         raise Spark.Error.DslError,
@@ -191,25 +101,130 @@ defmodule Jidoka.Agent.ToolSources do
     end
   end
 
-  defp skill_refs(agent_module) do
-    agent_module
-    |> entities()
+  defp operation_sources!(agent_module, entities, resolved_skills) do
+    {source_groups, remaining_skills} =
+      Enum.map_reduce(entities, resolved_skills, fn
+        %Tool{} = tool, skills ->
+          {[wrap!(agent_module, [:tools, :action], fn -> ToolSources.Action.source!(tool) end)], skills}
+
+        %AshResource{} = ash_resource, skills ->
+          {[
+             wrap!(agent_module, [:tools, :ash_resource], fn ->
+               ToolSources.AshResource.source!(ash_resource)
+             end)
+           ], skills}
+
+        %Browser{} = browser, skills ->
+          {[wrap!(agent_module, [:tools, :browser], fn -> ToolSources.Browser.source!(browser) end)], skills}
+
+        %MCPTools{} = mcp_tools, skills ->
+          {[
+             wrap!(agent_module, [:tools, :mcp_tools], fn ->
+               Defined.new!(
+                 ToolSources.MCP.source!(mcp_tools),
+                 ToolSources.MCP.operations!(mcp_tools),
+                 ToolSources.MCP.metadata!(mcp_tools)
+               )
+             end)
+           ], skills}
+
+        %Catalog{} = catalog, skills ->
+          {[
+             wrap!(agent_module, [:tools, :catalog], fn ->
+               Defined.new!(
+                 ToolSources.Catalog.source!(catalog),
+                 ToolSources.Catalog.operations!(catalog),
+                 ToolSources.Catalog.metadata!(catalog)
+               )
+             end)
+           ], skills}
+
+        %Subagent{} = subagent, skills ->
+          {[
+             wrap!(agent_module, [:tools, :subagent], fn ->
+               Defined.new!(
+                 ToolSources.Subagent.source!(subagent),
+                 ToolSources.Subagent.operations!(subagent),
+                 ToolSources.Subagent.metadata!(subagent)
+               )
+             end)
+           ], skills}
+
+        %Handoff{} = handoff, skills ->
+          {[
+             wrap!(agent_module, [:tools, :handoff], fn ->
+               Defined.new!(
+                 ToolSources.Handoff.source!(handoff),
+                 ToolSources.Handoff.operations!(handoff),
+                 ToolSources.Handoff.metadata!(handoff)
+               )
+             end)
+           ], skills}
+
+        %Workflow{} = workflow, skills ->
+          {[
+             wrap!(agent_module, [:tools, :workflow], fn ->
+               Defined.new!(
+                 ToolSources.Workflow.source!(workflow),
+                 ToolSources.Workflow.operations!(workflow),
+                 ToolSources.Workflow.metadata!(workflow)
+               )
+             end)
+           ], skills}
+
+        %SkillRef{skill: skill}, [%{source: skill} = resolved_skill | rest] ->
+          {[
+             wrap!(agent_module, [:tools, :skill], fn ->
+               ToolSources.Skill.source!(resolved_skill)
+             end)
+           ], rest}
+
+        _entity, skills ->
+          {[], skills}
+      end)
+
+    case remaining_skills do
+      [] -> List.flatten(source_groups)
+      skills -> raise ArgumentError, "unused skill resolutions: #{inspect(skills)}"
+    end
+  end
+
+  defp skill_refs(entities) do
+    entities
     |> Enum.flat_map(fn
       %SkillRef{} = skill_ref -> [skill_ref]
       _entity -> []
     end)
   end
 
-  defp skill_load_paths(agent_module) do
+  defp skill_load_paths(agent_module, entities) do
     load_paths =
-      agent_module
-      |> entities()
+      entities
       |> Enum.flat_map(fn
         %SkillPath{path: path} -> [path]
         _entity -> []
       end)
 
     Jidoka.Skill.normalize_load_paths(load_paths, agent_base_dir(agent_module))
+  end
+
+  defp action_modules_from_sources(sources) do
+    Enum.flat_map(sources, fn
+      %JidoAction{actions: actions} -> actions
+      _source -> []
+    end)
+  end
+
+  defp load_path_metadata!(agent_module, entities) do
+    Enum.flat_map(entities, fn
+      %SkillPath{} = skill_path ->
+        wrap!(agent_module, [:tools, :load_path], fn ->
+          ToolSources.Skill.load_path_metadata!(skill_path, agent_base_dir(agent_module))
+        end)
+
+      _entity ->
+        []
+    end)
   end
 
   defp wrap!(agent_module, path, fun) when is_function(fun, 0) do

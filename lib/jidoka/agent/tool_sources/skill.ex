@@ -1,34 +1,36 @@
 defmodule Jidoka.Agent.ToolSources.Skill do
   @moduledoc false
 
-  alias Jidoka.Adapter.Jido.Skill, as: JidoSkill
+  alias Jidoka.Adapter.Jido.Skill.{Resolution, ResolvedSkill}
   alias Jidoka.Agent.Dsl.{SkillPath, SkillRef}
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Agent.ToolSources.Common
   alias Jidoka.Operation.Source.JidoAction
 
-  @spec action_modules(term()) :: [module()]
-  def action_modules(%SkillRef{skill: skill}), do: Jidoka.Skill.action_modules([skill])
+  @spec resolve!([SkillRef.t()], [String.t()]) :: Resolution.t()
+  def resolve!(skill_refs, load_paths) when is_list(skill_refs) and is_list(load_paths) do
+    refs = Enum.map(skill_refs, & &1.skill)
 
-  @spec source!(term(), [String.t()]) :: JidoAction.t()
-  def source!(%SkillRef{} = skill_ref, load_paths) do
-    JidoAction.new!(action_modules(skill_ref), operations!(skill_ref), metadata: metadata!(skill_ref, load_paths))
-  end
-
-  @spec operations!(term()) :: [Jidoka.Agent.Spec.Operation.t()]
-  def operations!(%SkillRef{skill: skill}) do
-    [skill]
-    |> Jidoka.Skill.action_modules()
-    |> Enum.map(&Common.operation_from_action!/1)
-    |> Enum.map(&tag_operation(&1, skill))
-  end
-
-  @spec metadata!(term(), [String.t()]) :: [map()]
-  def metadata!(%SkillRef{skill: skill}, load_paths) do
-    case Jidoka.Skill.metadata([skill], load_paths: load_paths) do
-      {:ok, metadata} -> metadata
-      {:error, reason} -> raise ArgumentError, "invalid skill metadata: #{inspect(reason)}"
+    case Jidoka.Skill.resolve(refs, load_paths: load_paths) do
+      {:ok, resolution} -> resolution
+      {:error, reason} -> raise ArgumentError, "invalid skill resolution: #{inspect(reason)}"
     end
+  end
+
+  @spec action_modules(ResolvedSkill.t()) :: [module()]
+  def action_modules(%ResolvedSkill{action_modules: action_modules}), do: action_modules
+
+  @spec source!(ResolvedSkill.t()) :: JidoAction.t()
+  def source!(%ResolvedSkill{} = skill) do
+    JidoAction.new!(action_modules(skill), operations!(skill), metadata: [skill.metadata])
+  end
+
+  @spec operations!(ResolvedSkill.t()) :: [Jidoka.Agent.Spec.Operation.t()]
+  def operations!(%ResolvedSkill{} = skill) do
+    skill
+    |> action_modules()
+    |> Enum.map(&Common.operation_from_action!/1)
+    |> Enum.map(&tag_operation(&1, skill.spec.name))
   end
 
   @spec load_path_metadata!(term(), Path.t()) :: [map()]
@@ -42,19 +44,10 @@ defmodule Jidoka.Agent.ToolSources.Skill do
     ]
   end
 
-  @spec prompt!([term()], [String.t()]) :: String.t() | nil
-  def prompt!(skill_refs, load_paths) do
-    skills = Enum.map(skill_refs, & &1.skill)
+  @spec prompt(Resolution.t()) :: String.t() | nil
+  def prompt(%Resolution{prompt: prompt}), do: prompt
 
-    case Jidoka.Skill.prompt(skills, load_paths: load_paths) do
-      {:ok, prompt} -> prompt
-      {:error, reason} -> raise ArgumentError, "invalid skill prompt: #{inspect(reason)}"
-    end
-  end
-
-  defp tag_operation(%Operation{} = operation, skill) do
-    skill_name = skill_name(skill)
-
+  defp tag_operation(%Operation{} = operation, skill_name) do
     %Operation{
       operation
       | metadata:
@@ -67,12 +60,4 @@ defmodule Jidoka.Agent.ToolSources.Skill do
           })
     }
   end
-
-  defp skill_name(skill) when is_atom(skill) do
-    JidoSkill.name(skill)
-  rescue
-    _exception -> inspect(skill)
-  end
-
-  defp skill_name(skill) when is_binary(skill), do: String.trim(skill)
 end

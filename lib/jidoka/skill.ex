@@ -16,6 +16,9 @@ defmodule Jidoka.Skill do
   @doc "Validates a skill load path before it is expanded."
   defdelegate validate_load_path(path), to: JidoSkill
 
+  @doc "Resolves skill references into one stable ordered snapshot."
+  defdelegate resolve(refs, opts \\ []), to: JidoSkill
+
   @doc "Returns action modules contributed by skill references."
   defdelegate action_modules(refs, opts \\ []), to: JidoSkill
 

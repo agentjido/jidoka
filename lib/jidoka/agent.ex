@@ -140,28 +140,28 @@ defmodule Jidoka.Agent do
           required(:memory) => Memory.t() | nil,
           required(:actions) => [module()],
           required(:operations) => [Spec.Operation.t()],
+          required(:operation_capability) => Jidoka.Operation.Capability.t(),
           required(:tool_sources) => [map()],
           required(:controls) => Jidoka.Agent.Spec.Controls.t()
         }
   def definition!(agent_module) when is_atom(agent_module) do
     agent = fetch_agent!(agent_module)
-    actions = action_modules(agent_module)
-    operations = ToolSources.operations!(agent_module)
-    tool_sources = ToolSources.source_metadata!(agent_module)
+    tools = ToolSources.compile!(agent_module)
     controls = controls!(agent_module)
 
     %{
       id: normalize_id!(agent.id),
       model: normalize_model!(agent_module, agent.model),
       generation: normalize_generation!(agent_module, agent.generation),
-      instructions: normalize_instructions!(agent.instructions, ToolSources.skill_prompt!(agent_module)),
+      instructions: normalize_instructions!(agent.instructions, tools.skill_prompt),
       description: agent.description,
       context_schema: agent.context,
       result: normalize_result!(agent_module, agent.result),
       memory: normalize_memory!(agent_module, agent.memory),
-      actions: actions,
-      operations: operations,
-      tool_sources: tool_sources,
+      actions: tools.actions,
+      operations: tools.operations,
+      operation_capability: tools.capability,
+      tool_sources: tools.metadata,
       controls: controls
     }
   end
@@ -200,8 +200,12 @@ defmodule Jidoka.Agent do
   """
   @spec spec(module()) :: Spec.t()
   def spec(agent_module) when is_atom(agent_module) do
-    definition = definition!(agent_module)
+    agent_module
+    |> definition!()
+    |> spec_from_definition(agent_module)
+  end
 
+  defp spec_from_definition(definition, agent_module) do
     Spec.new!(
       id: definition.id,
       instructions: definition.instructions,
@@ -233,7 +237,9 @@ defmodule Jidoka.Agent do
           | {:hibernate, Jidoka.Snapshot.t()}
           | {:error, term()}
   def run_turn(agent_module, input, opts \\ []) when is_atom(agent_module) and is_list(opts) do
-    spec = spec(agent_module)
+    definition = definition!(agent_module)
+    spec = spec_from_definition(definition, agent_module)
+    opts = Keyword.put_new(opts, :operations, definition.operation_capability)
 
     case TurnExecution.run(spec, input, RuntimeOptions.resolve(agent_module, spec, opts)) do
       {:ok, _result} = ok -> ok
