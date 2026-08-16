@@ -102,8 +102,7 @@ defmodule Jidoka.Adapter.ReqLLMTest do
              ResponseAdapter.decision(response, nil, Jason.encode!(object))
 
     assert decision.type == :operation
-    assert decision.name == "lookup"
-    assert decision.arguments == %{}
+    assert [%{name: "lookup", arguments: %{}}] = decision.operations
     assert decision.parts == []
   end
 end

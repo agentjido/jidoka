@@ -490,7 +490,11 @@ defmodule Jidoka.DataStructsTest do
   end
 
   test "LLM decisions and operation observations are typed effect payloads" do
-    assert {:ok, %Effect.LLMDecision{type: :operation, name: "lookup"}} =
+    assert {:ok,
+            %Effect.LLMDecision{
+              type: :operation,
+              operations: [%Effect.OperationRequest{name: "lookup"}]
+            }} =
              Effect.LLMDecision.from_input(%{
                "type" => "operation",
                "name" => "lookup",
@@ -581,6 +585,43 @@ defmodule Jidoka.DataStructsTest do
 
     assert Enum.map(hd(interaction.tool_call_groups).calls, &{&1.provider_call_id, &1.call_index}) ==
              [{"call_a", 0}, {"call_b", 1}]
+  end
+
+  test "LLM decisions store one ordered operation list" do
+    assert {:ok, legacy} =
+             Effect.LLMDecision.from_input(%{
+               type: :operation,
+               name: "lookup",
+               arguments: %{"id" => "A-1"}
+             })
+
+    refute Map.has_key?(legacy, :name)
+    refute Map.has_key?(legacy, :arguments)
+    assert Effect.LLMDecision.name(legacy) == "lookup"
+    assert Effect.LLMDecision.arguments(legacy) == %{"id" => "A-1"}
+    assert [%Effect.OperationRequest{name: "lookup"}] = legacy.operations
+
+    assert %{type: :operation, operations: [%{name: "lookup"}]} =
+             Effect.LLMDecision.to_payload(legacy)
+
+    assert {:error, {:conflicting_operation_decision, _legacy, _operations}} =
+             Effect.LLMDecision.from_input(%{
+               type: :operation,
+               name: "lookup",
+               arguments: %{"id" => "A-1"},
+               operations: [%{name: "update", arguments: %{"id" => "A-1"}}]
+             })
+
+    ordered =
+      Effect.LLMDecision.operations([
+        %{name: "first", arguments: %{"index" => 1}},
+        %{name: "second", arguments: %{"index" => 2}}
+      ])
+
+    assert Enum.map(ordered.operations, &{&1.name, &1.arguments}) == [
+             {"first", %{"index" => 1}},
+             {"second", %{"index" => 2}}
+           ]
   end
 
   test "model interaction validation rejects mismatched group identity and call indexes" do

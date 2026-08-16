@@ -7,18 +7,6 @@ defmodule Jidoka.Turn.State.OperationPlanner do
   alias Jidoka.Operation.Registry
   alias Jidoka.Turn
 
-  @spec plan_turn(term(), Effect.LLMDecision.t(), String.t(), map()) ::
-          {:ok, term()} | {:error, term()}
-  def plan_turn(state, %Effect.LLMDecision{} = decision, name, arguments) do
-    with {:ok, tool_call} <- one_tool_call(decision),
-         {:ok, registry} <- registry(state),
-         {:ok, operation} <- Registry.fetch(registry, name),
-         {:ok, arguments} <- Registry.validate_arguments(registry, name, arguments),
-         :ok <- Agent.Spec.validate_operation_policy(state.spec, operation) do
-      {:ok, put_operation_effect(state, operation, decision, tool_call, name, arguments)}
-    end
-  end
-
   @spec plan_turns(term(), Effect.LLMDecision.t(), [Effect.OperationRequest.t()]) ::
           {:ok, term()} | {:error, term()}
   def plan_turns(state, %Effect.LLMDecision{} = decision, operations) do
@@ -47,23 +35,6 @@ defmodule Jidoka.Turn.State.OperationPlanner do
       {:ok, effects} -> {:ok, Enum.reverse(effects)}
       error -> error
     end)
-  end
-
-  defp put_operation_effect(state, operation, decision, tool_call, name, arguments) do
-    operation_request =
-      Effect.OperationRequest.new!(
-        name: name,
-        arguments: arguments,
-        request_id: state.request.request_id,
-        loop_index: state.loop_index,
-        provider_call_id: tool_call.provider_call_id,
-        provider_metadata: tool_call.provider_metadata,
-        tool_call: tool_call
-      )
-
-    effect = operation_effect(state, operation, operation_request, 0, 1)
-
-    put_operation_effects(state, decision, [operation_request], [effect])
   end
 
   defp put_operation_effects(state, %Effect.LLMDecision{} = decision, operation_requests, effects) do
@@ -113,7 +84,7 @@ defmodule Jidoka.Turn.State.OperationPlanner do
           provider_call_id: source_request.provider_call_id,
           provider_metadata: source_request.provider_metadata,
           tool_call: tool_call,
-          metadata: Map.merge(source_request.metadata, %{batch_index: index, batch_size: batch_size})
+          metadata: request_metadata(source_request.metadata, index, batch_size)
         )
 
       {:ok, operation_effect(state, operation, operation_request, index, batch_size)}
@@ -134,6 +105,11 @@ defmodule Jidoka.Turn.State.OperationPlanner do
       metadata: metadata
     )
   end
+
+  defp request_metadata(metadata, _index, 1), do: metadata
+
+  defp request_metadata(metadata, index, batch_size),
+    do: Map.merge(metadata, %{batch_index: index, batch_size: batch_size})
 
   defp operation_effect_identity(state, name, arguments, _index, 1) do
     idempotency_key =
@@ -189,13 +165,6 @@ defmodule Jidoka.Turn.State.OperationPlanner do
        do: Enum.flat_map(groups, & &1.calls)
 
   defp tool_calls(%Effect.LLMDecision{}), do: []
-
-  defp one_tool_call(decision) do
-    case tool_calls(decision) do
-      [call] -> {:ok, call}
-      calls -> {:error, {:tool_call_count_mismatch, 1, length(calls)}}
-    end
-  end
 
   defp validate_tool_call_count(calls, expected) do
     if length(calls) == expected,

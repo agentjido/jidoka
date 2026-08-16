@@ -190,10 +190,8 @@ defmodule Jidoka.Turn.State do
         %Effect.LLMDecision{type: :final} = decision ->
           apply_final_result(state, decision)
 
-        %Effect.LLMDecision{type: :operation, name: name, arguments: arguments} = decision ->
-          Jidoka.Turn.State.OperationPlanner.plan_turn(state, decision, name, arguments)
-
-        %Effect.LLMDecision{type: :operations, operations: operations} = decision ->
+        %Effect.LLMDecision{type: type, operations: operations} = decision
+        when type in [:operation, :operations] ->
           Jidoka.Turn.State.OperationPlanner.plan_turns(state, decision, operations)
       end
     end

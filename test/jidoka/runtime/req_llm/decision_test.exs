@@ -27,36 +27,48 @@ defmodule Jidoka.Adapter.ReqLLM.DecisionTest do
   end
 
   test "parses operation decisions from JSON text" do
-    assert {:ok, %{type: :operation, name: "weather", arguments: %{"city" => "Paris"}}} =
+    assert {:ok, decision} =
              Decision.parse_text(~s({"type":"operation","name":"weather","arguments":{"city":"Paris"}}))
+
+    assert_operation(decision, "weather", %{"city" => "Paris"})
   end
 
   test "normalizes common tool call aliases to operation decisions" do
-    assert {:ok, %{type: :operation, name: "weather", arguments: %{"city" => "Paris"}}} =
+    assert {:ok, decision} =
              Decision.parse_text(~s({"type":"tool","name":"weather","arguments":{"city":"Paris"}}))
 
-    assert {:ok, %{type: :operation, name: "weather", arguments: %{}}} =
-             Decision.parse_text(~s({"type":"function_call","name":"weather"}))
+    assert_operation(decision, "weather", %{"city" => "Paris"})
 
-    assert {:ok, %{type: :operation, name: "weather", arguments: %{}}} =
-             Decision.parse_text(~s({"type":"tool_call","name":"weather"}))
+    assert {:ok, decision} = Decision.parse_text(~s({"type":"function_call","name":"weather"}))
+    assert_operation(decision, "weather", %{})
 
-    assert {:ok, %{type: :operation, name: "weather", arguments: %{}}} =
-             Decision.parse_text(~s({"type":"action","name":"weather"}))
+    assert {:ok, decision} = Decision.parse_text(~s({"type":"tool_call","name":"weather"}))
+    assert_operation(decision, "weather", %{})
+
+    assert {:ok, decision} = Decision.parse_text(~s({"type":"action","name":"weather"}))
+    assert_operation(decision, "weather", %{})
   end
 
   test "normalizes operation-name shorthand when arguments are present" do
-    assert {:ok, %{type: :operation, name: "read_page", arguments: %{"url" => "https://example.com"}}} =
+    assert {:ok, decision} =
              Decision.parse_text(~s({"type":"read_page","url":"https://example.com"}))
 
-    assert {:ok, %{type: :operation, name: "search_web", arguments: %{"query" => "runic"}}} =
+    assert_operation(decision, "read_page", %{"url" => "https://example.com"})
+
+    assert {:ok, decision} =
              Decision.parse_text(~s({"type":"search_web","params":{"query":"runic"}}))
 
-    assert {:ok, %{type: :operation, name: "read_page", arguments: %{"url" => "https://example.com"}}} =
+    assert_operation(decision, "search_web", %{"query" => "runic"})
+
+    assert {:ok, decision} =
              Decision.parse_text(~s({"name":"read_page","arguments":{"url":"https://example.com"}}))
 
-    assert {:ok, %{type: :operation, name: "read_page", arguments: %{"url" => "https://example.com"}}} =
+    assert_operation(decision, "read_page", %{"url" => "https://example.com"})
+
+    assert {:ok, decision} =
              Decision.parse_text(~s({"tool_call":{"name":"read_page","arguments":{"url":"https://example.com"}}}))
+
+    assert_operation(decision, "read_page", %{"url" => "https://example.com"})
   end
 
   test "parses batched operation decisions" do
@@ -93,8 +105,10 @@ defmodule Jidoka.Adapter.ReqLLM.DecisionTest do
              ```
              """)
 
-    assert {:ok, %{type: :operation, name: "lookup", arguments: %{}}} =
+    assert {:ok, decision} =
              Decision.parse_text(~s(The answer is {"type":"operation","name":"lookup"} thanks))
+
+    assert_operation(decision, "lookup", %{})
   end
 
   test "falls back to final text when no JSON object is present" do
@@ -142,7 +156,16 @@ defmodule Jidoka.Adapter.ReqLLM.DecisionTest do
     assert {:ok, %{type: :final, content: "atom keyed"}} =
              Decision.parse_object(%{type: "final", content: "atom keyed"})
 
-    assert {:ok, %{type: :operation, name: "lookup", arguments: %{}}} =
+    assert {:ok, decision} =
              Decision.parse_object(%{"type" => "operation", "name" => "lookup"})
+
+    assert_operation(decision, "lookup", %{})
+  end
+
+  defp assert_operation(decision, name, arguments) do
+    assert decision.type == :operation
+    assert [operation] = decision.operations
+    assert operation.name == name
+    assert operation.arguments == arguments
   end
 end
