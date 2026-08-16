@@ -5,19 +5,29 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
   alias Jidoka.Workflow.Loop.Cursor
   alias Jidoka.Workflow.Runtime.{Retry, Value}
   alias Jidoka.Workflow.Step
+  alias Jidoka.Workflow.Suspension
 
   @default_map_max_concurrency 8
 
   @spec run_step(Jidoka.Workflow.Spec.t(), Step.t(), map()) :: map()
-  def run_step(_spec, %Step{}, %{error: error} = state) when not is_nil(error), do: state
-
-  def run_step(_spec, %Step{name: name}, %{suspension: %Cursor{step: suspended_step}} = state)
-      when name != suspended_step,
-      do: state
-
   def run_step(spec, %Step{} = step, state) do
     state = ensure_runtime_state(state)
 
+    if is_nil(state.error) do
+      case Suspension.find(state.outcomes) do
+        {:ok, suspension} -> run_available_step(spec, step, state, suspension)
+        {:error, reason} -> Map.put(state, :error, reason)
+      end
+    else
+      state
+    end
+  end
+
+  defp run_available_step(_spec, %Step{name: name}, state, {suspended_step, _cursor})
+       when name != suspended_step,
+       do: state
+
+  defp run_available_step(spec, %Step{} = step, state, _suspension) do
     if completed_step?(state, step) do
       state
     else
@@ -38,13 +48,10 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
     state
     |> put_in([:steps, step.name], result)
     |> put_in([:outcomes, step.name], %{status: :ok})
-    |> Map.put(:suspension, nil)
   end
 
   defp apply_step_result(_spec, step, state, {:suspend, %Cursor{} = cursor}) do
-    state
-    |> put_in([:outcomes, step.name], %{status: :suspended, cursor: cursor})
-    |> Map.put(:suspension, cursor)
+    put_in(state, [:outcomes, step.name], %{status: :suspended, cursor: cursor})
   end
 
   defp apply_step_result(spec, step, state, {:error, reason}) do
@@ -289,7 +296,6 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
     state
     |> Map.put_new(:outcomes, %{})
     |> Map.put_new(:max_concurrency, nil)
-    |> Map.put_new(:suspension, nil)
   end
 
   defp completed_step?(state, %Step{name: name}) do
@@ -308,12 +314,11 @@ defmodule Jidoka.Workflow.Runtime.StepRunner do
 
   defp loop_cursor(%Step{name: name}, state), do: loop_cursor(name, state)
 
-  defp loop_cursor(name, %{suspension: %Cursor{step: name} = cursor}), do: cursor
-
   defp loop_cursor(name, state) when is_atom(name) do
-    case get_in(state, [:outcomes, name]) do
-      %{status: :suspended, cursor: %Cursor{} = cursor} -> cursor
-      _outcome -> nil
+    case Suspension.find(state.outcomes) do
+      {:ok, {^name, cursor}} -> cursor
+      {:ok, _other} -> nil
+      {:error, _reason} -> nil
     end
   end
 end

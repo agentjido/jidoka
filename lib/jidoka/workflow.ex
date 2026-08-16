@@ -213,7 +213,9 @@ defmodule Jidoka.Workflow do
     end
   end
 
-  defp normalize_snapshot(%Jidoka.Workflow.Snapshot{} = snapshot), do: {:ok, snapshot}
+  defp normalize_snapshot(%Jidoka.Workflow.Snapshot{} = snapshot),
+    do: Jidoka.Workflow.Snapshot.normalize(snapshot)
+
   defp normalize_snapshot(binary) when is_binary(binary), do: Jidoka.Workflow.Snapshot.deserialize(binary)
   defp normalize_snapshot(other), do: {:error, {:invalid_workflow_snapshot, other}}
 

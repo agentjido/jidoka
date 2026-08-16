@@ -128,6 +128,8 @@ defmodule Jidoka.WorkflowLifecycleTest do
   end
 
   test "workflow snapshots reject runtime values and unsupported input" do
+    cursor = Cursor.new!(:work, %{pending: [1]}, 3)
+
     snapshot = %Snapshot{
       schema_version: Snapshot.schema_version(),
       workflow: LifecycleWorkflow,
@@ -135,8 +137,7 @@ defmodule Jidoka.WorkflowLifecycleTest do
       input: %{value: 1},
       context: %{},
       steps: %{},
-      outcomes: %{},
-      loop_cursor: Cursor.new!(:work, %{pending: [1]}, 3)
+      outcomes: %{work: %{status: :suspended, cursor: cursor}}
     }
 
     assert {:ok, binary} = Snapshot.serialize(snapshot)
@@ -147,7 +148,7 @@ defmodule Jidoka.WorkflowLifecycleTest do
     assert {:error, {:unsupported_snapshot_version, 99}} =
              unsupported |> :erlang.term_to_binary() |> Snapshot.deserialize()
 
-    non_portable = put_in(snapshot.loop_cursor.state, %{worker: self()})
+    non_portable = put_in(snapshot.outcomes.work.cursor.state, %{worker: self()})
 
     assert {:error, {:non_serializable_workflow_snapshot_value, _, :pid}} =
              Snapshot.serialize(non_portable)
@@ -161,6 +162,39 @@ defmodule Jidoka.WorkflowLifecycleTest do
     assert {:error, {:snapshot_deserialize_failed, _exception}} = Snapshot.deserialize(<<1, 2, 3>>)
   end
 
+  test "version one snapshots normalize one cursor and reject conflicts" do
+    cursor = Cursor.new!(:work, %{pending: [1]}, 3)
+
+    current = %Snapshot{
+      schema_version: Snapshot.schema_version(),
+      workflow: LifecycleWorkflow,
+      workflow_id: "lifecycle_workflow",
+      input: %{value: 1},
+      context: %{},
+      steps: %{},
+      outcomes: %{work: %{status: :suspended, cursor: cursor}}
+    }
+
+    legacy = current |> Map.put(:schema_version, 1) |> Map.put(:loop_cursor, cursor)
+
+    assert {:ok, upgraded} = legacy |> :erlang.term_to_binary() |> Snapshot.deserialize()
+    assert upgraded.schema_version == Snapshot.schema_version()
+    assert {:ok, ^cursor} = Snapshot.cursor(upgraded)
+    refute Map.has_key?(upgraded, :loop_cursor)
+
+    conflicting_cursor = Cursor.new!(:other, %{pending: []}, 3)
+    conflicting = Map.put(legacy, :loop_cursor, conflicting_cursor)
+
+    assert {:error, {:workflow_snapshot_cursor_conflict, ^cursor, ^conflicting_cursor}} =
+             conflicting |> :erlang.term_to_binary() |> Snapshot.deserialize()
+
+    duplicate =
+      put_in(current.outcomes[:other], %{status: :suspended, cursor: conflicting_cursor})
+
+    assert {:error, {:multiple_workflow_suspensions, [:other, :work]}} =
+             Snapshot.serialize(duplicate)
+  end
+
   test "bounded loops complete, suspend and resume, and stop at their exact limit" do
     assert {:ok, result} = Workflow.run(LoopWorkflow, %{items: [1, 2]})
     assert result.value == %{pending: [], processed: [1, 2]}
@@ -169,7 +203,10 @@ defmodule Jidoka.WorkflowLifecycleTest do
     assert {:hibernate, snapshot} =
              Workflow.run(SuspendingWorkflow, %{value: 7}, context: %{pause: true})
 
-    assert snapshot.loop_cursor.next_iteration == 1
+    refute Map.has_key?(snapshot, :loop_cursor)
+    assert %{pause: %{status: :suspended}} = snapshot.outcomes
+    assert {:ok, cursor} = Snapshot.cursor(snapshot)
+    assert cursor.next_iteration == 1
     assert {:ok, resumed} = Workflow.resume(snapshot, context: %{pause: false})
     assert resumed.value == %{value: 7}
 

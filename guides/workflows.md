@@ -309,12 +309,13 @@ Serialize the snapshot or resume it directly:
 {:ok, result} = Jidoka.Workflow.resume(binary, context: %{tenant: "acme"})
 ```
 
-The snapshot stores public context data, completed step outcomes, the loop
-cursor, iteration history, and created work. It does not store runtime-only
-capabilities. Resume validates the workflow identity, schema version, loop
-step, and original safety bound. Earlier completed steps do not run again. The
-workflow snapshot binary is not signed, so keep it in trusted application
-storage.
+The snapshot stores public context data, step outcomes, iteration history, and
+created work. The single suspended outcome owns the loop cursor. It does not
+store runtime-only capabilities. Resume validates the workflow identity,
+schema version, unique suspended outcome, loop step, and original safety
+bound. Version 1 snapshots are upgraded when their copied cursor agrees with
+the suspended outcome. Earlier completed steps do not run again. The workflow
+snapshot binary is not signed, so keep it in trusted application storage.
 
 ### Retry
 
