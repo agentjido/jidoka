@@ -70,6 +70,29 @@ defmodule Jidoka.ContextWindowTest do
     assert overflow.omitted_turn_ids == []
   end
 
+  test "large grouped transcripts keep one exact suffix without partial turns" do
+    prefix = [Agent.Message.system("System contract")]
+    transcript = Enum.flat_map(1..100, &turn("turn-#{&1}", "user #{&1}", "answer #{&1}"))
+    kept = Enum.drop(transcript, 190)
+    sizing_policy = Policy.new!(minimum_recent_turns: 0)
+
+    budget =
+      base_prompt()
+      |> Map.put(:messages, Enum.map(prefix ++ kept, &Agent.Message.to_map/1))
+      |> ContextWindow.estimate_tokens(sizing_policy)
+
+    policy = %Policy{sizing_policy | input_budget: budget}
+
+    assert {:ok, projected, evidence} =
+             ContextWindow.project(base_prompt(), prefix, transcript, policy, "turn-100")
+
+    assert evidence.turn_count_after == 5
+    assert evidence.omitted_turn_ids == Enum.map(1..95, &"turn-#{&1}")
+
+    assert Enum.map(tl(projected.messages), & &1.content) ==
+             Enum.flat_map(96..100, &["user #{&1}", "answer #{&1}"])
+  end
+
   test "policy derives input capacity from model context and output reserve" do
     spec =
       Agent.Spec.new!(
