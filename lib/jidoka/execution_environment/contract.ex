@@ -6,22 +6,19 @@ defmodule Jidoka.ExecutionEnvironment.Contract do
   @doc "Validates that a value contains no live runtime terms."
   @spec validate_portable(term(), keyword()) :: :ok | {:error, String.t()}
   def validate_portable(value, _opts \\ []) do
-    case invalid_path(value, []) do
-      nil -> :ok
-      {path, type} -> {:error, "non-portable #{inspect(type)} at #{format_path(path)}"}
-    end
+    validate(value, portable: true)
   end
 
   @doc "Validates portable map data and rejects credential-like keys."
   @spec validate_safe_map(map(), keyword()) :: :ok | {:error, String.t()}
   def validate_safe_map(map, _opts \\ []) when is_map(map) do
-    with :ok <- validate_portable(map), do: validate_keys(map, [])
+    validate(map, portable: true, safe_keys: true)
   end
 
   @doc "Validates a nonnegative portable limit map."
   @spec validate_limits(map(), keyword()) :: :ok | {:error, String.t()}
-  def validate_limits(map, opts \\ []) when is_map(map) do
-    with :ok <- validate_safe_map(map, opts), do: validate_limit_values(map, [])
+  def validate_limits(map, _opts \\ []) when is_map(map) do
+    validate(map, portable: true, safe_keys: true, nonnegative: true)
   end
 
   @doc "Validates that an opaque resource reference is not a raw host path."
@@ -63,75 +60,93 @@ defmodule Jidoka.ExecutionEnvironment.Contract do
   def project(value) when is_atom(value) and not is_nil(value), do: Atom.to_string(value)
   def project(value), do: value
 
-  defp invalid_path(value, path) when is_function(value), do: {Enum.reverse(path), :function}
-  defp invalid_path(value, path) when is_pid(value), do: {Enum.reverse(path), :pid}
-  defp invalid_path(value, path) when is_port(value), do: {Enum.reverse(path), :port}
-  defp invalid_path(value, path) when is_reference(value), do: {Enum.reverse(path), :reference}
-  defp invalid_path(%module{}, path), do: {Enum.reverse(path), {:struct, module}}
-
-  defp invalid_path(value, path) when is_map(value) do
-    Enum.find_value(value, fn {key, nested} ->
-      invalid_path(key, [:key | path]) || invalid_path(nested, [key | path])
-    end)
+  defp validate(value, rules) do
+    case walk(value, [], Map.new(rules)) do
+      :ok -> :ok
+      {:error, failure} -> {:error, format_failure(failure)}
+    end
   end
 
-  defp invalid_path(value, path) when is_list(value) do
-    value
-    |> Enum.with_index()
-    |> Enum.find_value(fn {nested, index} -> invalid_path(nested, [index | path]) end)
-  end
+  defp walk(%module{}, path, _rules),
+    do: {:error, {:non_portable, path, {:struct, module}}}
 
-  defp invalid_path(value, path) when is_tuple(value),
-    do: value |> Tuple.to_list() |> invalid_path(path)
-
-  defp invalid_path(_value, _path), do: nil
-
-  defp validate_keys(map, path) do
+  defp walk(map, path, rules) when is_map(map) do
     Enum.reduce_while(map, :ok, fn {key, value}, :ok ->
-      case validate_key_value(key, value, path) do
-        :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
+      with :ok <- validate_map_key(key, path, rules),
+           :ok <- walk(value, path ++ [key], rules) do
+        {:cont, :ok}
+      else
+        {:error, _failure} = error -> {:halt, error}
       end
     end)
   end
 
-  defp validate_nested_key_value(key, value, path) when is_map(value),
-    do: validate_keys(value, [key | path])
+  defp walk(list, path, rules) when is_list(list), do: walk_sequence(list, path, rules)
 
-  defp validate_nested_key_value(key, value, path) when is_list(value),
-    do: validate_list_keys(value, [key | path])
+  defp walk(tuple, path, rules) when is_tuple(tuple),
+    do: tuple |> Tuple.to_list() |> walk_sequence(path, rules)
 
-  defp validate_nested_key_value(_key, _value, _path), do: :ok
+  defp walk(value, path, rules) do
+    cond do
+      Map.get(rules, :nonnegative, false) and is_number(value) and value < 0 ->
+        {:error, {:negative_limit, path, value}}
 
-  defp validate_key_value(key, value, path) do
-    case validate_key_name(key, path) do
-      :ok -> validate_nested_key_value(key, value, path)
-      {:error, _reason} = error -> error
+      portable_leaf?(value) ->
+        :ok
+
+      true ->
+        {:error, {:non_portable, path, runtime_type(value)}}
     end
   end
 
-  defp validate_key_name(key, path) do
-    if sensitive_key?(key) do
-      {:error, "credential-like key at #{format_path(Enum.reverse([key | path]))}"}
-    else
-      :ok
-    end
-  end
-
-  defp validate_list_keys(list, path) do
-    list
+  defp walk_sequence(values, path, rules) do
+    values
     |> Enum.with_index()
-    |> Enum.reduce_while(:ok, fn
-      {%{} = map, index}, :ok ->
-        case validate_keys(map, [index | path]) do
-          :ok -> {:cont, :ok}
-          {:error, _reason} = error -> {:halt, error}
-        end
-
-      {_value, _index}, :ok ->
-        {:cont, :ok}
+    |> Enum.reduce_while(:ok, fn {value, index}, :ok ->
+      case walk(value, path ++ [index], rules) do
+        :ok -> {:cont, :ok}
+        {:error, _failure} = error -> {:halt, error}
+      end
     end)
   end
+
+  defp validate_map_key(key, path, rules) do
+    cond do
+      not portable_key?(key) ->
+        {:error, {:invalid_key, path ++ [{:key, key}], key}}
+
+      Map.get(rules, :safe_keys, false) and sensitive_key?(key) ->
+        {:error, {:credential_key, path ++ [key], key}}
+
+      true ->
+        :ok
+    end
+  end
+
+  defp portable_key?(key), do: is_binary(key) or is_atom(key) or is_integer(key)
+
+  defp portable_leaf?(value) do
+    is_nil(value) or is_boolean(value) or is_binary(value) or is_number(value) or is_atom(value)
+  end
+
+  defp runtime_type(value) when is_function(value), do: :function
+  defp runtime_type(value) when is_pid(value), do: :pid
+  defp runtime_type(value) when is_port(value), do: :port
+  defp runtime_type(value) when is_reference(value), do: :reference
+  defp runtime_type(value) when is_bitstring(value), do: :bitstring
+  defp runtime_type(_value), do: :unsupported
+
+  defp format_failure({:non_portable, path, type}),
+    do: "non-portable #{inspect(type)} at #{format_path(path)}"
+
+  defp format_failure({:invalid_key, path, key}),
+    do: "invalid portable map key #{inspect(key)} at #{format_path(path)}"
+
+  defp format_failure({:credential_key, path, _key}),
+    do: "credential-like key at #{format_path(path)}"
+
+  defp format_failure({:negative_limit, path, _value}),
+    do: "negative limit at #{format_path(path)}"
 
   defp sensitive_key?(key) do
     normalized =
@@ -145,26 +160,16 @@ defmodule Jidoka.ExecutionEnvironment.Contract do
       Enum.any?(@sensitive_words, &String.contains?(normalized, &1))
   end
 
-  defp validate_limit_values(map, path) do
-    Enum.reduce_while(map, :ok, fn {key, value}, :ok ->
-      case validate_limit_value(key, value, path) do
-        :ok -> {:cont, :ok}
-        {:error, _reason} = error -> {:halt, error}
-      end
-    end)
-  end
-
-  defp validate_limit_value(key, value, path) when is_number(value) and value < 0,
-    do: {:error, "negative limit at #{format_path(Enum.reverse([key | path]))}"}
-
-  defp validate_limit_value(key, value, path) when is_map(value),
-    do: validate_limit_values(value, [key | path])
-
-  defp validate_limit_value(_key, _value, _path), do: :ok
-
   defp project_key(key) when is_atom(key), do: Atom.to_string(key)
   defp project_key(key), do: key
 
   defp format_path([]), do: "root"
-  defp format_path(path), do: Enum.map_join(path, ".", &to_string/1)
+
+  defp format_path(path) do
+    Enum.reduce(path, "root", fn
+      index, path when is_integer(index) -> path <> "[#{index}]"
+      {:key, key}, path -> path <> ".key(#{inspect(key)})"
+      key, path -> path <> "." <> to_string(key)
+    end)
+  end
 end
