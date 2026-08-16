@@ -14,9 +14,12 @@ defmodule JidokaShowcase.MemoryAgent.Memory do
   end
 
   def store(session_id) when is_binary(session_id) do
+    store(session_id, "memory_agent")
+  end
+
+  def store(session_id, agent_id) when is_binary(session_id) and is_binary(agent_id) do
     {Jidoka.Memory.Store.JidoMemory,
-     namespace: @namespace,
-     scope: :session,
+     agent_id: agent_id,
      session_id: session_id,
      provider_opts: [store: {Jido.Memory.Store.ETS, [table: @table]}]}
   end

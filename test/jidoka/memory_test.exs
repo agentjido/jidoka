@@ -91,6 +91,44 @@ defmodule Jidoka.MemoryTest do
     end
   end
 
+  test "memory routes require one complete partition identity" do
+    assert {:ok, agent_route} =
+             Memory.Route.new(kind: :agent, agent_id: "memory_agent")
+
+    assert {:ok, session_route} =
+             Memory.Route.new(
+               kind: :session,
+               agent_id: "memory_agent",
+               session_id: "sess_1"
+             )
+
+    assert {:ok, namespace_route} =
+             Memory.Route.new(
+               kind: :namespace,
+               agent_id: "memory_agent",
+               namespace: "tenant:acme"
+             )
+
+    assert Memory.Route.key(agent_route) == {:agent, "memory_agent"}
+    assert Memory.Route.key(session_route) == {:session, "memory_agent", "sess_1"}
+    assert Memory.Route.key(namespace_route) == {:namespace, "tenant:acme"}
+
+    assert {:error, :missing_memory_route_session_id} =
+             Memory.Route.new(kind: :session, agent_id: "memory_agent")
+
+    assert %Memory.RecallRequest{route: ^session_route} =
+             Memory.RecallRequest.new!(
+               agent_id: "memory_agent",
+               session_id: "sess_1",
+               scope: :session,
+               query: "legacy"
+             )
+
+    assert JidoMemory.namespace(agent_route) == "agent:memory_agent"
+    assert JidoMemory.namespace(session_route) == "agent:memory_agent:session:sess_1"
+    assert JidoMemory.namespace(namespace_route) == "tenant:acme"
+  end
+
   test "in-memory store writes and recalls matching entries" do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}
@@ -131,10 +169,36 @@ defmodule Jidoka.MemoryTest do
       )
 
     assert {:ok, %Memory.RecallResult{entries: entries}} = Memory.Store.recall(store, recall)
-    assert Enum.map(entries, & &1.id) == ["mem_session", "mem_agent"]
+    assert Enum.map(entries, & &1.id) == ["mem_session"]
+
+    namespace_route =
+      Memory.Route.new!(
+        kind: :namespace,
+        agent_id: "memory_agent",
+        namespace: "tenant:acme"
+      )
+
+    namespace_entry =
+      Memory.Entry.new!(
+        id: "mem_namespace",
+        agent_id: "memory_agent",
+        content: "Tenant memory."
+      )
+
+    assert {:ok, %Memory.WriteResult{}} =
+             Memory.Store.write(
+               store,
+               Memory.WriteRequest.new!(entry: namespace_entry, route: namespace_route)
+             )
+
+    namespace_recall =
+      Memory.RecallRequest.new!(route: namespace_route, query: "tenant", limit: 5)
+
+    assert {:ok, %Memory.RecallResult{entries: [^namespace_entry]}} =
+             Memory.Store.recall(store, namespace_recall)
 
     assert {:ok, all_entries} = Memory.Store.list_entries(store)
-    assert Enum.map(all_entries, & &1.id) == ["mem_agent", "mem_session", "mem_other"]
+    assert Enum.map(all_entries, & &1.id) == ["mem_agent", "mem_session", "mem_other", "mem_namespace"]
   end
 
   test "memory stores collapse repeated idempotency keys to one visible entry" do

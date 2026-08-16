@@ -69,6 +69,7 @@ defmodule Jidoka.Projection do
     do: ExecutionEnvironment.Error.to_map(value)
 
   def project(%Jidoka.Memory.Entry{} = value), do: Projection.Memory.project(value)
+  def project(%Jidoka.Memory.Route{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.RecallRequest{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.RecallResult{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.WriteRequest{} = value), do: Projection.Memory.project(value)

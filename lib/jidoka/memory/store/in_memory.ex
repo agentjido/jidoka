@@ -8,6 +8,7 @@ defmodule Jidoka.Memory.Store.InMemory do
   alias Jidoka.Memory.Entry
   alias Jidoka.Memory.RecallRequest
   alias Jidoka.Memory.RecallResult
+  alias Jidoka.Memory.Route
   alias Jidoka.Memory.WriteRequest
   alias Jidoka.Memory.WriteResult
 
@@ -24,33 +25,41 @@ defmodule Jidoka.Memory.Store.InMemory do
     entries =
       pid
       |> Agent.get(& &1)
-      |> Enum.filter(&matches_request?(&1, request))
+      |> Enum.map(&normalize_record/1)
+      |> Enum.filter(fn {route, _entry} -> Route.key(route) == Route.key(request.route) end)
+      |> Enum.map(&elem(&1, 1))
       |> Enum.take(request.limit)
 
     RecallResult.new(request: request, entries: entries)
   end
 
   @impl true
-  def write(%WriteRequest{entry: %Entry{} = entry, idempotency_key: key} = request, opts) do
+  def write(%WriteRequest{entry: %Entry{} = entry, route: %Route{} = route, idempotency_key: key} = request, opts) do
     pid = fetch_pid!(opts)
     entry = put_idempotency_key(entry, key)
 
     stored_entry =
-      Agent.get_and_update(pid, fn entries ->
-        stored_entry = idempotent_entry(entries, entry, key)
-        updated = [stored_entry | Enum.reject(entries, &(&1.id == stored_entry.id))]
+      Agent.get_and_update(pid, fn records ->
+        records = Enum.map(records, &normalize_record/1)
+        stored_entry = idempotent_entry(records, route, entry, key)
+
+        updated =
+          [{route, stored_entry} | Enum.reject(records, fn {_route, existing} -> existing.id == stored_entry.id end)]
+
         {stored_entry, updated}
       end)
 
     WriteResult.new(request: request, entry: stored_entry)
   end
 
-  defp idempotent_entry(_entries, entry, nil), do: entry
+  defp idempotent_entry(_records, _route, entry, nil), do: entry
 
-  defp idempotent_entry(entries, entry, key) do
-    case Enum.find(entries, &(idempotency_key(&1) == key)) do
+  defp idempotent_entry(records, route, entry, key) do
+    case Enum.find(records, fn {existing_route, existing} ->
+           Route.key(existing_route) == Route.key(route) and idempotency_key(existing) == key
+         end) do
       nil -> entry
-      existing -> existing
+      {_route, existing} -> existing
     end
   end
 
@@ -71,19 +80,21 @@ defmodule Jidoka.Memory.Store.InMemory do
     entries =
       pid
       |> Agent.get(& &1)
+      |> Enum.map(&normalize_record/1)
       |> Enum.reverse()
+      |> Enum.map(&elem(&1, 1))
 
     {:ok, entries}
   end
 
-  defp matches_request?(%Entry{} = entry, %RecallRequest{} = request) do
-    entry.agent_id == request.agent_id and
-      session_matches?(entry.session_id, request.session_id, request.scope)
-  end
+  defp normalize_record({%Route{} = route, %Entry{} = entry}), do: {route, entry}
 
-  defp session_matches?(nil, _session_id, :agent), do: true
-  defp session_matches?(session_id, session_id, _scope), do: true
-  defp session_matches?(_entry_session_id, _request_session_id, _scope), do: false
+  defp normalize_record(%Entry{agent_id: agent_id, session_id: session_id} = entry)
+       when is_binary(session_id),
+       do: {Route.new!(kind: :session, agent_id: agent_id, session_id: session_id), entry}
+
+  defp normalize_record(%Entry{agent_id: agent_id} = entry),
+    do: {Route.new!(kind: :agent, agent_id: agent_id), entry}
 
   defp fetch_pid!(opts) do
     case Keyword.fetch(opts, :pid) do

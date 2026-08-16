@@ -197,9 +197,12 @@ You can also bypass the runtime helper and talk to `Jidoka.Memory.Store`:
 ```elixir
 request =
   Jidoka.Memory.RecallRequest.new!(
-    agent_id: "memory_agent",
-    session_id: "conv-1",
-    scope: :session,
+    route:
+      Jidoka.Memory.Route.new!(
+        kind: :session,
+        agent_id: "memory_agent",
+        session_id: "conv-1"
+      ),
     query: "hello",
     limit: 5
   )
