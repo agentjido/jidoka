@@ -158,6 +158,27 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
     assert :cont = RequireLuaExecution.call(context)
   end
 
+  test "output control rejects a failed Lua execution after a completed attempt" do
+    context = %{
+      boundary: :output,
+      agent_state: %Jidoka.Agent.State{
+        operation_results: [
+          %Jidoka.Effect.OperationResult{
+            operation: "catalog_execute",
+            output: %{"status" => "completed"}
+          },
+          %Jidoka.Effect.OperationResult{
+            operation: "catalog_execute",
+            output: %{"status" => "failed", "reason" => "later error"}
+          }
+        ]
+      }
+    }
+
+    assert {:block, {:lua_execution_not_completed, "failed", "later error"}} =
+             RequireLuaExecution.call(context)
+  end
+
   test "output control reports the most recent failed Lua execution" do
     context = %{
       boundary: :output,
@@ -364,8 +385,7 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
 
     started =
       for _ <- 1..2 do
-        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id,
-                        action_pid},
+        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, action_pid},
                        1_000
 
         {customer_id, action_pid}
@@ -455,8 +475,7 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
 
     started =
       for _ <- 1..2 do
-        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id,
-                        action_pid},
+        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, action_pid},
                        1_000
 
         {customer_id, action_pid}
