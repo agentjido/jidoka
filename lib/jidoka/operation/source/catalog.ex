@@ -25,6 +25,7 @@ defmodule Jidoka.Operation.Source.Catalog do
   alias Jidoka.Operation.Source.Catalog.Parameters
   alias Jidoka.Schema
   alias Jidoka.Workflow.Lua
+  alias Jidoka.Workflow.Lua.Policy, as: LuaPolicy
 
   @default_prefix "catalog_"
   @default_timeout 1_500
@@ -76,6 +77,12 @@ defmodule Jidoka.Operation.Source.Catalog do
              Schema.get_key(attrs, :max_parallel_calls, @default_max_parallel_calls),
              :max_parallel_calls
            ),
+         :ok <-
+           LuaPolicy.validate_catalog_limits(%{
+             max_calls: max_calls,
+             max_parallel_calls: max_parallel_calls,
+             timeout: timeout
+           }),
          {:ok, require_read_only?} <-
            Normalize.boolean(Schema.get_key(attrs, :require_read_only?, true), :require_read_only?),
          {:ok, result} <- Normalize.result(Schema.get_key(attrs, :result, :structured)),
@@ -151,7 +158,12 @@ defmodule Jidoka.Operation.Source.Catalog do
           "max_parallel_calls" => source.max_parallel_calls,
           "require_read_only?" => source.require_read_only?,
           "result" => Atom.to_string(source.result),
-          "parameters_schema" => Parameters.schema(suffix)
+          "parameters_schema" =>
+            Parameters.schema(suffix, %{
+              max_calls: source.max_calls,
+              max_parallel_calls: source.max_parallel_calls,
+              timeout: source.timeout
+            })
         })
         |> Normalize.reject_nil_values()
     )
@@ -209,36 +221,38 @@ defmodule Jidoka.Operation.Source.Catalog do
     script = arguments |> Normalize.get(:script, "") |> to_string()
     allowed_tools = arguments |> Normalize.get(:allowed_tools, []) |> List.wrap() |> Enum.map(&to_string/1)
 
-    max_calls =
-      arguments
-      |> Normalize.get(:max_calls, source.max_calls)
-      |> Normalize.positive_integer_or_default(source.max_calls)
+    with {:ok, max_calls} <- request_limit(arguments, :max_calls, source.max_calls),
+         {:ok, max_parallel_calls} <-
+           request_limit(arguments, :max_parallel_calls, source.max_parallel_calls),
+         {:ok, timeout} <- request_limit(arguments, :timeout, source.timeout) do
+      result =
+        Lua.execute(script,
+          catalog: source.catalog_value,
+          allowed_tools: allowed_tools,
+          context: context,
+          max_calls: max_calls,
+          max_parallel_calls: max_parallel_calls,
+          timeout: timeout,
+          require_read_only?: source.require_read_only?
+        )
 
-    max_parallel_calls =
-      arguments
-      |> Normalize.get(:max_parallel_calls, source.max_parallel_calls)
-      |> Normalize.positive_integer_or_default(source.max_parallel_calls)
+      case result do
+        {:ok, result} -> {:ok, result}
+        {:error, %{} = result} -> {:ok, repairable_failure(source, result)}
+        {:error, reason} -> {:ok, repairable_failure(source, failure_result(script, allowed_tools, reason))}
+      end
+    end
+  end
 
-    timeout =
-      arguments
-      |> Normalize.get(:timeout, source.timeout)
-      |> Normalize.positive_integer_or_default(source.timeout)
+  defp request_limit(arguments, field, maximum) do
+    requested = Normalize.get(arguments, field, maximum)
 
-    result =
-      Lua.execute(script,
-        catalog: source.catalog_value,
-        allowed_tools: allowed_tools,
-        context: context,
-        max_calls: max_calls,
-        max_parallel_calls: max_parallel_calls,
-        timeout: timeout,
-        require_read_only?: source.require_read_only?
-      )
-
-    case result do
-      {:ok, result} -> {:ok, result}
-      {:error, %{} = result} -> {:ok, repairable_failure(source, result)}
-      {:error, reason} -> {:ok, repairable_failure(source, failure_result(script, allowed_tools, reason))}
+    with {:ok, requested} <- Normalize.positive_integer(requested, field),
+         true <- requested <= maximum do
+      {:ok, requested}
+    else
+      false -> {:error, {:catalog_limit_ceiling_exceeded, field, requested, maximum}}
+      {:error, _reason} = error -> error
     end
   end
 

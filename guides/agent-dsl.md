@@ -119,6 +119,11 @@ tools do
 end
 ```
 
+Catalog `max_calls`, `max_parallel_calls`, and `timeout` values are host-owned
+ceilings. The generated execute schema publishes each maximum. A model request
+can use the maximum or a lower positive value. A higher value returns a typed
+ceiling error and does not run the Lua workflow.
+
 Supported approval values:
 
 | Value | Meaning |

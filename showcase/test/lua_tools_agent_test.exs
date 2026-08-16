@@ -59,7 +59,9 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
   end
 
   test "query and describe return a compact selected hidden catalog" do
-    assert {:ok, query_result} = run_catalog_operation("catalog_query", %{"query" => "unpaid invoice"})
+    assert {:ok, query_result} =
+             run_catalog_operation("catalog_query", %{"query" => "unpaid invoice"})
+
     ids = Enum.map(query_result["tools"], & &1["id"])
 
     assert "billing.invoice.list_unpaid" in ids
@@ -292,7 +294,7 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
     assert result["next"] =~ "call catalog_execute again"
   end
 
-  test "execute preserves field-specific defaults for invalid numeric params" do
+  test "execute rejects invalid numeric limits" do
     script = """
     return jidoka.workflow({
       steps = {
@@ -306,7 +308,7 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
     })
     """
 
-    assert {:ok, result} =
+    assert {:error, {:invalid_catalog_positive_integer, :timeout, "bad"}} =
              run_catalog_execute(
                %{
                  "script" => script,
@@ -315,9 +317,6 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
                },
                %{}
              )
-
-    assert result["status"] == "completed"
-    assert result["policy"]["timeout_ms"] == 1_500
   end
 
   test "jidoka.workflow executes a Lua-authored DAG with resolved step refs" do
@@ -411,7 +410,8 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
 
     started =
       for _ <- 1..2 do
-        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, action_pid},
+        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id,
+                        action_pid},
                        1_000
 
         {customer_id, action_pid}
@@ -501,7 +501,8 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
 
     started =
       for _ <- 1..2 do
-        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id, action_pid},
+        assert_receive {:lua_hidden_action_started, "billing.invoice.list_unpaid", customer_id,
+                        action_pid},
                        1_000
 
         {customer_id, action_pid}

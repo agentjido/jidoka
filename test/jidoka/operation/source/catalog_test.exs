@@ -121,6 +121,9 @@ defmodule Jidoka.Operation.Source.CatalogTest do
     execute = Enum.find(operations, &(&1.name == "catalog_execute"))
     assert execute.metadata["parameters_schema"]["required"] == ["script", "allowed_tools"]
     assert execute.metadata["max_parallel_calls"] == 8
+    assert execute.metadata["parameters_schema"]["properties"]["max_calls"]["maximum"] == 12
+    assert execute.metadata["parameters_schema"]["properties"]["max_parallel_calls"]["maximum"] == 8
+    assert execute.metadata["parameters_schema"]["properties"]["timeout"]["maximum"] == 1_500
   end
 
   test "normalizes a custom prefix" do
@@ -261,12 +264,56 @@ defmodule Jidoka.Operation.Source.CatalogTest do
     assert result["next"] =~ "catalog_execute again"
   end
 
+  test "request limits can lower but cannot raise host ceilings" do
+    source = CatalogSource.new!(catalog: TestCatalog, max_calls: 4, max_parallel_calls: 3, timeout: 1_000)
+    {:ok, %{capability: capability}} = Source.compile(source)
+    context = Jidoka.Context.from_data!(%{})
+
+    script = """
+    return jidoka.workflow({
+      id = "catalog_limit_test",
+      steps = {{id = "search", tool = "crm.customer.search", arguments = {query = "Ada", limit = 1}}},
+      output = "search"
+    })
+    """
+
+    base = %{"script" => script, "allowed_tools" => ["crm.customer.search"]}
+
+    for limits <- [
+          %{"max_calls" => 2, "max_parallel_calls" => 2, "timeout" => 500},
+          %{"max_calls" => 4, "max_parallel_calls" => 3, "timeout" => 1_000}
+        ] do
+      assert {:ok, %{"status" => "completed"}} =
+               capability.(
+                 operation_intent("catalog_execute", Map.merge(base, limits)),
+                 Effect.Journal.new!(),
+                 context
+               )
+    end
+
+    for {field, requested, maximum} <- [
+          {:max_calls, 5, 4},
+          {:max_parallel_calls, 4, 3},
+          {:timeout, 1_001, 1_000}
+        ] do
+      assert {:error, {:catalog_limit_ceiling_exceeded, ^field, ^requested, ^maximum}} =
+               capability.(
+                 operation_intent("catalog_execute", Map.put(base, Atom.to_string(field), requested)),
+                 Effect.Journal.new!(),
+                 context
+               )
+    end
+  end
+
   test "validates catalog source configuration" do
     assert {:error, {:invalid_catalog_module, InvalidCatalog, :missing_catalog_callback}} =
              CatalogSource.new(catalog: InvalidCatalog)
 
     assert {:error, {:invalid_catalog_prefix, "Bad Prefix"}} =
              CatalogSource.new(catalog: TestCatalog, prefix: "Bad Prefix")
+
+    assert {:error, {:catalog_host_limit_exceeds_lua_ceiling, :max_calls, 26, 25}} =
+             CatalogSource.new(catalog: TestCatalog, max_calls: 26)
   end
 
   defp operation_intent(name, arguments) do
