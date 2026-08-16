@@ -219,20 +219,81 @@ defmodule Jidoka.MemoryTest do
         content: "Repeated capture"
       )
 
-    assert {:ok, %Memory.WriteResult{entry: %{id: "mem_first"}}} =
+    assert {:ok, %Memory.WriteResult{entry: stored}} =
              Memory.Store.write(
                store,
                Memory.WriteRequest.new!(entry: first, idempotency_key: "capture-key")
              )
 
-    assert {:ok, %Memory.WriteResult{entry: %{id: "mem_first"}}} =
+    assert stored.content == "First capture"
+    refute Map.has_key?(stored.metadata, "idempotency_key")
+
+    assert {:ok, %Memory.WriteResult{entry: ^stored}} =
              Memory.Store.write(
                store,
                Memory.WriteRequest.new!(entry: second, idempotency_key: "capture-key")
              )
 
-    assert {:ok, [%{id: "mem_first", content: "First capture"}]} =
-             Memory.Store.list_entries(store)
+    assert {:ok, [^stored]} = Memory.Store.list_entries(store)
+  end
+
+  test "idempotency metadata is opaque and keys are independent across routes" do
+    legacy =
+      Memory.Entry.new!(
+        id: "mem_legacy",
+        agent_id: "memory_agent",
+        content: "User metadata only",
+        metadata: %{"idempotency_key" => "same-key"}
+      )
+
+    {:ok, pid} = InMemory.start_link(initial_entries: [legacy])
+    store = {InMemory, pid: pid}
+    agent_route = Memory.Route.new!(kind: :agent, agent_id: "memory_agent")
+
+    namespace_route =
+      Memory.Route.new!(
+        kind: :namespace,
+        agent_id: "memory_agent",
+        namespace: "tenant:acme"
+      )
+
+    keyed =
+      Memory.Entry.new!(
+        id: "mem_keyed",
+        agent_id: "memory_agent",
+        content: "True keyed write"
+      )
+
+    assert {:ok, %Memory.WriteResult{entry: agent_entry}} =
+             Memory.Store.write(
+               store,
+               Memory.WriteRequest.new!(
+                 entry: keyed,
+                 route: agent_route,
+                 idempotency_key: "same-key"
+               )
+             )
+
+    assert agent_entry.content == "True keyed write"
+
+    assert {:ok, %Memory.WriteResult{entry: namespace_entry}} =
+             Memory.Store.write(
+               store,
+               Memory.WriteRequest.new!(
+                 entry: keyed,
+                 route: namespace_route,
+                 idempotency_key: "same-key"
+               )
+             )
+
+    assert namespace_entry.id != agent_entry.id
+    assert {:ok, entries} = Memory.Store.list_entries(store)
+    assert Enum.map(entries, & &1.content) == ["User metadata only", "True keyed write", "True keyed write"]
+
+    assert JidoMemory.idempotency_entry_id(agent_route, keyed, "same-key") == agent_entry.id
+
+    assert JidoMemory.idempotency_entry_id(namespace_route, keyed, "same-key") ==
+             namespace_entry.id
   end
 
   test "memory writes require context namespace values when configured" do

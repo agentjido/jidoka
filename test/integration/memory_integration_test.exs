@@ -160,7 +160,7 @@ defmodule Jidoka.MemoryIntegrationTest do
                :conversation
              ])
 
-    assert entry.metadata["idempotency_key"] == entry.id
+    refute Map.has_key?(entry.metadata, "idempotency_key")
     assert entry.content =~ "User: Capture this request"
     assert entry.content =~ "Assistant: Captured response."
     assert entry.metadata["source"] == "jidoka_capture"

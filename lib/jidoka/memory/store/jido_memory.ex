@@ -61,7 +61,7 @@ defmodule Jidoka.Memory.Store.JidoMemory do
     namespace = namespace(route)
 
     attrs = %{
-      id: request.idempotency_key || entry.id,
+      id: idempotency_entry_id(route, entry, request.idempotency_key),
       namespace: namespace,
       class: metadata_value(entry.metadata, :class, :semantic),
       kind: metadata_value(entry.metadata, :kind, :fact),
@@ -71,7 +71,6 @@ defmodule Jidoka.Memory.Store.JidoMemory do
       source: metadata_value(entry.metadata, :source, "jidoka"),
       metadata:
         entry.metadata
-        |> maybe_put_metadata("idempotency_key", request.idempotency_key)
         |> Map.put("jidoka_agent_id", entry.agent_id)
         |> maybe_put_metadata("jidoka_session_id", entry.session_id)
     }
@@ -115,6 +114,14 @@ defmodule Jidoka.Memory.Store.JidoMemory do
     do: "agent:" <> agent_id <> ":session:" <> session_id
 
   def namespace(%Route{kind: :namespace, namespace: namespace}), do: namespace
+
+  @doc false
+  @spec idempotency_entry_id(Route.t(), Entry.t(), String.t() | nil) :: String.t()
+  def idempotency_entry_id(_route, %Entry{id: id}, nil), do: id
+  def idempotency_entry_id(_route, %Entry{id: id}, id), do: id
+
+  def idempotency_entry_id(%Route{} = route, %Entry{}, key),
+    do: Jidoka.Id.stable("mem", [Route.key(route), key])
 
   defp list_namespace(opts) do
     cond do

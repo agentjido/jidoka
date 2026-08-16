@@ -146,7 +146,7 @@ defmodule Jidoka.SessionMemoryCommitOrderTest do
       ])
 
     assert entry.id == expected_id
-    assert entry.metadata["idempotency_key"] == expected_id
+    refute Map.has_key?(entry.metadata, "idempotency_key")
 
     request = List.last(completed.requests)
 

@@ -156,8 +156,7 @@ defmodule Jidoka.Memory.Runtime do
       "kind" => capture_kind,
       "source" => "jidoka_capture",
       "request_id" => request.request_id,
-      "session_id" => Keyword.get(opts, :session_id),
-      "idempotency_key" => capture_id
+      "session_id" => Keyword.get(opts, :session_id)
     })
   end
 

@@ -110,6 +110,7 @@ Request to upsert one entry.
 | --- | --- | --- | --- |
 | `entry` | `Entry.t()` | required | Entry to persist. |
 | `route` | `Memory.Route.t()` | required | Exact partition that receives the entry. |
+| `idempotency_key` | non-empty string or `nil` | `nil` | Private dedupe key within the route. |
 | `metadata` | map | `%{}` | Write-specific metadata. |
 
 ### `Jidoka.Memory.Route`
@@ -159,8 +160,17 @@ dispatching.
   or store options. Stores must use `request.route`.
 - **Keep metadata opaque.** Tenant facts, embedding model names, and trace ids
   can use metadata, but they do not change the partition.
+- **Keep idempotency private.** Stores index `{route, idempotency_key}` without
+  adding the key to entry metadata. A metadata field named `idempotency_key`
+  has no special meaning.
 - **Keep stores small.** Implementing the three callbacks is enough; the
   runtime handles policy, capture, and injection.
+
+Older entries do not establish private dedupe evidence. The in-memory store
+starts an empty index when it receives its former list state. The Jido adapter
+uses a route-key-derived record identity for the first keyed write after this
+version boundary. Later writes with the same route and key use that identity.
+Keys in different routes remain independent.
 
 ## Testing
 
