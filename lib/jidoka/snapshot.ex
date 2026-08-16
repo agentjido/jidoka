@@ -46,6 +46,14 @@ defmodule Jidoka.Snapshot do
   @spec schema_version() :: pos_integer()
   def schema_version, do: @schema_version
 
+  @doc "Returns the snapshot schema versions that this release accepts."
+  @spec supported_schema_versions() :: [pos_integer()]
+  def supported_schema_versions, do: @supported_schema_versions
+
+  @doc "Returns the durable snapshot codec prefix, which is separate from the schema version."
+  @spec serialization_prefix() :: String.t()
+  def serialization_prefix, do: Codec.serialized_prefix()
+
   @doc "Builds a durable agent snapshot from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do

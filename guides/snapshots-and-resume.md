@@ -76,7 +76,7 @@ A snapshot is data. The runtime treats it as an inert payload until
 Key facts:
 
 - [`Jidoka.Snapshot`](`Jidoka.Snapshot`) has a
-  `schema_version/0` of `1`. Unknown versions fail at normalization.
+  current `schema_version/0` of `2` and accepts schema versions `1` and `2`.
 - `serialize/1` returns `"jidoka:snapshot:v1:" <> base64`. The body is
   `:erlang.term_to_binary/1` over the validated struct.
 - Snapshots are validated for portability before serialization: pids,
@@ -121,8 +121,8 @@ snapshot.cursor.phase
 ### Step 2: Serialize And Persist
 
 Snapshots survive any byte-safe transport. The serialized payload is opaque;
-the contract is the `"jidoka:snapshot:v1:"` prefix and the `schema_version`
-field.
+the contract includes the `schema_version` field. The
+`"jidoka:snapshot:v1:"` codec prefix is a separate wire-format fact.
 
 ```elixir
 {:ok, payload} = Jidoka.Snapshot.serialize(snapshot)
@@ -177,7 +177,7 @@ _}` or `{:error, _}`.
 
 ### Step 5: Honor Schema Versioning
 
-The struct carries `schema_version: 1`. Anything else fails up front:
+New structs carry `schema_version: 2`. Versions other than `1` and `2` fail up front:
 
 ```elixir
 Jidoka.Snapshot.new(%{
@@ -187,7 +187,7 @@ Jidoka.Snapshot.new(%{
   cursor: cursor,
   turn_state: turn_state
 })
-#=> {:error, {:unsupported_snapshot_schema_version, 99, 1}}
+#=> {:error, {:unsupported_snapshot_schema_version, 99, 2}}
 ```
 
 Likewise, `deserialize/1` only accepts the `"jidoka:snapshot:v1:"` prefix:
@@ -200,6 +200,16 @@ Jidoka.Snapshot.deserialize("v0:garbage")
 When the snapshot version eventually changes, older payloads will not be
 silently coerced; Jidoka returns a versioned error and the application owns the
 migration.
+
+Authoritative durable facts checked by `scripts/check_docs.exs`:
+
+```text
+Jidoka.Snapshot.schema_version() == 2
+Jidoka.Snapshot.supported_schema_versions() == [1, 2]
+Jidoka.Snapshot.serialization_prefix() == "jidoka:snapshot:v1:"
+Jidoka.Session.Data.schema_version() == 3
+Jidoka.Session.Data.supported_schema_versions() == [1, 2, 3]
+```
 
 ### Step 6: Reuse Snapshots In A Session
 
@@ -269,7 +279,7 @@ For approval flows, see the resume-with-`:approval` examples in
 | --- | --- | --- |
 | `{:error, :invalid_snapshot_serialization}` | Payload does not start with `"jidoka:snapshot:v1:"`. | Re-serialize from the source `Snapshot` or migrate the persisted row. |
 | `{:error, {:non_serializable_snapshot_value, path, :pid}}` | A pid was placed in snapshot metadata or context. | Remove runtime references before persisting; keep only data. |
-| `{:error, {:unsupported_snapshot_schema_version, n, 1}}` | Persisted snapshot was written under a different schema. | Migrate the persisted payload or discard the older snapshot. |
+| `{:error, {:unsupported_snapshot_schema_version, n, 2}}` | Persisted snapshot uses a schema other than accepted versions `1` and `2`. | Migrate the persisted payload or discard the older snapshot. |
 | `Jidoka.resume/2` returns `{:hibernate, _}` again | Checkpoint policy or review interrupt still in effect. | Loop until `{:ok, _}` or `{:error, _}`; supply `:approval` if waiting on review. |
 | `{:error, {:missing_pending_effect, _}}` on resume | The snapshot was finalized or already consumed. | Start a new turn; do not resume a snapshot whose work has already completed. |
 

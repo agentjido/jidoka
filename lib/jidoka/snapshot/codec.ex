@@ -5,6 +5,10 @@ defmodule Jidoka.Snapshot.Codec do
   @signature_algorithm :sha256
   @minimum_signing_secret_bytes 32
 
+  @doc false
+  @spec serialized_prefix() :: String.t()
+  def serialized_prefix, do: @serialized_prefix
+
   @spec serialize(term()) :: {:ok, String.t()} | {:error, term()}
   def serialize(snapshot) do
     with :ok <- validate_portable(snapshot),

@@ -312,6 +312,10 @@ defmodule Jidoka.StabilizationContractTest do
   end
 
   test "snapshots reject invalid serialized payloads and future schema versions" do
+    assert Snapshot.supported_schema_versions() == [1, 2]
+    assert Snapshot.serialization_prefix() == "jidoka:snapshot:v1:"
+    assert Session.supported_schema_versions() == [1, 2, 3]
+
     spec = agent_spec()
     request = Turn.Request.new!(input: "Hello")
 

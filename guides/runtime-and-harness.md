@@ -392,9 +392,11 @@ This is safe-boundary durability, not arbitrary process resurrection.
 
 Versioned durability boundaries:
 
-- `Jidoka.Snapshot.schema_version() == 1`;
-- serialized snapshots use the opaque prefix `jidoka:snapshot:v1:`;
-- `Jidoka.Session.Data.schema_version() == 1`;
+- `Jidoka.Snapshot.schema_version() == 2`;
+- `Jidoka.Snapshot.supported_schema_versions() == [1, 2]`;
+- `Jidoka.Snapshot.serialization_prefix() == "jidoka:snapshot:v1:"`;
+- `Jidoka.Session.Data.schema_version() == 3`;
+- `Jidoka.Session.Data.supported_schema_versions() == [1, 2, 3]`;
 - import documents use `Jidoka.Import.AgentDocument.version() == 1`.
 
 Unsupported versions fail during normalization instead of attempting a partial

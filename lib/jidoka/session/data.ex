@@ -60,6 +60,10 @@ defmodule Jidoka.Session.Data do
   @spec schema_version() :: pos_integer()
   def schema_version, do: @schema_version
 
+  @doc "Returns the durable session schema versions that this release accepts."
+  @spec supported_schema_versions() :: [pos_integer()]
+  def supported_schema_versions, do: @supported_schema_versions
+
   @doc "Returns the possible durable session statuses."
   @spec statuses() :: [status()]
   def statuses, do: @statuses

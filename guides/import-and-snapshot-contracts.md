@@ -47,7 +47,7 @@ tools:
     actions: %{"local_time" => MyApp.LocalTime}
   )
 
-# Snapshot (schema_version 1, "jidoka:snapshot:v1:" prefix)
+# Snapshot (schema_version 2, "jidoka:snapshot:v1:" codec prefix)
 {:ok, snapshot} =
   Jidoka.Snapshot.from_turn_state(turn_state, Jidoka.Turn.Cursor.after_prompt())
 
@@ -55,7 +55,7 @@ tools:
 String.starts_with?(serialized, "jidoka:snapshot:v1:")
 #=> true
 
-# Session (schema_version 1)
+# Session (schema_version 3)
 {:ok, session} = Jidoka.Session.Data.start(spec)
 ```
 
@@ -65,7 +65,7 @@ String.starts_with?(serialized, "jidoka:snapshot:v1:")
 ╭───────────────────╮       ╭───────────────────╮       ╭───────────────────╮
 │ Import.Agent      │       │ Jidoka.Snapshot   │       │ Jidoka.Session.Data│
 │ Document          │       │                   │       │                   │
-│  version: 1       │       │  schema_version:1 │       │  schema_version:1 │
+│  version: 1       │       │  schema_version:2 │       │  schema_version:3 │
 ╰─────────┬─────────╯       ╰─────────┬─────────╯       ╰─────────┬─────────╯
           │                           │                            │
           ▼                           ▼                            ▼
@@ -132,7 +132,7 @@ Serializable semantic snapshot used for hibernate/resume.
 
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `schema_version` | positive integer | `1` (current) | Compatibility boundary. `Snapshot.schema_version/0` returns the supported value. |
+| `schema_version` | positive integer | `2` (current; accepts `1`, `2`) | Compatibility boundary. Use the version accessors for current and accepted values. |
 | `snapshot_id` | non-empty string | generated prefixed UUIDv7 (`"snap_…"`) | Stable id for storage and traces. |
 | `agent_id` | non-empty string | required | Mirrors `Spec.id`. |
 | `cursor` | `Turn.Cursor.t()` | required | Next safe resume boundary. |
@@ -141,7 +141,7 @@ Serializable semantic snapshot used for hibernate/resume.
 
 **Serialization format.** `Snapshot.serialize/1` produces an opaque
 string with the prefix `"jidoka:snapshot:v1:"` followed by URL-safe Base64.
-The prefix is the wire-level version tag. `Snapshot.deserialize/1`
+The prefix is the codec tag. It is separate from the snapshot schema version. `Snapshot.deserialize/1`
 refuses any other prefix with `{:error, :invalid_snapshot_serialization}`.
 
 Snapshots refuse non-portable values (functions, pids, ports, references) and
@@ -154,7 +154,7 @@ Serializable envelope for running an agent across requests.
 
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `schema_version` | positive integer | `1` (current) | Compatibility boundary. `Jidoka.Session.Data.schema_version/0` returns the supported value. |
+| `schema_version` | positive integer | `3` (current; accepts `1`, `2`, `3`) | Compatibility boundary. Use the version accessors for current and accepted values. |
 | `session_id` | non-empty string | generated prefixed UUIDv7 (`"sess_…"`) | Stable session id. |
 | `agent_id` | non-empty string | required | Mirrors `Spec.id`. |
 | `spec` | `Agent.Spec.t()` | required | The compiled spec the session runs. |
@@ -174,8 +174,8 @@ breaking persisted data:
 | Boundary | What may change between versions | Stability promise |
 | --- | --- | --- |
 | `AgentDocument` v1 | Tool registry shape, controls vocabulary, operation kinds. | The `version` field is the wire signal. New versions add new constructors; old versions stay loadable until intentionally dropped. |
-| `Snapshot` v1 | Internal `Turn.State` fields, cursor metadata, capture of new domain values. | The `"jidoka:snapshot:v1:"` prefix is the wire signal. New schema versions get a new prefix. |
-| `Jidoka.Session.Data` v1 | Status set, snapshot list pruning, review request shape. | The `schema_version` field is the wire signal. |
+| `Snapshot` schema v1-v2 | Internal `Turn.State` fields, cursor metadata, capture of new domain values. | The `schema_version` field is the compatibility signal. The codec prefix is separate. |
+| `Jidoka.Session.Data` schema v1-v3 | Status set, snapshot list pruning, review request shape. | The `schema_version` field is the wire signal. |
 
 Loaders **must** reject unsupported versions instead of best-effort guessing.
 
@@ -205,7 +205,7 @@ test "snapshot round-trips through serialization" do
 
   {:ok, restored} = Jidoka.Snapshot.deserialize(serialized)
   assert restored.snapshot_id == snapshot.snapshot_id
-  assert restored.schema_version == 1
+  assert restored.schema_version == 2
 end
 
 test "rejects an unsupported document version" do
@@ -238,6 +238,16 @@ end
   snapshot.
 - [`Jidoka.Turn.State`](`Jidoka.Turn.State`) - state shape stored on every
   snapshot.
+
+Authoritative durable facts checked by `scripts/check_docs.exs`:
+
+```text
+Jidoka.Snapshot.schema_version() == 2
+Jidoka.Snapshot.supported_schema_versions() == [1, 2]
+Jidoka.Snapshot.serialization_prefix() == "jidoka:snapshot:v1:"
+Jidoka.Session.Data.schema_version() == 3
+Jidoka.Session.Data.supported_schema_versions() == [1, 2, 3]
+```
 
 ## Related Guides
 
