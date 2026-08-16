@@ -110,6 +110,7 @@ defmodule Jidoka.Adapter.Runic.Background do
              Runtime.build_workflow(state.workflow_spec),
              max_concurrency: state.max_concurrency || System.schedulers_online(),
              checkpoint_strategy: Keyword.get(opts, :checkpoint_strategy, :every_cycle),
+             on_complete: Keyword.get(opts, :on_complete),
              executor: Executor,
              executor_opts: [task_supervisor: Module.concat(runner, TaskSupervisor)]
            ),
@@ -126,6 +127,7 @@ defmodule Jidoka.Adapter.Runic.Background do
     runner_opts = [
       max_concurrency: runtime_opts.max_concurrency || System.schedulers_online(),
       checkpoint_strategy: Keyword.get(opts, :checkpoint_strategy, :every_cycle),
+      on_complete: Keyword.get(opts, :on_complete),
       executor: Executor,
       executor_opts: [task_supervisor: Module.concat(runner, TaskSupervisor)]
     ]

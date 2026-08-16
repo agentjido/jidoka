@@ -2,9 +2,10 @@ defmodule Jidoka.Workflow.Scheduler do
   @moduledoc """
   OTP scheduler that creates normal `Jidoka.Workflow.Background` runs.
 
-  The scheduler owns schedule definitions, timers, and trigger history. Use an
-  application supervisor for lifecycle ownership. Set `auto_schedule: false`
-  in deterministic tests and call `trigger_due/2` with an explicit time.
+  The scheduler owns schedule definitions, timers, append-only trigger history,
+  and a separate index of active runs. Use an application supervisor for
+  lifecycle ownership. Set `auto_schedule: false` in deterministic tests and
+  call `trigger_due/2` with an explicit time.
   """
 
   use GenServer
@@ -66,11 +67,14 @@ defmodule Jidoka.Workflow.Scheduler do
     {:ok,
      %{
        runner: Keyword.fetch!(opts, :runner),
+       background: Keyword.get(opts, :background, Background),
        schedules: %{},
        history: %{},
+       active_runs: %{},
        timers: %{},
        clock: Keyword.get(opts, :clock, &DateTime.utc_now/0),
-       auto_schedule: Keyword.get(opts, :auto_schedule, true)
+       auto_schedule: Keyword.get(opts, :auto_schedule, true),
+       notification_target: Keyword.get(opts, :name) || self()
      }}
   end
 
@@ -148,6 +152,11 @@ defmodule Jidoka.Workflow.Scheduler do
   end
 
   @impl GenServer
+  def handle_cast({:schedule_run_terminal, schedule_id, run_id}, state) do
+    {:noreply, delete_active_run(state, schedule_id, run_id)}
+  end
+
+  @impl GenServer
   def handle_info({:schedule_due, schedule_id, due_at}, state) do
     case Map.fetch(state.schedules, schedule_id) do
       {:ok, %Schedule{next_at: ^due_at} = schedule} ->
@@ -159,8 +168,32 @@ defmodule Jidoka.Workflow.Scheduler do
     end
   end
 
+  @impl GenServer
+  def code_change(_old_vsn, state, _extra) do
+    state =
+      state
+      |> Map.put_new(:background, Background)
+      |> Map.put_new(:active_runs, %{})
+      |> Map.put_new(:notification_target, self())
+
+    {:ok, rebuild_active_runs(state)}
+  end
+
+  @doc false
+  @spec notify_run_terminal(String.t(), term(), server(), String.t()) :: :ok
+  def notify_run_terminal(run_id, _workflow, scheduler, schedule_id) do
+    GenServer.cast(scheduler, {:schedule_run_terminal, schedule_id, run_id})
+  end
+
   defp fire(%Schedule{} = schedule, now, state, advance?) do
     due_at = schedule.next_at || now
+
+    {overlap?, state} =
+      if schedule.overlap == :skip do
+        active_run?(schedule, state)
+      else
+        {false, state}
+      end
 
     {trigger, state} =
       cond do
@@ -170,7 +203,7 @@ defmodule Jidoka.Workflow.Scheduler do
         misfired?(schedule, now) and schedule.misfire == :skip ->
           record(schedule, due_at, now, :skipped, nil, :misfire, 1, state)
 
-        schedule.overlap == :skip and active_run?(schedule, state) ->
+        overlap? ->
           record(schedule, due_at, now, :skipped, nil, :overlap, 1, state)
 
         true ->
@@ -190,12 +223,19 @@ defmodule Jidoka.Workflow.Scheduler do
 
   defp submit_with_retry(schedule, due_at, now, run_id, state) do
     {:ok, attempt_counter} = Elixir.Agent.start_link(fn -> 0 end)
-    run_opts = Keyword.put(schedule.run_opts, :run_id, run_id)
+
+    run_opts =
+      schedule.run_opts
+      |> Keyword.put(:run_id, run_id)
+      |> Keyword.put(
+        :on_complete,
+        {__MODULE__, :notify_run_terminal, [state.notification_target, schedule.id]}
+      )
 
     result =
       Retry.call(schedule.retry, fn ->
         Elixir.Agent.update(attempt_counter, &(&1 + 1))
-        Background.submit(state.runner, schedule.workflow, schedule.input, run_opts)
+        state.background.submit(state.runner, schedule.workflow, schedule.input, run_opts)
       end)
 
     attempt_count = Elixir.Agent.get(attempt_counter, & &1)
@@ -219,7 +259,9 @@ defmodule Jidoka.Workflow.Scheduler do
     }
 
     history = Map.update(state.history, schedule.id, [trigger], &(&1 ++ [trigger]))
-    {trigger, %{state | history: history}}
+    state = %{state | history: history}
+    state = if status == :started, do: put_active_run(state, schedule.id, run_id), else: state
+    {trigger, state}
   end
 
   defp advance_schedule(schedule, due_at, state) do
@@ -275,30 +317,81 @@ defmodule Jidoka.Workflow.Scheduler do
   defp misfired?(_schedule, _now), do: false
 
   defp active_run?(schedule, state) do
-    state.history
-    |> Map.get(schedule.id, [])
-    |> Enum.any?(fn
-      %Trigger{run_id: run_id} when is_binary(run_id) ->
-        case Background.get(state.runner, run_id) do
-          {:ok, %Run{status: status}} -> status not in [:completed, :failed]
-          {:error, _reason} -> false
-        end
-
-      _trigger ->
-        false
-    end)
+    state = refresh_active_runs(state, schedule.id)
+    {not empty_active_runs?(state, schedule.id), state}
   end
 
   defp maybe_cancel_active_runs(%Schedule{cancellation: :future_only}, state), do: state
 
   defp maybe_cancel_active_runs(schedule, state) do
-    state.history
-    |> Map.get(schedule.id, [])
-    |> Enum.each(fn
-      %Trigger{run_id: run_id} when is_binary(run_id) -> Background.stop(state.runner, run_id)
-      _trigger -> :ok
-    end)
+    state = refresh_active_runs(state, schedule.id)
 
-    state
+    state.active_runs
+    |> Map.get(schedule.id, MapSet.new())
+    |> Enum.each(&state.background.stop(state.runner, &1))
+
+    put_in(state, [:active_runs, schedule.id], MapSet.new())
+  end
+
+  defp put_active_run(state, schedule_id, run_id) do
+    update_in(state, [:active_runs, schedule_id], fn
+      nil -> MapSet.new([run_id])
+      %MapSet{} = run_ids -> MapSet.put(run_ids, run_id)
+    end)
+  end
+
+  defp delete_active_run(state, schedule_id, run_id) do
+    update_in(state, [:active_runs, schedule_id], fn
+      nil -> MapSet.new()
+      %MapSet{} = run_ids -> MapSet.delete(run_ids, run_id)
+    end)
+  end
+
+  defp empty_active_runs?(state, schedule_id) do
+    state.active_runs
+    |> Map.get(schedule_id, MapSet.new())
+    |> MapSet.size()
+    |> Kernel.==(0)
+  end
+
+  defp refresh_active_runs(state, schedule_id) do
+    active =
+      state.active_runs
+      |> Map.get(schedule_id, MapSet.new())
+      |> Enum.reduce(MapSet.new(), fn run_id, active ->
+        case state.background.get(state.runner, run_id) do
+          {:ok, %Run{} = run} -> if Run.terminal?(run), do: active, else: MapSet.put(active, run_id)
+          {:error, _reason} -> active
+        end
+      end)
+
+    put_in(state, [:active_runs, schedule_id], active)
+  end
+
+  defp rebuild_active_runs(state) do
+    active_runs =
+      Map.new(state.history, fn {schedule_id, triggers} ->
+        candidates =
+          triggers
+          |> Enum.reduce(MapSet.new(), fn
+            %Trigger{status: :started, run_id: run_id}, run_ids when is_binary(run_id) ->
+              MapSet.put(run_ids, run_id)
+
+            _trigger, run_ids ->
+              run_ids
+          end)
+
+        active =
+          Enum.reduce(candidates, MapSet.new(), fn run_id, active ->
+            case state.background.get(state.runner, run_id) do
+              {:ok, %Run{} = run} -> if Run.terminal?(run), do: active, else: MapSet.put(active, run_id)
+              {:error, _reason} -> active
+            end
+          end)
+
+        {schedule_id, active}
+      end)
+
+    %{state | active_runs: active_runs}
   end
 end

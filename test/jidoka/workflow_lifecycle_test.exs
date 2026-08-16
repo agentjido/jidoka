@@ -4,6 +4,7 @@ defmodule Jidoka.WorkflowLifecycleTest do
   alias Jidoka.Workflow
   alias Jidoka.Workflow.{Background, Run, Schedule, Scheduler, Snapshot}
   alias Jidoka.Workflow.Loop.Cursor
+  alias Jidoka.Workflow.Schedule.Trigger
 
   @runner __MODULE__.Runner
   @scheduler __MODULE__.Scheduler
@@ -117,6 +118,25 @@ defmodule Jidoka.WorkflowLifecycleTest do
 
     @impl true
     def run(_input, _context), do: {:ok, %{done: true}}
+  end
+
+  defmodule BackgroundProbe do
+    @moduledoc false
+
+    alias Jidoka.Workflow.Run
+
+    def get(probe, run_id) do
+      Elixir.Agent.get_and_update(probe, fn state ->
+        status = Map.fetch!(state.runs, run_id)
+        run = %Run{id: run_id, workflow_id: "probe", status: status, outcomes: %{}, event_count: 0}
+        {{:ok, run}, %{state | gets: state.gets ++ [run_id]}}
+      end)
+    end
+
+    def stop(probe, run_id) do
+      Elixir.Agent.update(probe, &%{&1 | stops: &1.stops ++ [run_id]})
+      :ok
+    end
   end
 
   setup do
@@ -353,6 +373,8 @@ defmodule Jidoka.WorkflowLifecycleTest do
     assert {:ok, %Run{status: :completed, output: %{value: 42}}} =
              Background.await(@runner, trigger.run_id)
 
+    assert eventually(fn -> active_run_ids(@scheduler, schedule.id) == MapSet.new() end)
+
     assert {:ok, unchanged} = Scheduler.get(@scheduler, schedule.id)
     assert unchanged.next_at == due_at
     assert [^trigger] = Scheduler.history(@scheduler, schedule.id)
@@ -363,5 +385,123 @@ defmodule Jidoka.WorkflowLifecycleTest do
     assert {:ok, cancelled_trigger} = Scheduler.trigger(@scheduler, schedule.id, @now)
     assert cancelled_trigger.status == :cancelled
     assert cancelled_trigger.reason == :schedule_disabled
+  end
+
+  test "active lookup and cancellation do not scan completed trigger history" do
+    {:ok, probe} =
+      Elixir.Agent.start_link(fn ->
+        %{runs: %{"active-run" => :running}, gets: [], stops: []}
+      end)
+
+    scheduler = __MODULE__.IndexedScheduler
+
+    start_supervised!(
+      {Scheduler,
+       name: scheduler, runner: probe, background: BackgroundProbe, auto_schedule: false, clock: fn -> @now end}
+    )
+
+    assert {:ok, schedule} =
+             Scheduler.add(scheduler, %{
+               id: "indexed",
+               workflow: LifecycleWorkflow,
+               input: %{value: 1},
+               trigger: {:at, @now},
+               overlap: :skip,
+               cancellation: :future_and_active
+             })
+
+    completed_history =
+      Enum.map(1..1_000, fn index ->
+        %Trigger{
+          schedule_id: schedule.id,
+          due_at: @now,
+          triggered_at: @now,
+          status: :started,
+          run_id: "completed-#{index}",
+          reason: nil,
+          attempts: 1
+        }
+      end)
+
+    :sys.replace_state(scheduler, fn state ->
+      %{
+        state
+        | history: %{schedule.id => completed_history},
+          active_runs: %{schedule.id => MapSet.new(["active-run"])}
+      }
+    end)
+
+    assert {:ok, %Trigger{status: :skipped, reason: :overlap}} =
+             Scheduler.trigger(scheduler, schedule.id, @now)
+
+    assert {:ok, _cancelled} = Scheduler.cancel(scheduler, schedule.id)
+
+    assert %{gets: ["active-run", "active-run"], stops: ["active-run"]} =
+             Elixir.Agent.get(probe, & &1)
+
+    assert active_run_ids(scheduler, schedule.id) == MapSet.new()
+    assert length(Scheduler.history(scheduler, schedule.id)) == 1_001
+  end
+
+  test "legacy scheduler state rebuilds only nonterminal active runs" do
+    {:ok, probe} =
+      Elixir.Agent.start_link(fn ->
+        %{runs: %{"active-run" => :running, "finished-run" => :completed}, gets: [], stops: []}
+      end)
+
+    history = %{
+      "recovered" => [
+        trigger("recovered", "finished-run"),
+        trigger("recovered", "active-run")
+      ]
+    }
+
+    legacy_state = %{
+      runner: probe,
+      background: BackgroundProbe,
+      schedules: %{},
+      history: history,
+      timers: %{},
+      clock: fn -> @now end,
+      auto_schedule: false,
+      notification_target: self()
+    }
+
+    assert {:ok, recovered} = Scheduler.code_change(:legacy, legacy_state, nil)
+    assert recovered.active_runs == %{"recovered" => MapSet.new(["active-run"])}
+
+    assert %{gets: gets, stops: []} = Elixir.Agent.get(probe, & &1)
+    assert Enum.sort(gets) == ["active-run", "finished-run"]
+  end
+
+  defp active_run_ids(scheduler, schedule_id) do
+    scheduler
+    |> :sys.get_state()
+    |> Map.fetch!(:active_runs)
+    |> Map.get(schedule_id, MapSet.new())
+  end
+
+  defp trigger(schedule_id, run_id) do
+    %Trigger{
+      schedule_id: schedule_id,
+      due_at: @now,
+      triggered_at: @now,
+      status: :started,
+      run_id: run_id,
+      reason: nil,
+      attempts: 1
+    }
+  end
+
+  defp eventually(predicate, attempts \\ 50)
+  defp eventually(predicate, 0), do: predicate.()
+
+  defp eventually(predicate, attempts) do
+    if predicate.() do
+      true
+    else
+      Process.sleep(2)
+      eventually(predicate, attempts - 1)
+    end
   end
 end

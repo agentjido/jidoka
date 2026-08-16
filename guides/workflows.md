@@ -581,6 +581,9 @@ next time in the declared timezone, including daylight-saving changes.
 Use `history/2` for trigger evidence. Use `trigger/3` for a manual run without
 moving the next scheduled time. In deterministic tests, start the scheduler
 with `auto_schedule: false` and call `trigger_due/2` with an explicit time.
+The scheduler keeps active run ownership in a separate index. Completed runs
+remain in history, but overlap checks and active cancellation inspect only the
+indexed run IDs.
 
 ## Inspect Workflows
 
