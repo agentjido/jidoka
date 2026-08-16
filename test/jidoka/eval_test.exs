@@ -5,6 +5,7 @@ defmodule Jidoka.EvalTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Eval
+  alias Jidoka.Eval.Case
   alias Jidoka.Runtime.LocalOperations
 
   import Jidoka.TestSupport, only: [count_results: 2]
@@ -107,10 +108,10 @@ defmodule Jidoka.EvalTest do
             %Eval.Case{
               id: "eval_fixed",
               request: %{request_id: "turn_fixed", input: "Hello"},
-              assertions: %{}
+              assertions: [%{kind: :equals, expected: "Hello"}]
             }} =
              Eval.Case.new(
-               [agent: spec, input: "Hello"],
+               [agent: spec, input: "Hello", assertions: %{equals: "Hello"}],
                id_generator: fn
                  "eval" -> "eval_fixed"
                  "turn" -> "turn_fixed"
@@ -133,6 +134,49 @@ defmodule Jidoka.EvalTest do
     assert_raise ArgumentError, ~r/invalid eval run/, fn -> Eval.Run.new!(case_id: "bad") end
   end
 
+  test "eval cases reject empty and unknown assertions" do
+    spec =
+      Agent.Spec.new!(
+        id: "eval_assertion_agent",
+        instructions: "Answer directly.",
+        model: %{provider: :test, id: "model"}
+      )
+
+    assert {:error, {:invalid_eval_assertions, :empty}} =
+             Case.new(agent: spec, input: "Hello", assertions: %{})
+
+    assert {:error, {:invalid_eval_assertions, {:unknown_keys, [:matches]}}} =
+             Case.new(agent: spec, input: "Hello", assertions: %{matches: "Hello"})
+  end
+
+  test "eval assertion variants survive portable JSON projection" do
+    spec =
+      Agent.Spec.new!(
+        id: "eval_projection_agent",
+        instructions: "Answer directly.",
+        model: %{provider: :test, id: "model"}
+      )
+
+    assert {:ok, eval_case} =
+             Case.new(
+               agent: spec,
+               input: "Hello",
+               assertions: %{contains: ["Hel", "lo"], equals: "Hello", operation_called: :lookup}
+             )
+
+    assertions =
+      eval_case
+      |> Jidoka.Projection.project()
+      |> Map.fetch!(:assertions)
+      |> Jason.encode!()
+      |> Jason.decode!()
+
+    assert {:ok, round_trip} =
+             Case.new(agent: spec, input: "Hello", assertions: assertions)
+
+    assert round_trip.assertions == eval_case.assertions
+  end
+
   test "run_case records hibernation as an eval error run" do
     spec =
       Agent.Spec.new!(
@@ -148,7 +192,8 @@ defmodule Jidoka.EvalTest do
                [
                  id: "eval_hibernate",
                  agent: spec,
-                 input: "Say hello"
+                 input: "Say hello",
+                 assertions: %{equals: "hello"}
                ],
                llm: llm,
                checkpoint: :after_prompt

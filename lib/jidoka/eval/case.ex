@@ -8,6 +8,7 @@ defmodule Jidoka.Eval.Case do
   """
 
   alias Jidoka.Agent
+  alias Jidoka.Eval.Assertion
   alias Jidoka.Id
   alias Jidoka.Schema
   alias Jidoka.Turn
@@ -18,7 +19,7 @@ defmodule Jidoka.Eval.Case do
               id: Schema.non_empty_string(),
               agent: Zoi.lazy({Agent.Spec, :schema, []}),
               request: Zoi.lazy({Turn.Request, :schema, []}),
-              assertions: Zoi.map() |> Zoi.default(%{}),
+              assertions: Zoi.array(Assertion.schema()) |> Zoi.min(1),
               metadata: Zoi.map() |> Zoi.default(%{})
             },
             coerce: true
@@ -39,13 +40,15 @@ defmodule Jidoka.Eval.Case do
 
     with {:ok, id} <- eval_id(attrs, opts),
          {:ok, agent} <- agent(attrs),
-         {:ok, request} <- request(attrs, opts) do
+         {:ok, request} <- request(attrs, opts),
+         {:ok, assertions} <- assertions(attrs) do
       attrs =
         attrs
         |> drop_keys([:id, :agent, :request, :input, :request_id, :agent_state, :context])
         |> Map.put(:id, id)
         |> Map.put(:agent, agent)
         |> Map.put(:request, request)
+        |> Map.put(:assertions, assertions)
 
       Schema.parse(@schema, attrs)
     end
@@ -106,6 +109,13 @@ defmodule Jidoka.Eval.Case do
         :error -> request
       end
     end)
+  end
+
+  defp assertions(attrs) do
+    case Schema.fetch_key(attrs, :assertions) do
+      {:ok, assertions} -> Assertion.normalize(assertions)
+      :error -> {:error, {:invalid_eval_assertions, :empty}}
+    end
   end
 
   defp drop_keys(attrs, keys) do

@@ -10,7 +10,6 @@ defmodule Jidoka.Eval do
   alias Jidoka.Effect
   alias Jidoka.Eval.{Case, Run}
   alias Jidoka.Snapshot
-  alias Jidoka.Schema
   alias Jidoka.Turn
   alias Jidoka.Turn.Execution, as: TurnExecution
 
@@ -29,10 +28,7 @@ defmodule Jidoka.Eval do
   @doc "Evaluates supported assertions against a completed turn result."
   @spec evaluate(Case.t(), Turn.Result.t()) :: [Run.assertion()]
   def evaluate(%Case{assertions: assertions}, %Turn.Result{} = result) do
-    []
-    |> maybe_assert_contains(Schema.get_key(assertions, :contains), result)
-    |> maybe_assert_equals(Schema.get_key(assertions, :equals), result)
-    |> maybe_assert_operation_called(Schema.get_key(assertions, :operation_called), result)
+    Enum.map(assertions, &evaluate_assertion(&1, result))
   end
 
   defp execute(%Case{} = eval_case, opts) do
@@ -73,52 +69,34 @@ defmodule Jidoka.Eval do
     )
   end
 
-  defp maybe_assert_contains(assertions, nil, _result), do: assertions
-
-  defp maybe_assert_contains(assertions, expected, %Turn.Result{content: content}) do
-    expected
-    |> List.wrap()
-    |> Enum.reduce(assertions, fn expected, assertions ->
-      append_assertion(assertions, %{
-        name: :contains,
-        status: assertion_status(is_binary(expected) and String.contains?(content, expected)),
-        expected: expected,
-        actual: content
-      })
-    end)
+  defp evaluate_assertion(%{kind: :contains, expected: expected}, %Turn.Result{content: content}) do
+    %{
+      name: :contains,
+      status: assertion_status(String.contains?(content, expected)),
+      expected: expected,
+      actual: content
+    }
   end
 
-  defp maybe_assert_equals(assertions, nil, _result), do: assertions
-
-  defp maybe_assert_equals(assertions, expected, %Turn.Result{content: content}) do
-    append_assertion(assertions, %{
+  defp evaluate_assertion(%{kind: :equals, expected: expected}, %Turn.Result{content: content}) do
+    %{
       name: :equals,
       status: assertion_status(content == expected),
       expected: expected,
       actual: content
-    })
+    }
   end
 
-  defp maybe_assert_operation_called(assertions, nil, _result), do: assertions
-
-  defp maybe_assert_operation_called(assertions, expected, %Turn.Result{} = result) do
+  defp evaluate_assertion(%{kind: :operation_called, expected: expected}, %Turn.Result{} = result) do
     actual = operation_names(result)
 
-    expected
-    |> List.wrap()
-    |> Enum.reduce(assertions, fn expected, assertions ->
-      expected = operation_name(expected)
-
-      append_assertion(assertions, %{
-        name: :operation_called,
-        status: assertion_status(expected in actual),
-        expected: expected,
-        actual: actual
-      })
-    end)
+    %{
+      name: :operation_called,
+      status: assertion_status(expected in actual),
+      expected: expected,
+      actual: actual
+    }
   end
-
-  defp append_assertion(assertions, assertion), do: assertions ++ [assertion]
 
   defp assertion_status(true), do: :passed
   defp assertion_status(false), do: :failed
@@ -132,10 +110,6 @@ defmodule Jidoka.Eval do
     end)
     |> Enum.reject(&is_nil/1)
   end
-
-  defp operation_name(name) when is_atom(name), do: Atom.to_string(name)
-  defp operation_name(name) when is_binary(name), do: name
-  defp operation_name(name), do: name
 
   defp observations(%Turn.Result{} = result) do
     %{
