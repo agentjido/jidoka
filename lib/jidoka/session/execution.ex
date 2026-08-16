@@ -198,9 +198,10 @@ defmodule Jidoka.Session.Execution do
   @doc """
   Recovers a stored session after its worker lease expires.
 
-  Recovery atomically replaces the expired lease and resumes the latest
-  durable snapshot. A completed journal result is replayed. An incomplete
-  effect follows its declared idempotency or reconciliation policy.
+  Recovery atomically replaces the expired lease. It resumes only a snapshot
+  for the leased request, or it restarts that same request when no matching
+  snapshot exists. A completed journal result is replayed. An incomplete effect
+  follows its declared idempotency or reconciliation policy.
   """
   @spec recover_session(String.t(), runtime_opts()) :: session_run_result()
   def recover_session(session_id, opts \\ []) when is_binary(session_id) and is_list(opts) do
@@ -741,12 +742,15 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp recover_claimed_session(%Session{} = session, opts) do
-    case Session.latest_snapshot(session) do
-      %Snapshot{} = snapshot ->
+    case Session.recovery_target(session) do
+      {:ok, {:resume, %Snapshot{} = snapshot}} ->
         resume_recovered_snapshot(session, snapshot, opts)
 
-      nil ->
-        restart_recovered_request(session, opts)
+      {:ok, {:restart, %Turn.Request{} = request}} ->
+        restart_recovered_request(session, request, opts)
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -758,9 +762,8 @@ defmodule Jidoka.Session.Execution do
     end
   end
 
-  defp restart_recovered_request(%Session{} = session, opts) do
-    with %Turn.Request{} = request <- List.last(session.requests),
-         opts = Keyword.put(opts, :session_id, session.session_id),
+  defp restart_recovered_request(%Session{} = session, %Turn.Request{} = request, opts) do
+    with opts = Keyword.put(opts, :session_id, session.session_id),
          {:ok, prepared} <- TurnExecution.prepare(session.spec, request, opts) do
       runtime_opts = Keyword.put(prepared.opts, :session_id, session.session_id)
 
@@ -774,7 +777,6 @@ defmodule Jidoka.Session.Execution do
         )
       end)
     else
-      nil -> {:error, {:session_not_recoverable, session.session_id, :missing_request}}
       {:error, _reason} = error -> error
     end
   end

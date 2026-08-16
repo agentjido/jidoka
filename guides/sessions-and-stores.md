@@ -324,7 +324,9 @@ claim the session:
   )
 ```
 
-Recovery uses the latest durable snapshot:
+The lease request ID selects recovery work. Jidoka uses the newest snapshot
+for that request only. Older request snapshots remain history and cannot
+become the recovery target:
 
 - if the worker stopped before its first snapshot, Jidoka restarts the stored
   request because no effect intent exists yet;

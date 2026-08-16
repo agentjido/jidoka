@@ -47,6 +47,7 @@ defmodule Jidoka.Session.Data do
           )
 
   @type status :: :new | :running | :hibernated | :waiting | :finished | :cancelled | :error
+  @type recovery_target :: {:resume, Snapshot.t()} | {:restart, Turn.Request.t()}
   @type t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
@@ -248,6 +249,21 @@ defmodule Jidoka.Session.Data do
   @spec latest_snapshot(t()) :: Snapshot.t() | nil
   def latest_snapshot(%__MODULE__{snapshots: snapshots}), do: List.last(snapshots)
 
+  @doc "Selects recovery work only for the request owned by the active lease."
+  @spec recovery_target(t()) :: {:ok, recovery_target()} | {:error, term()}
+  def recovery_target(%__MODULE__{lease: %Lease{request_id: request_id}} = session) do
+    with {:ok, request} <- leased_request(session, request_id),
+         :ok <- validate_recovery_snapshot_identities(session, request_id),
+         {:ok, target} <- select_recovery_target(session, request),
+         :ok <- validate_recovery_target_revision(session, target) do
+      {:ok, target}
+    end
+  end
+
+  def recovery_target(%__MODULE__{session_id: session_id}) do
+    {:error, {:session_not_recoverable, session_id, :missing_lease}}
+  end
+
   @doc "Derives pending review requests from the authoritative turn-state interrupt."
   @spec pending_reviews(t() | Snapshot.t()) :: [Review.Request.t()]
   def pending_reviews(%__MODULE__{status: :waiting} = session) do
@@ -299,6 +315,74 @@ defmodule Jidoka.Session.Data do
   end
 
   defp validate_distinct_fork_id(%__MODULE__{}, _fork_session_id), do: :ok
+
+  defp leased_request(%__MODULE__{requests: requests, session_id: session_id}, request_id) do
+    matching = Enum.filter(requests, &(&1.request_id == request_id))
+
+    case {matching, List.last(requests)} do
+      {[request], %Turn.Request{request_id: ^request_id}} ->
+        {:ok, request}
+
+      {[], _current} ->
+        {:error, {:recovery_request_not_found, session_id, request_id}}
+
+      {[_request | _duplicates], _current} when length(matching) > 1 ->
+        {:error, {:recovery_request_identity_conflict, session_id, request_id, length(matching)}}
+
+      {[_request], %Turn.Request{request_id: current_request_id}} ->
+        {:error, {:recovery_request_mismatch, session_id, request_id, current_request_id}}
+
+      {[_request], nil} ->
+        {:error, {:recovery_request_mismatch, session_id, request_id, nil}}
+    end
+  end
+
+  defp validate_recovery_snapshot_identities(%__MODULE__{} = session, lease_request_id) do
+    request_ids = MapSet.new(session.requests, & &1.request_id)
+
+    case Enum.find(session.snapshots, fn snapshot ->
+           not MapSet.member?(request_ids, snapshot_request_id(snapshot))
+         end) do
+      %Snapshot{} = snapshot ->
+        {:error,
+         {:recovery_snapshot_request_mismatch, session.session_id, snapshot.snapshot_id, snapshot_request_id(snapshot),
+          lease_request_id}}
+
+      nil ->
+        :ok
+    end
+  end
+
+  defp select_recovery_target(%__MODULE__{} = session, %Turn.Request{} = request) do
+    matching = Enum.filter(session.snapshots, &(snapshot_request_id(&1) == request.request_id))
+
+    case List.last(matching) do
+      nil ->
+        {:ok, {:restart, request}}
+
+      %Snapshot{} = snapshot ->
+        case latest_snapshot(session) do
+          %Snapshot{} = latest when latest.snapshot_id == snapshot.snapshot_id ->
+            {:ok, {:resume, snapshot}}
+
+          %Snapshot{} = latest ->
+            {:error,
+             {:recovery_snapshot_order_mismatch, session.session_id, request.request_id, snapshot.snapshot_id,
+              latest.snapshot_id}}
+        end
+    end
+  end
+
+  defp validate_recovery_target_revision(%__MODULE__{} = session, {:resume, %Snapshot{} = snapshot}) do
+    Conversation.validate_snapshot_revision(session.conversation, snapshot, session.session_id)
+  end
+
+  defp validate_recovery_target_revision(%__MODULE__{} = session, {:restart, %Turn.Request{} = request}) do
+    Conversation.validate_request_revision(session.conversation, request, session.session_id)
+  end
+
+  defp snapshot_request_id(%Snapshot{turn_state: %{request: %Turn.Request{request_id: request_id}}}),
+    do: request_id
 
   defp requests_through_snapshot(%__MODULE__{requests: requests}, %Snapshot{
          turn_state: %{request: %Turn.Request{request_id: request_id} = snapshot_request}
