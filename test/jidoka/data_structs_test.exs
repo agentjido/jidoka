@@ -69,6 +69,26 @@ defmodule Jidoka.DataStructsTest do
 
     assert {:error, :missing_tool_message_operation} =
              Agent.Message.from_input(%{"role" => "tool", "content" => "missing operation"})
+
+    assert {:error, {:invalid_message_role_fields, :user, [:output]}} =
+             Agent.Message.from_input(%{role: :user, content: "hello", output: %{unexpected: true}})
+
+    assert {:error, _reason} =
+             Agent.State.from_input(%{
+               messages: [%{role: :assistant, content: "hello", operation: "not-an-assistant-field"}]
+             })
+
+    direct = Agent.Message.user("direct")
+    assert {:ok, ^direct} = Agent.Message.from_input(direct)
+
+    for message <- [
+          Agent.Message.system("system"),
+          Agent.Message.user("user"),
+          Agent.Message.assistant("assistant"),
+          Agent.Message.tool("lookup", %{ok: true})
+        ] do
+      assert {:ok, ^message} = Agent.Message.from_input(message)
+    end
   end
 
   test "operation specs validate idempotency and normalize fields" do
