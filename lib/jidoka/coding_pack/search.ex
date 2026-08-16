@@ -191,39 +191,42 @@ defmodule Jidoka.CodingPack.Search do
   end
 
   defp search(%{mode: "path"} = input, entries, facts, _workspace, _opts) do
-    matches =
+    collector =
       entries
       |> Enum.filter(&Regex.match?(input.glob_regex, local_path(input.base, &1.relative)))
       |> Enum.map(&%{"path" => &1.relative, "type" => Atom.to_string(&1.type)})
+      |> Enum.reduce(new_collector(input), &collect_match(&2, &1))
 
-    {:ok, result(input, matches, facts)}
+    {:ok, result(input, collector, facts)}
   end
 
   defp search(%{mode: "text"} = input, entries, facts, workspace, opts) do
+    input = Map.put(input, :text_regex, text_regex(input))
+
     entries
     |> Enum.filter(&(&1.type == :regular and Regex.match?(input.glob_regex, local_path(input.base, &1.relative))))
-    |> Enum.reduce_while({:ok, [], facts}, fn entry, {:ok, matches, facts} ->
-      case text_matches(entry, input, workspace, opts) do
-        {:ok, :binary} -> {:cont, {:ok, matches, %{facts | binary: facts.binary + 1}}}
-        {:ok, :oversized} -> {:cont, {:ok, matches, %{facts | oversized: facts.oversized + 1}}}
-        {:ok, found} -> {:cont, {:ok, matches ++ found, facts}}
+    |> Enum.reduce_while({:ok, new_collector(input), facts}, fn entry, {:ok, collector, facts} ->
+      case text_matches(entry, input, workspace, collector, opts) do
+        {:ok, :binary} -> {:cont, {:ok, collector, %{facts | binary: facts.binary + 1}}}
+        {:ok, :oversized} -> {:cont, {:ok, collector, %{facts | oversized: facts.oversized + 1}}}
+        {:ok, collector} -> {:cont, {:ok, collector, facts}}
         {:error, %Error{} = error} -> {:halt, {:error, error}}
       end
     end)
     |> case do
-      {:ok, matches, facts} -> {:ok, result(input, matches, facts)}
+      {:ok, collector, facts} -> {:ok, result(input, collector, facts)}
       {:error, %Error{} = error} -> {:error, error}
     end
   end
 
-  defp text_matches(entry, input, workspace, opts) do
+  defp text_matches(entry, input, workspace, collector, opts) do
     with {:ok, before_stat} <- stat(opts).(entry.absolute),
          :ok <- searchable_size(before_stat.size, workspace.limits.max_file_bytes),
          {:ok, contents} <- read_file(opts).(entry.absolute),
          {:ok, after_stat} <- stat(opts).(entry.absolute),
          :ok <- unchanged(before_stat, after_stat) do
       if String.valid?(contents) and not String.contains?(contents, <<0>>) do
-        {:ok, line_matches(entry.relative, contents, input)}
+        {:ok, collect_line_matches(entry.relative, contents, input, collector)}
       else
         {:ok, :binary}
       end
@@ -234,29 +237,29 @@ defmodule Jidoka.CodingPack.Search do
     end
   end
 
-  defp line_matches(path, contents, input) do
+  defp collect_line_matches(path, contents, input, collector) do
     digest = digest(contents)
 
     contents
-    |> String.split("\n", trim: false)
-    |> Enum.with_index(1)
-    |> Enum.flat_map(fn {line, number} ->
-      Regex.scan(text_regex(input), line, return: :index)
-      |> Enum.map(fn [{offset, _length}] ->
-        %{
+    |> String.splitter("\n", trim: false)
+    |> Stream.with_index(1)
+    |> Enum.reduce(collector, fn {line, number}, collector ->
+      input.text_regex
+      |> Regex.scan(line, return: :index)
+      |> Enum.reduce(collector, fn [{offset, _length}], collector ->
+        collect_match(collector, %{
           "path" => path,
           "line" => number,
           "column" => column(line, offset),
           "preview" => preview(line),
           "file_sha256" => digest
-        }
+        })
       end)
     end)
   end
 
-  defp result(input, matches, facts) do
-    matches = Enum.sort_by(matches, &sort_key/1)
-    {returned, bytes} = bounded(matches, input.max_results, input.max_bytes)
+  defp result(input, collector, facts) do
+    returned = Enum.reverse(collector.matches)
 
     %{
       "mode" => input.mode,
@@ -264,10 +267,10 @@ defmodule Jidoka.CodingPack.Search do
       "pattern" => input.pattern,
       "glob" => input.glob,
       "matches" => returned,
-      "total_count" => length(matches),
-      "returned_count" => length(returned),
-      "output_bytes" => bytes,
-      "truncated" => length(returned) < length(matches),
+      "total_count" => collector.total_count,
+      "returned_count" => collector.returned_count,
+      "output_bytes" => collector.output_bytes,
+      "truncated" => collector.returned_count < collector.total_count,
       "scanned_entries" => facts.visited,
       "ignored_entries" => facts.ignored,
       "binary_files" => facts.binary,
@@ -275,25 +278,47 @@ defmodule Jidoka.CodingPack.Search do
     }
   end
 
-  defp bounded(matches, max_results, max_bytes) do
-    matches
-    |> Enum.take(max_results)
-    |> Enum.reduce_while({[], 0}, fn match, {accepted, bytes} ->
+  defp new_collector(input) do
+    %{
+      matches: [],
+      total_count: 0,
+      returned_count: 0,
+      output_bytes: 0,
+      max_results: input.max_results,
+      max_bytes: input.max_bytes,
+      closed?: false
+    }
+  end
+
+  defp collect_match(%{closed?: true} = collector, _match),
+    do: %{collector | total_count: collector.total_count + 1}
+
+  defp collect_match(collector, match) do
+    total_count = collector.total_count + 1
+
+    if collector.returned_count >= collector.max_results do
+      %{collector | total_count: total_count, closed?: true}
+    else
       size = match |> Jason.encode!() |> byte_size()
 
-      if bytes + size <= max_bytes,
-        do: {:cont, {accepted ++ [match], bytes + size}},
-        else: {:halt, {accepted, bytes}}
-    end)
+      if collector.output_bytes + size <= collector.max_bytes do
+        %{
+          collector
+          | matches: [match | collector.matches],
+            total_count: total_count,
+            returned_count: collector.returned_count + 1,
+            output_bytes: collector.output_bytes + size
+        }
+      else
+        %{collector | total_count: total_count, closed?: true}
+      end
+    end
   end
 
   defp text_regex(input) do
     options = if input.case_sensitive, do: "u", else: "iu"
     Regex.compile!(Regex.escape(input.pattern), options)
   end
-
-  defp sort_key(%{"path" => path, "line" => line, "column" => column}), do: {path, line, column}
-  defp sort_key(%{"path" => path}), do: {path, 0, 0}
 
   defp column(line, offset), do: line |> binary_part(0, offset) |> String.length() |> Kernel.+(1)
   defp preview(line), do: if(byte_size(line) <= 512, do: line, else: utf8_prefix(line, 512) <> "…")
