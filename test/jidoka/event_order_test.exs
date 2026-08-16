@@ -88,7 +88,7 @@ defmodule Jidoka.EventOrderTest do
                "Reject extras",
                [stream: true, request_id: "controller-reject"],
                fn opts ->
-                 send(parent, {:controller, Keyword.fetch!(opts, :stream_to)})
+                 send(parent, {:controller, Keyword.fetch!(opts, :stream_to), self()})
 
                  :ok =
                    Stream.emit(
@@ -102,14 +102,14 @@ defmodule Jidoka.EventOrderTest do
                end
              )
 
-    assert_receive {:controller, controller}, 1_000
+    assert_receive {:controller, controller, worker}, 1_000
 
     send(
       controller,
       {:jidoka_turn_event, Event.build(:turn_failed, [], request_id: "foreign-request", seq: 99)}
     )
 
-    send(request.task.pid, :continue)
+    send(worker, :continue)
 
     stream = Jidoka.stream(request, stream_event_timeout_ms: 100)
     assert {:ok, "done"} = Jidoka.await(request, timeout: 1_000)

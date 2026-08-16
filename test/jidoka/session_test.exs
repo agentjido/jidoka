@@ -17,7 +17,6 @@ defmodule Jidoka.SessionTest do
   alias Jidoka.Session.Data, as: SessionData
   alias Jidoka.Session.Store.InMemory
   alias Jidoka.Chat.Async, as: AsyncChat
-  alias Jidoka.Chat.Request
   alias Jidoka.Session
   alias Jidoka.SessionTest.Support.DslAgent
   alias Jidoka.Turn
@@ -97,27 +96,18 @@ defmodule Jidoka.SessionTest do
   test "await cancels timed out async chat requests by default" do
     parent = self()
 
-    task =
-      Task.async(fn ->
-        send(parent, {:chat_task_started, self()})
-        Process.sleep(5_000)
-        {:ok, :late}
-      end)
-
-    request =
-      Request.new(
-        request_id: "chat_cancel_test",
-        task: task,
-        target: :test,
-        session_id: nil,
-        stream_to: nil,
-        started_at_ms: System.system_time(:millisecond),
-        metadata: %{}
-      )
+    assert {:ok, request} =
+             AsyncChat.start_fun(:test, "Timeout", [request_id: "chat_cancel_test"], fn _opts ->
+               send(parent, {:chat_task_started, self()})
+               Process.sleep(5_000)
+               {:ok, :late}
+             end)
 
     assert_receive {:chat_task_started, task_pid}
-    assert {:error, :timeout} = AsyncChat.await(request, timeout: 5)
-    refute Process.alive?(task_pid)
+    monitor = Process.monitor(task_pid)
+    assert {:error, :timeout} = AsyncChat.await(request, timeout: 5, cancel_grace_ms: 5)
+    assert {:cancelled, _cancellation} = AsyncChat.await(request, timeout: 100)
+    assert_receive {:DOWN, ^monitor, :process, ^task_pid, :killed}, 1_000
   end
 
   test "session run can resolve persisted sessions by id" do

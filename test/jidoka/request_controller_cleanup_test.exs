@@ -3,12 +3,78 @@ defmodule Jidoka.RequestControllerCleanupTest do
 
   alias Jidoka.Agent
   alias Jidoka.Cancellation.Token
+  alias Jidoka.Chat.Request
   alias Jidoka.Event
   alias Jidoka.Event.Order
   alias Jidoka.Session
   alias Jidoka.Session.Sequence
   alias Jidoka.Session.Sequence.Request, as: SequenceRequest
   alias Jidoka.Turn
+
+  test "chat request handles require a controller" do
+    invalid =
+      struct(Request,
+        request_id: "invalid-controller",
+        controller: nil,
+        target: :invalid,
+        session_id: nil,
+        stream_to: nil,
+        started_at_ms: 0,
+        metadata: %{}
+      )
+
+    assert {:error, :invalid_async_request} = Jidoka.Chat.Async.await(invalid)
+    assert {:error, :invalid_async_request} = Jidoka.Chat.Async.cancel(invalid)
+
+    assert_raise ArgumentError, fn ->
+      Request.new(request_id: "missing-controller", target: :invalid, started_at_ms: 0)
+    end
+  end
+
+  test "cancel and await use one controller and terminal cleanup drops runtime references" do
+    parent = self()
+
+    assert {:ok, request} =
+             Jidoka.Chat.Async.start_fun(
+               :controller_only,
+               "Cancel",
+               [request_id: "controller-only", request_retention_ms: 1_000],
+               fn _opts ->
+                 send(parent, {:controller_worker, self()})
+
+                 receive do
+                   :finish -> {:ok, "ignored after cancellation"}
+                 end
+               end
+             )
+
+    assert_receive {:controller_worker, worker}, 1_000
+    awaiter = Task.async(fn -> Jidoka.await(request, timeout: 1_000) end)
+    assert controller_state(request.controller, &(&1.awaiters != []))
+
+    canceller = Task.async(fn -> Jidoka.cancel(request, grace_ms: 500) end)
+
+    assert controller_state(
+             request.controller,
+             &(&1.awaiters != [] and &1.cancellers != [] and &1.cancellation_requested?)
+           )
+
+    send(worker, :finish)
+
+    assert {:ok, cancellation} = Task.await(canceller, 1_000)
+    assert {:cancelled, ^cancellation} = Task.await(awaiter, 1_000)
+
+    state = :sys.get_state(request.controller)
+    assert state.status == :finished
+    assert state.task == nil
+    assert state.token == nil
+    assert state.stream_to == nil
+    assert state.on_event == nil
+    assert state.on_cancelled == nil
+    assert state.awaiters == []
+    assert state.cancellers == []
+    assert state.cancellation_members == %{}
+  end
 
   test "a completed chat controller expires and stops registered members" do
     parent = self()
@@ -194,5 +260,20 @@ defmodule Jidoka.RequestControllerCleanupTest do
       instructions: "Complete the bounded cleanup test.",
       model: %{provider: :test, id: "model"}
     )
+  end
+
+  defp controller_state(controller, predicate, attempts \\ 100)
+
+  defp controller_state(_controller, _predicate, 0), do: false
+
+  defp controller_state(controller, predicate, attempts) do
+    if predicate.(:sys.get_state(controller)) do
+      true
+    else
+      receive do
+      after
+        5 -> controller_state(controller, predicate, attempts - 1)
+      end
+    end
   end
 end

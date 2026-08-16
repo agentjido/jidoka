@@ -19,9 +19,7 @@ defmodule Jidoka.Parity.SynchronousAndAsynchronousRunsTest do
     assert {:ok,
             %Request{
               request_id: "parity-e01-async",
-              task: %Task{},
-              controller: controller,
-              cancellation: cancellation
+              controller: controller
             } = request} =
              Jidoka.chat_async(spec(), "Run asynchronously",
                llm: llm,
@@ -29,7 +27,6 @@ defmodule Jidoka.Parity.SynchronousAndAsynchronousRunsTest do
              )
 
     assert is_pid(controller)
-    assert is_struct(cancellation, Cancellation.Token)
 
     assert {:ok, "The execution contract is complete."} =
              Jidoka.await(request, timeout: 1_000)
@@ -38,16 +35,22 @@ defmodule Jidoka.Parity.SynchronousAndAsynchronousRunsTest do
   end
 
   test "an await timeout cleans up the request without hiding the timeout" do
+    parent = self()
+
     assert {:ok, request} =
              AsyncChat.start_fun(
                :parity_e01_timeout,
                "Wait",
                [request_id: "parity-e01-timeout"],
                fn _opts ->
+                 send(parent, {:async_worker, self()})
                  Process.sleep(5_000)
                  {:ok, "too late"}
                end
              )
+
+    assert_receive {:async_worker, worker}, 1_000
+    monitor = Process.monitor(worker)
 
     assert {:error, :timeout} =
              Jidoka.await(request,
@@ -61,7 +64,7 @@ defmodule Jidoka.Parity.SynchronousAndAsynchronousRunsTest do
               forced?: true
             }} = Jidoka.await(request, timeout: 100)
 
-    refute Process.alive?(request.task.pid)
+    assert_receive {:DOWN, ^monitor, :process, ^worker, :killed}, 1_000
   end
 
   defp spec do

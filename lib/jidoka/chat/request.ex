@@ -1,24 +1,19 @@
 defmodule Jidoka.Chat.Request do
   @moduledoc """
-  Data handle for an asynchronous Jidoka chat request.
+  Opaque handle for an asynchronous Jidoka chat request.
 
-  The handle is intentionally not part of the durable agent data contract. It is
-  caller-owned data for UI processes that stream request-scoped events and await
-  the normalized final chat result. The internal async chat module owns task
-  control.
+  The handle contains public request identity and controller identity. It does
+  not contain a worker task or cancellation token. Use `Jidoka.await/2` and
+  `Jidoka.cancel/2` for all lifecycle actions.
   """
 
-  alias Jidoka.Cancellation
-  alias Jidoka.Cancellation.Token
   alias Jidoka.Schema
 
   @schema Zoi.struct(
             __MODULE__,
             %{
-              request_id: Zoi.string(),
-              task: Schema.typed_struct(Task, quote(do: Task.t())),
-              controller: Zoi.pid() |> Zoi.nullish(),
-              cancellation: Schema.typed_struct(Token, quote(do: Cancellation.token())) |> Zoi.nullish(),
+              request_id: Schema.non_empty_string(),
+              controller: Zoi.pid(),
               target: Zoi.any(),
               session_id: Zoi.string() |> Zoi.nullish(),
               stream_to: Zoi.pid() |> Zoi.nullish(),
@@ -29,7 +24,7 @@ defmodule Jidoka.Chat.Request do
             unrecognized_keys: :error
           )
 
-  @type t :: unquote(Zoi.type_spec(@schema))
+  @opaque t :: unquote(Zoi.type_spec(@schema))
   @enforce_keys Zoi.Struct.enforce_keys(@schema)
   defstruct Zoi.Struct.struct_fields(@schema)
 
@@ -40,4 +35,12 @@ defmodule Jidoka.Chat.Request do
   @doc false
   @spec new(keyword()) :: t()
   def new(attrs) when is_list(attrs), do: Schema.parse!(@schema, attrs, "chat request")
+
+  @doc false
+  @spec controller(term()) :: {:ok, pid()} | {:error, :invalid_async_request}
+  def controller(%__MODULE__{request_id: request_id, controller: controller})
+      when is_binary(request_id) and request_id != "" and is_pid(controller),
+      do: {:ok, controller}
+
+  def controller(_request), do: {:error, :invalid_async_request}
 end

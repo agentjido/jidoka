@@ -21,13 +21,11 @@ defmodule Jidoka.Chat.Async do
              runtime_opts: opts,
              fun: fun
            ),
-         {:ok, task, cancellation} <- RequestController.runtime(controller) do
+         :ok <- RequestController.ready(controller) do
       {:ok,
        Request.new(
          request_id: request_id,
-         task: task,
          controller: controller,
-         cancellation: cancellation,
          target: target,
          session_id: session_id(target),
          stream_to: stream_to(opts),
@@ -43,56 +41,33 @@ defmodule Jidoka.Chat.Async do
           term() | {:cancelled, Cancellation.t()} | {:error, term()}
   def await(request, opts \\ [])
 
-  def await(%Request{controller: controller} = request, opts)
-      when is_pid(controller) and is_list(opts) do
+  def await(%Request{} = request, opts) when is_list(opts) do
     timeout = Keyword.get(opts, :timeout, 30_000)
 
-    case RequestController.await(controller, timeout) do
-      {:error, :timeout} = timeout_result ->
-        maybe_cancel_after_timeout(request, opts)
-        timeout_result
+    with {:ok, controller} <- Request.controller(request) do
+      case RequestController.await(controller, timeout) do
+        {:error, :timeout} = timeout_result ->
+          maybe_cancel_after_timeout(request, opts)
+          timeout_result
 
-      result ->
-        result
+        result ->
+          result
+      end
     end
   end
 
-  def await(%Request{task: %Task{} = task}, opts) when is_list(opts) do
-    timeout = Keyword.get(opts, :timeout, 30_000)
-
-    case Task.yield(task, timeout) do
-      {:ok, result} -> result
-      {:exit, reason} -> {:error, {:chat_request_failed, reason}}
-      nil -> timeout_result(task, opts)
-    end
-  end
+  def await(_request, opts) when is_list(opts), do: {:error, :invalid_async_request}
 
   @spec cancel(Request.t(), keyword()) :: {:ok, Cancellation.t()} | {:error, term()}
   def cancel(request, opts \\ [])
 
-  def cancel(%Request{controller: controller}, opts)
-      when is_pid(controller) and is_list(opts) do
-    RequestController.cancel(controller, opts)
-  end
-
-  def cancel(%Request{task: %Task{} = task, request_id: request_id}, _opts) do
-    _shutdown = Task.shutdown(task, :brutal_kill)
-
-    {:ok,
-     Cancellation.new!(
-       request_id: request_id,
-       forced?: true,
-       cancelled_at_ms: System.system_time(:millisecond)
-     )}
-  end
-
-  defp timeout_result(%Task{} = task, opts) do
-    if Keyword.get(opts, :cancel_on_timeout, true) do
-      Task.shutdown(task, :brutal_kill)
+  def cancel(%Request{} = request, opts) when is_list(opts) do
+    with {:ok, controller} <- Request.controller(request) do
+      RequestController.cancel(controller, opts)
     end
-
-    {:error, :timeout}
   end
+
+  def cancel(_request, opts) when is_list(opts), do: {:error, :invalid_async_request}
 
   defp maybe_cancel_after_timeout(request, opts) do
     if Keyword.get(opts, :cancel_on_timeout, true) do

@@ -28,8 +28,8 @@ defmodule Jidoka.Chat.RequestController do
     DynamicSupervisor.start_child(@request_supervisor, {__MODULE__, opts})
   end
 
-  @spec runtime(pid()) :: {:ok, Task.t(), Token.t()}
-  def runtime(controller) when is_pid(controller), do: GenServer.call(controller, :runtime)
+  @spec ready(pid()) :: :ok
+  def ready(controller) when is_pid(controller), do: GenServer.call(controller, :ready)
 
   @spec await(pid(), timeout()) :: term() | {:error, :timeout}
   def await(controller, timeout) when is_pid(controller) do
@@ -103,8 +103,8 @@ defmodule Jidoka.Chat.RequestController do
   end
 
   @impl true
-  def handle_call(:runtime, _from, state) do
-    {:reply, {:ok, state.task, state.token}, mark_runtime_ready(state)}
+  def handle_call(:ready, _from, state) do
+    {:reply, :ok, mark_runtime_ready(state)}
   end
 
   def handle_call(:await, _from, %{status: :finished} = state) do
@@ -335,8 +335,14 @@ defmodule Jidoka.Chat.RequestController do
       state
       | status: :finished,
         result: result,
+        task: nil,
+        token: nil,
+        stream_to: nil,
+        on_event: nil,
+        on_cancelled: nil,
         awaiters: [],
-        cancellers: []
+        cancellers: [],
+        cancellation_members: %{}
     }
     |> maybe_schedule_expiry()
   end

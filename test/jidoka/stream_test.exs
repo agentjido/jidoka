@@ -187,23 +187,23 @@ defmodule Jidoka.StreamTest do
   end
 
   test "stream enumerable exposes non-sized protocol callbacks explicitly" do
-    task = Task.async(fn -> :ok end)
+    assert {:ok, request} =
+             Jidoka.Chat.Async.start_fun(
+               :test_target,
+               "Protocol",
+               [request_id: "req_protocol"],
+               fn _opts -> :ok end
+             )
 
     stream =
       %Jidoka.Stream{
-        request:
-          Jidoka.Chat.Request.new(
-            request_id: "req_protocol",
-            task: task,
-            target: :test_target,
-            started_at_ms: 0
-          ),
+        request: request,
         events: []
       }
 
     assert Enumerable.count(stream) == {:error, Enumerable.Jidoka.Stream}
     assert Enumerable.member?(stream, :event) == {:error, Enumerable.Jidoka.Stream}
     assert Enumerable.slice(stream) == {:error, Enumerable.Jidoka.Stream}
-    assert Task.await(task) == :ok
+    assert :ok = Jidoka.await(request)
   end
 end
