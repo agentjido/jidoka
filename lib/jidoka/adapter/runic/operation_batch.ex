@@ -6,7 +6,6 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
   alias Jidoka.Config
   alias Jidoka.Effect
   alias Jidoka.Error
-  alias Jidoka.Runtime.CapabilityInvoker
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.OperationInvoker
   alias Jidoka.Turn
@@ -37,8 +36,8 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
       Workflow.react_until_satisfied(workflow, %{},
         async: true,
         max_concurrency: max_parallel_operations(opts),
-        deadline_ms: batch_timeout(state, opts),
-        timeout: batch_timeout(state, opts)
+        deadline_ms: remaining_turn_deadline(state, opts),
+        timeout: :infinity
       )
 
     intents
@@ -107,7 +106,24 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
     |> Config.normalize_positive_integer!(:max_parallel_operations)
   end
 
-  defp batch_timeout(state, opts), do: CapabilityInvoker.capability_timeout(state, opts)
+  defp remaining_turn_deadline(
+         %Turn.State{plan: %{timeout_ms: timeout_ms}, started_at_ms: started_at_ms},
+         opts
+       )
+       when is_integer(timeout_ms) and is_integer(started_at_ms) do
+    max(1, timeout_ms - (clock_ms(opts) - started_at_ms))
+  end
+
+  defp remaining_turn_deadline(%Turn.State{plan: %{timeout_ms: timeout_ms}}, _opts)
+       when is_integer(timeout_ms),
+       do: timeout_ms
+
+  defp clock_ms(opts) do
+    case Keyword.get(opts, :clock) do
+      clock when is_function(clock, 0) -> clock.()
+      _clock -> System.system_time(:millisecond)
+    end
+  end
 
   defp before_operation_call(intent, journal, opts) do
     case Keyword.get(opts, :operation_group_before_call) do
