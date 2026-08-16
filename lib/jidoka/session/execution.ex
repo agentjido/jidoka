@@ -51,7 +51,8 @@ defmodule Jidoka.Session.Execution do
   """
   @spec start_session(plan_input(), runtime_opts()) :: {:ok, Session.t()} | {:error, term()}
   def start_session(spec_or_plan, opts \\ []) do
-    with {:ok, plan} <- TurnExecution.plan(spec_or_plan),
+    with :ok <- validate_store_mode(opts),
+         {:ok, plan} <- TurnExecution.plan(spec_or_plan),
          {:ok, session} <- Session.start(plan.spec, session_opts(opts)),
          {:ok, session} <- EnvironmentRuntime.prepare(session, opts) do
       persist_session(session, opts)
@@ -63,7 +64,8 @@ defmodule Jidoka.Session.Execution do
   """
   @spec run_session(session_input(), request_input(), runtime_opts()) :: session_run_result()
   def run_session(session_input, request_input, opts \\ []) do
-    with {:ok, session} <- resolve_session(session_input, opts),
+    with :ok <- validate_store_mode(opts),
+         {:ok, session} <- resolve_session(session_input, opts),
          :ok <- ensure_runnable_session(session),
          {:ok, session} <- EnvironmentRuntime.prepare(session, opts),
          {:ok, session} <- persist_prepared_environment(session_input, session, opts),
@@ -95,7 +97,8 @@ defmodule Jidoka.Session.Execution do
     do: {:error, {:invalid_session_sequence, request_inputs}}
 
   defp run_sequence_with_runtime(session_input, request_inputs, opts) do
-    with {:ok, session} <- resolve_session(session_input, opts),
+    with :ok <- validate_store_mode(opts),
+         {:ok, session} <- resolve_session(session_input, opts),
          {:ok, plan} <- TurnExecution.plan(session.spec),
          {:ok, limits} <- Limits.resolve(plan, opts) do
       opts =
@@ -181,7 +184,8 @@ defmodule Jidoka.Session.Execution do
   """
   @spec resume_session(session_input(), runtime_opts()) :: session_run_result()
   def resume_session(session_input, opts \\ []) do
-    with {:ok, session} <- resolve_session(session_input, opts),
+    with :ok <- validate_store_mode(opts),
+         {:ok, session} <- resolve_session(session_input, opts),
          {:ok, session} <- EnvironmentRuntime.prepare(session, opts),
          {:ok, session} <- persist_prepared_environment(session_input, session, opts),
          {:ok, session} <- claim_resume_session(session, opts),
@@ -202,7 +206,8 @@ defmodule Jidoka.Session.Execution do
   def recover_session(session_id, opts \\ []) when is_binary(session_id) and is_list(opts) do
     opts = Keyword.put(opts, :session_id, session_id)
 
-    with {:ok, store} <- fetch_store(opts),
+    with :ok <- validate_store_mode(opts),
+         {:ok, store} <- fetch_store(opts),
          {:ok, session} <- Store.recover_session(store, session_id, lease_store_opts(opts)),
          {:ok, session} <- EnvironmentRuntime.restore(session, opts) do
       with_session_environment(session, opts, fn environment_session, environment_opts ->
@@ -222,7 +227,8 @@ defmodule Jidoka.Session.Execution do
   @spec fork_session(session_input(), runtime_opts()) ::
           {:ok, Session.t()} | {:error, term()}
   def fork_session(session_input, opts \\ []) do
-    with {:ok, source} <- resolve_session(session_input, opts),
+    with :ok <- validate_store_mode(opts),
+         {:ok, source} <- resolve_session(session_input, opts),
          :ok <- ensure_forkable_session(source),
          {:ok, source_snapshot} <- select_fork_snapshot(source, Keyword.get(opts, :snapshot, :latest)),
          {:ok, lineage} <-
@@ -856,6 +862,19 @@ defmodule Jidoka.Session.Execution do
     case Keyword.fetch(opts, :store) do
       {:ok, store} -> {:ok, store}
       :error -> {:error, :missing_harness_store}
+    end
+  end
+
+  defp validate_store_mode(opts) do
+    case Keyword.fetch(opts, :store) do
+      {:ok, store} ->
+        case Store.durable_mode(store) do
+          {:ok, _mode} -> :ok
+          {:error, _reason} = error -> error
+        end
+
+      :error ->
+        :ok
     end
   end
 

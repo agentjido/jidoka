@@ -394,9 +394,11 @@ defmodule MyApp.PostgresSessionStore do
 end
 ```
 
-`claim_session/3` remains optional for older stores. Its fallback uses
-`get_session/2` followed by `put_session/2`, but that fallback is not a durable
-lease protocol.
+The durable lifecycle is one capability set. A store must implement none of
+its callbacks or all of them. A store with no durable callbacks uses the
+`get_session/2` and `put_session/2` compatibility path for a new claim. That
+path is not a durable lease protocol. Jidoka rejects a partial durable set
+before the store can claim work.
 
 A crash-safe store implements these callbacks as atomic compare-and-set
 transitions:
