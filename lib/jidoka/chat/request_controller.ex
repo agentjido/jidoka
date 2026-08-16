@@ -66,9 +66,15 @@ defmodule Jidoka.Chat.RequestController do
 
     worker_opts =
       runtime_opts
-      |> Keyword.put(:stream_to, self())
+      |> Keyword.delete(:stream_to)
       |> Keyword.delete(:on_event)
       |> Keyword.delete(:on_cancelled)
+      |> Keyword.put(:event_relay_to, self())
+      |> Keyword.put(:cancellation, token)
+
+    publisher_opts =
+      runtime_opts
+      |> Keyword.delete(:event_relay_to)
       |> Keyword.put(:cancellation, token)
 
     task = Task.Supervisor.async_nolink(@task_supervisor, fn -> fun.(worker_opts) end)
@@ -82,6 +88,7 @@ defmodule Jidoka.Chat.RequestController do
        stream_to: Keyword.get(runtime_opts, :stream_to),
        on_event: Keyword.get(runtime_opts, :on_event),
        on_cancelled: Keyword.get(runtime_opts, :on_cancelled),
+       publisher_opts: publisher_opts,
        owner: owner,
        owner_monitor: owner_monitor,
        status: :running,
@@ -340,6 +347,7 @@ defmodule Jidoka.Chat.RequestController do
         stream_to: nil,
         on_event: nil,
         on_cancelled: nil,
+        publisher_opts: nil,
         awaiters: [],
         cancellers: [],
         cancellation_members: %{}
@@ -430,12 +438,8 @@ defmodule Jidoka.Chat.RequestController do
   defp forward_event(state, %Event{} = event) do
     event = %Event{event | seq: state.next_seq, request_id: state.request_id}
 
-    :ok =
-      EventDispatcher.emit(event,
-        stream_to: state.stream_to,
-        on_event: state.on_event,
-        sequence: false
-      )
+    publisher_opts = state.publisher_opts || []
+    :ok = EventDispatcher.emit(event, Keyword.put(publisher_opts, :sequence, false))
 
     %{
       state

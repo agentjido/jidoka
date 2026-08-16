@@ -71,6 +71,7 @@ defmodule Jidoka.RequestControllerCleanupTest do
     assert state.stream_to == nil
     assert state.on_event == nil
     assert state.on_cancelled == nil
+    assert state.publisher_opts == nil
     assert state.awaiters == []
     assert state.cancellers == []
     assert state.cancellation_members == %{}
