@@ -46,7 +46,9 @@ trusted profile, one installed adapter module, and one provider-neutral adapter
 capability declaration. `ProfileResolver.resolve/3` accepts only a
 `PolicyRequest`. Agent and scenario documents cannot create registrations.
 
-Before `open`, `Validator.validate_profile/3` checks availability, adapter
+The resolver returns an opaque `ExecutionEnvironment.Selection`. Only this
+validated value can start a manager. Before `open`,
+`Validator.validate_profile/3` checks availability, adapter
 identity, isolation, network, workspace, immutable image evidence, limit keys,
 checkpoint support, fork support, and requested capability identifiers. After
 each lifecycle call, `Validator.validate_evidence/2` checks actual confirmed
@@ -106,15 +108,17 @@ acquire, restore, and fork operations.
 
 ### Resolved sequence option
 
-A host can give `Jidoka.Session.run_sequence/3` a resolved registration and
-policy request:
+A host can give `Jidoka.Session.run_sequence/3` a resolved selection:
 
 ```elixir
+{:ok, selection} =
+  Jidoka.ExecutionEnvironment.ProfileResolver.resolve(
+    policy_request,
+    trusted_resolver
+  )
+
 Jidoka.Session.run_sequence(session, inputs,
-  execution_environment: %{
-    request: policy_request,
-    registration: registration
-  },
+  execution_environment: %{selection: selection},
   execution_environment_policy: host_policy,
   execution_environment_adapter_opts: trusted_adapter_opts
 )

@@ -62,6 +62,9 @@ defmodule Jidoka.Projection do
   def project(%ExecutionEnvironment.Registration{} = value),
     do: ExecutionEnvironment.Registration.to_map(value)
 
+  def project(%ExecutionEnvironment.Selection{} = value),
+    do: ExecutionEnvironment.Selection.to_map(value)
+
   def project(%ExecutionEnvironment.Error{} = value),
     do: ExecutionEnvironment.Error.to_map(value)
 

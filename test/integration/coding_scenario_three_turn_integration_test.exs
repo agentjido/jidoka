@@ -44,7 +44,10 @@ defmodule Jidoka.CodingScenarioThreeTurnIntegrationTest do
     profile = profile()
 
     {:ok, manager} =
-      Manager.start_link(registration(profile), allow_policy(), root: root, state: shell_state)
+      Manager.start_link(Jidoka.TestSupport.environment_selection(registration(profile)), allow_policy(),
+        root: root,
+        state: shell_state
+      )
 
     {:ok, binding, _evidence} =
       Manager.open(manager, PolicyRequest.new!(profile_id: profile.profile_id))

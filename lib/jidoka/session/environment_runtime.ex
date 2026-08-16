@@ -9,7 +9,7 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   alias Jidoka.ExecutionEnvironment.Manager
   alias Jidoka.ExecutionEnvironment.PolicyRequest
-  alias Jidoka.ExecutionEnvironment.Registration
+  alias Jidoka.ExecutionEnvironment.Selection
   alias Jidoka.Session.Data
   alias Jidoka.Session.Environment
 
@@ -18,15 +18,15 @@ defmodule Jidoka.Session.EnvironmentRuntime do
   @doc "Owns one manager for a resolved registration during a public run."
   @spec with_manager(keyword(), (keyword() -> term())) :: term()
   def with_manager(opts, function) when is_list(opts) and is_function(function, 1) do
-    case unresolved_registration(opts) do
+    case unresolved_selection(opts) do
       :none ->
         function.(opts)
 
-      {:ok, registration, request} ->
+      {:ok, selection} ->
         with {:ok, policy} <- environment_policy(opts),
              {:ok, manager_opts} <- manager_opts(opts),
-             {:ok, manager} <- Manager.start_link(registration, policy, manager_opts) do
-          run_with_manager(manager, registration, request, manager_opts, opts, function)
+             {:ok, manager} <- Manager.start_link(selection, policy, manager_opts) do
+          run_with_manager(manager, selection, manager_opts, opts, function)
         end
 
       {:error, _reason} = error ->
@@ -34,10 +34,12 @@ defmodule Jidoka.Session.EnvironmentRuntime do
     end
   end
 
-  defp run_with_manager(manager, registration, request, manager_opts, opts, function) do
+  defp run_with_manager(manager, %Selection{} = selection, manager_opts, opts, function) do
+    registration = selection.registration
+
     runtime = %{
       manager: manager,
-      request: request,
+      request: selection.request,
       retention: registration.profile.retention,
       opts: manager_opts
     }
@@ -252,39 +254,38 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   defp normalize_config(config), do: {:error, {:invalid_execution_environment_runtime, config}}
 
-  defp unresolved_registration(opts) do
+  defp unresolved_selection(opts) do
     case Keyword.get(opts, :execution_environment) do
       nil ->
         :none
 
       config when is_list(config) ->
-        unresolved_registration_config(Map.new(config))
+        unresolved_selection_config(Map.new(config))
+
+      %Selection{} = selection ->
+        {:ok, selection}
 
       %{} = config ->
-        unresolved_registration_config(config)
+        unresolved_selection_config(config)
 
       config ->
         {:error, {:invalid_execution_environment_runtime, config}}
     end
   end
 
-  defp unresolved_registration_config(config) do
-    registration = Map.get(config, :registration, Map.get(config, "registration"))
-    request = Map.get(config, :request, Map.get(config, "request"))
+  defp unresolved_selection_config(config) do
+    selection = Map.get(config, :selection, Map.get(config, "selection"))
     manager = Map.get(config, :manager, Map.get(config, "manager"))
 
     cond do
       not is_nil(manager) ->
         :none
 
-      not match?(%Registration{}, registration) ->
-        {:error, {:invalid_execution_environment_registration, registration}}
-
-      not match?(%PolicyRequest{}, request) ->
-        {:error, {:invalid_execution_environment_request, request}}
+      not match?(%Selection{}, selection) ->
+        {:error, {:invalid_environment_selection, selection}}
 
       true ->
-        {:ok, registration, request}
+        {:ok, selection}
     end
   end
 

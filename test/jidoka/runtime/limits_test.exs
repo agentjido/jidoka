@@ -657,10 +657,13 @@ defmodule Jidoka.Runtime.LimitsTest do
         workspaces: [:ephemeral]
       )
 
-    %{
-      request: PolicyRequest.new!(profile_id: "blocking"),
-      registration: Registration.new!(profile: profile, adapter: BlockingEnvironment, capabilities: capabilities)
-    }
+    request = PolicyRequest.new!(profile_id: "blocking")
+    registration = Registration.new!(profile: profile, adapter: BlockingEnvironment, capabilities: capabilities)
+
+    {:ok, selection} =
+      Jidoka.ExecutionEnvironment.ProfileResolver.resolve(request, fn _profile_id, _opts -> {:ok, registration} end)
+
+    %{selection: selection}
   end
 
   defp allow_policy do

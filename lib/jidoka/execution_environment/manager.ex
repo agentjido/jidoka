@@ -17,6 +17,7 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   alias Jidoka.ExecutionEnvironment.Manager.Handle
   alias Jidoka.ExecutionEnvironment.PolicyRequest
   alias Jidoka.ExecutionEnvironment.Registration
+  alias Jidoka.ExecutionEnvironment.Selection
   alias Jidoka.ExecutionEnvironment.Validator
   alias Jidoka.Policy.Gate
   alias Jidoka.Policy.Request, as: GateRequest
@@ -25,11 +26,17 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
 
   @type manager :: GenServer.server()
 
-  @doc "Starts a lifecycle manager for one resolved trusted registration."
-  @spec start_link(Registration.t(), Gate.capability(), keyword()) :: GenServer.on_start()
-  def start_link(%Registration{} = registration, policy, opts \\ []) when is_function(policy, 2) do
-    GenServer.start_link(__MODULE__, {registration, policy, opts})
+  @doc "Starts a lifecycle manager for one validated environment selection."
+  @spec start_link(Selection.t(), Gate.capability(), keyword()) :: GenServer.on_start()
+  def start_link(selection, policy, opts \\ [])
+
+  def start_link(%Selection{} = selection, policy, opts) when is_function(policy, 2) do
+    with {:ok, selection} <- Selection.validate(selection) do
+      GenServer.start_link(__MODULE__, {selection, policy, opts})
+    end
   end
+
+  def start_link(_selection, _policy, _opts), do: {:error, :invalid_environment_selection}
 
   @doc "Opens or locates the durable environment for a profile request."
   @spec open(manager(), PolicyRequest.t(), keyword()) ::
@@ -96,7 +103,7 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   end
 
   @impl true
-  def init({%Registration{} = registration, policy, opts}) do
+  def init({%Selection{registration: %Registration{} = registration}, policy, opts}) do
     case Conformance.validate(registration.adapter) do
       :ok ->
         {:ok,
@@ -120,6 +127,7 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
 
     result =
       with :ok <- profile_matches(request, registration),
+           :ok <- Validator.validate_profile(registration.profile, registration.capabilities, request),
            :ok <- authorize(state, "open", request.profile_id, opts),
            {:ok, binding, evidence} <-
              call_adapter(registration.adapter, :open, [registration.profile, request, call_opts(state, opts)]),

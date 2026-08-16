@@ -14,7 +14,8 @@ defmodule Jidoka.CodingPack.ShellTest do
     File.mkdir_p!(Path.join(root, "subdir"))
     {:ok, state} = Agent.start_link(fn -> %{events: []} end)
     profile = profile()
-    {:ok, manager} = Manager.start_link(registration(profile), allow_policy(), state: state)
+    selection = Jidoka.TestSupport.environment_selection(registration(profile))
+    {:ok, manager} = Manager.start_link(selection, allow_policy(), state: state)
     {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: profile.profile_id))
 
     {:ok, port} =
@@ -156,7 +157,8 @@ defmodule Jidoka.CodingPack.ShellTest do
     end
 
     {:ok, state} = Agent.start_link(fn -> %{events: []} end)
-    {:ok, manager} = Manager.start_link(registration(profile), policy, state: state)
+    selection = Jidoka.TestSupport.environment_selection(registration(profile))
+    {:ok, manager} = Manager.start_link(selection, policy, state: state)
     {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: profile.profile_id))
     {:ok, port} = ShellPort.new(manager, binding, profile, %{"echo" => %{class: "read"}})
 

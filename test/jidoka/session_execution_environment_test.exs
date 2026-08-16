@@ -8,6 +8,7 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
   alias Jidoka.ExecutionEnvironment.EnforcementEvidence
   alias Jidoka.ExecutionEnvironment.Manager
   alias Jidoka.ExecutionEnvironment.PolicyRequest
+  alias Jidoka.ExecutionEnvironment.ProfileResolver
   alias Jidoka.ExecutionEnvironment.Registration
   alias Jidoka.ExecutionEnvironment.SecurityProfile
   alias Jidoka.Policy.Decision
@@ -346,8 +347,10 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
 
   defp runtime do
     {:ok, probe} = Agent.start_link(fn -> [] end)
-    {:ok, manager} = Manager.start_link(registration(), allow_policy(), probe: probe)
-    {manager, probe, PolicyRequest.new!(profile_id: "restricted")}
+    request = PolicyRequest.new!(profile_id: "restricted")
+    {:ok, selection} = ProfileResolver.resolve(request, fn _profile_id, _opts -> {:ok, registration()} end)
+    {:ok, manager} = Manager.start_link(selection, allow_policy(), probe: probe)
+    {manager, probe, request}
   end
 
   defp runtime_opts(manager, request, retention) do

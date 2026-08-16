@@ -3,6 +3,9 @@ defmodule Jidoka.TestSupport do
 
   alias Jidoka.Effect
   alias Jidoka.Event
+  alias Jidoka.ExecutionEnvironment.PolicyRequest
+  alias Jidoka.ExecutionEnvironment.ProfileResolver
+  alias Jidoka.ExecutionEnvironment.Registration
 
   @spec count_results(Effect.Journal.t(), Effect.Intent.kind()) :: non_neg_integer()
   def count_results(%Effect.Journal{results: results}, kind) do
@@ -72,5 +75,19 @@ defmodule Jidoka.TestSupport do
         &1
       )
     )
+  end
+
+  @spec environment_selection(Registration.t(), [String.t()]) :: Jidoka.ExecutionEnvironment.Selection.t()
+  def environment_selection(%Registration{} = registration, capability_ids \\ []) do
+    request =
+      PolicyRequest.new!(
+        profile_id: registration.profile.profile_id,
+        capability_ids: capability_ids
+      )
+
+    {:ok, selection} =
+      ProfileResolver.resolve(request, fn _profile_id, _opts -> {:ok, registration} end)
+
+    selection
   end
 end
