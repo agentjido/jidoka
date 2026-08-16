@@ -12,6 +12,7 @@ defmodule Jidoka.Policy.Gate do
   alias Jidoka.Cancellation.Token
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Error
   alias Jidoka.Policy.Decision
   alias Jidoka.Policy.Request
   alias Jidoka.Review.Interrupt
@@ -72,8 +73,7 @@ defmodule Jidoka.Policy.Gate do
   def check(%Request{} = request, policy, opts) when is_function(policy, 2) do
     context = Context.from_data!(%{"request_id" => request.request_id})
 
-    with {:ok, output} <- invoke(policy, request, context, opts),
-         {:ok, %Decision{} = decision} <- Decision.new(output),
+    with {:ok, %Decision{} = decision} <- invoke(policy, request, context, opts),
          :ok <- allowed(decision) do
       {:ok, stamp(decision, opts)}
     else
@@ -87,8 +87,8 @@ defmodule Jidoka.Policy.Gate do
     request = build_request(state, intent)
     context = Context.from_data!(Context.data(state.request.context))
 
-    with {:ok, output} <- invoke(policy, request, context, opts),
-         {:ok, %Decision{} = decision} <- normalize_decision(output, opts) do
+    with {:ok, %Decision{} = decision} <- invoke(policy, request, context, opts) do
+      decision = stamp(decision, opts)
       journal = Effect.Journal.put_policy_decision(state.journal, intent, decision)
       apply_decision(%Turn.State{state | journal: journal}, intent, decision, opts)
     else
@@ -200,10 +200,6 @@ defmodule Jidoka.Policy.Gate do
     end
   end
 
-  defp normalize_decision(output, opts) do
-    with {:ok, decision} <- Decision.new(output), do: {:ok, stamp(decision, opts)}
-  end
-
   defp stamp(%Decision{decided_at_ms: nil} = decision, opts),
     do: %Decision{decision | decided_at_ms: clock_ms(opts)}
 
@@ -226,7 +222,7 @@ defmodule Jidoka.Policy.Gate do
           result
 
         {:exit, reason} ->
-          {:error, {:policy_exit, reason}}
+          invalid_policy_result(:task_exit, reason)
 
         nil ->
           _result = Task.shutdown(task, :brutal_kill)
@@ -237,10 +233,25 @@ defmodule Jidoka.Policy.Gate do
 
   defp safe_call(policy, request, context) do
     policy.(request, context)
+    |> normalize_policy_result()
   rescue
-    exception -> {:error, {:policy_exception, exception}}
+    exception -> invalid_policy_result(:exception, exception)
   catch
-    kind, reason -> {:error, {:policy_failure, {kind, reason}}}
+    kind, reason -> invalid_policy_result(kind, reason)
+  end
+
+  defp normalize_policy_result({:ok, output}) do
+    case Decision.new(output) do
+      {:ok, %Decision{} = decision} -> {:ok, decision}
+      {:error, reason} -> invalid_policy_result(:decision, reason)
+    end
+  end
+
+  defp normalize_policy_result({:error, reason}), do: {:error, reason}
+  defp normalize_policy_result(output), do: invalid_policy_result(:return, output)
+
+  defp invalid_policy_result(kind, cause) do
+    {:error, {:invalid_policy_callback_result, kind, Error.to_map(cause)}}
   end
 
   defp maybe_register(%Task{pid: pid}, opts) do

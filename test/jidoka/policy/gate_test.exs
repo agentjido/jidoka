@@ -100,6 +100,43 @@ defmodule Jidoka.Policy.GateTest do
     end)
   end
 
+  test "normalizes every malformed policy callback result into a typed failure" do
+    intent = operation_intent(%{})
+
+    policies = [
+      {:return, fn _request, _context -> {:malformed, :tuple} end},
+      {:return, fn _request, _context -> %{outcome: :allow, rule_id: "raw.map"} end},
+      {:decision, fn _request, _context -> {:ok, %{outcome: :allow}} end},
+      {:throw, fn _request, _context -> throw(:policy_throw) end},
+      {:exit, fn _request, _context -> exit(:policy_exit) end},
+      {:exception, fn _request, _context -> raise "policy exception" end}
+    ]
+
+    for {kind, policy} <- policies do
+      assert {:error,
+              {:policy_check_failed, :operation,
+               {:invalid_policy_callback_result, ^kind, %{category: _, message: message}}}} =
+               Gate.authorize(state(intent), intent, policy, [])
+
+      assert is_binary(message)
+    end
+  end
+
+  test "keeps valid allow, deny, and review callback decisions" do
+    intent = operation_intent(%{})
+
+    for outcome <- [:allow, :deny, :require_review] do
+      policy = fn _request, _context ->
+        {:ok, Decision.new!(outcome: outcome, rule_id: "host.#{outcome}")}
+      end
+
+      result = Gate.authorize(state(intent), intent, policy, [])
+
+      assert elem(result, 0) == expected_gate_result(outcome)
+      assert %Decision{outcome: ^outcome} = elem(result, 1)
+    end
+  end
+
   test "a review decision is reused after approval and is not called twice" do
     parent = self()
     %Effect.Intent{} = intent = operation_intent(%{})
@@ -166,6 +203,10 @@ defmodule Jidoka.Policy.GateTest do
 
   defp operation_intent(arguments),
     do: Effect.Intent.new(:operation, %{name: "weather", arguments: arguments})
+
+  defp expected_gate_result(:allow), do: :allow
+  defp expected_gate_result(:deny), do: :deny
+  defp expected_gate_result(:require_review), do: :review
 
   defp missing_llm, do: fn _intent, _journal, _context -> {:error, :missing_llm} end
 end
