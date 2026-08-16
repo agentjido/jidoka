@@ -136,8 +136,9 @@ defmodule Jidoka.Parity.CrashSafeDurableExecutionTest do
              Store.get_session(store, "sess_incomplete_crash")
 
     assert incomplete_unsafe_intent?(List.last(snapshots))
+    operation_monitor = Process.monitor(operation_pid)
     assert nil == Task.shutdown(worker, :brutal_kill)
-    refute Process.alive?(operation_pid)
+    assert_receive {:DOWN, ^operation_monitor, :process, ^operation_pid, _reason}, 1_000
 
     Elixir.Agent.update(clock, fn _now -> 1_100 end)
 
