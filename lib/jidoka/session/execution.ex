@@ -244,7 +244,7 @@ defmodule Jidoka.Session.Execution do
   @doc "Lists pending human-review requests from a session or store."
   @spec pending_reviews(Session.t() | Store.store()) ::
           {:ok, [Jidoka.Review.Request.t()]} | {:error, term()}
-  def pending_reviews(%Session{} = session), do: {:ok, session.pending_reviews}
+  def pending_reviews(%Session{} = session), do: {:ok, Session.pending_reviews(session)}
   def pending_reviews(store), do: Store.pending_reviews(store)
 
   @doc "Returns a data-only replay view for a session or snapshot."

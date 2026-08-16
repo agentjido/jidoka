@@ -37,7 +37,6 @@ defmodule Jidoka.Session.Data do
               requests: Zoi.array(Zoi.lazy({Turn.Request, :schema, []})) |> Zoi.default([]),
               snapshots: Zoi.array(Zoi.lazy({Snapshot, :schema, []})) |> Zoi.default([]),
               result: Zoi.lazy({Turn.Result, :schema, []}) |> Zoi.nullish(),
-              pending_reviews: Zoi.array(Zoi.lazy({Review.Request, :schema, []})) |> Zoi.default([]),
               error: Zoi.any() |> Zoi.nullish(),
               lease: Zoi.lazy({Lease, :schema, []}) |> Zoi.nullish(),
               lineage: Zoi.lazy({Lineage, :schema, []}) |> Zoi.nullish(),
@@ -198,14 +197,13 @@ defmodule Jidoka.Session.Data do
   @doc "Adds a snapshot and marks the session as hibernated."
   @spec put_snapshot(t(), Snapshot.t()) :: t()
   def put_snapshot(%__MODULE__{snapshots: snapshots} = session, %Snapshot{} = snapshot) do
-    pending_reviews = pending_reviews_from_snapshot(snapshot)
+    pending_reviews = pending_reviews(snapshot)
 
     %__MODULE__{
       session
       | agent_id: snapshot.agent_id,
         snapshots: upsert_snapshot(snapshots, snapshot),
         environment: snapshot.environment || session.environment,
-        pending_reviews: pending_reviews,
         status: snapshot_status(snapshot, pending_reviews),
         error: nil
     }
@@ -221,7 +219,6 @@ defmodule Jidoka.Session.Data do
       session
       | conversation: conversation,
         result: result,
-        pending_reviews: [],
         status: :finished,
         error: nil
     }
@@ -250,6 +247,23 @@ defmodule Jidoka.Session.Data do
   @doc "Returns the most recent session snapshot, if one exists."
   @spec latest_snapshot(t()) :: Snapshot.t() | nil
   def latest_snapshot(%__MODULE__{snapshots: snapshots}), do: List.last(snapshots)
+
+  @doc "Derives pending review requests from the authoritative turn-state interrupt."
+  @spec pending_reviews(t() | Snapshot.t()) :: [Review.Request.t()]
+  def pending_reviews(%__MODULE__{status: :waiting} = session) do
+    case latest_snapshot(session) do
+      %Snapshot{} = snapshot -> pending_reviews(snapshot)
+      nil -> []
+    end
+  end
+
+  def pending_reviews(%__MODULE__{}), do: []
+
+  def pending_reviews(%Snapshot{turn_state: %Turn.State{pending_interrupt: %Review.Interrupt{} = interrupt}}) do
+    [Review.Request.from_interrupt!(interrupt)]
+  end
+
+  def pending_reviews(%Snapshot{}), do: []
 
   @doc "Merges snapshot evidence without adding duplicate snapshot ids."
   @spec merge_snapshots([Snapshot.t()], [Snapshot.t()]) :: [Snapshot.t()]
@@ -327,21 +341,6 @@ defmodule Jidoka.Session.Data do
   defp put_legacy_conversation(attrs), do: {:ok, attrs}
 
   defp has_key?(map, key), do: Map.has_key?(map, key) or Map.has_key?(map, Atom.to_string(key))
-
-  defp pending_reviews_from_snapshot(%Snapshot{metadata: metadata}) do
-    case Map.get(metadata, "pending_review", Map.get(metadata, :pending_review)) do
-      nil -> []
-      %Review.Request{} = request -> [request]
-      request -> normalize_pending_review(request)
-    end
-  end
-
-  defp normalize_pending_review(request) do
-    case Review.Request.from_input(request) do
-      {:ok, request} -> [request]
-      {:error, _reason} -> []
-    end
-  end
 
   defp snapshot_status(%Snapshot{cursor: %{phase: :review}}, _pending_reviews), do: :waiting
   defp snapshot_status(_snapshot, [_review | _rest]), do: :waiting

@@ -142,18 +142,19 @@ defmodule Jidoka.HarnessSessionIntegrationTest do
     assert {:ok, [%Review.Request{interrupt_id: interrupt_id, operation: "refund_order"}]} =
              Harness.pending_reviews(store)
 
-    assert waiting.pending_reviews |> hd() |> Map.get(:interrupt_id) == interrupt_id
+    assert waiting |> Session.pending_reviews() |> hd() |> Map.get(:interrupt_id) == interrupt_id
 
     approval = Review.Response.approve(interrupt_id)
 
-    assert {:ok, %Session{status: :finished, pending_reviews: []} = finished,
-            %Turn.Result{content: "Refund refund_123 is queued."}} =
+    assert {:ok, %Session{status: :finished} = finished, %Turn.Result{content: "Refund refund_123 is queued."}} =
              Harness.resume_session("sess_review",
                store: store,
                approval: approval,
                llm: llm,
                operations: operations
              )
+
+    assert Session.pending_reviews(finished) == []
 
     assert_receive {:refund_called, %{"order_id" => "order_123"}}
 

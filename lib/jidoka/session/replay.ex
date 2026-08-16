@@ -61,7 +61,7 @@ defmodule Jidoka.Session.Replay do
       snapshots: Enum.map(session.snapshots, &snapshot_summary/1),
       timeline: timeline(session),
       journal: latest_journal(session),
-      pending_reviews: Enum.map(session.pending_reviews, &ReviewProjection.project/1),
+      pending_reviews: Enum.map(Data.pending_reviews(session), &ReviewProjection.project/1),
       result: project_result(session.result),
       lineage: project_lineage(session.lineage),
       metadata: session.metadata
@@ -133,11 +133,6 @@ defmodule Jidoka.Session.Replay do
 
   defp snapshot_states(%Data{snapshots: snapshots}), do: Enum.map(snapshots, & &1.turn_state)
 
-  defp pending_reviews(%Snapshot{} = snapshot) do
-    snapshot.metadata
-    |> Map.get("pending_review", Map.get(snapshot.metadata, :pending_review))
-    |> List.wrap()
-    |> Enum.reject(&is_nil/1)
-    |> Enum.map(&ReviewProjection.project/1)
-  end
+  defp pending_reviews(%Snapshot{} = snapshot),
+    do: Enum.map(Data.pending_reviews(snapshot), &ReviewProjection.project/1)
 end

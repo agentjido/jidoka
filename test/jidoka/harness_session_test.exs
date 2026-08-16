@@ -125,7 +125,7 @@ defmodule Jidoka.HarnessSessionTest do
                operation: "refund_order",
                reason: :approval_required
              }
-           ] = session.pending_reviews
+           ] = Session.pending_reviews(session)
 
     assert interrupt_id == interrupt.id
   end

@@ -154,7 +154,7 @@ defmodule Jidoka.Session.Store do
   @spec pending_reviews(store()) :: {:ok, [Jidoka.Review.Request.t()]} | {:error, term()}
   def pending_reviews(store) do
     with {:ok, sessions} <- list_sessions(store) do
-      {:ok, Enum.flat_map(sessions, & &1.pending_reviews)}
+      {:ok, Enum.flat_map(sessions, &Data.pending_reviews/1)}
     end
   end
 

@@ -180,9 +180,10 @@ defmodule Jidoka.Inspection do
       journal: journal_view(snapshot.turn_state.journal, opts),
       pending_effects: Enum.map(snapshot.turn_state.pending_effects, &intent_view(&1, opts)),
       pending_review:
-        Jidoka.Projection.project(
-          Map.get(snapshot.metadata, "pending_review", Map.get(snapshot.metadata, :pending_review))
-        ),
+        snapshot
+        |> Data.pending_reviews()
+        |> List.first()
+        |> Jidoka.Projection.project(),
       metadata: Jidoka.Projection.project(snapshot.metadata)
     }
     |> maybe_put_full(:snapshot, snapshot, opts)
@@ -202,7 +203,7 @@ defmodule Jidoka.Inspection do
       status: session.status,
       request_count: length(session.requests),
       snapshot_count: length(session.snapshots),
-      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.Projection.project/1),
+      pending_reviews: Enum.map(Data.pending_reviews(session), &Jidoka.Projection.project/1),
       latest_cursor: latest_cursor(session),
       replay: replay,
       result: Jidoka.Projection.project(session.result),

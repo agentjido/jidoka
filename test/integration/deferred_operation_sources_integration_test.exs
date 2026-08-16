@@ -228,7 +228,8 @@ defmodule Jidoka.DeferredOperationSourcesIntegrationTest do
     assert snapshot.cursor.phase == :review
     assert snapshot.turn_state.pending_interrupt.operation == "handoff_to_billing"
     assert snapshot.turn_state.pending_interrupt.operation_kind == :handoff
-    assert snapshot.metadata["pending_review"].operation == "handoff_to_billing"
+    assert {:ok, [review]} = Jidoka.pending_reviews(snapshot)
+    assert review.operation == "handoff_to_billing"
 
     assert_receive {:handoff_review_requested, :handoff, "handoff", "handoff_to_billing"}
     refute_received {:handoff_called, _case_id}

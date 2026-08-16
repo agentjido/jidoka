@@ -121,12 +121,7 @@ defmodule Jidoka.Debug.Diagnostics do
     |> Map.values()
   end
 
-  defp pending_reviews(%Snapshot{metadata: metadata}) do
-    metadata
-    |> map_get(:pending_review)
-    |> List.wrap()
-    |> Enum.reject(&is_nil/1)
-  end
+  defp pending_reviews(%Snapshot{} = snapshot), do: Session.pending_reviews(snapshot)
 
   defp replay_pending_effects(%Replay{snapshots: snapshots}) do
     Enum.flat_map(snapshots, fn snapshot ->
