@@ -75,6 +75,58 @@ defmodule Jidoka.Adapter.ReqLLM.NormalizedStreamTest do
     assert records == [%{type: :finish, finish_reason: :stop}]
   end
 
+  test "one-byte chunks preserve escaped protocol content and event order" do
+    wire = ~s(  ```json\n{"type":"final","content":"héllo\\n\\u263A"}\n```)
+
+    {chunked_state, chunked_records} = push_chunks([wire])
+    {byte_state, byte_records} = push_chunks(for <<byte <- wire>>, do: <<byte>>)
+
+    assert text_from_records(chunked_records) == "héllo\n☺"
+    assert text_from_records(byte_records) == "héllo\n☺"
+    assert NormalizedStream.raw_text(byte_state) == wire
+
+    response = response("héllo\n☺", "")
+    decision = LLMDecision.final("héllo\n☺")
+    {_chunked_state, chunked_completion} = NormalizedStream.complete(chunked_state, response, decision)
+    {_byte_state, byte_completion} = NormalizedStream.complete(byte_state, response, decision)
+
+    assert chunked_completion == byte_completion
+    assert chunked_completion == [%{type: :finish, finish_reason: :stop}]
+  end
+
+  test "large protocol streams scan every input byte once" do
+    content = String.duplicate("x", 20_000)
+    wire = ~s({"type":"final","content":"#{content}"})
+    {state, records} = push_chunks(for <<byte <- wire>>, do: <<byte>>)
+
+    assert text_from_records(records) == content
+    assert NormalizedStream.raw_text(state) == wire
+
+    assert %{
+             raw_bytes: bytes,
+             scanned_bytes: bytes,
+             undecoded_suffix_bytes: 0
+           } = NormalizedStream.scanner_stats(state)
+
+    assert bytes == byte_size(wire)
+  end
+
+  test "an incomplete escape keeps only its suffix and a provider error remains terminal" do
+    wire = ~s({"type":"final","content":"ok\\u26)
+    {state, records} = push_chunks(for <<byte <- wire>>, do: <<byte>>)
+
+    assert text_from_records(records) == "ok"
+    assert %{undecoded_suffix_bytes: 2} = NormalizedStream.scanner_stats(state)
+
+    {_state, error_records} = NormalizedStream.fail(state, :provider_disconnected)
+
+    assert records ++ error_records ==
+             Enum.filter(records, &(&1.type == :text_delta)) ++
+               [%{type: :error, error: :provider_disconnected}]
+
+    assert Enum.count(records ++ error_records, &NormalizedStream.terminal?/1) == 1
+  end
+
   test "cancellation and errors close the normalized stream exactly once" do
     state = NormalizedStream.new()
     {state, records} = NormalizedStream.fail(state, :llm_response_cancelled)
@@ -116,5 +168,24 @@ defmodule Jidoka.Adapter.ReqLLM.NormalizedStreamTest do
       end)
 
     [%{type: :text_delta, delta: text}, %{type: :reasoning_delta, delta: reasoning} | other]
+  end
+
+  defp push_chunks(chunks) do
+    {state, reversed_records} =
+      Enum.reduce(chunks, {NormalizedStream.new(), []}, fn chunk, {state, records} ->
+        {state, emitted} = NormalizedStream.push(state, StreamChunk.text(chunk))
+        {state, Enum.reverse(emitted, records)}
+      end)
+
+    {state, Enum.reverse(reversed_records)}
+  end
+
+  defp text_from_records(records) do
+    records
+    |> Enum.flat_map(fn
+      %{type: :text_delta, delta: delta} -> [delta]
+      _record -> []
+    end)
+    |> IO.iodata_to_binary()
   end
 end
