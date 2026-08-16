@@ -3,9 +3,9 @@ defmodule Jidoka.Extension.ProcessHost do
 
   use GenServer
 
-  alias Jidoka.Agent.Spec.Operation
   alias Jidoka.ExecutionEnvironment.Contract
   alias Jidoka.Extension.{Binding, Error, Protocol, Slot}
+  alias Jidoka.Extension.ProcessHost.Manifest
 
   @default_timeout 1_000
 
@@ -81,7 +81,6 @@ defmodule Jidoka.Extension.ProcessHost do
     result =
       with :ok <- validate_launch(binding, Keyword.get(opts, :mode, binding.mode), evidence),
            {:ok, protocol, next_handle, manifest} <- handshake(binding, transport, handle, opts),
-           :ok <- validate_manifest(manifest),
            {:ok, protocol, next_handle} <-
              maybe_restore(protocol, transport, next_handle, Keyword.get(opts, :context, %{}), opts) do
         {:ok,
@@ -152,8 +151,9 @@ defmodule Jidoka.Extension.ProcessHost do
 
     with {:ok, frame, protocol} <- Protocol.initialize(protocol, id, mode),
          {:ok, line, handle} <- safe_transport(fn -> transport.exchange(handle, frame, timeout(opts)) end),
-         {:ok, %{"result" => manifest}, protocol} <- Protocol.receive_line(protocol, line),
-         {:ok, protocol} <- Protocol.complete_initialize(protocol, manifest) do
+         {:ok, %{"result" => raw_manifest}, protocol} <- Protocol.receive_line(protocol, line),
+         {:ok, protocol} <- Protocol.complete_initialize(protocol, raw_manifest),
+         {:ok, manifest} <- Manifest.new(raw_manifest) do
       {:ok, protocol, handle, manifest}
     end
   end
@@ -231,38 +231,29 @@ defmodule Jidoka.Extension.ProcessHost do
   defp response_result(%{"error" => error}), do: {:error, {:process_extension_remote_error, error}}
 
   defp build_slots(state) do
-    manifest = state.manifest
+    %Manifest{} = manifest = state.manifest
     pid = self()
 
     Slot.new(%{
       namespace: state.binding.instance_key,
-      tools: Enum.map(Map.get(manifest, "tools", []), &operation/1),
-      tool_handlers: tool_handlers(pid, Map.get(manifest, "tools", [])),
-      commands: named_handlers(pid, "command.call", Map.get(manifest, "commands", [])),
-      providers: named_handlers(pid, "provider.start", Map.get(manifest, "providers", [])),
-      context: optional_handler(pid, manifest, "context", "context.contribute"),
-      policy_advice: optional_handler(pid, manifest, "policy_advice", "policy.advise"),
+      tools: manifest.tools,
+      tool_handlers: tool_handlers(pid, manifest.tools),
+      commands: named_handlers(pid, "command.call", manifest.commands),
+      providers: named_handlers(pid, "provider.start", manifest.providers),
+      context: optional_handler(pid, manifest.context?, "context.contribute"),
+      policy_advice: optional_handler(pid, manifest.policy_advice?, "policy.advise"),
       lifecycle: fn event -> notify(pid, "lifecycle.notify", %{"event" => Jidoka.Extension.Event.to_map(event)}) end,
       checkpoint: fn pid -> call(pid, "state.checkpoint", %{}) end,
       close: fn pid -> close(pid) end,
-      state: Map.get(manifest, "state", %{}),
-      result: Map.get(manifest, "result", %{}),
-      ui_data: Map.get(manifest, "ui_data", %{})
+      state: manifest.state,
+      result: manifest.result,
+      ui_data: manifest.ui_data
     })
-  end
-
-  defp operation(tool) do
-    Operation.new!(
-      name: Map.fetch!(tool, "name"),
-      description: Map.get(tool, "description"),
-      idempotency: Map.get(tool, "idempotency", "idempotent"),
-      metadata: %{"source" => "process_extension"}
-    )
   end
 
   defp tool_handlers(pid, tools) do
     Map.new(tools, fn tool ->
-      name = Map.fetch!(tool, "name")
+      name = tool.name
       {name, fn arguments, _context -> call(pid, "tool.call", %{"name" => name, "arguments" => arguments}) end}
     end)
   end
@@ -274,8 +265,8 @@ defmodule Jidoka.Extension.ProcessHost do
     end)
   end
 
-  defp optional_handler(pid, manifest, key, method) do
-    if Map.get(manifest, key, false), do: fn _instance, input -> call(pid, method, %{"input" => input}) end
+  defp optional_handler(pid, enabled?, method) do
+    if enabled?, do: fn _instance, input -> call(pid, method, %{"input" => input}) end
   end
 
   defp close_state(%{closed?: true} = state, _opts), do: {:ok, state}
@@ -313,54 +304,22 @@ defmodule Jidoka.Extension.ProcessHost do
     end
   end
 
-  defp validate_manifest(manifest) when is_map(manifest) do
-    tools = Map.get(manifest, "tools", [])
-    commands = Map.get(manifest, "commands", [])
-    providers = Map.get(manifest, "providers", [])
+  defp authorized_call(%Manifest{} = manifest, "tool.call", params),
+    do: declared(Map.get(params, "name"), manifest.tool_names, :tool)
 
-    with true <- valid_tools?(tools),
-         true <- unique_strings?(commands),
-         true <- unique_strings?(providers),
-         true <- is_map(Map.get(manifest, "state", %{})),
-         true <- is_map(Map.get(manifest, "result", %{})),
-         true <- is_map(Map.get(manifest, "ui_data", %{})),
-         :ok <- Contract.validate_safe_map(manifest) do
-      :ok
-    else
-      reason -> {:error, {:invalid_process_extension_manifest, reason}}
-    end
-  end
+  defp authorized_call(%Manifest{} = manifest, "command.call", params),
+    do: declared(Map.get(params, "name"), manifest.command_names, :command)
 
-  defp validate_manifest(value), do: {:error, {:invalid_process_extension_manifest, value}}
-
-  defp authorized_call(manifest, "tool.call", params) do
-    names = Enum.map(Map.get(manifest, "tools", []), &Map.get(&1, "name"))
-    declared(Map.get(params, "name"), names, :tool)
-  end
-
-  defp authorized_call(manifest, "command.call", params),
-    do: declared(Map.get(params, "name"), Map.get(manifest, "commands", []), :command)
-
-  defp authorized_call(manifest, "provider.start", params),
-    do: declared(Map.get(params, "provider"), Map.get(manifest, "providers", []), :provider)
+  defp authorized_call(%Manifest{} = manifest, "provider.start", params),
+    do: declared(Map.get(params, "provider"), manifest.provider_names, :provider)
 
   defp authorized_call(_manifest, _method, _params), do: :ok
 
   defp declared(name, names, kind) do
-    if name in names, do: :ok, else: {:error, {:undeclared_process_extension_capability, kind, name}}
+    if MapSet.member?(names, name),
+      do: :ok,
+      else: {:error, {:undeclared_process_extension_capability, kind, name}}
   end
-
-  defp valid_tools?(tools) when is_list(tools) do
-    names = Enum.map(tools, fn tool -> if is_map(tool), do: Map.get(tool, "name") end)
-    Enum.all?(names, &(is_binary(&1) and &1 != "")) and length(names) == length(Enum.uniq(names))
-  end
-
-  defp valid_tools?(_tools), do: false
-
-  defp unique_strings?(values) when is_list(values),
-    do: Enum.all?(values, &(is_binary(&1) and &1 != "")) and length(values) == length(Enum.uniq(values))
-
-  defp unique_strings?(_values), do: false
 
   defp transport_diagnostics(state) do
     diagnostics =
