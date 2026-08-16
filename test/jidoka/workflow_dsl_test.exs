@@ -748,6 +748,37 @@ defmodule Jidoka.WorkflowDslTest do
     assert [%Step{name: :normalize}] = spec.steps
   end
 
+  test "workflow step kinds accept only their own fields" do
+    steps = [
+      Step.new!(name: :function, kind: :function, target: {Fns, :normalize, 2}),
+      Step.new!(name: :action, kind: :action, target: AddAmount),
+      Step.new!(name: :agent, kind: :agent, target: EchoAgent, prompt: "hello"),
+      Step.new!(name: :gate, kind: :gate, condition: true),
+      Step.new!(name: :map, kind: :map, target: {Fns, :normalize, 2}, target_kind: :function, over: []),
+      Step.new!(name: :reduce, kind: :reduce, target: {Fns, :normalize, 2}, over: []),
+      Step.new!(
+        name: :loop,
+        kind: :loop,
+        target: {Fns, :normalize, 2},
+        initial: %{},
+        max_iterations: 1
+      )
+    ]
+
+    assert Enum.map(steps, &(&1 |> Map.from_struct() |> Map.fetch!(:kind))) == Step.kinds()
+
+    assert {:error, {:invalid_workflow_step_fields, :function, [:prompt]}} =
+             Step.new(name: :invalid, kind: :function, target: {Fns, :normalize, 2}, prompt: "wrong kind")
+
+    old_valid = %Step{name: :legacy, kind: :function, target: {Fns, :normalize, 2}}
+    assert {:ok, %Step{name: :legacy}} = Step.from_input(old_valid)
+
+    invalid_restored = %Step{old_valid | prompt: "wrong kind"}
+
+    assert {:error, _reason} =
+             Spec.new(id: "invalid_restored", module: __MODULE__, mode: :dsl, steps: [invalid_restored])
+  end
+
   test "workflow parameter schemas project common Zoi input types" do
     schema =
       Zoi.object(%{

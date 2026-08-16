@@ -9,7 +9,7 @@ defmodule Jidoka.Workflow.Scheduler do
 
   use GenServer
 
-  alias Jidoka.Workflow.{Background, Run, Schedule, Step}
+  alias Jidoka.Workflow.{Background, Run, Schedule}
   alias Jidoka.Workflow.Runtime.Retry
   alias Jidoka.Workflow.Schedule.Trigger
 
@@ -189,12 +189,11 @@ defmodule Jidoka.Workflow.Scheduler do
   end
 
   defp submit_with_retry(schedule, due_at, now, run_id, state) do
-    step = Step.new!(name: :schedule_submission, kind: :function, retry: schedule.retry)
     {:ok, attempt_counter} = Elixir.Agent.start_link(fn -> 0 end)
     run_opts = Keyword.put(schedule.run_opts, :run_id, run_id)
 
     result =
-      Retry.call(step, fn ->
+      Retry.call(schedule.retry, fn ->
         Elixir.Agent.update(attempt_counter, &(&1 + 1))
         Background.submit(state.runner, schedule.workflow, schedule.input, run_opts)
       end)
