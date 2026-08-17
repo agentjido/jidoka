@@ -50,6 +50,14 @@ defmodule Jidoka.Extension.HostTest do
            }
   end
 
+  test "close succeeds after the linked dispatcher stops" do
+    {:ok, session} = Session.start(spec(), session_id: "stopped-dispatcher-session")
+    {:ok, host} = Host.open(session, [], %{}, :interactive)
+    :ok = GenServer.stop(host.dispatcher)
+
+    assert {:ok, []} = Host.close(host)
+  end
+
   test "fails before a turn on slot collisions, unknown slots, and bad result namespaces" do
     {:ok, session} = Session.start(spec(), session_id: "collision-session")
     first = Request.new!(id: "acme.first")

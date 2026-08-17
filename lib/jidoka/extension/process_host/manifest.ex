@@ -33,6 +33,7 @@ defmodule Jidoka.Extension.ProcessHost.Manifest do
           ui_data: map()
         }
 
+  @doc false
   @spec new(map()) :: {:ok, t()} | {:error, {:invalid_process_extension_manifest, term()}}
   def new(raw) when is_map(raw) do
     with :ok <- Contract.validate_safe_map(raw),

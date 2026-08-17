@@ -180,8 +180,14 @@ defmodule Jidoka.Extension.Host do
   @spec close(t()) :: {:ok, [map()]}
   def close(%__MODULE__{instances: instances, dispatcher: dispatcher}) do
     evidence = Enum.reverse(instances) |> Enum.map(&close_instance/1)
-    if Process.alive?(dispatcher), do: GenServer.stop(dispatcher, :normal)
+    stop_dispatcher(dispatcher)
     {:ok, evidence}
+  end
+
+  defp stop_dispatcher(dispatcher) do
+    GenServer.stop(dispatcher, :normal)
+  catch
+    :exit, {:noproc, _call} -> :ok
   end
 
   defp open_instances([], _requests, _registry, _session, opened), do: {:ok, Enum.reverse(opened)}

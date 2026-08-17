@@ -34,12 +34,12 @@ defmodule Jidoka.Session.EnvironmentRuntime do
     end
   end
 
-  defp run_with_manager(manager, %Selection{} = selection, manager_opts, opts, function) do
-    registration = selection.registration
+  defp run_with_manager(manager, selection, manager_opts, opts, function) do
+    registration = Selection.registration(selection)
 
     runtime = %{
       manager: manager,
-      request: selection.request,
+      request: Selection.request(selection),
       retention: registration.profile.retention,
       opts: manager_opts
     }
@@ -266,11 +266,16 @@ defmodule Jidoka.Session.EnvironmentRuntime do
       config when is_list(config) ->
         unresolved_selection_config(Map.new(config))
 
-      %Selection{} = selection ->
-        {:ok, selection}
-
       %{} = config ->
-        unresolved_selection_config(config)
+        case Selection.validate(config) do
+          {:ok, selection} ->
+            {:ok, selection}
+
+          {:error, reason} ->
+            if is_struct(config, Selection),
+              do: {:error, reason},
+              else: unresolved_selection_config(config)
+        end
 
       config ->
         {:error, {:invalid_execution_environment_runtime, config}}
@@ -281,15 +286,13 @@ defmodule Jidoka.Session.EnvironmentRuntime do
     selection = Map.get(config, :selection, Map.get(config, "selection"))
     manager = Map.get(config, :manager, Map.get(config, "manager"))
 
-    cond do
-      not is_nil(manager) ->
-        :none
-
-      not match?(%Selection{}, selection) ->
-        {:error, {:invalid_environment_selection, selection}}
-
-      true ->
-        {:ok, selection}
+    if is_nil(manager) do
+      case Selection.validate(selection) do
+        {:ok, selection} -> {:ok, selection}
+        {:error, _reason} -> {:error, {:invalid_environment_selection, selection}}
+      end
+    else
+      :none
     end
   end
 

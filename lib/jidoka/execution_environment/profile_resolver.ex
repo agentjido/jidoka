@@ -15,7 +15,7 @@ defmodule Jidoka.ExecutionEnvironment.ProfileResolver do
   @spec resolve(PolicyRequest.t(), resolver(), keyword()) :: {:ok, Selection.t()} | {:error, Error.t()}
   def resolve(%PolicyRequest{} = request, resolver, opts \\ []) do
     with {:ok, %Registration{} = registration} <- call_resolver(resolver, request.profile_id, opts),
-         {:ok, %Selection{} = selection} <- request |> Selection.build(registration) |> Selection.validate() do
+         {:ok, selection} <- request |> Selection.build(registration) |> Selection.validate() do
       {:ok, selection}
     else
       {:error, %Error{} = error} -> {:error, error}

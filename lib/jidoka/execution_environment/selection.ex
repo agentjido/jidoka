@@ -28,7 +28,7 @@ defmodule Jidoka.ExecutionEnvironment.Selection do
   end
 
   @doc "Validates that a selection still contains the exact resolved request and registration."
-  @spec validate(t()) :: {:ok, t()} | {:error, Error.t()}
+  @spec validate(term()) :: {:ok, t()} | {:error, Error.t()}
   def validate(
         %__MODULE__{request: %PolicyRequest{} = request, registration: %Registration{} = registration} = selection
       ) do
@@ -59,6 +59,14 @@ defmodule Jidoka.ExecutionEnvironment.Selection do
   def validate(_selection),
     do: {:error, error(:invalid_environment_selection, nil, :invalid_selection_value)}
 
+  @doc false
+  @spec request(t()) :: PolicyRequest.t()
+  def request(%__MODULE__{request: request}), do: request
+
+  @doc false
+  @spec registration(t()) :: Registration.t()
+  def registration(%__MODULE__{registration: registration}), do: registration
+
   @doc "Projects the validated selection without its executable adapter reference."
   @spec to_map(t()) :: map()
   def to_map(%__MODULE__{} = selection) do
@@ -85,7 +93,6 @@ defmodule Jidoka.ExecutionEnvironment.Selection do
     else
       false -> {:error, :registration_fingerprint_mismatch}
       {:error, _reason} = error -> error
-      _invalid -> {:error, :invalid_registration_contract}
     end
   rescue
     exception -> {:error, {:invalid_registration_contract, exception}}

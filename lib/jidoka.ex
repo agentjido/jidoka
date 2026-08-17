@@ -263,7 +263,7 @@ defmodule Jidoka do
   `:turn_finished`, `:turn_failed`, or `:turn_hibernated`.
   """
   @spec stream(Chat.Request.t(), keyword()) :: Jidoka.Stream.t()
-  def stream(%Chat.Request{} = request, opts \\ []), do: Jidoka.Stream.new(request, opts)
+  def stream(request, opts \\ []), do: Jidoka.Stream.new(request, opts)
 
   @doc """
   Waits for a chat request or stream to finish.
@@ -276,25 +276,35 @@ defmodule Jidoka do
   """
   @spec await(Chat.Request.t() | Jidoka.Stream.t() | SequenceRequest.t(), keyword()) :: term()
   def await(request_or_stream, opts \\ [])
-  def await(%Chat.Request{} = request, opts), do: AsyncChat.await(request, opts)
   def await(%Jidoka.Stream{} = stream, opts), do: Jidoka.Stream.await(stream, opts)
 
   def await(request, opts) when is_list(opts) do
-    if SequenceRequest.request?(request),
-      do: AsyncSequence.await(request, opts),
-      else: {:error, :invalid_async_request}
+    case Chat.Request.validate(request) do
+      {:ok, request} ->
+        AsyncChat.await(request, opts)
+
+      {:error, :invalid_async_request} ->
+        if SequenceRequest.request?(request),
+          do: AsyncSequence.await(request, opts),
+          else: {:error, :invalid_async_request}
+    end
   end
 
   @doc "Cancels an active asynchronous request and returns typed evidence."
   @spec cancel(Chat.Request.t() | SequenceRequest.t(), keyword()) ::
           {:ok, Jidoka.Cancellation.t()} | {:error, term()}
   def cancel(request, opts \\ [])
-  def cancel(%Chat.Request{} = request, opts), do: AsyncChat.cancel(request, opts)
 
   def cancel(request, opts) when is_list(opts) do
-    if SequenceRequest.request?(request),
-      do: AsyncSequence.cancel(request, opts),
-      else: {:error, :invalid_async_request}
+    case Chat.Request.validate(request) do
+      {:ok, request} ->
+        AsyncChat.cancel(request, opts)
+
+      {:error, :invalid_async_request} ->
+        if SequenceRequest.request?(request),
+          do: AsyncSequence.cancel(request, opts),
+          else: {:error, :invalid_async_request}
+    end
   end
 
   @doc """

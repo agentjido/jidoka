@@ -41,10 +41,11 @@ defmodule Jidoka.Chat.Async do
           term() | {:cancelled, Cancellation.t()} | {:error, term()}
   def await(request, opts \\ [])
 
-  def await(%Request{} = request, opts) when is_list(opts) do
+  def await(request, opts) when is_list(opts) do
     timeout = Keyword.get(opts, :timeout, 30_000)
 
-    with {:ok, controller} <- Request.controller(request) do
+    with {:ok, request} <- Request.validate(request),
+         {:ok, controller} <- Request.controller(request) do
       case RequestController.await(controller, timeout) do
         {:error, :timeout} = timeout_result ->
           maybe_cancel_after_timeout(request, opts)
@@ -56,18 +57,15 @@ defmodule Jidoka.Chat.Async do
     end
   end
 
-  def await(_request, opts) when is_list(opts), do: {:error, :invalid_async_request}
-
   @spec cancel(Request.t(), keyword()) :: {:ok, Cancellation.t()} | {:error, term()}
   def cancel(request, opts \\ [])
 
-  def cancel(%Request{} = request, opts) when is_list(opts) do
-    with {:ok, controller} <- Request.controller(request) do
+  def cancel(request, opts) when is_list(opts) do
+    with {:ok, request} <- Request.validate(request),
+         {:ok, controller} <- Request.controller(request) do
       RequestController.cancel(controller, opts)
     end
   end
-
-  def cancel(_request, opts) when is_list(opts), do: {:error, :invalid_async_request}
 
   defp maybe_cancel_after_timeout(request, opts) do
     if Keyword.get(opts, :cancel_on_timeout, true) do

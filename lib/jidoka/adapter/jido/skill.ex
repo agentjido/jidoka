@@ -169,7 +169,8 @@ defmodule Jidoka.Adapter.Jido.Skill do
 
   defp resolve_skill(ref) do
     with {:ok, %Spec{} = spec} <- resolve_ref(ref),
-         {:ok, action_modules} <- validate_actions(ref, spec.actions),
+         actions = spec |> Map.from_struct() |> Map.get(:actions),
+         {:ok, action_modules} <- validate_actions(ref, actions),
          {:ok, body} <- read_body(ref, spec) do
       spec = %Spec{spec | actions: action_modules, body_ref: {:inline, body}}
 

@@ -5,6 +5,7 @@ defmodule Jidoka.Workflow.Suspension do
 
   @type lookup :: {:ok, nil | {atom(), Cursor.t()}} | {:error, term()}
 
+  @doc false
   @spec find(map()) :: lookup()
   def find(outcomes) when is_map(outcomes) do
     suspended =
@@ -32,6 +33,7 @@ defmodule Jidoka.Workflow.Suspension do
 
   def find(outcomes), do: {:error, {:invalid_workflow_outcomes, outcomes}}
 
+  @doc false
   @spec cursor(map()) :: {:ok, Cursor.t() | nil} | {:error, term()}
   def cursor(outcomes) do
     case find(outcomes) do

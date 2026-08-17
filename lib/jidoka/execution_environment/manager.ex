@@ -32,7 +32,7 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
 
   def start_link(%Selection{} = selection, policy, opts) when is_function(policy, 2) do
     with {:ok, selection} <- Selection.validate(selection) do
-      GenServer.start_link(__MODULE__, {selection, policy, opts})
+      GenServer.start_link(__MODULE__, {Selection.registration(selection), policy, opts})
     end
   end
 
@@ -103,7 +103,7 @@ defmodule Jidoka.ExecutionEnvironment.Manager do
   end
 
   @impl true
-  def init({%Selection{registration: %Registration{} = registration}, policy, opts}) do
+  def init({%Registration{} = registration, policy, opts}) do
     case Conformance.validate(registration.adapter) do
       :ok ->
         {:ok,

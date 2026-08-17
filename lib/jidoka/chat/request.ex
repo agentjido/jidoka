@@ -37,10 +37,20 @@ defmodule Jidoka.Chat.Request do
   def new(attrs) when is_list(attrs), do: Schema.parse!(@schema, attrs, "chat request")
 
   @doc false
-  @spec controller(term()) :: {:ok, pid()} | {:error, :invalid_async_request}
-  def controller(%__MODULE__{request_id: request_id, controller: controller})
+  @spec validate(term()) :: {:ok, t()} | {:error, :invalid_async_request}
+  def validate(%__MODULE__{request_id: request_id, controller: controller} = request)
       when is_binary(request_id) and request_id != "" and is_pid(controller),
-      do: {:ok, controller}
+      do: {:ok, request}
 
-  def controller(_request), do: {:error, :invalid_async_request}
+  def validate(_request), do: {:error, :invalid_async_request}
+
+  @doc false
+  @spec request_id(t()) :: String.t()
+  def request_id(%__MODULE__{request_id: request_id}), do: request_id
+
+  @doc false
+  @spec controller(term()) :: {:ok, pid()} | {:error, :invalid_async_request}
+  def controller(request) do
+    with {:ok, %__MODULE__{controller: controller}} <- validate(request), do: {:ok, controller}
+  end
 end

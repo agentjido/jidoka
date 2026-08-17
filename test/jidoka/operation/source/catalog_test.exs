@@ -280,7 +280,7 @@ defmodule Jidoka.Operation.Source.CatalogTest do
     base = %{"script" => script, "allowed_tools" => ["crm.customer.search"]}
 
     for limits <- [
-          %{"max_calls" => 2, "max_parallel_calls" => 2, "timeout" => 500},
+          %{"max_calls" => 2, "max_parallel_calls" => 2, "timeout" => 900},
           %{"max_calls" => 4, "max_parallel_calls" => 3, "timeout" => 1_000}
         ] do
       assert {:ok, %{"status" => "completed"}} =

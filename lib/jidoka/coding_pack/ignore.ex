@@ -36,12 +36,15 @@ defmodule Jidoka.CodingPack.Ignore do
     @type t :: %__MODULE__{workspace: Workspace.t(), hard_rules: [map()], rules: [map()]}
   end
 
+  @opaque evaluator :: Evaluator.t()
+
   @doc "Returns the non-overridable default exclusions."
   @spec default_exclusions() :: [String.t()]
   def default_exclusions, do: @default_exclusions
 
   @doc "Explains whether a workspace path is ignored."
-  @spec decision(Workspace.t(), String.t()) :: {:ok, decision()} | {:error, Error.t()}
+  @spec decision(Workspace.t() | evaluator(), String.t()) ::
+          {:ok, decision()} | {:error, Error.t()}
   def decision(%Workspace{} = workspace, path) do
     with {:ok, resolved} <- Workspace.resolve(workspace, path, allow_missing: true),
          :ok <- valid_patterns(workspace.trusted_exclusions),
@@ -89,7 +92,7 @@ defmodule Jidoka.CodingPack.Ignore do
   end
 
   @doc "Builds one immutable ignore evaluator for a bounded workspace search."
-  @spec compile(Workspace.t(), keyword()) :: {:ok, Evaluator.t()} | {:error, Error.t()}
+  @spec compile(Workspace.t(), keyword()) :: {:ok, evaluator()} | {:error, Error.t()}
   def compile(%Workspace{} = workspace, opts \\ []) do
     with :ok <- valid_patterns(workspace.trusted_exclusions),
          hard_rules = compile_hard_rules(@default_exclusions ++ workspace.trusted_exclusions),

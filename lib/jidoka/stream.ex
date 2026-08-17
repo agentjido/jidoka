@@ -37,13 +37,20 @@ defmodule Jidoka.Stream do
 
   @doc "Builds a stream wrapper for an async chat request."
   @spec new(Jidoka.Chat.Request.t(), keyword()) :: t()
-  def new(%Jidoka.Chat.Request{} = request, opts \\ []) when is_list(opts) do
-    Schema.parse!(@schema, %{request: request, events: events(request.request_id, opts)}, "stream")
+  def new(request, opts \\ []) when is_list(opts) do
+    {:ok, request} = Jidoka.Chat.Request.validate(request)
+
+    attrs = %{
+      request: request,
+      events: events(Jidoka.Chat.Request.request_id(request), opts)
+    }
+
+    Schema.parse!(@schema, attrs, "stream")
   end
 
   @doc "Waits for the final normalized result for a stream wrapper."
   @spec await(t(), keyword()) :: term()
-  def await(%__MODULE__{request: %Jidoka.Chat.Request{} = request}, opts \\ []) do
+  def await(%__MODULE__{request: request}, opts \\ []) do
     AsyncChat.await(request, opts)
   end
 

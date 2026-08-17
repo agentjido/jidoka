@@ -9,7 +9,7 @@ defmodule Jidoka.Schema do
   @type parse_result(t) :: {:ok, t} | {:error, term()}
 
   @doc "Parses normalized attributes through the final Zoi struct schema."
-  @spec parse(Zoi.schema(), keyword() | map()) :: parse_result(struct())
+  @spec parse(Zoi.schema(), keyword() | map()) :: parse_result(term())
   def parse(schema, attrs) do
     Zoi.parse(schema, normalize_attrs(attrs))
   end
