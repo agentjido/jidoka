@@ -69,7 +69,10 @@ defmodule Jidoka.HarnessSessionTest do
   end
 
   defmodule ResumeOnlyStore do
-    def claim_resume(_session_id, _opts), do: {:error, :not_called}
+    def claim_resume(_session_id, opts) do
+      if test_pid = Keyword.get(opts, :test_pid), do: send(test_pid, :partial_resume_store_called)
+      {:error, :not_called}
+    end
   end
 
   defmodule RecoverOnlyStore do
@@ -212,6 +215,11 @@ defmodule Jidoka.HarnessSessionTest do
              Store.claim_session(store, "partial-store-session", request)
 
     refute_receive :partial_store_called
+
+    assert {:error, {:partial_durable_session_store, ResumeOnlyStore, [claim_resume: 2], _missing}} =
+             Store.claim_resume({ResumeOnlyStore, test_pid: self()}, "partial-store-session")
+
+    refute_receive :partial_resume_store_called
   end
 
   test "sessions collect snapshots and pending review requests" do

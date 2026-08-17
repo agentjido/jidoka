@@ -314,7 +314,8 @@ durable form of `Turn.State` plus a cursor. Three details matter to
 contributors:
 
 - **Schema version is part of the snapshot.**
-  `Jidoka.Snapshot.schema_version/0` returns `1`. Bumping it
+  `Jidoka.Snapshot.schema_version/0` returns `2`, and
+  `supported_schema_versions/0` returns `[1, 2]`. Bumping the current version
   requires migration logic in `from_input/1`.
 - **Serialize is opaque.** `serialize/1` produces a string with the prefix
   `"jidoka:snapshot:v1:"` followed by base64-encoded `:erlang.term_to_binary`.

@@ -3,7 +3,10 @@ defmodule Jidoka.Session.Transitions do
   Pure durable session state transitions.
 
   This module validates revisions, leases, claims, checkpoints, commits, and
-  recovery. It does not call a store or another external service.
+  recovery. It does not call a store or another external service. Custom
+  durable stores use these public functions inside one backend transaction,
+  persist the returned `Jidoka.Session.Data`, make that transaction durable,
+  and only then send a successful callback reply.
   """
 
   alias Jidoka.Session.Data
