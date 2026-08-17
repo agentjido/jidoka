@@ -18,6 +18,9 @@ defmodule Jidoka.Extension.ProcessHostTest do
 
         assert {:ok, slots} = ProcessHost.slots(pid)
 
+        assert [%{idempotency: :pure, metadata: %{"input_policy" => %{"additional_properties" => false}}}] =
+                 slots.tools
+
         assert {:ok, %{"tool" => "fixture_tool"}} = slots.tool_handlers["fixture_tool"].(%{}, %{})
         assert {:ok, %{"command" => "fixture_command"}} = slots.commands["fixture_command"].(%{})
         assert {:ok, %{"content" => "provider answer"}} = slots.providers["fixture_provider"].(%{})
@@ -40,6 +43,39 @@ defmodule Jidoka.Extension.ProcessHostTest do
     assert_receive {:protocol_notification, "lifecycle.notify", _message}
     assert_receive {:protocol_frame, "shutdown", _message}
     assert_receive :transport_closed
+  end
+
+  test "normalizes the complete manifest once and rejects invalid entries during handshake" do
+    owner = self()
+    tool = %{"name" => "duplicate", "idempotency" => "idempotent"}
+
+    invalid_manifests = [
+      [manifest_tools: [tool, tool]],
+      [manifest_tools: [%{"name" => "bad", "idempotency" => "sometimes"}]],
+      [manifest_extra: %{"context" => "yes"}],
+      [manifest_extra: %{"commands" => ["same", "same"]}]
+    ]
+
+    for manifest_opts <- invalid_manifests do
+      assert {:error, %Jidoka.Extension.Error{code: :process_extension_start_failed}} =
+               ProcessHost.start(
+                 binding: extension_binding(),
+                 descriptor: descriptor(owner, manifest_opts),
+                 mode: :automation
+               )
+
+      assert_receive :transport_closed, 1_000
+    end
+
+    assert {:ok, pid} =
+             ProcessHost.start(
+               binding: extension_binding(),
+               descriptor: descriptor(owner, manifest_extra: %{"future_optional" => %{"enabled" => true}}),
+               mode: :automation
+             )
+
+    assert {:ok, _slots} = ProcessHost.slots(pid)
+    assert :ok = ProcessHost.close(pid)
   end
 
   test "fails closed for missing constrained evidence and handshake mismatch and cleans up" do

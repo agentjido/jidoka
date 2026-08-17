@@ -59,7 +59,9 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
   end
 
   test "query and describe return a compact selected hidden catalog" do
-    assert {:ok, query_result} = run_catalog_operation("catalog_query", %{"query" => "unpaid invoice"})
+    assert {:ok, query_result} =
+             run_catalog_operation("catalog_query", %{"query" => "unpaid invoice"})
+
     ids = Enum.map(query_result["tools"], & &1["id"])
 
     assert "billing.invoice.list_unpaid" in ids
@@ -113,6 +115,32 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
              result["customers"] |> Enum.map(& &1["name"])
   end
 
+  test "customer search accepts each selector alone" do
+    selectors = %{
+      "query" => "Ada",
+      "name" => "Ada",
+      "company" => "Northwind",
+      "tier" => "enterprise",
+      "status" => "active",
+      "tag" => "logistics",
+      "value" => "Ada"
+    }
+
+    for {selector, value} <- selectors do
+      assert {:ok, %{"count" => count}} = SearchCustomers.run(%{selector => value}, %{})
+      assert count > 0
+    end
+  end
+
+  test "customer search rejects a missing selector" do
+    assert {:error, {:invalid_customer_search_selectors, []}} = SearchCustomers.run(%{}, %{})
+  end
+
+  test "customer search rejects multiple selectors and names them" do
+    assert {:error, {:invalid_customer_search_selectors, [:name, :tier]}} =
+             SearchCustomers.run(%{"name" => "Ada", "tier" => "enterprise"}, %{})
+  end
+
   test "output control rejects final answers that did not execute Lua" do
     context = %{
       boundary: :output,
@@ -156,6 +184,27 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
     }
 
     assert :cont = RequireLuaExecution.call(context)
+  end
+
+  test "output control rejects a failed Lua execution after a completed attempt" do
+    context = %{
+      boundary: :output,
+      agent_state: %Jidoka.Agent.State{
+        operation_results: [
+          %Jidoka.Effect.OperationResult{
+            operation: "catalog_execute",
+            output: %{"status" => "completed"}
+          },
+          %Jidoka.Effect.OperationResult{
+            operation: "catalog_execute",
+            output: %{"status" => "failed", "reason" => "later error"}
+          }
+        ]
+      }
+    }
+
+    assert {:block, {:lua_execution_not_completed, "failed", "later error"}} =
+             RequireLuaExecution.call(context)
   end
 
   test "output control reports the most recent failed Lua execution" do
@@ -245,7 +294,7 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
     assert result["next"] =~ "call catalog_execute again"
   end
 
-  test "execute preserves field-specific defaults for invalid numeric params" do
+  test "execute rejects invalid numeric limits" do
     script = """
     return jidoka.workflow({
       steps = {
@@ -259,7 +308,7 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
     })
     """
 
-    assert {:ok, result} =
+    assert {:error, {:invalid_catalog_positive_integer, :timeout, "bad"}} =
              run_catalog_execute(
                %{
                  "script" => script,
@@ -268,9 +317,6 @@ defmodule JidokaShowcase.LuaToolsAgentTest do
                },
                %{}
              )
-
-    assert result["status"] == "completed"
-    assert result["policy"]["timeout_ms"] == 1_500
   end
 
   test "jidoka.workflow executes a Lua-authored DAG with resolved step refs" do

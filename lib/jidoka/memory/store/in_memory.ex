@@ -8,13 +8,15 @@ defmodule Jidoka.Memory.Store.InMemory do
   alias Jidoka.Memory.Entry
   alias Jidoka.Memory.RecallRequest
   alias Jidoka.Memory.RecallResult
+  alias Jidoka.Memory.Route
   alias Jidoka.Memory.WriteRequest
   alias Jidoka.Memory.WriteResult
 
   @doc "Starts a process-local memory store."
   @spec start_link(keyword()) :: Agent.on_start()
   def start_link(opts \\ []) do
-    Agent.start_link(fn -> [] end, opts)
+    {initial_entries, opts} = Keyword.pop(opts, :initial_entries, [])
+    Agent.start_link(fn -> initial_entries end, opts)
   end
 
   @impl true
@@ -23,45 +25,83 @@ defmodule Jidoka.Memory.Store.InMemory do
 
     entries =
       pid
-      |> Agent.get(& &1)
-      |> Enum.filter(&matches_request?(&1, request))
+      |> Agent.get(&normalize_state/1)
+      |> Map.fetch!(:entries)
+      |> Enum.filter(fn {route, _entry} -> Route.key(route) == Route.key(request.route) end)
+      |> Enum.map(&elem(&1, 1))
       |> Enum.take(request.limit)
 
     RecallResult.new(request: request, entries: entries)
   end
 
   @impl true
-  def write(%WriteRequest{entry: %Entry{} = entry, idempotency_key: key} = request, opts) do
+  def write(%WriteRequest{entry: %Entry{} = entry, route: %Route{} = route, idempotency_key: key} = request, opts) do
     pid = fetch_pid!(opts)
-    entry = put_idempotency_key(entry, key)
 
     stored_entry =
-      Agent.get_and_update(pid, fn entries ->
-        stored_entry = idempotent_entry(entries, entry, key)
-        updated = [stored_entry | Enum.reject(entries, &(&1.id == stored_entry.id))]
-        {stored_entry, updated}
+      Agent.get_and_update(pid, fn current ->
+        state = normalize_state(current)
+        {stored_entry, state} = put_entry(state, route, entry, key)
+        {stored_entry, state}
       end)
 
     WriteResult.new(request: request, entry: stored_entry)
   end
 
-  defp idempotent_entry(_entries, entry, nil), do: entry
+  defp put_entry(state, route, entry, nil) do
+    {entry, %{state | entries: upsert_entry(state.entries, route, entry)}}
+  end
 
-  defp idempotent_entry(entries, entry, key) do
-    case Enum.find(entries, &(idempotency_key(&1) == key)) do
-      nil -> entry
-      existing -> existing
+  defp put_entry(state, route, entry, key) do
+    index_key = {Route.key(route), key}
+
+    case Map.fetch(state.idempotency_index, index_key) do
+      {:ok, entry_id} ->
+        case find_entry(state.entries, route, entry_id) do
+          %Entry{} = existing ->
+            {existing, state}
+
+          nil ->
+            put_new_idempotent_entry(state, route, entry, index_key)
+        end
+
+      :error ->
+        put_new_idempotent_entry(state, route, entry, index_key)
     end
   end
 
-  defp put_idempotency_key(entry, nil), do: entry
+  defp put_new_idempotent_entry(state, %Route{} = route, %Entry{} = entry, index_key) do
+    entry = %Entry{entry | id: idempotency_entry_id(route, entry, elem(index_key, 1))}
 
-  defp put_idempotency_key(%Entry{} = entry, key) do
-    %Entry{entry | metadata: Map.put(entry.metadata, "idempotency_key", key)}
+    state = %{
+      state
+      | entries: upsert_entry(state.entries, route, entry),
+        idempotency_index: Map.put(state.idempotency_index, index_key, entry.id)
+    }
+
+    {entry, state}
   end
 
-  defp idempotency_key(%Entry{} = entry) do
-    Map.get(entry.metadata, "idempotency_key", Map.get(entry.metadata, :idempotency_key))
+  defp upsert_entry(entries, route, entry) do
+    route_key = Route.key(route)
+
+    [
+      {route, entry}
+      | Enum.reject(entries, fn {existing_route, existing} ->
+          Route.key(existing_route) == route_key and existing.id == entry.id
+        end)
+    ]
+  end
+
+  defp find_entry(entries, route, entry_id) do
+    route_key = Route.key(route)
+
+    case Enum.find(entries, fn {existing_route, entry} ->
+           Route.key(existing_route) == route_key and entry.id == entry_id
+         end) do
+      {_route, entry} -> entry
+      nil -> nil
+    end
   end
 
   @impl true
@@ -70,20 +110,36 @@ defmodule Jidoka.Memory.Store.InMemory do
 
     entries =
       pid
-      |> Agent.get(& &1)
+      |> Agent.get(&normalize_state/1)
+      |> Map.fetch!(:entries)
       |> Enum.reverse()
+      |> Enum.map(&elem(&1, 1))
 
     {:ok, entries}
   end
 
-  defp matches_request?(%Entry{} = entry, %RecallRequest{} = request) do
-    entry.agent_id == request.agent_id and
-      session_matches?(entry.session_id, request.session_id, request.scope)
-  end
+  defp normalize_record({%Route{} = route, %Entry{} = entry}), do: {route, entry}
 
-  defp session_matches?(nil, _session_id, :agent), do: true
-  defp session_matches?(session_id, session_id, _scope), do: true
-  defp session_matches?(_entry_session_id, _request_session_id, _scope), do: false
+  defp normalize_record(%Entry{agent_id: agent_id, session_id: session_id} = entry)
+       when is_binary(session_id),
+       do: {Route.new!(kind: :session, agent_id: agent_id, session_id: session_id), entry}
+
+  defp normalize_record(%Entry{agent_id: agent_id} = entry),
+    do: {Route.new!(kind: :agent, agent_id: agent_id), entry}
+
+  defp normalize_state(%{entries: entries, idempotency_index: index})
+       when is_list(entries) and is_map(index),
+       do: %{entries: Enum.map(entries, &normalize_record/1), idempotency_index: index}
+
+  # Old process state has entries only. Metadata is opaque, so migration starts
+  # with an empty private index instead of treating metadata as dedupe evidence.
+  defp normalize_state(entries) when is_list(entries),
+    do: %{entries: Enum.map(entries, &normalize_record/1), idempotency_index: %{}}
+
+  defp idempotency_entry_id(_route, %Entry{id: id}, id), do: id
+
+  defp idempotency_entry_id(route, %Entry{}, key),
+    do: Jidoka.Id.stable("mem", [Route.key(route), key])
 
   defp fetch_pid!(opts) do
     case Keyword.fetch(opts, :pid) do

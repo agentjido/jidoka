@@ -6,7 +6,13 @@ defmodule Jidoka.ExecutionEnvironment.Conformance do
   @doc "Checks that an adapter exports the full lifecycle port."
   @spec validate(module()) :: :ok | {:error, {:missing_adapter_callbacks, [{atom(), arity()}]}}
   def validate(adapter) when is_atom(adapter) do
-    missing = Enum.reject(@callbacks, fn {name, arity} -> function_exported?(adapter, name, arity) end)
-    if missing == [], do: :ok, else: {:error, {:missing_adapter_callbacks, missing}}
+    case Code.ensure_loaded(adapter) do
+      {:module, ^adapter} ->
+        missing = Enum.reject(@callbacks, fn {name, arity} -> function_exported?(adapter, name, arity) end)
+        if missing == [], do: :ok, else: {:error, {:missing_adapter_callbacks, missing}}
+
+      {:error, _reason} ->
+        {:error, {:missing_adapter_callbacks, @callbacks}}
+    end
   end
 end

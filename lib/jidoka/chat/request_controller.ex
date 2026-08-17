@@ -28,8 +28,8 @@ defmodule Jidoka.Chat.RequestController do
     DynamicSupervisor.start_child(@request_supervisor, {__MODULE__, opts})
   end
 
-  @spec runtime(pid()) :: {:ok, Task.t(), Token.t()}
-  def runtime(controller) when is_pid(controller), do: GenServer.call(controller, :runtime)
+  @spec ready(pid()) :: :ok
+  def ready(controller) when is_pid(controller), do: GenServer.call(controller, :ready)
 
   @spec await(pid(), timeout()) :: term() | {:error, :timeout}
   def await(controller, timeout) when is_pid(controller) do
@@ -66,9 +66,15 @@ defmodule Jidoka.Chat.RequestController do
 
     worker_opts =
       runtime_opts
-      |> Keyword.put(:stream_to, self())
+      |> Keyword.delete(:stream_to)
       |> Keyword.delete(:on_event)
       |> Keyword.delete(:on_cancelled)
+      |> Keyword.put(:event_relay_to, self())
+      |> Keyword.put(:cancellation, token)
+
+    publisher_opts =
+      runtime_opts
+      |> Keyword.delete(:event_relay_to)
       |> Keyword.put(:cancellation, token)
 
     task = Task.Supervisor.async_nolink(@task_supervisor, fn -> fun.(worker_opts) end)
@@ -82,6 +88,7 @@ defmodule Jidoka.Chat.RequestController do
        stream_to: Keyword.get(runtime_opts, :stream_to),
        on_event: Keyword.get(runtime_opts, :on_event),
        on_cancelled: Keyword.get(runtime_opts, :on_cancelled),
+       publisher_opts: publisher_opts,
        owner: owner,
        owner_monitor: owner_monitor,
        status: :running,
@@ -103,8 +110,8 @@ defmodule Jidoka.Chat.RequestController do
   end
 
   @impl true
-  def handle_call(:runtime, _from, state) do
-    {:reply, {:ok, state.task, state.token}, mark_runtime_ready(state)}
+  def handle_call(:ready, _from, state) do
+    {:reply, :ok, mark_runtime_ready(state)}
   end
 
   def handle_call(:await, _from, %{status: :finished} = state) do
@@ -335,8 +342,15 @@ defmodule Jidoka.Chat.RequestController do
       state
       | status: :finished,
         result: result,
+        task: nil,
+        token: nil,
+        stream_to: nil,
+        on_event: nil,
+        on_cancelled: nil,
+        publisher_opts: nil,
         awaiters: [],
-        cancellers: []
+        cancellers: [],
+        cancellation_members: %{}
     }
     |> maybe_schedule_expiry()
   end
@@ -424,12 +438,8 @@ defmodule Jidoka.Chat.RequestController do
   defp forward_event(state, %Event{} = event) do
     event = %Event{event | seq: state.next_seq, request_id: state.request_id}
 
-    :ok =
-      EventDispatcher.emit(event,
-        stream_to: state.stream_to,
-        on_event: state.on_event,
-        sequence: false
-      )
+    publisher_opts = state.publisher_opts || []
+    :ok = EventDispatcher.emit(event, Keyword.put(publisher_opts, :sequence, false))
 
     %{
       state

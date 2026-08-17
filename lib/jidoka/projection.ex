@@ -62,10 +62,18 @@ defmodule Jidoka.Projection do
   def project(%ExecutionEnvironment.Registration{} = value),
     do: ExecutionEnvironment.Registration.to_map(value)
 
+  def project(%ExecutionEnvironment.Selection{} = value) do
+    case ExecutionEnvironment.Selection.validate(value) do
+      {:ok, selection} -> ExecutionEnvironment.Selection.to_map(selection)
+      {:error, error} -> ExecutionEnvironment.Error.to_map(error)
+    end
+  end
+
   def project(%ExecutionEnvironment.Error{} = value),
     do: ExecutionEnvironment.Error.to_map(value)
 
   def project(%Jidoka.Memory.Entry{} = value), do: Projection.Memory.project(value)
+  def project(%Jidoka.Memory.Route{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.RecallRequest{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.RecallResult{} = value), do: Projection.Memory.project(value)
   def project(%Jidoka.Memory.WriteRequest{} = value), do: Projection.Memory.project(value)

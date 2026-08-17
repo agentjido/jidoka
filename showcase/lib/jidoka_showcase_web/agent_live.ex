@@ -13,17 +13,24 @@ defmodule JidokaShowcaseWeb.AgentLive do
     package_root = Keyword.get(opts, :package_root)
     default_question = Keyword.fetch!(opts, :default_question)
 
-    Phoenix.Component.assign(socket,
+    socket
+    |> Phoenix.Component.assign(
       agent_view: initial_view(view_module, session_id),
       active_tab: active_tab(params, Keyword.get(opts, :tabs, ~w(activity source))),
       active_source: active_source(params, sources),
       active_request_id: nil,
+      active_worker: nil,
       form: form(default_question, default_model()),
       guide: Keyword.fetch!(opts, :guide),
       live_ready?: live_ready(Keyword.get(opts, :credentials, :llm)),
       page_title: Keyword.fetch!(opts, :page_title),
       session_id: session_id,
       source_examples: source_examples(sources, showcase_root, package_root)
+    )
+    |> Phoenix.LiveView.attach_hook(
+      :jidoka_turn_worker,
+      :handle_info,
+      &handle_worker_info/2
     )
   end
 
@@ -109,6 +116,7 @@ defmodule JidokaShowcaseWeb.AgentLive do
 
   def reset_session(socket, view_module, supervisor, agent_id, default_question)
       when is_atom(view_module) and is_atom(supervisor) and is_binary(agent_id) do
+    socket = stop_turn_worker(socket)
     session_id = Jidoka.Id.random("example_session")
 
     case reset_agent_process(supervisor, agent_id) do
@@ -148,7 +156,8 @@ defmodule JidokaShowcaseWeb.AgentLive do
 
   def finish_turn(socket, view_module, request_id, result, model) when is_atom(view_module) do
     if current_request?(socket, request_id) do
-      view = view_module.after_turn(socket.assigns.agent_view, result)
+      socket = clear_turn_worker(socket, request_id)
+      view = view_module.after_turn(socket.assigns.agent_view, result, request_id)
 
       Phoenix.Component.assign(socket,
         agent_view: view,
@@ -160,34 +169,92 @@ defmodule JidokaShowcaseWeb.AgentLive do
     end
   end
 
+  @doc false
+  def start_turn_worker(socket, view_module, request_id, model, run)
+      when is_atom(view_module) and is_binary(request_id) and is_function(run, 0) do
+    socket = stop_turn_worker(socket)
+    parent = self()
+
+    {:ok, worker} =
+      Task.start(fn ->
+        result = run.()
+        send(parent, {:jidoka_turn_result, request_id, result, model})
+      end)
+
+    monitor_ref = Process.monitor(worker)
+
+    Phoenix.Component.assign(socket,
+      active_worker: %{
+        pid: worker,
+        monitor_ref: monitor_ref,
+        request_id: request_id,
+        view_module: view_module
+      }
+    )
+  end
+
+  @doc false
+  def handle_worker_info({:jidoka_turn_result, request_id, result, model}, socket) do
+    case socket.assigns[:active_worker] do
+      %{request_id: ^request_id, view_module: view_module} ->
+        {:halt, finish_turn(socket, view_module, request_id, result, model)}
+
+      _worker ->
+        {:halt, socket}
+    end
+  end
+
+  def handle_worker_info({:DOWN, monitor_ref, :process, worker, reason}, socket) do
+    case socket.assigns[:active_worker] do
+      %{
+        monitor_ref: ^monitor_ref,
+        pid: ^worker,
+        request_id: request_id,
+        view_module: view_module
+      } ->
+        error = {:showcase_turn_worker_exited, reason}
+        view = view_module.after_turn(socket.assigns.agent_view, {:error, error}, request_id)
+
+        {:halt,
+         Phoenix.Component.assign(socket,
+           active_request_id: nil,
+           active_worker: nil,
+           agent_view: view
+         )}
+
+      _worker ->
+        {:halt, socket}
+    end
+  end
+
+  def handle_worker_info(_message, socket), do: {:cont, socket}
+
   def resume_review(socket, view_module, agent_module, decision, opts \\ [])
       when is_atom(view_module) and is_atom(agent_module) and
              decision in [:approved, :denied] and is_list(opts) do
     case pending_snapshot(socket.assigns.agent_view) do
       {:ok, snapshot} ->
         model = opts |> Keyword.get(:model, default_model()) |> to_string() |> String.trim()
-        request_id = view_module.request_id()
+        request_id = snapshot.turn_state.request.request_id
         parent = self()
         response = review_response(snapshot, decision)
 
-        Task.start(fn ->
-          result =
-            Jidoka.resume(snapshot,
-              approval: response,
-              llm: resume_llm(model, parent),
-              operations: operation_capability(agent_module),
-              operation_context: operation_context(agent_module),
-              stream_to: parent
-            )
+        socket =
+          Phoenix.Component.assign(socket,
+            agent_view: view_module.activate_request(socket.assigns.agent_view, request_id),
+            active_request_id: request_id,
+            form: form("", model)
+          )
 
-          send(parent, {:jidoka_turn_result, request_id, result, model})
+        start_turn_worker(socket, view_module, request_id, model, fn ->
+          Jidoka.resume(snapshot,
+            approval: response,
+            llm: resume_llm(model, parent),
+            operations: operation_capability(agent_module),
+            operation_context: operation_context(agent_module),
+            stream_to: parent
+          )
         end)
-
-        Phoenix.Component.assign(socket,
-          agent_view: %{socket.assigns.agent_view | status: :running, error_text: nil},
-          active_request_id: request_id,
-          form: form("", model)
-        )
 
       {:error, reason} ->
         assign_reset_error(socket, reason)
@@ -258,47 +325,45 @@ defmodule JidokaShowcaseWeb.AgentLive do
     agent_pid = Keyword.fetch!(opts, :agent_pid)
     example = Keyword.fetch!(opts, :example)
     running = view_module.before_turn(socket.assigns.agent_view, question)
-    request_id = view_module.request_id()
+    request_id = view_module.active_request_id(running)
     parent = self()
     session_id = socket.assigns.session_id
     context = Keyword.get(opts, :context, %{})
     memory_store = Keyword.get(opts, :memory_store)
     operation_context = Keyword.get(opts, :operation_context)
 
-    Task.start(fn ->
-      result =
-        with {:ok, pid} <- agent_pid.() do
-          run_opts =
-            [
-              request_id: request_id,
-              stream: true,
-              stream_to: parent,
-              timeout: Keyword.get(opts, :timeout, 90_000),
-              llm_opts: [model: model],
-              context:
-                Map.merge(
-                  %{
-                    surface: "phoenix_live_view",
-                    example: example,
-                    session_id: session_id
-                  },
-                  context
-                )
-            ]
-            |> maybe_put_memory_store(memory_store)
-            |> maybe_put_operation_context(operation_context)
+    socket =
+      Phoenix.Component.assign(socket,
+        agent_view: running,
+        active_request_id: request_id,
+        form: form("", model)
+      )
 
-          Jidoka.turn(pid, question, run_opts)
-        end
+    start_turn_worker(socket, view_module, request_id, model, fn ->
+      with {:ok, pid} <- agent_pid.() do
+        run_opts =
+          [
+            request_id: request_id,
+            stream: true,
+            stream_to: parent,
+            timeout: Keyword.get(opts, :timeout, 90_000),
+            llm_opts: [model: model],
+            context:
+              Map.merge(
+                %{
+                  surface: "phoenix_live_view",
+                  example: example,
+                  session_id: session_id
+                },
+                context
+              )
+          ]
+          |> maybe_put_memory_store(memory_store)
+          |> maybe_put_operation_context(operation_context)
 
-      send(parent, {:jidoka_turn_result, request_id, result, model})
+        Jidoka.turn(pid, question, run_opts)
+      end
     end)
-
-    Phoenix.Component.assign(socket,
-      agent_view: running,
-      active_request_id: request_id,
-      form: form("", model)
-    )
   end
 
   defp run_missing_credentials_prompt(socket, question, model, view_module, opts) do
@@ -371,4 +436,31 @@ defmodule JidokaShowcaseWeb.AgentLive do
 
   defp maybe_put_operation_context(opts, operation_context),
     do: Keyword.put(opts, :operation_context, operation_context)
+
+  defp clear_turn_worker(socket, request_id) do
+    case socket.assigns[:active_worker] do
+      %{monitor_ref: monitor_ref, request_id: ^request_id} ->
+        Process.demonitor(monitor_ref, [:flush])
+        Phoenix.Component.assign(socket, active_worker: nil)
+
+      _worker ->
+        socket
+    end
+  end
+
+  defp stop_turn_worker(socket) do
+    case socket.assigns[:active_worker] do
+      %{monitor_ref: monitor_ref, pid: worker} ->
+        Process.demonitor(monitor_ref, [:flush])
+
+        if Process.alive?(worker) do
+          Process.exit(worker, :kill)
+        end
+
+        Phoenix.Component.assign(socket, active_worker: nil)
+
+      _worker ->
+        socket
+    end
+  end
 end

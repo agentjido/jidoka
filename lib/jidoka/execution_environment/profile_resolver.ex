@@ -4,7 +4,7 @@ defmodule Jidoka.ExecutionEnvironment.ProfileResolver do
   alias Jidoka.ExecutionEnvironment.Error
   alias Jidoka.ExecutionEnvironment.PolicyRequest
   alias Jidoka.ExecutionEnvironment.Registration
-  alias Jidoka.ExecutionEnvironment.Validator
+  alias Jidoka.ExecutionEnvironment.Selection
 
   @callback resolve(profile_id :: String.t(), opts :: keyword()) ::
               {:ok, Registration.t()} | {:error, term()}
@@ -12,12 +12,11 @@ defmodule Jidoka.ExecutionEnvironment.ProfileResolver do
   @type resolver :: module() | (String.t(), keyword() -> {:ok, Registration.t()} | {:error, term()})
 
   @doc "Resolves and validates one data-only policy request through trusted host code."
-  @spec resolve(PolicyRequest.t(), resolver(), keyword()) :: {:ok, Registration.t()} | {:error, Error.t()}
+  @spec resolve(PolicyRequest.t(), resolver(), keyword()) :: {:ok, Selection.t()} | {:error, Error.t()}
   def resolve(%PolicyRequest{} = request, resolver, opts \\ []) do
     with {:ok, %Registration{} = registration} <- call_resolver(resolver, request.profile_id, opts),
-         :ok <- enabled(registration),
-         :ok <- Validator.validate_profile(registration.profile, registration.capabilities, request) do
-      {:ok, registration}
+         {:ok, selection} <- request |> Selection.build(registration) |> Selection.validate() do
+      {:ok, selection}
     else
       {:error, %Error{} = error} -> {:error, error}
       {:error, :unknown_profile} -> {:error, error(:unknown_profile, request.profile_id)}
@@ -46,11 +45,6 @@ defmodule Jidoka.ExecutionEnvironment.ProfileResolver do
   catch
     kind, reason -> {:error, {:resolver_failure, {kind, reason}}}
   end
-
-  defp enabled(%Registration{enabled: true}), do: :ok
-
-  defp enabled(%Registration{profile: profile}),
-    do: {:error, error(:disabled_profile, profile.profile_id)}
 
   defp error(code, profile_id, reason \\ nil) do
     details = if is_nil(reason), do: %{profile_id: profile_id}, else: %{profile_id: profile_id, reason: inspect(reason)}

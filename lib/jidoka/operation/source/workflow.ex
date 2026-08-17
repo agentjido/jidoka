@@ -12,6 +12,7 @@ defmodule Jidoka.Operation.Source.Workflow do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Operation.Source
   alias Jidoka.Schema
   alias Jidoka.Workflow.Resolver
   alias Jidoka.Workflow.Spec
@@ -100,6 +101,14 @@ defmodule Jidoka.Operation.Source.Workflow do
     case new(attrs) do
       {:ok, source} -> source
       {:error, reason} -> raise ArgumentError, "invalid workflow source: #{inspect(reason)}"
+    end
+  end
+
+  @impl true
+  def compile(%__MODULE__{} = source, opts) do
+    with {:ok, operations} <- operations(source, opts),
+         {:ok, capability} <- capability(source, opts) do
+      Source.compiled(operations, capability)
     end
   end
 

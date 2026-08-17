@@ -296,7 +296,7 @@ defmodule Jidoka.StabilizationContractTest do
     session = Session.put_snapshot(session, snapshot)
 
     assert session.status == :waiting
-    assert [%Review.Request{operation: "refund_order"}] = session.pending_reviews
+    assert [%Review.Request{operation: "refund_order"}] = Session.pending_reviews(session)
 
     finished = %{state | status: :finished, result: "done"}
     result = Turn.Result.from_turn_state!(finished)
@@ -308,10 +308,61 @@ defmodule Jidoka.StabilizationContractTest do
 
     assert session.status == :finished
     assert session.error == nil
-    assert session.pending_reviews == []
+    assert Session.pending_reviews(session) == []
+  end
+
+  test "snapshots normalize one authoritative pending interrupt" do
+    spec = agent_spec()
+    request = Turn.Request.new!(input: "Hello")
+    interrupt = review_interrupt(spec, request)
+
+    effect =
+      Effect.Intent.new(:operation, %{name: "refund_order", arguments: %{"order_id" => "A1001"}},
+        id: interrupt.effect_id,
+        idempotency: :unsafe_once,
+        idempotency_key: "key"
+      )
+
+    state =
+      base_state(spec, request)
+      |> Turn.State.set_pending_effects([effect])
+      |> Turn.State.put_pending_interrupt(interrupt)
+
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.review(interrupt))
+    refute Map.has_key?(snapshot.metadata, "pending_review")
+
+    %Review.Request{} = legacy_request = Review.Request.from_interrupt!(interrupt)
+
+    legacy = %{
+      snapshot
+      | turn_state: Turn.State.clear_pending_interrupt(snapshot.turn_state),
+        metadata: Map.put(snapshot.metadata, "pending_review", legacy_request)
+    }
+
+    assert {:ok, normalized} = Snapshot.new(legacy)
+    assert normalized.turn_state.pending_interrupt.id == interrupt.id
+    assert normalized.turn_state.pending_interrupt.control == Jidoka.Review.LegacyControl
+    assert normalized.turn_state.pending_interrupt.metadata["legacy_review"]
+    refute Map.has_key?(normalized.metadata, "pending_review")
+
+    conflicting_request = %Review.Request{
+      legacy_request
+      | id: "review:other",
+        interrupt_id: "intr:other"
+    }
+
+    conflicting = %{snapshot | metadata: Map.put(snapshot.metadata, "pending_review", conflicting_request)}
+
+    assert {:ok, resolved} = Snapshot.new(conflicting)
+    assert resolved.turn_state.pending_interrupt == interrupt
+    refute Map.has_key?(resolved.metadata, "pending_review")
   end
 
   test "snapshots reject invalid serialized payloads and future schema versions" do
+    assert Snapshot.supported_schema_versions() == [1, 2]
+    assert Snapshot.serialization_prefix() == "jidoka:snapshot:v1:"
+    assert Session.supported_schema_versions() == [1, 2, 3]
+
     spec = agent_spec()
     request = Turn.Request.new!(input: "Hello")
 

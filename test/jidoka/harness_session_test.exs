@@ -4,6 +4,7 @@ defmodule Jidoka.HarnessSessionTest do
   alias Jidoka.Agent
   alias Jidoka.Harness
   alias Jidoka.Session.Data, as: Session
+  alias Jidoka.Session.Execution
   alias Jidoka.Session.Lineage
   alias Jidoka.Session.Lease
   alias Jidoka.Session.Store
@@ -45,6 +46,48 @@ defmodule Jidoka.HarnessSessionTest do
     end
   end
 
+  defmodule ClaimOnlyStore do
+    @behaviour Store
+
+    @impl true
+    def put_session(session, opts) do
+      send(Keyword.fetch!(opts, :test_pid), :partial_store_called)
+      {:ok, session}
+    end
+
+    @impl true
+    def get_session(_session_id, _opts), do: {:error, :not_called}
+
+    @impl true
+    def list_sessions(_opts), do: {:ok, []}
+
+    @impl true
+    def claim_session(_session_id, _request, opts) do
+      send(Keyword.fetch!(opts, :test_pid), :partial_store_called)
+      {:error, :not_called}
+    end
+  end
+
+  defmodule ResumeOnlyStore do
+    def claim_resume(_session_id, _opts), do: {:error, :not_called}
+  end
+
+  defmodule RecoverOnlyStore do
+    def recover_session(_session_id, _opts), do: {:error, :not_called}
+  end
+
+  defmodule CheckpointOnlyStore do
+    def checkpoint_session(_session_id, _lease_id, _snapshot, _opts), do: {:error, :not_called}
+  end
+
+  defmodule CommitOnlyStore do
+    def commit_session(_session_id, _lease_id, _session, _opts), do: {:error, :not_called}
+  end
+
+  defmodule RenewOnlyStore do
+    def renew_session(_session_id, _lease_id, _opts), do: {:error, :not_called}
+  end
+
   test "sessions can be started and persisted in the in-memory store" do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}
@@ -56,6 +99,34 @@ defmodule Jidoka.HarnessSessionTest do
     assert {:ok, ^session} = Harness.store_get_session(store, "sess_1")
     assert {:ok, [%Session{session_id: "sess_1"}]} = Harness.store_list_sessions(store)
     assert {:ok, []} = Harness.pending_reviews(store)
+  end
+
+  test "internal failures retain the same session that was persisted" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    reason = :forced_model_failure
+    failing_llm = fn _intent, _journal, _context -> {:error, reason} end
+
+    assert {:ok, %Session{}} =
+             Harness.start_session(spec(), session_id: "sess_internal_error", store: store)
+
+    assert {:error, %Session{} = failed, %Jidoka.Error.ExecutionError{details: %{cause: ^reason}} = error} =
+             Execution.run_session_internal(
+               "sess_internal_error",
+               "Fail",
+               store: store,
+               llm: failing_llm
+             )
+
+    assert failed.status == :error
+    assert failed.error == error
+    assert {:ok, ^failed} = Store.get_session(store, "sess_internal_error")
+
+    assert {:ok, %Session{}} =
+             Harness.start_session(spec(), session_id: "sess_public_error", store: store)
+
+    assert {:error, %Jidoka.Error.ExecutionError{details: %{cause: ^reason}}} =
+             Harness.run_session("sess_public_error", "Fail", store: store, llm: failing_llm)
   end
 
   test "in-memory stores atomically claim a session before running a turn" do
@@ -106,6 +177,43 @@ defmodule Jidoka.HarnessSessionTest do
              Store.claim_session(store, "sess_fallback", Turn.Request.new!(input: "Duplicate turn"))
   end
 
+  test "store durable mode is either none or complete" do
+    assert {:ok, :none} = Store.durable_mode(FallbackStore)
+    assert {:ok, :durable} = Store.durable_mode(InMemory)
+
+    partial_stores = [
+      {ClaimOnlyStore, [claim_session: 3]},
+      {ResumeOnlyStore, [claim_resume: 2]},
+      {RecoverOnlyStore, [recover_session: 2]},
+      {CheckpointOnlyStore, [checkpoint_session: 4]},
+      {CommitOnlyStore, [commit_session: 4]},
+      {RenewOnlyStore, [renew_session: 3]}
+    ]
+
+    for {store, implemented} <- partial_stores do
+      assert {:error, {:partial_durable_session_store, ^store, ^implemented, missing}} =
+               Store.durable_mode(store)
+
+      assert length(missing) == 5
+    end
+  end
+
+  test "a partial durable store is rejected before startup or claim" do
+    store = {ClaimOnlyStore, test_pid: self()}
+    request = Turn.Request.new!(input: "Do not claim", request_id: "partial-store-request")
+
+    assert {:error, {:partial_durable_session_store, ClaimOnlyStore, [claim_session: 3], missing}} =
+             Harness.start_session(spec(), session_id: "partial-store-session", store: store)
+
+    assert length(missing) == 5
+    refute_receive :partial_store_called
+
+    assert {:error, {:partial_durable_session_store, ClaimOnlyStore, [claim_session: 3], _missing}} =
+             Store.claim_session(store, "partial-store-session", request)
+
+    refute_receive :partial_store_called
+  end
+
   test "sessions collect snapshots and pending review requests" do
     session = Session.start(spec(), session_id: "sess_review") |> elem(1)
     interrupt = interrupt()
@@ -125,7 +233,7 @@ defmodule Jidoka.HarnessSessionTest do
                operation: "refund_order",
                reason: :approval_required
              }
-           ] = session.pending_reviews
+           ] = Session.pending_reviews(session)
 
     assert interrupt_id == interrupt.id
   end

@@ -197,9 +197,12 @@ You can also bypass the runtime helper and talk to `Jidoka.Memory.Store`:
 ```elixir
 request =
   Jidoka.Memory.RecallRequest.new!(
-    agent_id: "memory_agent",
-    session_id: "conv-1",
-    scope: :session,
+    route:
+      Jidoka.Memory.Route.new!(
+        kind: :session,
+        agent_id: "memory_agent",
+        session_id: "conv-1"
+      ),
     query: "hello",
     limit: 5
   )
@@ -216,14 +219,25 @@ for a turn.
 
 ### Step 5: Inspect Memory Injection With Preflight
 
-Before running a live turn, confirm the recalled entries are landing in the
-prompt:
+Before running a live turn, resolve memory and then confirm that the entries
+are in the prompt. Preflight does not call the store.
 
 ```elixir
-{:ok, preflight} =
-  Jidoka.preflight(MyApp.MemoryAgent, "hello",
+request =
+  Jidoka.Turn.Request.new!(
+    input: "hello",
+    request_id: "memory-preview"
+  )
+
+{:ok, resolved_memory} =
+  Jidoka.Memory.recall(MyApp.MemoryAgent.spec(), request,
     memory_store: store,
     session_id: "conv-1"
+  )
+
+{:ok, preflight} =
+  Jidoka.preflight(MyApp.MemoryAgent, request,
+    resolved_memory: resolved_memory
   )
 
 preflight.prompt.messages

@@ -1,3 +1,36 @@
+defmodule Jidoka.Adapter.Jido.Skill.ResolvedSkill do
+  @moduledoc false
+
+  alias Jido.AI.Skill.Spec
+
+  @enforce_keys [:source, :spec, :action_modules, :prompt, :metadata]
+  defstruct [:source, :spec, action_modules: [], prompt: nil, metadata: %{}]
+
+  @type t :: %__MODULE__{
+          source: module() | String.t(),
+          spec: Spec.t(),
+          action_modules: [module()],
+          prompt: String.t() | nil,
+          metadata: map()
+        }
+end
+
+defmodule Jidoka.Adapter.Jido.Skill.Resolution do
+  @moduledoc false
+
+  alias Jidoka.Adapter.Jido.Skill.ResolvedSkill
+
+  @enforce_keys [:skills, :action_modules, :prompt, :metadata]
+  defstruct skills: [], action_modules: [], prompt: nil, metadata: []
+
+  @type t :: %__MODULE__{
+          skills: [ResolvedSkill.t()],
+          action_modules: [module()],
+          prompt: String.t() | nil,
+          metadata: [map()]
+        }
+end
+
 defmodule Jidoka.Adapter.Jido.Skill do
   @moduledoc """
   Jido.AI skill helpers used by the Jidoka DSL.
@@ -8,7 +41,9 @@ defmodule Jidoka.Adapter.Jido.Skill do
   """
 
   alias Jido.AI.Skill
+  alias Jido.AI.Skill.Spec
   alias Jido.AI.Skill.Registry
+  alias __MODULE__.{Resolution, ResolvedSkill}
 
   @type ref :: module() | String.t()
 
@@ -47,54 +82,59 @@ defmodule Jidoka.Adapter.Jido.Skill do
   def validate_load_path(other),
     do: {:error, "skill load paths must be strings, got: #{inspect(other)}"}
 
-  @doc "Returns action modules contributed by a list of skill references."
-  @spec action_modules([ref()], keyword()) :: [module()]
-  def action_modules(refs, opts \\ []) when is_list(refs) and is_list(opts) do
-    refs
-    |> maybe_load_paths(opts)
-    |> Enum.flat_map(fn
-      module when is_atom(module) ->
-        Skill.actions(module)
+  @doc "Resolves ordered skill references into one stable snapshot."
+  @spec resolve([ref()], keyword()) :: {:ok, Resolution.t()} | {:error, term()}
+  def resolve(refs, opts \\ []) when is_list(refs) and is_list(opts) do
+    with :ok <- load_paths(Keyword.get(opts, :load_paths, [])),
+         {:ok, skills} <- resolve_skills(refs) do
+      specs = Enum.map(skills, & &1.spec)
+      prompt = render_prompt(specs)
 
-      name when is_binary(name) ->
-        case Skill.resolve(name) do
-          {:ok, spec} -> Skill.actions(spec)
-          {:error, _reason} -> []
-        end
-    end)
-    |> Enum.uniq()
-  end
-
-  @doc "Renders prompt text contributed by a list of skill references."
-  @spec prompt([ref()], keyword()) :: {:ok, String.t() | nil} | {:error, term()}
-  def prompt(refs, opts \\ []) when is_list(refs) and is_list(opts) do
-    with {:ok, refs} <- load_and_resolve(refs, opts) do
-      refs
-      |> Skill.Prompt.render(include_body: true)
-      |> case do
-        "" -> {:ok, nil}
-        prompt -> {:ok, prompt}
-      end
+      {:ok,
+       %Resolution{
+         skills: skills,
+         action_modules: skills |> Enum.flat_map(& &1.action_modules) |> Enum.uniq(),
+         prompt: prompt,
+         metadata: Enum.map(skills, & &1.metadata)
+       }}
     end
   end
 
-  @doc "Returns serializable metadata for resolved skill references."
-  @spec metadata([ref()], keyword()) :: {:ok, [map()]} | {:error, term()}
-  def metadata(refs, opts \\ []) when is_list(refs) and is_list(opts) do
-    with {:ok, refs} <- load_and_resolve(refs, opts) do
-      {:ok,
-       Enum.map(refs, fn ref ->
-         spec = Skill.manifest(ref)
+  @doc "Returns action modules contributed by skill references or one resolution."
+  @spec action_modules([ref()] | Resolution.t(), keyword()) :: [module()]
+  def action_modules(refs_or_resolution, opts \\ [])
 
-         %{
-           "source" => "skill",
-           "name" => spec.name,
-           "description" => spec.description,
-           "allowed_tools" => spec.allowed_tools,
-           "actions" => Enum.map(spec.actions, &inspect/1)
-         }
-         |> reject_empty()
-       end)}
+  def action_modules(%Resolution{action_modules: action_modules}, []), do: action_modules
+
+  def action_modules(refs, opts) when is_list(refs) and is_list(opts) do
+    case resolve(refs, opts) do
+      {:ok, resolution} -> action_modules(resolution)
+      {:error, _reason} -> []
+    end
+  end
+
+  @doc "Renders prompt text from skill references or one resolution."
+  @spec prompt([ref()] | Resolution.t(), keyword()) ::
+          {:ok, String.t() | nil} | {:error, term()}
+  def prompt(refs_or_resolution, opts \\ [])
+
+  def prompt(%Resolution{prompt: prompt}, []), do: {:ok, prompt}
+
+  def prompt(refs, opts) when is_list(refs) and is_list(opts) do
+    with {:ok, resolution} <- resolve(refs, opts) do
+      prompt(resolution)
+    end
+  end
+
+  @doc "Returns serializable metadata from skill references or one resolution."
+  @spec metadata([ref()] | Resolution.t(), keyword()) :: {:ok, [map()]} | {:error, term()}
+  def metadata(refs_or_resolution, opts \\ [])
+
+  def metadata(%Resolution{metadata: metadata}, []), do: {:ok, metadata}
+
+  def metadata(refs, opts) when is_list(refs) and is_list(opts) do
+    with {:ok, resolution} <- resolve(refs, opts) do
+      metadata(resolution)
     end
   end
 
@@ -114,26 +154,35 @@ defmodule Jidoka.Adapter.Jido.Skill do
     |> Enum.uniq()
   end
 
-  defp load_and_resolve(refs, opts) do
-    load_paths = Keyword.get(opts, :load_paths, [])
-
-    with :ok <- load_paths(load_paths) do
-      resolve_refs(refs)
-    end
-  end
-
-  defp resolve_refs(refs) do
+  defp resolve_skills(refs) do
     Enum.reduce_while(refs, {:ok, []}, fn ref, {:ok, acc} ->
-      case resolve_ref(ref) do
-        {:ok, resolved} -> {:cont, {:ok, acc ++ [resolved]}}
+      case resolve_skill(ref) do
+        {:ok, resolved} -> {:cont, {:ok, [resolved | acc]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
+    |> then(fn
+      {:ok, skills} -> {:ok, Enum.reverse(skills)}
+      error -> error
+    end)
   end
 
-  defp maybe_load_paths(refs, opts) do
-    _ = load_paths(Keyword.get(opts, :load_paths, []))
-    refs
+  defp resolve_skill(ref) do
+    with {:ok, %Spec{} = spec} <- resolve_ref(ref),
+         actions = spec |> Map.from_struct() |> Map.get(:actions),
+         {:ok, action_modules} <- validate_actions(ref, actions),
+         {:ok, body} <- read_body(ref, spec) do
+      spec = %Spec{spec | actions: action_modules, body_ref: {:inline, body}}
+
+      {:ok,
+       %ResolvedSkill{
+         source: ref,
+         spec: spec,
+         action_modules: action_modules,
+         prompt: render_prompt([spec]),
+         metadata: skill_metadata(spec)
+       }}
+    end
   end
 
   defp load_paths([]), do: :ok
@@ -147,8 +196,8 @@ defmodule Jidoka.Adapter.Jido.Skill do
 
   defp resolve_ref(module) when is_atom(module) do
     with :ok <- validate_module(module),
-         {:ok, _spec} <- Skill.resolve(module) do
-      {:ok, module}
+         {:ok, spec} <- Skill.resolve(module) do
+      {:ok, spec}
     else
       {:error, reason} -> {:error, {:invalid_skill, module, reason}}
     end
@@ -158,11 +207,63 @@ defmodule Jidoka.Adapter.Jido.Skill do
     name = String.trim(name)
 
     with :ok <- validate_ref(name),
-         {:ok, _spec} <- Skill.resolve(name) do
-      {:ok, name}
+         {:ok, spec} <- Skill.resolve(name) do
+      {:ok, spec}
     else
       {:error, reason} -> {:error, {:invalid_skill, name, reason}}
     end
+  end
+
+  defp validate_actions(ref, actions) when is_list(actions) do
+    Enum.reduce_while(actions, {:ok, []}, fn action, {:ok, acc} ->
+      case validate_action(action) do
+        :ok -> {:cont, {:ok, [action | acc]}}
+        {:error, reason} -> {:halt, {:error, {:invalid_skill_action, ref, action, reason}}}
+      end
+    end)
+    |> then(fn
+      {:ok, action_modules} -> {:ok, action_modules |> Enum.reverse() |> Enum.uniq()}
+      error -> error
+    end)
+  end
+
+  defp validate_actions(ref, actions),
+    do: {:error, {:invalid_skill_actions, ref, actions}}
+
+  defp validate_action(action) when is_atom(action) do
+    with {:module, _module} <- Code.ensure_compiled(action),
+         true <- function_exported?(action, :to_tool, 0) do
+      :ok
+    else
+      {:error, reason} -> {:error, {:not_compiled, reason}}
+      false -> {:error, :missing_to_tool}
+    end
+  end
+
+  defp validate_action(_action), do: {:error, :not_a_module}
+
+  defp read_body(ref, spec) do
+    {:ok, Skill.body(spec)}
+  rescue
+    exception -> {:error, {:invalid_skill_body, ref, Exception.message(exception)}}
+  end
+
+  defp render_prompt(specs) do
+    case Skill.Prompt.render(specs, include_body: true) do
+      "" -> nil
+      prompt -> prompt
+    end
+  end
+
+  defp skill_metadata(spec) do
+    %{
+      "source" => "skill",
+      "name" => spec.name,
+      "description" => spec.description,
+      "allowed_tools" => spec.allowed_tools,
+      "actions" => Enum.map(spec.actions, &inspect/1)
+    }
+    |> reject_empty()
   end
 
   defp validate_module(module) when is_atom(module) do

@@ -70,6 +70,29 @@ defmodule Jidoka.ContextWindowTest do
     assert overflow.omitted_turn_ids == []
   end
 
+  test "large grouped transcripts keep one exact suffix without partial turns" do
+    prefix = [Agent.Message.system("System contract")]
+    transcript = Enum.flat_map(1..100, &turn("turn-#{&1}", "user #{&1}", "answer #{&1}"))
+    kept = Enum.drop(transcript, 190)
+    sizing_policy = Policy.new!(minimum_recent_turns: 0)
+
+    budget =
+      base_prompt()
+      |> Map.put(:messages, Enum.map(prefix ++ kept, &Agent.Message.to_map/1))
+      |> ContextWindow.estimate_tokens(sizing_policy)
+
+    policy = %Policy{sizing_policy | input_budget: budget}
+
+    assert {:ok, projected, evidence} =
+             ContextWindow.project(base_prompt(), prefix, transcript, policy, "turn-100")
+
+    assert evidence.turn_count_after == 5
+    assert evidence.omitted_turn_ids == Enum.map(1..95, &"turn-#{&1}")
+
+    assert Enum.map(tl(projected.messages), & &1.content) ==
+             Enum.flat_map(96..100, &["user #{&1}", "answer #{&1}"])
+  end
+
   test "policy derives input capacity from model context and output reserve" do
     spec =
       Agent.Spec.new!(
@@ -88,6 +111,35 @@ defmodule Jidoka.ContextWindowTest do
     assert policy.input_budget == 750
     assert policy.output_reserve == 250
     assert policy.minimum_recent_turns == 3
+  end
+
+  test "policy uses the smallest finite declared model capacity" do
+    spec =
+      Agent.Spec.new!(
+        id: "candidate-model-budgets",
+        instructions: "Reply.",
+        model: %{provider: :test, id: "base", limits: %{context: 2_000, input: 1_800}},
+        generation: %{params: %{max_tokens: 100}}
+      )
+
+    candidates = [
+      %{provider: :openai, id: "primary", limits: %{context: 1_000, input: 900}},
+      %{provider: :anthropic, id: "fallback", limits: %{context: 400, input: 350}}
+    ]
+
+    assert {:ok, prepared} =
+             Turn.Execution.prepare(spec, "Use the safe budget",
+               llm: fn _intent, _journal, _context -> {:ok, %{type: :final, content: "ok"}} end,
+               model_policy: [models: candidates]
+             )
+
+    assert Enum.map(prepared.plan.model_candidates, &Jidoka.Config.model_ref/1) == [
+             "openai:primary",
+             "anthropic:fallback"
+           ]
+
+    assert prepared.plan.context_policy.input_budget == 300
+    assert prepared.plan.context_policy.output_reserve == 100
   end
 
   test "prompt assembly records compaction without changing the complete transcript" do

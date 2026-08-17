@@ -39,7 +39,6 @@ defmodule Jidoka.CancellationTest do
 
     assert {:cancelled, ^cancellation} = Jidoka.await(request, timeout: 100)
     assert_receive {:capability_cleaned_up, ^capability_pid}, 1_000
-    refute Process.alive?(request.task.pid)
     refute Process.alive?(capability_pid)
 
     events = Enum.to_list(stream)

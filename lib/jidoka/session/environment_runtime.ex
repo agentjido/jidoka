@@ -9,7 +9,7 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   alias Jidoka.ExecutionEnvironment.Manager
   alias Jidoka.ExecutionEnvironment.PolicyRequest
-  alias Jidoka.ExecutionEnvironment.Registration
+  alias Jidoka.ExecutionEnvironment.Selection
   alias Jidoka.Session.Data
   alias Jidoka.Session.Environment
 
@@ -18,15 +18,15 @@ defmodule Jidoka.Session.EnvironmentRuntime do
   @doc "Owns one manager for a resolved registration during a public run."
   @spec with_manager(keyword(), (keyword() -> term())) :: term()
   def with_manager(opts, function) when is_list(opts) and is_function(function, 1) do
-    case unresolved_registration(opts) do
+    case unresolved_selection(opts) do
       :none ->
         function.(opts)
 
-      {:ok, registration, request} ->
+      {:ok, selection} ->
         with {:ok, policy} <- environment_policy(opts),
              {:ok, manager_opts} <- manager_opts(opts),
-             {:ok, manager} <- Manager.start_link(registration, policy, manager_opts) do
-          run_with_manager(manager, registration, request, manager_opts, opts, function)
+             {:ok, manager} <- Manager.start_link(selection, policy, manager_opts) do
+          run_with_manager(manager, selection, manager_opts, opts, function)
         end
 
       {:error, _reason} = error ->
@@ -34,10 +34,12 @@ defmodule Jidoka.Session.EnvironmentRuntime do
     end
   end
 
-  defp run_with_manager(manager, registration, request, manager_opts, opts, function) do
+  defp run_with_manager(manager, selection, manager_opts, opts, function) do
+    registration = Selection.registration(selection)
+
     runtime = %{
       manager: manager,
-      request: request,
+      request: Selection.request(selection),
       retention: registration.profile.retention,
       opts: manager_opts
     }
@@ -110,7 +112,9 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   @doc "Closes the active handle and applies the configured retention rule."
   @spec finish(lease() | nil, atom(), keyword()) ::
-          {:ok, Environment.t() | nil} | {:error, term()}
+          {:ok, Environment.t() | nil}
+          | {:error, Environment.t(), term()}
+          | {:error, term()}
   def finish(nil, _terminal, _opts), do: {:ok, nil}
 
   def finish(%{manager: manager, handle: handle, tracker: tracker}, terminal, opts) do
@@ -129,12 +133,14 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
             {:error, _reason} = error ->
               notify_observer(closed, opts)
-              error
+              {:error, reason} = error
+              {:error, closed, reason}
           end
 
         {:error, _reason} = error ->
           notify_observer(environment, opts)
-          error
+          {:error, reason} = error
+          {:error, environment, reason}
       end
 
     Agent.stop(tracker)
@@ -252,39 +258,41 @@ defmodule Jidoka.Session.EnvironmentRuntime do
 
   defp normalize_config(config), do: {:error, {:invalid_execution_environment_runtime, config}}
 
-  defp unresolved_registration(opts) do
+  defp unresolved_selection(opts) do
     case Keyword.get(opts, :execution_environment) do
       nil ->
         :none
 
       config when is_list(config) ->
-        unresolved_registration_config(Map.new(config))
+        unresolved_selection_config(Map.new(config))
 
       %{} = config ->
-        unresolved_registration_config(config)
+        case Selection.validate(config) do
+          {:ok, selection} ->
+            {:ok, selection}
+
+          {:error, reason} ->
+            if is_struct(config, Selection),
+              do: {:error, reason},
+              else: unresolved_selection_config(config)
+        end
 
       config ->
         {:error, {:invalid_execution_environment_runtime, config}}
     end
   end
 
-  defp unresolved_registration_config(config) do
-    registration = Map.get(config, :registration, Map.get(config, "registration"))
-    request = Map.get(config, :request, Map.get(config, "request"))
+  defp unresolved_selection_config(config) do
+    selection = Map.get(config, :selection, Map.get(config, "selection"))
     manager = Map.get(config, :manager, Map.get(config, "manager"))
 
-    cond do
-      not is_nil(manager) ->
-        :none
-
-      not match?(%Registration{}, registration) ->
-        {:error, {:invalid_execution_environment_registration, registration}}
-
-      not match?(%PolicyRequest{}, request) ->
-        {:error, {:invalid_execution_environment_request, request}}
-
-      true ->
-        {:ok, registration, request}
+    if is_nil(manager) do
+      case Selection.validate(selection) do
+        {:ok, selection} -> {:ok, selection}
+        {:error, _reason} -> {:error, {:invalid_environment_selection, selection}}
+      end
+    else
+      :none
     end
   end
 

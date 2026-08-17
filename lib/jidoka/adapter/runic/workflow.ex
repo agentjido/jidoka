@@ -43,7 +43,6 @@ defmodule Jidoka.Adapter.Runic.Workflow do
          action_runner: &Actions.invoke_action/3,
          agent_opts: runtime_opts.agent_opts,
          max_concurrency: runtime_opts.max_concurrency,
-         suspension: nil,
          error: nil
        }, runtime_opts}
     end
@@ -67,7 +66,6 @@ defmodule Jidoka.Adapter.Runic.Workflow do
         action_runner: &Actions.invoke_action/3,
         agent_opts: runtime_opts.agent_opts,
         max_concurrency: runtime_opts.max_concurrency,
-        suspension: snapshot.loop_cursor,
         error: nil
       }
 
@@ -163,20 +161,16 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       {:ok, %{error: error}} when not is_nil(error) ->
         {:error, error}
 
-      {:ok, %{suspension: %Jidoka.Workflow.Loop.Cursor{}} = state} ->
-        {:hibernate, build_snapshot(spec, state)}
-
       {:ok, state} ->
-        case Value.resolve(spec.output, state) do
-          {:ok, output} ->
-            {:ok, output}
+        case Jidoka.Workflow.Suspension.cursor(state.outcomes) do
+          {:ok, %Jidoka.Workflow.Loop.Cursor{}} ->
+            {:hibernate, build_snapshot(spec, state)}
+
+          {:ok, nil} ->
+            resolve_final_output(spec, state)
 
           {:error, reason} ->
-            {:error,
-             Jidoka.Error.execution_error("Workflow #{spec.id} output failed.",
-               phase: :workflow_output,
-               details: %{workflow_id: spec.id, reason: :output_ref, cause: reason}
-             )}
+            {:error, reason}
         end
     end
   end
@@ -217,7 +211,6 @@ defmodule Jidoka.Adapter.Runic.Workflow do
           action_runner: &Actions.invoke_action/3,
           agent_opts: [],
           max_concurrency: nil,
-          suspension: nil,
           error: {:invalid_workflow_state_join, states}
         }
 
@@ -237,7 +230,6 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       action_runner: &Actions.invoke_action/3,
       agent_opts: [],
       max_concurrency: nil,
-      suspension: nil,
       error: {:invalid_workflow_state_join, state}
     }
   end
@@ -247,28 +239,37 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       acc
       | steps: Map.merge(acc.steps, state.steps),
         outcomes: Map.merge(Map.get(acc, :outcomes, %{}), Map.get(state, :outcomes, %{})),
-        suspension: Map.get(acc, :suspension) || Map.get(state, :suspension),
         error: acc.error || state.error
     }
 
-    clear_completed_suspension(merged)
+    validate_suspension(merged)
   end
 
-  defp clear_completed_suspension(%{suspension: %Jidoka.Workflow.Loop.Cursor{step: step}} = state) do
-    case get_in(state, [:outcomes, step]) do
-      %{status: :ok} -> %{state | suspension: nil}
-      _outcome -> state
+  defp validate_suspension(%{error: error} = state) when not is_nil(error), do: state
+
+  defp validate_suspension(state) do
+    case Jidoka.Workflow.Suspension.find(state.outcomes) do
+      {:ok, _suspension} -> state
+      {:error, reason} -> %{state | error: reason}
     end
   end
 
-  defp clear_completed_suspension(state), do: state
-
   defp run_status(%{error: error}, _spec) when not is_nil(error), do: {:failed, nil, error}
 
-  defp run_status(%{suspension: %Jidoka.Workflow.Loop.Cursor{}}, _spec),
-    do: {:hibernated, nil, nil}
-
   defp run_status(state, %Spec{} = spec) do
+    case Jidoka.Workflow.Suspension.cursor(state.outcomes) do
+      {:ok, %Jidoka.Workflow.Loop.Cursor{}} ->
+        {:hibernated, nil, nil}
+
+      {:ok, nil} ->
+        completed_status(state, spec)
+
+      {:error, reason} ->
+        {:failed, nil, reason}
+    end
+  end
+
+  defp completed_status(state, %Spec{} = spec) do
     completed? =
       Enum.all?(spec.steps, fn step ->
         match?(%{status: status} when status in [:ok, :skipped], Map.get(state.outcomes, step.name))
@@ -281,6 +282,20 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       end
     else
       {:running, nil, nil}
+    end
+  end
+
+  defp resolve_final_output(%Spec{} = spec, state) do
+    case Value.resolve(spec.output, state) do
+      {:ok, output} ->
+        {:ok, output}
+
+      {:error, reason} ->
+        {:error,
+         Jidoka.Error.execution_error("Workflow #{spec.id} output failed.",
+           phase: :workflow_output,
+           details: %{workflow_id: spec.id, reason: :output_ref, cause: reason}
+         )}
     end
   end
 
@@ -513,8 +528,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       input: state.input,
       context: Context.data(state.context),
       steps: state.steps,
-      outcomes: state.outcomes,
-      loop_cursor: state.suspension
+      outcomes: state.outcomes
     }
   end
 
@@ -541,16 +555,23 @@ defmodule Jidoka.Adapter.Runic.Workflow do
          %Snapshot{
            schema_version: version,
            workflow: workflow,
-           workflow_id: id,
-           loop_cursor: %Jidoka.Workflow.Loop.Cursor{step: step, max_iterations: max_iterations}
-         },
+           workflow_id: id
+         } = snapshot,
          %Spec{module: workflow, id: id, steps: steps}
        )
        when version == @snapshot_schema_version do
-    case Enum.find(steps, &(&1.name == step)) do
-      %{kind: :loop, max_iterations: ^max_iterations} -> :ok
-      %{kind: :loop, max_iterations: current} -> {:error, {:workflow_loop_bound_changed, step, max_iterations, current}}
-      _step -> {:error, {:workflow_snapshot_loop_missing, step}}
+    with {:ok, %Jidoka.Workflow.Loop.Cursor{step: step, max_iterations: max_iterations}} <-
+           Snapshot.cursor(snapshot) do
+      case Enum.find(steps, &(&1.name == step)) do
+        %{kind: :loop, max_iterations: ^max_iterations} ->
+          :ok
+
+        %{kind: :loop, max_iterations: current} ->
+          {:error, {:workflow_loop_bound_changed, step, max_iterations, current}}
+
+        _step ->
+          {:error, {:workflow_snapshot_loop_missing, step}}
+      end
     end
   end
 

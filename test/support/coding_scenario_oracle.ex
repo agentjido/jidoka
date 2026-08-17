@@ -33,7 +33,7 @@ defmodule CodingScenario.Oracle do
 
     git!(root, ["init", "-b", "main"])
     git!(root, ["add", "--all"])
-    git!(root, ["commit", "-m", "Initial rate limiter fixture"], env: @git_env)
+    git!(root, ["commit", "--no-gpg-sign", "-m", "Initial rate limiter fixture"], env: @git_env)
 
     before_digest = tree_digest!(root, initial_paths(scenario), :workspace)
 

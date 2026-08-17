@@ -12,29 +12,31 @@ defmodule Jidoka.Agent.Message do
 
   @roles [:system, :user, :assistant, :tool]
 
-  @schema Zoi.struct(
-            __MODULE__,
-            %{
-              id: Schema.non_empty_string() |> Zoi.nullish(),
-              request_id: Schema.non_empty_string() |> Zoi.nullish(),
-              role: Schema.atom_enum(@roles),
-              content: Zoi.string() |> Zoi.nullish(),
-              parts:
-                Zoi.array(Zoi.lazy({ContentPart, :schema, []}))
-                |> Zoi.default([]),
-              operation: Schema.non_empty_string() |> Zoi.nullish(),
-              output: Zoi.any() |> Zoi.nullish(),
-              interaction: Zoi.lazy({Effect.ModelInteraction, :schema, []}) |> Zoi.nullish(),
-              tool_call: Zoi.lazy({Effect.ToolCall, :schema, []}) |> Zoi.nullish(),
-              metadata: Zoi.map() |> Zoi.default(%{})
-            },
-            coerce: true
-          )
+  @base_schema Zoi.struct(
+                 __MODULE__,
+                 %{
+                   id: Schema.non_empty_string() |> Zoi.nullish(),
+                   request_id: Schema.non_empty_string() |> Zoi.nullish(),
+                   role: Schema.atom_enum(@roles),
+                   content: Zoi.string() |> Zoi.nullish(),
+                   parts:
+                     Zoi.array(Zoi.lazy({ContentPart, :schema, []}))
+                     |> Zoi.default([]),
+                   operation: Schema.non_empty_string() |> Zoi.nullish(),
+                   output: Zoi.any() |> Zoi.nullish(),
+                   interaction: Zoi.lazy({Effect.ModelInteraction, :schema, []}) |> Zoi.nullish(),
+                   tool_call: Zoi.lazy({Effect.ToolCall, :schema, []}) |> Zoi.nullish(),
+                   metadata: Zoi.map() |> Zoi.default(%{})
+                 },
+                 coerce: true
+               )
+
+  @schema Zoi.refine(@base_schema, {__MODULE__, :validate_role, []})
 
   @type role :: :system | :user | :assistant | :tool
-  @type t :: unquote(Zoi.type_spec(@schema))
-  @enforce_keys Zoi.Struct.enforce_keys(@schema)
-  defstruct Zoi.Struct.struct_fields(@schema)
+  @type t :: unquote(Zoi.type_spec(@base_schema))
+  @enforce_keys Zoi.Struct.enforce_keys(@base_schema)
+  defstruct Zoi.Struct.struct_fields(@base_schema)
 
   @doc "Returns the Zoi schema for durable chat messages."
   @spec schema() :: Zoi.schema()
@@ -48,8 +50,8 @@ defmodule Jidoka.Agent.Message do
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
     with {:ok, attrs} <- normalize_parts(attrs),
-         {:ok, %__MODULE__{} = message} <- Schema.parse(@schema, attrs),
-         :ok <- validate(message) do
+         {:ok, %__MODULE__{} = message} <- Schema.parse(@base_schema, attrs),
+         :ok <- validate_role(message) do
       {:ok, message}
     end
   end
@@ -135,22 +137,50 @@ defmodule Jidoka.Agent.Message do
     )
   end
 
-  defp validate(%__MODULE__{role: role, content: content, parts: parts})
+  @doc false
+  @spec validate_role(t(), keyword()) :: :ok | {:error, String.t()}
+  def validate_role(%__MODULE__{} = message, _opts) do
+    case validate_role(message) do
+      :ok -> :ok
+      {:error, reason} -> {:error, "invalid fields for message role: #{inspect(reason)}"}
+    end
+  end
+
+  defp validate_role(%__MODULE__{role: role, content: content, parts: parts} = message)
        when role in [:system, :user, :assistant] do
     if is_binary(content) or parts != [] do
-      :ok
+      validate_allowed_fields(message)
     else
       {:error, {:missing_message_content, role}}
     end
   end
 
-  defp validate(%__MODULE__{role: :tool, operation: operation}) do
+  defp validate_role(%__MODULE__{role: :tool, operation: operation} = message) do
     if is_binary(operation) do
-      :ok
+      validate_allowed_fields(message)
     else
       {:error, :missing_tool_message_operation}
     end
   end
+
+  defp validate_allowed_fields(%__MODULE__{role: role} = message) do
+    forbidden =
+      case role do
+        role when role in [:system, :user] -> [:operation, :output, :interaction, :tool_call]
+        :assistant -> [:operation, :output, :tool_call]
+        :tool -> [:parts, :interaction]
+      end
+
+    present = Enum.filter(forbidden, &present_field?(message, &1))
+
+    case present do
+      [] -> :ok
+      fields -> {:error, {:invalid_message_role_fields, role, fields}}
+    end
+  end
+
+  defp present_field?(message, :parts), do: message.parts != []
+  defp present_field?(message, field), do: not is_nil(Map.fetch!(message, field))
 
   defp normalize_parts(attrs) do
     attrs = Schema.normalize_attrs(attrs)

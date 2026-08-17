@@ -3,6 +3,9 @@ defmodule Jidoka.Agent.ToolSources.Common do
 
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Adapter.Jido.Actions
+  alias Jidoka.Operation.Source
+  alias Jidoka.Operation.Source.Compiled
+  alias Jidoka.Review.Approval
 
   @spec operation_from_action!(module()) :: Operation.t()
   def operation_from_action!(action) do
@@ -16,6 +19,20 @@ defmodule Jidoka.Agent.ToolSources.Common do
 
       false ->
         raise ArgumentError, "#{inspect(action)} must expose `to_tool/0`"
+    end
+  end
+
+  @spec compile_source!(Source.source(), term(), (Source.source(), [Operation.t()] -> [map()]), keyword()) ::
+          Compiled.t()
+  def compile_source!(source, approval, metadata_fun, opts \\ [])
+      when is_function(metadata_fun, 2) and is_list(opts) do
+    with {:ok, compiled} <- Source.load(source, opts),
+         operations = Approval.apply_to_operations!(compiled.operations, approval),
+         metadata = metadata_fun.(source, operations),
+         {:ok, compiled} <- Compiled.new(operations, compiled.routes_by_name, metadata) do
+      compiled
+    else
+      {:error, reason} -> raise ArgumentError, "invalid operation source: #{inspect(reason)}"
     end
   end
 

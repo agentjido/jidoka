@@ -83,7 +83,7 @@ end
 {:ok, _result} = Jidoka.turn(MyApp.TriageAgent, "Why is my bill higher?", llm: llm)
 
 Jidoka.handoff("conv-1")
-#=> %{agent: MyApp.SpecialistAgent, agent_id: "conv-1:specialist_agent", handoff: %Jidoka.Handoff{...}, updated_at_ms: 1_234}
+#=> %{conversation_id: "conv-1", agent: MyApp.SpecialistAgent, agent_id: "conv-1:specialist_agent", handoff: %Jidoka.Handoff{...}, updated_at_ms: 1_234}
 ```
 
 After the turn, the application can read `Jidoka.handoff("conv-1")` to see
@@ -106,6 +106,10 @@ A handoff is three pieces of data and one storage boundary.
    `Jidoka.Handoff.OwnerStore.InMemory`, an ETS-backed table good for tests
    and single-node demos. Applications can configure another module through
    `:jidoka, :handoff_owner_store`.
+
+Every handoff requires a non-empty `conversation_id`. `put_owner/2` rejects a
+store key that does not equal that ID. Owner fields such as `agent` and
+`agent_id` are derived from the canonical handoff when the record is read.
 
 ```diagram
 ╭──────────────╮     ╭───────────────────────╮     ╭───────────────────╮
@@ -397,7 +401,8 @@ public `Jidoka.handoff/1` and `Jidoka.reset_handoff/1` calls do not change.
 | --- | --- | --- |
 | `{:error, {:invalid_handoff_module, ...}}` at compile time | The target module does not define `spec/0`. | Make sure the target uses `Jidoka.Agent` (or otherwise exposes `spec/0`). |
 | `{:error, {:invalid_handoff_payload, :message}}` at runtime | The LLM called the operation without a non-empty `message` argument. | Tighten the prompt or supply a richer description; the schema requires `message`. |
-| `Jidoka.handoff(id)` returns `nil` after a turn | The arguments did not include a `conversation_id` and the context did not provide one either. | Either pass a `conversation_id` argument, set it in the turn `context:`, or use a `target: {:peer, ...}` mapping. |
+| The handoff operation returns a validation error for `conversation_id` | The arguments did not include a `conversation_id` and the context did not provide one. | Pass a `conversation_id` argument, or set it in the turn `context:`. |
+| `{:error, {:handoff_conversation_id_mismatch, key, id}}` | A custom caller used a store key that differs from the handoff ID. | Use `handoff.conversation_id` as the owner-store key. |
 | `{:error, {:missing_handoff_peer_context, key}}` | A `{:peer, {:context, key}}` target needed a context value that was not present. | Add the key to `context:` for the turn (`context: %{tenant_id: ...}`). |
 | ETS owner store leaks across tests | The default InMemory store is process-wide. | Call `Jidoka.reset_handoff/1` in `setup`/`on_exit`, or configure a per-test store module. |
 

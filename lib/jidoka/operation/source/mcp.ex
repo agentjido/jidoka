@@ -12,6 +12,7 @@ defmodule Jidoka.Operation.Source.MCP do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.MCP.Tools
   alias Jidoka.Operation.Source.MCP.Transport
   alias Jidoka.Schema
@@ -115,6 +116,15 @@ defmodule Jidoka.Operation.Source.MCP do
   end
 
   @impl true
+  def compile(%__MODULE__{} = source, opts) do
+    with {:ok, tools} <- tools(source, opts) do
+      operations = Enum.map(tools, &operation(source, &1))
+      routes = Map.new(tools, &{operation_name(source, &1.name), &1.name})
+      Source.compiled(operations, mcp_capability(source, routes))
+    end
+  end
+
+  @impl true
   def operations(%__MODULE__{} = source, opts) do
     with {:ok, tools} <- tools(source, opts) do
       {:ok, Enum.map(tools, &operation(source, &1))}
@@ -125,18 +135,20 @@ defmodule Jidoka.Operation.Source.MCP do
   def capability(%__MODULE__{} = source, opts) do
     with {:ok, tools} <- tools(source, opts) do
       routes = Map.new(tools, &{operation_name(source, &1.name), &1.name})
+      {:ok, mcp_capability(source, routes)}
+    end
+  end
 
-      {:ok,
-       fn
-         %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
-           with {:ok, request} <- Effect.OperationRequest.from_input(payload),
-                {:ok, remote_name} <- fetch_remote_tool(routes, request.name) do
-             call_tool(client(source, context), source, remote_name, request.arguments, Transport.call_opts(source))
-           end
+  defp mcp_capability(source, routes) do
+    fn
+      %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
+        with {:ok, request} <- Effect.OperationRequest.from_input(payload),
+             {:ok, remote_name} <- fetch_remote_tool(routes, request.name) do
+          call_tool(client(source, context), source, remote_name, request.arguments, Transport.call_opts(source))
+        end
 
-         %Effect.Intent{kind: kind}, _journal, %Context{} ->
-           {:error, {:unsupported_effect_kind, kind}}
-       end}
+      %Effect.Intent{kind: kind}, _journal, %Context{} ->
+        {:error, {:unsupported_effect_kind, kind}}
     end
   end
 

@@ -159,15 +159,11 @@ Jidoka.inspect(MyApp.Assistant)
 #=>   },
 #=>   plan: %{
 #=>     spec_id: "assistant",
-#=>     workflow_profile: :tool_loop,
 #=>     max_model_turns: 8,
 #=>     timeout_ms: 30000,
 #=>     phases: [
 #=>       :assemble_prompt,
-#=>       :plan_model_effect,
-#=>       :apply_model_result,
-#=>       :plan_operation_effects,
-#=>       :apply_operation_results
+#=>       :plan_model_effect
 #=>     ]
 #=>   }
 #=> }

@@ -69,6 +69,26 @@ defmodule Jidoka.DataStructsTest do
 
     assert {:error, :missing_tool_message_operation} =
              Agent.Message.from_input(%{"role" => "tool", "content" => "missing operation"})
+
+    assert {:error, {:invalid_message_role_fields, :user, [:output]}} =
+             Agent.Message.from_input(%{role: :user, content: "hello", output: %{unexpected: true}})
+
+    assert {:error, _reason} =
+             Agent.State.from_input(%{
+               messages: [%{role: :assistant, content: "hello", operation: "not-an-assistant-field"}]
+             })
+
+    direct = Agent.Message.user("direct")
+    assert {:ok, ^direct} = Agent.Message.from_input(direct)
+
+    for message <- [
+          Agent.Message.system("system"),
+          Agent.Message.user("user"),
+          Agent.Message.assistant("assistant"),
+          Agent.Message.tool("lookup", %{ok: true})
+        ] do
+      assert {:ok, ^message} = Agent.Message.from_input(message)
+    end
   end
 
   test "operation specs validate idempotency and normalize fields" do
@@ -352,6 +372,28 @@ defmodule Jidoka.DataStructsTest do
     assert {:ok, %Turn.Plan{}} = Turn.Plan.new(controlled_spec)
   end
 
+  test "turn plans reject removed phase defaults and project fixed compiler phases" do
+    spec =
+      Agent.Spec.new!(
+        id: "removed_plan_defaults",
+        instructions: "Use the fixed turn process.",
+        model: %{provider: :test, id: "model"},
+        runtime_defaults: %{workflow_profile: :chat, phases: [:assemble_prompt]}
+      )
+
+    assert {:error, {:removed_turn_plan_defaults, [:phases, :workflow_profile]}} =
+             Turn.Plan.new(spec)
+
+    plan =
+      spec
+      |> Map.put(:runtime_defaults, %{})
+      |> Turn.Plan.new!()
+
+    refute Map.has_key?(Map.from_struct(plan), :workflow_profile)
+    refute Map.has_key?(Map.from_struct(plan), :phases)
+    assert Jidoka.project(plan).phases == Jidoka.Adapter.Runic.TurnCompiler.phases()
+  end
+
   test "operation controls can match by source, idempotency, and metadata" do
     operation =
       Operation.new!(
@@ -470,7 +512,11 @@ defmodule Jidoka.DataStructsTest do
   end
 
   test "LLM decisions and operation observations are typed effect payloads" do
-    assert {:ok, %Effect.LLMDecision{type: :operation, name: "lookup"}} =
+    assert {:ok,
+            %Effect.LLMDecision{
+              type: :operation,
+              operations: [%Effect.OperationRequest{name: "lookup"}]
+            }} =
              Effect.LLMDecision.from_input(%{
                "type" => "operation",
                "name" => "lookup",
@@ -561,6 +607,43 @@ defmodule Jidoka.DataStructsTest do
 
     assert Enum.map(hd(interaction.tool_call_groups).calls, &{&1.provider_call_id, &1.call_index}) ==
              [{"call_a", 0}, {"call_b", 1}]
+  end
+
+  test "LLM decisions store one ordered operation list" do
+    assert {:ok, legacy} =
+             Effect.LLMDecision.from_input(%{
+               type: :operation,
+               name: "lookup",
+               arguments: %{"id" => "A-1"}
+             })
+
+    refute Map.has_key?(legacy, :name)
+    refute Map.has_key?(legacy, :arguments)
+    assert Effect.LLMDecision.name(legacy) == "lookup"
+    assert Effect.LLMDecision.arguments(legacy) == %{"id" => "A-1"}
+    assert [%Effect.OperationRequest{name: "lookup"}] = legacy.operations
+
+    assert %{type: :operation, operations: [%{name: "lookup"}]} =
+             Effect.LLMDecision.to_payload(legacy)
+
+    assert {:error, {:conflicting_operation_decision, _legacy, _operations}} =
+             Effect.LLMDecision.from_input(%{
+               type: :operation,
+               name: "lookup",
+               arguments: %{"id" => "A-1"},
+               operations: [%{name: "update", arguments: %{"id" => "A-1"}}]
+             })
+
+    ordered =
+      Effect.LLMDecision.operations([
+        %{name: "first", arguments: %{"index" => 1}},
+        %{name: "second", arguments: %{"index" => 2}}
+      ])
+
+    assert Enum.map(ordered.operations, &{&1.name, &1.arguments}) == [
+             {"first", %{"index" => 1}},
+             {"second", %{"index" => 2}}
+           ]
   end
 
   test "model interaction validation rejects mismatched group identity and call indexes" do
@@ -738,7 +821,41 @@ defmodule Jidoka.DataStructsTest do
     assert {:ok, %Snapshot{} = restored} = Snapshot.deserialize(serialized)
     assert restored.snapshot_id == snapshot.snapshot_id
     assert restored.cursor.phase == :after_prompt
-    assert restored.turn_state.spec.id == "snapshot_agent"
+    assert restored.turn_state.plan.spec.id == "snapshot_agent"
+  end
+
+  test "legacy snapshots discard copied turn authorities" do
+    state = base_state()
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+
+    conflicting_spec =
+      Agent.Spec.new!(
+        id: "conflicting_agent",
+        instructions: "This copied value is not authoritative.",
+        model: %{provider: :test, id: "other-model"}
+      )
+
+    legacy_state =
+      state
+      |> Map.from_struct()
+      |> Map.put(:spec, conflicting_spec)
+      |> Map.put(:operation_plan, %{name: "stale", arguments: %{}})
+      |> Map.put(
+        :plan,
+        state.plan
+        |> Map.from_struct()
+        |> Map.put(:workflow_profile, :chat)
+        |> Map.put(:phases, [:stale_phase])
+      )
+
+    legacy_snapshot = snapshot |> Map.from_struct() |> Map.put(:turn_state, legacy_state)
+
+    assert {:ok, restored} = Snapshot.new(legacy_snapshot)
+    assert restored.turn_state.plan.spec.id == "snapshot_agent"
+    refute Map.has_key?(Map.from_struct(restored.turn_state), :spec)
+    refute Map.has_key?(Map.from_struct(restored.turn_state), :operation_plan)
+    refute Map.has_key?(Map.from_struct(restored.turn_state.plan), :workflow_profile)
+    refute Map.has_key?(Map.from_struct(restored.turn_state.plan), :phases)
   end
 
   test "agent snapshot restore keeps model interaction and tool-call identifiers" do

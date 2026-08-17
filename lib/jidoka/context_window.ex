@@ -54,24 +54,60 @@ defmodule Jidoka.ContextWindow do
   defp compact_groups(groups, prefix, prompt, %Policy{} = policy, active_request_id) do
     active_index = Enum.find_index(groups, &(&1.request_id == active_request_id))
     mandatory_start = mandatory_start(groups, active_index, policy.minimum_recent_turns)
-    do_compact(groups, [], mandatory_start, prefix, prompt, policy)
+    retained_start = retained_group_start(groups, mandatory_start, prefix, prompt, policy)
+    {omitted, kept} = Enum.split(groups, retained_start)
+    {kept, omitted}
   end
 
-  defp do_compact(groups, omitted, mandatory_start, prefix, prompt, policy) do
-    messages = prefix ++ Enum.flat_map(groups, & &1.messages)
-    tokens = prompt |> put_messages(messages) |> estimate_tokens(policy)
+  defp retained_group_start(groups, mandatory_start, prefix, prompt, policy) do
+    base = prompt_message_stats(prompt, prefix)
+    max_bytes = policy.input_budget * policy.bytes_per_token
 
-    cond do
-      fits?(tokens, policy.input_budget) ->
-        {groups, Enum.reverse(omitted)}
+    groups
+    |> Enum.with_index()
+    |> Enum.reverse()
+    |> Enum.reduce_while({length(groups), base}, fn {group, index}, {_retained_start, stats} ->
+      candidate = append_message_stats(stats, message_stats(group.messages))
 
-      mandatory_start > 0 ->
-        [oldest | rest] = groups
-        do_compact(rest, [oldest | omitted], mandatory_start - 1, prefix, prompt, policy)
+      if index >= mandatory_start or candidate.bytes <= max_bytes do
+        {:cont, {index, candidate}}
+      else
+        {:halt, {index + 1, stats}}
+      end
+    end)
+    |> elem(0)
+  end
 
-      true ->
-        {groups, Enum.reverse(omitted)}
-    end
+  defp prompt_message_stats(prompt, prefix) do
+    empty_prompt_bytes = prompt |> put_messages([]) |> encoded_size()
+    prefix_stats = message_stats(prefix)
+    %{prefix_stats | bytes: empty_prompt_bytes - 2 + 2 + prefix_stats.bytes}
+  end
+
+  defp message_stats(messages) do
+    {bytes, count} =
+      Enum.reduce(messages, {0, 0}, fn message, {bytes, count} ->
+        separator = if count == 0, do: 0, else: 1
+        {bytes + separator + encoded_size(Agent.Message.to_map(message)), count + 1}
+      end)
+
+    %{bytes: bytes, count: count}
+  end
+
+  defp append_message_stats(left, %{count: 0}), do: left
+
+  defp append_message_stats(left, right) do
+    separator = if left.count == 0, do: 0, else: 1
+    %{bytes: left.bytes + separator + right.bytes, count: left.count + right.count}
+  end
+
+  defp encoded_size(value) do
+    value
+    |> Portable.project()
+    |> estimable()
+    |> canonical()
+    |> Jason.encode!()
+    |> byte_size()
   end
 
   defp mandatory_start(groups, active_index, minimum_recent_turns) do

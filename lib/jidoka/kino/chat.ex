@@ -76,7 +76,7 @@ if Mix.env() in [:dev, :test] do
         session_id: session.session_id,
         agent_id: session.agent_id,
         status: session.status,
-        pending_reviews: length(session.pending_reviews)
+        pending_reviews: length(Session.pending_reviews(session))
       }
     end
 

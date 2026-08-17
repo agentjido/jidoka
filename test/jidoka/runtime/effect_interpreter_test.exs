@@ -4,6 +4,7 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
   alias Jidoka.Agent
   alias Jidoka.Effect
   alias Jidoka.Runtime.{Capabilities, EffectInterpreter}
+  alias Jidoka.Runtime.Review, as: RuntimeReview
   alias Jidoka.Turn
 
   defmodule BlockOperationControl do
@@ -13,6 +14,30 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
 
     @impl true
     def call(%Jidoka.Runtime.Controls.OperationContext{}), do: {:block, :blocked_by_control}
+  end
+
+  defmodule FirstReviewControl do
+    @moduledoc false
+
+    use Jidoka.Control, name: "first_review_control"
+
+    @impl true
+    def call(%Jidoka.Runtime.Controls.OperationContext{} = context) do
+      send(Jidoka.Context.get_runtime(context.ctx, :test_pid), :first_control_called)
+      {:interrupt, :first_review}
+    end
+  end
+
+  defmodule SecondReviewControl do
+    @moduledoc false
+
+    use Jidoka.Control, name: "second_review_control"
+
+    @impl true
+    def call(%Jidoka.Runtime.Controls.OperationContext{} = context) do
+      send(Jidoka.Context.get_runtime(context.ctx, :test_pid), :second_control_called)
+      {:interrupt, :second_review}
+    end
   end
 
   test "records llm intents before calling capabilities and journals successful results" do
@@ -269,6 +294,64 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
              EffectInterpreter.interpret_pending(state, capabilities, operation_retry: [max_attempts: 3])
   end
 
+  test "an approval advances only its exact control and does not bypass the host gate" do
+    parent = self()
+    intent = Effect.Intent.new(:operation, %{name: "reviewed_tool", arguments: %{}})
+
+    review_controls = [
+      %{control: FirstReviewControl, match: %{name: "reviewed_tool"}},
+      %{control: SecondReviewControl, match: %{name: "reviewed_tool"}}
+    ]
+
+    state = state_with_pending_effect(intent, spec: spec(controls: %{operations: review_controls}))
+
+    policy = fn _request, _context ->
+      {:ok, Jidoka.Policy.Decision.new!(outcome: :require_review, rule_id: "host.review")}
+    end
+
+    operations = fn _intent, _journal, _context ->
+      send(parent, :operation_called)
+      {:ok, %{done: true}}
+    end
+
+    capabilities = Capabilities.new!(llm: missing_llm(), operations: operations, policy: policy)
+    opts = [operation_context: %{test_pid: parent}]
+
+    assert {:interrupt, first_interrupt, first_state} =
+             EffectInterpreter.interpret_pending(state, capabilities, opts)
+
+    assert first_interrupt.control == FirstReviewControl
+    assert_receive :first_control_called
+
+    assert {:ok, first_resumed} = approve(first_state, first_interrupt)
+
+    assert {:interrupt, second_interrupt, second_state} =
+             EffectInterpreter.interpret_pending(first_resumed, capabilities, opts)
+
+    assert second_interrupt.control == SecondReviewControl
+    refute_receive :first_control_called
+    assert_receive :second_control_called
+
+    assert {:ok, second_resumed} = approve(second_state, second_interrupt)
+
+    assert {:interrupt, host_interrupt, host_state} =
+             EffectInterpreter.interpret_pending(second_resumed, capabilities, opts)
+
+    assert host_interrupt.control == Jidoka.Policy.Gate
+    refute_receive :first_control_called
+    refute_receive :second_control_called
+    refute_receive :operation_called
+
+    assert {:ok, host_resumed} = approve(host_state, host_interrupt)
+
+    assert {:ok, %Effect.Result{status: :ok}, _state} =
+             EffectInterpreter.interpret_pending(host_resumed, capabilities, opts)
+
+    assert_receive :operation_called
+    refute_receive :first_control_called
+    refute_receive :second_control_called
+  end
+
   test "reuses journaled results without calling capabilities again" do
     intent = Effect.Intent.new(:llm, %{prompt: %{messages: []}})
     result = Effect.Result.ok(intent, %{type: :final, content: "cached"})
@@ -442,4 +525,9 @@ defmodule Jidoka.Runtime.EffectInterpreterTest do
   end
 
   defp missing_llm, do: fn _intent, _journal, _ctx -> {:error, :missing_llm} end
+
+  defp approve(state, interrupt) do
+    response = Jidoka.Review.Response.new!(interrupt_id: interrupt.id, decision: :approved)
+    RuntimeReview.apply_response(state, interrupt, response)
+  end
 end

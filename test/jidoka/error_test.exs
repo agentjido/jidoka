@@ -183,6 +183,34 @@ defmodule Jidoka.ErrorTest do
     assert %{category: :unknown, message: ":boom"} = Error.to_map(:boom)
   end
 
+  test "projects nested runtime terms as bounded JSON-safe error details" do
+    deep = Enum.reduce(1..20, :leaf, fn index, value -> %{index => value} end)
+
+    error =
+      Error.execution_error("Runtime values",
+        details: %{
+          pid: self(),
+          reference: make_ref(),
+          callback: fn value -> value end,
+          tuple: {:error, :boom},
+          exception: %RuntimeError{message: "boom"},
+          deep: deep,
+          large: Enum.to_list(1..100)
+        }
+      )
+
+    projected = Error.to_map(error)
+
+    assert projected.details.pid == %{type: "pid"}
+    assert projected.details.reference == %{type: "reference"}
+    assert projected.details.callback == %{type: "function", arity: 1}
+    assert projected.details.tuple == %{type: "tuple", values: [:error, :boom]}
+    assert projected.details.exception == %{exception: RuntimeError, message: "boom"}
+    assert inspect(projected.details.deep) =~ "__jidoka_truncated__"
+    assert List.last(projected.details.large) == %{"__jidoka_truncated__" => "collection"}
+    assert is_binary(Jason.encode!(projected))
+  end
+
   test "formats Splode error classes" do
     error_class =
       Error.to_class([

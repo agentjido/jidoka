@@ -79,11 +79,11 @@ defmodule Jidoka.InstructionsTest do
     assert spec().instructions == "Use the tenant policy."
   end
 
-  test "uses the same module provider during preflight and session turns" do
+  test "uses resolved provider output during preflight and the provider during session turns" do
     assert {:ok, preflight} =
              Jidoka.preflight(spec(), "Preview",
                context: %{tenant_id: "tenant_2"},
-               instructions: Provider
+               resolved_instructions: "Use the tenant policy. Tenant: tenant_2."
              )
 
     assert [%{role: :system, content: "Use the tenant policy. Tenant: tenant_2."} | _rest] =

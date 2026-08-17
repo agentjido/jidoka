@@ -21,8 +21,8 @@ defmodule Jidoka.ExecutionEnvironment.ProfileResolverTest do
     request = PolicyRequest.new!(profile_id: "restricted", capability_ids: ["files.read"])
 
     assert {:ok, resolved} = ProfileResolver.resolve(request, InMemory.resolver(resolver))
-    assert resolved.profile.profile_id == "restricted"
-    assert resolved.adapter == FakeAdapter
+    assert resolved.registration.profile.profile_id == "restricted"
+    assert resolved.registration.adapter == FakeAdapter
     assert String.starts_with?(resolved.fingerprint, "sha256:")
     refute inspect(Jidoka.project(resolved)) =~ "FakeAdapter"
   end
@@ -57,6 +57,19 @@ defmodule Jidoka.ExecutionEnvironment.ProfileResolverTest do
              ProfileResolver.resolve(request, fn _id, _opts -> {:ok, registration} end)
 
     assert details.dimension == :capability_ids
+  end
+
+  test "wrong identity and malformed profile fail before manager use" do
+    wrong_request = PolicyRequest.new!(profile_id: "other")
+
+    assert {:error, %Error{code: :profile_identity_mismatch}} =
+             ProfileResolver.resolve(wrong_request, fn _id, _opts -> {:ok, registration()} end)
+
+    malformed = %Registration{registration() | profile: %{profile_id: "restricted"}}
+    request = PolicyRequest.new!(profile_id: "restricted")
+
+    assert {:error, %Error{code: :malformed_profile_registration}} =
+             ProfileResolver.resolve(request, fn _id, _opts -> {:ok, malformed} end)
   end
 
   defp registration(opts \\ []) do

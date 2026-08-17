@@ -107,7 +107,8 @@ defmodule Jidoka.TestSupport.ProcessExtensionTransport do
         %{
           "name" => "fixture_tool",
           "description" => "Runs the fixture tool.",
-          "idempotency" => "pure"
+          "idempotency" => "pure",
+          "input_policy" => %{"additional_properties" => false}
         }
       ],
       "commands" => ["fixture_command"],
@@ -119,8 +120,12 @@ defmodule Jidoka.TestSupport.ProcessExtensionTransport do
       "ui_data" => %{"panel" => "fixture"}
     }
 
-    if descriptor[:malformed_manifest],
-      do: Map.put(manifest, "tools", [%{"description" => "missing name"}]),
-      else: manifest
+    manifest = Map.merge(manifest, descriptor[:manifest_extra] || %{})
+
+    cond do
+      descriptor[:malformed_manifest] -> Map.put(manifest, "tools", [%{"description" => "missing name"}])
+      descriptor[:manifest_tools] -> Map.put(manifest, "tools", descriptor.manifest_tools)
+      true -> manifest
+    end
   end
 end

@@ -174,4 +174,26 @@ defmodule Jidoka.ExecutionEnvironment.ContractsTest do
              "forkable" => false
            }
   end
+
+  test "one walker validates complete mixed nesting with exact paths" do
+    contract = ExecutionEnvironment.Contract
+
+    assert :ok =
+             contract.validate_safe_map(%{
+               "mixed" => [%{"enabled" => true}, {:value, [1, 2, nil]}]
+             })
+
+    assert {:error, "non-portable :pid at root.outer[0].inner[1]"} =
+             contract.validate_safe_map(%{"outer" => [%{"inner" => [:ok, self()]}]})
+
+    assert {:error, "credential-like key at root.outer[0][0].api_key"} =
+             contract.validate_safe_map(%{"outer" => [{%{"api_key" => "secret"}}]})
+
+    assert {:error, reason} = contract.validate_portable(%{{:bad, :key} => "value"})
+    assert reason =~ "invalid portable map key"
+    assert reason =~ "root.key({:bad, :key})"
+
+    assert {:error, "negative limit at root.groups[0][1].cpu"} =
+             contract.validate_limits(%{"groups" => [{:limits, %{"cpu" => -1}}]})
+  end
 end

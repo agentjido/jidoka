@@ -5,6 +5,7 @@ defmodule Jidoka.Memory.Runtime do
   alias Jidoka.Context
   alias Jidoka.Id
   alias Jidoka.Memory
+  alias Jidoka.Memory.Route
   alias Jidoka.Turn
 
   @spec recall(Agent.Spec.t(), Turn.Request.t(), keyword()) ::
@@ -18,12 +19,10 @@ defmodule Jidoka.Memory.Runtime do
       {:ok, store} ->
         memory = spec.memory
 
-        with {:ok, store} <- store_with_policy(store, memory, request.context, opts) do
+        with {:ok, route} <- resolve_route(memory, spec.id, request.context, opts) do
           recall_request =
             Memory.RecallRequest.new!(
-              agent_id: spec.id,
-              session_id: memory_session_id(memory, opts),
-              scope: memory.scope,
+              route: route,
               query: request.input,
               limit: memory.max_entries,
               metadata: memory.metadata
@@ -43,12 +42,12 @@ defmodule Jidoka.Memory.Runtime do
     with {:ok, store} <- fetch_memory_store(opts) do
       context = normalize_context(Keyword.get(opts, :context, %{}))
 
-      with {:ok, store} <- store_with_policy(store, spec.memory, context, opts) do
+      with {:ok, route} <- resolve_route(spec.memory, spec.id, context, opts) do
         entry_attrs =
           [
             id: Keyword.get(opts, :entry_id),
             agent_id: spec.id,
-            session_id: write_session_id(spec.memory, opts),
+            session_id: route.session_id,
             content: content,
             metadata: Keyword.get(opts, :metadata, %{})
           ]
@@ -59,6 +58,7 @@ defmodule Jidoka.Memory.Runtime do
         request =
           Memory.WriteRequest.new!(
             entry: entry,
+            route: route,
             idempotency_key: Keyword.get(opts, :idempotency_key)
           )
 
@@ -91,12 +91,6 @@ defmodule Jidoka.Memory.Runtime do
     ])
   end
 
-  defp memory_session_id(%{scope: :session}, opts), do: Keyword.get(opts, :session_id)
-  defp memory_session_id(_memory, _opts), do: nil
-
-  defp write_session_id(%{scope: :session}, opts), do: Keyword.get(opts, :session_id)
-  defp write_session_id(_memory, _opts), do: nil
-
   defp fetch_memory_store(opts) do
     case Keyword.fetch(opts, :memory_store) do
       {:ok, store} -> {:ok, store}
@@ -104,25 +98,28 @@ defmodule Jidoka.Memory.Runtime do
     end
   end
 
-  defp store_with_policy(store, nil, _context, _opts), do: {:ok, store}
+  defp resolve_route(nil, agent_id, _context, _opts),
+    do: Route.new(kind: :agent, agent_id: agent_id)
 
-  defp store_with_policy(store, %Agent.Spec.Memory{} = memory, context, opts) do
-    with {:ok, namespace} <- resolve_namespace(memory.namespace, context),
-         {:ok, session_id} <- resolve_session_id(memory, opts) do
-      memory_opts =
-        []
-        |> maybe_put(:namespace, namespace)
-        |> maybe_put(:scope, memory.scope)
-        |> maybe_put(:session_id, session_id)
+  defp resolve_route(%Agent.Spec.Memory{} = memory, agent_id, context, opts) do
+    with {:ok, namespace} <- resolve_namespace(memory.namespace, context) do
+      cond do
+        is_binary(namespace) and memory.scope == :session ->
+          {:error, {:ambiguous_memory_route, :session, namespace}}
 
-      {:ok, merge_store_opts(store, memory_opts)}
+        is_binary(namespace) ->
+          Route.new(kind: :namespace, agent_id: agent_id, namespace: namespace)
+
+        memory.scope == :session ->
+          with {:ok, session_id} <- resolve_session_id(memory, opts) do
+            Route.new(kind: :session, agent_id: agent_id, session_id: session_id)
+          end
+
+        true ->
+          Route.new(kind: :agent, agent_id: agent_id)
+      end
     end
   end
-
-  defp merge_store_opts({module, opts}, memory_opts),
-    do: {module, Keyword.merge(opts, memory_opts)}
-
-  defp merge_store_opts(module, memory_opts) when is_atom(module), do: {module, memory_opts}
 
   defp resolve_namespace(nil, _context), do: {:ok, nil}
   defp resolve_namespace(namespace, _context) when is_binary(namespace), do: {:ok, namespace}
@@ -146,9 +143,6 @@ defmodule Jidoka.Memory.Runtime do
 
   defp resolve_session_id(%Agent.Spec.Memory{}, opts), do: {:ok, Keyword.get(opts, :session_id)}
 
-  defp maybe_put(opts, _key, nil), do: opts
-  defp maybe_put(opts, key, value), do: Keyword.put(opts, key, value)
-
   defp normalize_context(%Context{} = context), do: context
   defp normalize_context(context), do: Context.from_data!(context)
 
@@ -162,8 +156,7 @@ defmodule Jidoka.Memory.Runtime do
       "kind" => capture_kind,
       "source" => "jidoka_capture",
       "request_id" => request.request_id,
-      "session_id" => Keyword.get(opts, :session_id),
-      "idempotency_key" => capture_id
+      "session_id" => Keyword.get(opts, :session_id)
     })
   end
 

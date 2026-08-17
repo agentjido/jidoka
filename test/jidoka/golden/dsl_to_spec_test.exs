@@ -143,15 +143,11 @@ defmodule Jidoka.Golden.DslToSpecTest do
 
     assert %{
              spec_id: "golden_time_agent",
-             workflow_profile: :tool_loop,
              max_model_turns: 8,
              timeout_ms: 30_000,
              phases: [
                :assemble_prompt,
-               :plan_model_effect,
-               :apply_model_result,
-               :plan_operation_effects,
-               :apply_operation_results
+               :plan_model_effect
              ],
              metadata: %{}
            } == Jidoka.project(plan)

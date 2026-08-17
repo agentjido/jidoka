@@ -6,6 +6,7 @@ defmodule Jidoka.Projection.Memory do
 
   @spec project(
           Memory.Entry.t()
+          | Memory.Route.t()
           | Memory.RecallRequest.t()
           | Memory.RecallResult.t()
           | Memory.WriteRequest.t()
@@ -25,11 +26,16 @@ defmodule Jidoka.Projection.Memory do
     |> reject_nil_values()
   end
 
+  def project(%Memory.Route{} = route) do
+    route
+    |> Map.from_struct()
+    |> Portable.project()
+    |> reject_nil_values()
+  end
+
   def project(%Memory.RecallRequest{} = request) do
     %{
-      agent_id: request.agent_id,
-      session_id: request.session_id,
-      scope: request.scope,
+      route: project(request.route),
       query: request.query,
       limit: request.limit,
       metadata: Portable.project(request.metadata)
@@ -48,6 +54,7 @@ defmodule Jidoka.Projection.Memory do
   def project(%Memory.WriteRequest{} = request) do
     %{
       entry: project(request.entry),
+      route: project(request.route),
       idempotency_key: request.idempotency_key,
       metadata: Portable.project(request.metadata)
     }

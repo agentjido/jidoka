@@ -85,6 +85,22 @@ defmodule Jidoka.Workflow.Lua.Policy do
     }
   end
 
+  @doc false
+  @spec validate_catalog_limits(map()) :: :ok | {:error, term()}
+  def validate_catalog_limits(limits) when is_map(limits) do
+    ceilings = %{max_calls: 25, max_parallel_calls: 16, timeout: 5_000}
+
+    Enum.reduce_while(ceilings, :ok, fn {field, ceiling}, :ok ->
+      requested = Map.fetch!(limits, field)
+
+      if requested <= ceiling do
+        {:cont, :ok}
+      else
+        {:halt, {:error, {:catalog_host_limit_exceeds_lua_ceiling, field, requested, ceiling}}}
+      end
+    end)
+  end
+
   defp available_entries(opts) do
     cond do
       Keyword.has_key?(opts, :entries) ->

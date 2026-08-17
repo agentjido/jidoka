@@ -93,6 +93,21 @@ defmodule Jidoka.ModelPolicy do
     end
   end
 
+  @doc false
+  @spec normalize(nil | keyword() | map() | t()) :: {:ok, nil | t()} | {:error, term()}
+  def normalize(nil), do: {:ok, nil}
+  def normalize(%__MODULE__{} = policy), do: {:ok, policy}
+  def normalize(attrs), do: new(attrs)
+
+  @doc false
+  @spec declared_models(nil | t(), LLMDB.Model.t()) :: {:ok, [LLMDB.Model.t()]} | {:error, term()}
+  def declared_models(nil, %LLMDB.Model{} = base_model), do: {:ok, [base_model]}
+
+  def declared_models(%__MODULE__{models: []}, %LLMDB.Model{} = base_model),
+    do: {:ok, [base_model]}
+
+  def declared_models(%__MODULE__{models: models}, %LLMDB.Model{}), do: require_models_result(models)
+
   @doc "Returns the built-in failure class for a model error."
   @spec classify(term()) :: :transient | :permanent
   def classify(%Req.TransportError{}), do: :transient
@@ -168,7 +183,8 @@ defmodule Jidoka.ModelPolicy do
     with {:ok, models} <- base_models(policy.models, intent),
          {:ok, selected} <- select(policy.select, models, context),
          {:ok, selected} <- normalize_selection(selected),
-         :ok <- require_models(selected) do
+         :ok <- require_models(selected),
+         {:ok, selected} <- resolve_declared_selection(selected, models) do
       {:ok, selected}
     end
   end
@@ -368,7 +384,7 @@ defmodule Jidoka.ModelPolicy do
       end
     end)
     |> case do
-      {:ok, models} -> {:ok, Enum.reverse(models)}
+      {:ok, models} -> {:ok, models |> Enum.reverse() |> Enum.uniq_by(&Config.model_ref/1)}
       error -> error
     end
   end
@@ -380,6 +396,29 @@ defmodule Jidoka.ModelPolicy do
 
   defp require_models([]), do: {:error, :empty_model_policy_models}
   defp require_models(_models), do: :ok
+
+  defp require_models_result(models) do
+    case require_models(models) do
+      :ok -> {:ok, models}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp resolve_declared_selection(selected, declared) do
+    declared_by_ref = Map.new(declared, &{Config.model_ref(&1), &1})
+
+    Enum.reduce_while(selected, {:ok, []}, fn model, {:ok, resolved} ->
+      model_ref = Config.model_ref(model)
+
+      case Map.fetch(declared_by_ref, model_ref) do
+        {:ok, declared_model} ->
+          {:cont, {:ok, resolved ++ [declared_model]}}
+
+        :error ->
+          {:halt, {:error, {:undeclared_model_policy_selection, model_ref, Map.keys(declared_by_ref) |> Enum.sort()}}}
+      end
+    end)
+  end
 
   defp normalize_callback(nil, _name, _arity), do: {:ok, nil}
 

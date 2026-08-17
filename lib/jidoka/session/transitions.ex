@@ -82,8 +82,8 @@ defmodule Jidoka.Session.Transitions do
     now_ms = clock_ms(opts)
 
     with :ok <- ensure_recoverable(session, now_ms),
-         :ok <- validate_recovery_conversation(session),
-         {:ok, request_id} <- recovery_request_id(session),
+         {:ok, target} <- Data.recovery_target(session),
+         request_id = recovery_request_id(target),
          {:ok, lease} <- acquire_lease(request_id, opts) do
       {:ok, session |> Data.put_lease(lease) |> Data.bump_revision()}
     end
@@ -148,7 +148,7 @@ defmodule Jidoka.Session.Transitions do
   @doc "Returns true when a running session has recoverable expired work."
   @spec recoverable?(Data.t(), non_neg_integer()) :: boolean()
   def recoverable?(%Data{status: :running, lease: %Lease{} = lease} = session, now_ms) do
-    Lease.expired?(lease, now_ms) and match?({:ok, _request_id}, recovery_request_id(session))
+    Lease.expired?(lease, now_ms) and match?({:ok, _target}, Data.recovery_target(session))
   end
 
   def recoverable?(_session, _now_ms), do: false
@@ -269,34 +269,10 @@ defmodule Jidoka.Session.Transitions do
 
   defp merge_environment(_current, completed), do: completed
 
-  defp recovery_request_id(%Data{} = session) do
-    case Data.latest_snapshot(session) do
-      %Snapshot{turn_state: %{request: %Turn.Request{request_id: request_id}}} ->
-        {:ok, request_id}
+  defp recovery_request_id({:resume, %Snapshot{turn_state: %{request: %Turn.Request{request_id: request_id}}}}),
+    do: request_id
 
-      nil ->
-        case List.last(session.requests) do
-          %Turn.Request{request_id: request_id} -> {:ok, request_id}
-          nil -> {:error, {:session_not_recoverable, session.session_id, :missing_request}}
-        end
-    end
-  end
-
-  defp validate_recovery_conversation(%Data{} = session) do
-    case Data.latest_snapshot(session) do
-      %Snapshot{} = snapshot ->
-        Conversation.validate_snapshot_revision(session.conversation, snapshot, session.session_id)
-
-      nil ->
-        case List.last(session.requests) do
-          %Turn.Request{} = request ->
-            Conversation.validate_request_revision(session.conversation, request, session.session_id)
-
-          nil ->
-            :ok
-        end
-    end
-  end
+  defp recovery_request_id({:restart, %Turn.Request{request_id: request_id}}), do: request_id
 
   defp acquire_lease(request_id, opts) do
     Lease.acquire(request_id, clock_ms(opts), lease_ttl_ms(opts), opts)

@@ -13,6 +13,16 @@ defmodule Jidoka.Session.Store do
   alias Jidoka.Turn
 
   @type store :: module() | {module(), keyword()}
+  @type durable_mode :: :none | :durable
+
+  @durable_callbacks [
+    claim_session: 3,
+    claim_resume: 2,
+    recover_session: 2,
+    checkpoint_session: 4,
+    commit_session: 4,
+    renew_session: 3
+  ]
 
   @doc "Persists a caller-managed or inactive session."
   @callback put_session(Data.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
@@ -52,6 +62,31 @@ defmodule Jidoka.Session.Store do
                       commit_session: 4,
                       renew_session: 3
 
+  @doc "Returns whether a store implements no durable lifecycle or the complete lifecycle."
+  @spec durable_mode(store()) :: {:ok, durable_mode()} | {:error, term()}
+  def durable_mode(store) do
+    {module, _opts} = normalize_store(store)
+
+    with {:module, ^module} <- Code.ensure_loaded(module) do
+      implemented =
+        Enum.filter(@durable_callbacks, fn {callback, arity} -> function_exported?(module, callback, arity) end)
+
+      cond do
+        implemented == [] ->
+          {:ok, :none}
+
+        implemented == @durable_callbacks ->
+          {:ok, :durable}
+
+        true ->
+          missing = @durable_callbacks -- implemented
+          {:error, {:partial_durable_session_store, module, implemented, missing}}
+      end
+    else
+      {:error, reason} -> {:error, {:invalid_session_store_module, module, reason}}
+    end
+  end
+
   @doc "Persists a session through a store module or configured store tuple."
   @spec put_session(store(), Data.t()) :: {:ok, Data.t()} | {:error, term()}
   def put_session(store, %Data{} = session) do
@@ -82,10 +117,15 @@ defmodule Jidoka.Session.Store do
       when is_binary(session_id) and is_list(opts) do
     {module, store_opts} = normalize_store(store)
 
-    if function_exported?(module, :claim_session, 3) do
-      module.claim_session(session_id, request, Keyword.merge(store_opts, opts))
-    else
-      claim_session_fallback(module, store_opts, session_id, request)
+    case durable_mode(store) do
+      {:ok, :durable} ->
+        module.claim_session(session_id, request, Keyword.merge(store_opts, opts))
+
+      {:ok, :none} ->
+        claim_session_fallback(module, store_opts, session_id, request)
+
+      {:error, _reason} = error ->
+        error
     end
   end
 
@@ -154,7 +194,7 @@ defmodule Jidoka.Session.Store do
   @spec pending_reviews(store()) :: {:ok, [Jidoka.Review.Request.t()]} | {:error, term()}
   def pending_reviews(store) do
     with {:ok, sessions} <- list_sessions(store) do
-      {:ok, Enum.flat_map(sessions, & &1.pending_reviews)}
+      {:ok, Enum.flat_map(sessions, &Data.pending_reviews/1)}
     end
   end
 
@@ -197,12 +237,16 @@ defmodule Jidoka.Session.Store do
 
   defp call_durable(store, callback, args, runtime_opts) do
     {module, store_opts} = normalize_store(store)
-    arity = length(args) + 1
 
-    if function_exported?(module, callback, arity) do
-      apply(module, callback, args ++ [Keyword.merge(store_opts, runtime_opts)])
-    else
-      {:error, {:durable_store_capability_missing, module, callback}}
+    case durable_mode(store) do
+      {:ok, :durable} ->
+        apply(module, callback, args ++ [Keyword.merge(store_opts, runtime_opts)])
+
+      {:ok, :none} ->
+        {:error, {:durable_store_capability_missing, module, callback}}
+
+      {:error, _reason} = error ->
+        error
     end
   end
 

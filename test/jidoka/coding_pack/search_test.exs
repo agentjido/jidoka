@@ -83,6 +83,62 @@ defmodule Jidoka.CodingPack.SearchTest do
     assert result["truncated"]
   end
 
+  test "text collection stays bounded while it counts every omitted match", %{
+    root: root,
+    workspace: workspace
+  } do
+    File.write!(Path.join(root, "many.txt"), Enum.map_join(1..1_000, "\n", &"target #{&1}"))
+    %Workspace{} = workspace
+    workspace = %Workspace{workspace | limits: Map.put(workspace.limits, :max_file_bytes, 50_000)}
+
+    assert {:ok, result} =
+             Search.run(workspace, %{
+               "mode" => "text",
+               "pattern" => "target",
+               "glob" => "many.txt",
+               "max_results" => 3,
+               "max_bytes" => 1_024
+             })
+
+    assert result["total_count"] == 1_000
+    assert result["returned_count"] == 3
+    assert Enum.map(result["matches"], & &1["line"]) == [1, 2, 3]
+    assert result["output_bytes"] == Enum.sum(Enum.map(result["matches"], &(Jason.encode!(&1) |> byte_size())))
+    assert result["truncated"]
+  end
+
+  test "text collection keeps file errors after earlier matches", %{workspace: workspace} do
+    read_file = fn path ->
+      if String.ends_with?(path, "src/nested/b.ex"), do: {:error, :eio}, else: File.read(path)
+    end
+
+    assert {:error, %Jidoka.CodingPack.Error{code: :coding_search_io_error}} =
+             Search.run(
+               workspace,
+               %{"mode" => "text", "pattern" => "target", "glob" => "**/*.ex"},
+               read_file: read_file
+             )
+  end
+
+  test "loads each ignore file once for one search", %{root: root, workspace: workspace} do
+    File.write!(Path.join(root, ".gitignore"), "*.tmp\n")
+    {:ok, reads} = Agent.start_link(fn -> 0 end)
+
+    read_rule = fn path ->
+      Agent.update(reads, &(&1 + 1))
+      File.read(path)
+    end
+
+    assert {:ok, _result} =
+             Search.run(
+               workspace,
+               %{"mode" => "path", "pattern" => "**/*"},
+               ignore_rule_read_file: read_rule
+             )
+
+    assert Agent.get(reads, & &1) == 1
+  end
+
   test "rejects invalid input, unsafe links, and IO failures", %{root: root, outside: outside, workspace: workspace} do
     File.ln_s!(Path.join(outside, "secret.ex"), Path.join(root, "escape.ex"))
 

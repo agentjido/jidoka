@@ -165,13 +165,16 @@ defmodule Jidoka.Session do
           chat_result() | sequence_await_result()
   def await(request, opts \\ [])
 
-  def await(%Chat.Request{} = request, opts) when is_list(opts),
-    do: AsyncChat.await(request, opts)
-
   def await(request, opts) when is_list(opts) do
-    if SequenceRequest.request?(request),
-      do: AsyncSequence.await(request, opts),
-      else: {:error, :invalid_async_request}
+    case Chat.Request.validate(request) do
+      {:ok, request} ->
+        AsyncChat.await(request, opts)
+
+      {:error, :invalid_async_request} ->
+        if SequenceRequest.request?(request),
+          do: AsyncSequence.await(request, opts),
+          else: {:error, :invalid_async_request}
+    end
   end
 
   @doc "Cancels an active asynchronous session request."
@@ -179,13 +182,16 @@ defmodule Jidoka.Session do
           {:ok, Cancellation.t()} | {:error, term()}
   def cancel(request, opts \\ [])
 
-  def cancel(%Chat.Request{} = request, opts) when is_list(opts),
-    do: AsyncChat.cancel(request, opts)
-
   def cancel(request, opts) when is_list(opts) do
-    if SequenceRequest.request?(request),
-      do: AsyncSequence.cancel(request, opts),
-      else: {:error, :invalid_async_request}
+    case Chat.Request.validate(request) do
+      {:ok, request} ->
+        AsyncChat.cancel(request, opts)
+
+      {:error, :invalid_async_request} ->
+        if SequenceRequest.request?(request),
+          do: AsyncSequence.cancel(request, opts),
+          else: {:error, :invalid_async_request}
+    end
   end
 
   @doc """

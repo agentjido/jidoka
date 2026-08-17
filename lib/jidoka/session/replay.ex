@@ -12,6 +12,7 @@ defmodule Jidoka.Session.Replay do
   alias Jidoka.Projection.Turn, as: TurnProjection
   alias Jidoka.Portable
   alias Jidoka.Session.Data
+  alias Jidoka.Session.Lease
   alias Jidoka.Snapshot
   alias Jidoka.Schema
   alias Jidoka.Turn
@@ -53,19 +54,21 @@ defmodule Jidoka.Session.Replay do
   @doc "Builds replay data from a durable session."
   @spec from_session(Data.t()) :: {:ok, t()} | {:error, term()}
   def from_session(%Data{} = session) do
-    new(
-      session_id: session.session_id,
-      session_revision: session.revision,
-      agent_id: session.agent_id,
-      status: session.status,
-      snapshots: Enum.map(session.snapshots, &snapshot_summary/1),
-      timeline: timeline(session),
-      journal: latest_journal(session),
-      pending_reviews: Enum.map(session.pending_reviews, &ReviewProjection.project/1),
-      result: project_result(session.result),
-      lineage: project_lineage(session.lineage),
-      metadata: session.metadata
-    )
+    with {:ok, journal} <- latest_journal(session) do
+      new(
+        session_id: session.session_id,
+        session_revision: session.revision,
+        agent_id: session.agent_id,
+        status: session.status,
+        snapshots: Enum.map(session.snapshots, &snapshot_summary/1),
+        timeline: timeline(session),
+        journal: journal,
+        pending_reviews: Enum.map(Data.pending_reviews(session), &ReviewProjection.project/1),
+        result: project_result(session.result),
+        lineage: project_lineage(session.lineage),
+        metadata: session.metadata
+      )
+    end
   end
 
   @doc "Builds replay data from a hibernation snapshot."
@@ -115,13 +118,26 @@ defmodule Jidoka.Session.Replay do
     end)
   end
 
+  defp latest_journal(%Data{status: :running, lease: %Lease{}} = session) do
+    case Data.recovery_target(session) do
+      {:ok, {:resume, %Snapshot{} = snapshot}} ->
+        {:ok, EffectProjection.project(snapshot.turn_state.journal)}
+
+      {:ok, {:restart, %Turn.Request{}}} ->
+        {:ok, %{intents: [], results: []}}
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
   defp latest_journal(%Data{result: %Turn.Result{} = result}),
-    do: EffectProjection.project(result.journal)
+    do: {:ok, EffectProjection.project(result.journal)}
 
   defp latest_journal(%Data{} = session) do
     case Data.latest_snapshot(session) do
-      %Snapshot{} = snapshot -> EffectProjection.project(snapshot.turn_state.journal)
-      nil -> %{intents: [], results: []}
+      %Snapshot{} = snapshot -> {:ok, EffectProjection.project(snapshot.turn_state.journal)}
+      nil -> {:ok, %{intents: [], results: []}}
     end
   end
 
@@ -133,11 +149,6 @@ defmodule Jidoka.Session.Replay do
 
   defp snapshot_states(%Data{snapshots: snapshots}), do: Enum.map(snapshots, & &1.turn_state)
 
-  defp pending_reviews(%Snapshot{} = snapshot) do
-    snapshot.metadata
-    |> Map.get("pending_review", Map.get(snapshot.metadata, :pending_review))
-    |> List.wrap()
-    |> Enum.reject(&is_nil/1)
-    |> Enum.map(&ReviewProjection.project/1)
-  end
+  defp pending_reviews(%Snapshot{} = snapshot),
+    do: Enum.map(Data.pending_reviews(snapshot), &ReviewProjection.project/1)
 end

@@ -32,7 +32,7 @@ defmodule Jidoka.HumanInTheLoopIntegrationTest do
     assert interrupt.created_at_ms == 1_000
     assert interrupt.expires_at_ms == 31_000
 
-    assert %Review.Request{} = approval_request = snapshot.metadata["pending_review"]
+    assert {:ok, [%Review.Request{} = approval_request]} = Jidoka.pending_reviews(snapshot)
     assert approval_request.interrupt_id == interrupt.id
     assert approval_request.operation == "review_lookup"
     assert approval_request.arguments == %{"id" => "reviewed"}

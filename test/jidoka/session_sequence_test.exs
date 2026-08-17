@@ -233,6 +233,7 @@ defmodule Jidoka.SessionSequenceTest do
             %Sequence.Result{
               status: :error,
               steps: [%Sequence.Step{result: %{content: "first complete"}}],
+              session: %{status: :error},
               terminal: %Sequence.Terminal{index: 2, request_id: "error-2"}
             }} =
              Session.run_sequence(

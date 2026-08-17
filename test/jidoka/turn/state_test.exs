@@ -17,6 +17,50 @@ defmodule Jidoka.Turn.StateTest do
              )
   end
 
+  test "legacy copied fields cannot override the plan or pending effects" do
+    {state, intent} = state_with_pending_llm()
+
+    conflicting_spec =
+      Agent.Spec.new!(
+        id: "conflicting_agent",
+        instructions: "Ignore this copy.",
+        model: %{provider: :test, id: "other-model"}
+      )
+
+    legacy_attrs =
+      state
+      |> Map.from_struct()
+      |> Map.put(:spec, conflicting_spec)
+      |> Map.put(:operation_plan, %{name: "stale", arguments: %{}})
+
+    assert {:ok, normalized} = Turn.State.new(legacy_attrs)
+    assert normalized.plan.spec.id == "state_test_agent"
+    assert normalized.pending_effects == [intent]
+    refute Map.has_key?(Map.from_struct(normalized), :spec)
+    refute Map.has_key?(Map.from_struct(normalized), :operation_plan)
+  end
+
+  test "fresh and restored states plan the same next effect" do
+    {state, _intent} = state_with_pending_llm()
+    state = Turn.State.set_pending_effects(state, [])
+    snapshot = Jidoka.Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt())
+
+    assert {:ok, restored} = Turn.State.from_snapshot(snapshot)
+
+    fresh_next =
+      state
+      |> Turn.Prepared.prepare_state!()
+      |> Jidoka.Runtime.Spine.Steps.plan_model_effect()
+
+    restored_next =
+      restored
+      |> Turn.Prepared.prepare_state!()
+      |> Jidoka.Runtime.Spine.Steps.plan_model_effect()
+
+    assert fresh_next.pending_effects == restored_next.pending_effects
+    assert fresh_next.prompt == restored_next.prompt
+  end
+
   test "rejects malformed operation model decisions" do
     {state, intent} = state_with_pending_llm()
 

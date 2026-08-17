@@ -21,9 +21,9 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapterTest do
              ResponseAdapter.decision(response([call]), nil, "", prompt: prompt)
 
     assert decision.type == :operation
-    assert decision.name == "coding.read"
-    assert decision.arguments == %{"path" => "lib/jidoka.ex"}
     assert [request] = decision.operations
+    assert request.name == "coding.read"
+    assert request.arguments == %{"path" => "lib/jidoka.ex"}
     assert request.provider_call_id == "call-read-1"
     assert request.provider_metadata.provider_tool_name == call.function.name
   end

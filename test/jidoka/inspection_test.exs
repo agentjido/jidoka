@@ -17,6 +17,16 @@ defmodule Jidoka.InspectionTest do
   alias Jidoka.Harness
   alias Jidoka.Session.Data, as: Session
   alias Jidoka.Review
+  alias Jidoka.Turn
+
+  defmodule EffectfulOperationSource do
+    defstruct [:test_pid]
+
+    def compile(%__MODULE__{test_pid: test_pid}, _opts) do
+      send(test_pid, :operation_source_called)
+      {:error, :must_not_run}
+    end
+  end
 
   test "Jidoka.inspect returns an agent inspection view" do
     assert %{
@@ -29,7 +39,7 @@ defmodule Jidoka.InspectionTest do
              },
              plan: %{
                spec_id: "inspection_agent",
-               workflow_profile: :tool_loop
+               phases: [:assemble_prompt, :plan_model_effect]
              }
            } = Jidoka.inspect(Agent)
   end
@@ -49,6 +59,68 @@ defmodule Jidoka.InspectionTest do
            } = preflight.prompt
 
     assert [%{event: :prompt_assembled, seq: 0}] = preflight.timeline
+  end
+
+  test "preflight and execution prepare equal prompts from equal resolved inputs" do
+    opts = [
+      context: %{tenant_id: "tenant_1"},
+      request_id: "turn_equal_preparation",
+      runtime_limits: %{max_model_turns: 3},
+      llm: fn _intent, _journal, _context -> {:ok, %{type: :final, content: "ok"}} end
+    ]
+
+    assert {:ok, execution} = Turn.Execution.prepare(Agent.spec(), "Prepare once", opts)
+    assert {:ok, preflight} = Jidoka.preflight(Agent.spec(), "Prepare once", opts)
+
+    assert preflight.plan == Jidoka.Projection.project(execution.prepared_turn.plan)
+    assert preflight.prompt == Jidoka.Projection.project(execution.prepared_turn.state.prompt)
+  end
+
+  test "preflight reports unresolved operation discovery without calling the source" do
+    source = %EffectfulOperationSource{test_pid: self()}
+
+    assert {:error, error} =
+             Jidoka.preflight(Agent, "Inspect operations",
+               context: %{tenant_id: "tenant_1"},
+               operation_sources: [source]
+             )
+
+    assert unresolved_cause(error) == [:unresolved_preflight_input, :operations]
+    refute_receive :operation_source_called
+  end
+
+  test "preflight reports unresolved memory without calling the store" do
+    spec =
+      Jidoka.Agent.Spec.new!(
+        id: "inspection_memory",
+        model: %{provider: :test, id: "model"},
+        instructions: "Use memory.",
+        memory: %{enabled: true}
+      )
+
+    memory_store = fn -> send(self(), :memory_store_called) end
+
+    assert {:error, error} =
+             Jidoka.preflight(spec, "Inspect memory", memory_store: memory_store)
+
+    assert unresolved_cause(error) == [:unresolved_preflight_input, :memory]
+    refute_receive :memory_store_called
+  end
+
+  test "preflight reports unresolved instruction providers without calling them" do
+    provider = fn _base, _context ->
+      send(self(), :instruction_provider_called)
+      "changed"
+    end
+
+    assert {:error, error} =
+             Jidoka.preflight(Agent, "Inspect instructions",
+               context: %{tenant_id: "tenant_1"},
+               instructions: provider
+             )
+
+    assert unresolved_cause(error) == [:unresolved_preflight_input, :instructions]
+    refute_receive :instruction_provider_called
   end
 
   test "Jidoka.inspect summarizes completed turns" do
@@ -82,6 +154,12 @@ defmodule Jidoka.InspectionTest do
              result_count: 1,
              incomplete_intents: []
            } = Jidoka.inspect(result.journal)
+  end
+
+  defp unresolved_cause(error) do
+    error
+    |> Jidoka.Error.to_map()
+    |> get_in([:details, :cause, :values])
   end
 
   test "Jidoka.inspect summarizes sessions and replay data" do

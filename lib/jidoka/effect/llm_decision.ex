@@ -24,8 +24,6 @@ defmodule Jidoka.Effect.LLMDecision do
                 Zoi.array(Zoi.lazy({ContentPart, :schema, []}))
                 |> Zoi.default([]),
               result: Zoi.any() |> Zoi.nullish(),
-              name: Schema.non_empty_string() |> Zoi.nullish(),
-              arguments: Zoi.map() |> Zoi.default(%{}),
               operations: Zoi.array(Zoi.lazy({OperationRequest, :schema, []})) |> Zoi.default([]),
               interaction: Zoi.lazy({ModelInteraction, :schema, []}) |> Zoi.nullish(),
               metadata: Zoi.map() |> Zoi.default(%{})
@@ -86,8 +84,6 @@ defmodule Jidoka.Effect.LLMDecision do
   def operation(name, arguments \\ %{}, opts \\ []) when is_binary(name) and is_map(arguments) do
     new!(
       type: :operation,
-      name: name,
-      arguments: arguments,
       operations: [
         %{
           name: name,
@@ -118,6 +114,29 @@ defmodule Jidoka.Effect.LLMDecision do
     )
   end
 
+  @doc "Returns the first requested operation for legacy singular consumers."
+  @spec first_operation(t()) :: OperationRequest.t() | nil
+  def first_operation(%__MODULE__{operations: [operation | _rest]}), do: operation
+  def first_operation(%__MODULE__{}), do: nil
+
+  @doc "Returns the first requested operation name."
+  @spec name(t()) :: String.t() | nil
+  def name(%__MODULE__{} = decision) do
+    case first_operation(decision) do
+      %OperationRequest{name: name} -> name
+      nil -> nil
+    end
+  end
+
+  @doc "Returns the first requested operation arguments."
+  @spec arguments(t()) :: map() | nil
+  def arguments(%__MODULE__{} = decision) do
+    case first_operation(decision) do
+      %OperationRequest{arguments: arguments} -> arguments
+      nil -> nil
+    end
+  end
+
   @doc "Projects a model decision into its effect payload."
   @spec to_payload(t()) :: map()
   def to_payload(%__MODULE__{type: :final, content: content, parts: parts, result: result}) do
@@ -126,12 +145,9 @@ defmodule Jidoka.Effect.LLMDecision do
     |> Map.new()
   end
 
-  def to_payload(%__MODULE__{type: :operation, name: name, arguments: arguments}) do
-    %{type: :operation, name: name, arguments: arguments}
-  end
-
-  def to_payload(%__MODULE__{type: :operations, operations: operations}) do
-    %{type: :operations, operations: Enum.map(operations, &OperationRequest.to_payload/1)}
+  def to_payload(%__MODULE__{type: type, operations: operations})
+      when type in [:operation, :operations] do
+    %{type: type, operations: Enum.map(operations, &OperationRequest.to_payload/1)}
   end
 
   defp normalized_type(type) when is_atom(type), do: Atom.to_string(type)
@@ -183,38 +199,122 @@ defmodule Jidoka.Effect.LLMDecision do
   end
 
   defp new_operation(attrs) do
-    name = Schema.get_key(attrs, :name)
-    arguments = Schema.get_key(attrs, :arguments, %{})
-
-    cond do
-      not is_binary(name) ->
-        {:error, {:invalid_operation_name, name}}
-
-      not is_map(arguments) ->
-        {:error, {:invalid_operation_arguments, arguments}}
-
-      true ->
-        attrs
-        |> normalize_singular_operation(name, arguments)
-        |> parse_typed(:operation)
+    with {:ok, legacy} <- legacy_operation(attrs),
+         {:ok, operations} <- operation_requests(attrs, legacy),
+         :ok <- validate_singular_operations(legacy, operations) do
+      attrs
+      |> put_operations(operations)
+      |> parse_typed(:operation)
     end
   end
 
-  defp normalize_singular_operation(attrs, name, arguments) do
+  defp operation_requests(attrs, legacy) do
     case Schema.get_key(attrs, :operations, []) do
-      [] -> Map.put(attrs, :operations, [%{name: name, arguments: arguments}])
-      operations -> Map.put(attrs, :operations, operations)
+      [] -> operation_requests_from_legacy(legacy)
+      operations -> normalize_operation_requests(operations)
     end
   end
+
+  defp operation_requests_from_legacy(:none), do: {:error, {:invalid_operation_name, nil}}
+  defp operation_requests_from_legacy({:legacy, operation}), do: {:ok, [operation]}
 
   defp new_operations(attrs) do
-    operations = Schema.get_key(attrs, :operations, [])
-
-    cond do
-      not is_list(operations) -> {:error, {:invalid_operations, operations}}
-      operations == [] -> {:error, {:empty_operations, operations}}
-      true -> parse_typed(attrs, :operations)
+    with {:ok, legacy} <- legacy_operation(attrs),
+         {:ok, operations} <- nonempty_operation_requests(attrs),
+         :ok <- validate_plural_legacy(legacy, operations) do
+      attrs
+      |> put_operations(operations)
+      |> parse_typed(:operations)
     end
+  end
+
+  defp nonempty_operation_requests(attrs) do
+    case Schema.get_key(attrs, :operations, []) do
+      operations when not is_list(operations) -> {:error, {:invalid_operations, operations}}
+      [] -> {:error, {:empty_operations, []}}
+      operations -> normalize_operation_requests(operations)
+    end
+  end
+
+  defp normalize_operation_requests(operations) when is_list(operations) do
+    operations
+    |> Enum.reduce_while({:ok, []}, fn operation, {:ok, normalized} ->
+      case OperationRequest.from_input(operation) do
+        {:ok, operation} -> {:cont, {:ok, [operation | normalized]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> then(fn
+      {:ok, normalized} -> {:ok, Enum.reverse(normalized)}
+      error -> error
+    end)
+  end
+
+  defp normalize_operation_requests(operations), do: {:error, {:invalid_operations, operations}}
+
+  defp legacy_operation(attrs) do
+    name? = has_key?(attrs, :name)
+    arguments? = has_key?(attrs, :arguments)
+
+    if name? or arguments? do
+      name = Schema.get_key(attrs, :name)
+      arguments = Schema.get_key(attrs, :arguments, %{})
+
+      cond do
+        not is_binary(name) -> {:error, {:invalid_operation_name, name}}
+        name == "" -> {:error, {:invalid_operation_name, name}}
+        not is_map(arguments) -> {:error, {:invalid_operation_arguments, arguments}}
+        true -> {:ok, {:legacy, OperationRequest.new!(name: name, arguments: arguments)}}
+      end
+    else
+      {:ok, :none}
+    end
+  end
+
+  defp has_key?(attrs, key) do
+    Map.has_key?(attrs, key) or Map.has_key?(attrs, Atom.to_string(key))
+  end
+
+  defp validate_singular_operations(:none, [_operation]), do: :ok
+
+  defp validate_singular_operations(:none, operations),
+    do: {:error, {:invalid_operation_decision_count, :operation, length(operations)}}
+
+  defp validate_singular_operations({:legacy, legacy}, [operation]) do
+    validate_legacy_match(legacy, [operation])
+  end
+
+  defp validate_singular_operations({:legacy, legacy}, operations),
+    do: conflicting_operation(legacy, operations)
+
+  defp validate_plural_legacy(:none, _operations), do: :ok
+
+  defp validate_plural_legacy({:legacy, legacy}, [operation]),
+    do: validate_legacy_match(legacy, [operation])
+
+  defp validate_plural_legacy({:legacy, legacy}, operations),
+    do: conflicting_operation(legacy, operations)
+
+  defp validate_legacy_match(legacy, [operation]) do
+    if same_operation?(legacy, operation),
+      do: :ok,
+      else: conflicting_operation(legacy, [operation])
+  end
+
+  defp same_operation?(left, right) do
+    left.name == right.name and left.arguments == right.arguments
+  end
+
+  defp conflicting_operation(legacy, operations) do
+    {:error,
+     {:conflicting_operation_decision, OperationRequest.to_payload(legacy),
+      Enum.map(operations, &OperationRequest.to_payload/1)}}
+  end
+
+  defp put_operations(attrs, operations) do
+    attrs
+    |> Map.drop([:name, "name", :arguments, "arguments", "operations"])
+    |> Map.put(:operations, operations)
   end
 
   defp parse_typed(attrs, type) do

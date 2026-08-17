@@ -455,7 +455,7 @@ defmodule JidokaShowcaseWeb.KitchenSinkAgentLive.Index do
   defp review_decision("denied"), do: :denied
 
   defp load_memory_entries(session_id) do
-    case Jidoka.Memory.Store.list_entries(Memory.store(session_id)) do
+    case Jidoka.Memory.Store.list_entries(Memory.store(session_id, "kitchen_sink_agent")) do
       {:ok, entries} -> entries
       {:error, _reason} -> []
     end

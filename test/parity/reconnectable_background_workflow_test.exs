@@ -10,6 +10,7 @@ defmodule Jidoka.Parity.ReconnectableBackgroundWorkflowTest do
   @moduletag :w07
 
   @runner __MODULE__.Runner
+  @restart_timeout_ms 1_000
 
   defmodule Functions do
     @moduledoc false
@@ -131,6 +132,11 @@ defmodule Jidoka.Parity.ReconnectableBackgroundWorkflowTest do
   end
 
   defp wait_for_runner_restart(previous, previous_worker_supervisor) do
+    deadline = System.monotonic_time(:millisecond) + @restart_timeout_ms
+    wait_for_runner_restart(previous, previous_worker_supervisor, deadline)
+  end
+
+  defp wait_for_runner_restart(previous, previous_worker_supervisor, deadline) do
     runner = Process.whereis(@runner)
     worker_supervisor = Process.whereis(Module.concat(@runner, WorkerSupervisor))
 
@@ -138,8 +144,20 @@ defmodule Jidoka.Parity.ReconnectableBackgroundWorkflowTest do
          worker_supervisor != previous_worker_supervisor do
       :ok
     else
-      Process.sleep(5)
-      wait_for_runner_restart(previous, previous_worker_supervisor)
+      now = System.monotonic_time(:millisecond)
+
+      if now >= deadline do
+        flunk("""
+        runner did not restart within #{@restart_timeout_ms}ms
+        previous runner: #{inspect(previous)}
+        last runner: #{inspect(runner)}
+        previous worker supervisor: #{inspect(previous_worker_supervisor)}
+        last worker supervisor: #{inspect(worker_supervisor)}
+        """)
+      end
+
+      Process.sleep(min(5, deadline - now))
+      wait_for_runner_restart(previous, previous_worker_supervisor, deadline)
     end
   end
 end

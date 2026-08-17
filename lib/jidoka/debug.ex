@@ -233,7 +233,7 @@ defmodule Jidoka.Debug do
       status: session.status,
       input: request_input(request),
       context_keys: request_context_keys(request),
-      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.Projection.project/1),
+      pending_reviews: Enum.map(Session.pending_reviews(session), &Jidoka.Projection.project/1),
       error: session.error,
       replay_diagnostics: Diagnostics.diagnose!(session),
       metadata: session.metadata
@@ -346,12 +346,7 @@ defmodule Jidoka.Debug do
 
   defp context_keys(_context), do: []
 
-  defp pending_reviews(%Snapshot{metadata: metadata}) do
-    metadata
-    |> map_get(:pending_review)
-    |> List.wrap()
-    |> Enum.reject(&is_nil/1)
-  end
+  defp pending_reviews(%Snapshot{} = snapshot), do: Session.pending_reviews(snapshot)
 
   defp replay_content(%{content: content}) when is_binary(content), do: content
   defp replay_content(%{"content" => content}) when is_binary(content), do: content

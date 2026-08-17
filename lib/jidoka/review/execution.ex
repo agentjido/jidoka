@@ -22,7 +22,7 @@ defmodule Jidoka.Review.Execution do
   @doc "Lists pending reviews from a snapshot, session, session ID, or store."
   @spec pending(Snapshot.t() | Data.t() | Store.store() | String.t()) ::
           {:ok, [Review.Request.t()]} | {:error, term()}
-  def pending(%Data{} = session), do: {:ok, session.pending_reviews}
+  def pending(%Data{} = session), do: {:ok, Data.pending_reviews(session)}
   def pending(%Snapshot{} = snapshot), do: pending_from_snapshot(snapshot)
 
   def pending(snapshot_input) when is_binary(snapshot_input) do
@@ -47,15 +47,7 @@ defmodule Jidoka.Review.Execution do
     resume_target(target, response, opts)
   end
 
-  defp pending_from_snapshot(%Snapshot{metadata: metadata}) when is_map(metadata) do
-    case Map.get(metadata, "pending_review", Map.get(metadata, :pending_review)) do
-      nil -> {:ok, []}
-      review -> review |> Review.Request.from_input() |> wrap_review()
-    end
-  end
-
-  defp wrap_review({:ok, review}), do: {:ok, [review]}
-  defp wrap_review({:error, reason}), do: {:error, reason}
+  defp pending_from_snapshot(%Snapshot{} = snapshot), do: {:ok, Data.pending_reviews(snapshot)}
 
   defp resume_target(%Data{} = session, %Review.Response{} = response, opts) do
     SessionExecution.resume_session(session, resume_opts(opts, response))

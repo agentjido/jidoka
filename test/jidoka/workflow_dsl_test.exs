@@ -748,34 +748,81 @@ defmodule Jidoka.WorkflowDslTest do
     assert [%Step{name: :normalize}] = spec.steps
   end
 
-  test "workflow parameter schemas project common Zoi input types" do
+  test "workflow step kinds accept only their own fields" do
+    steps = [
+      Step.new!(name: :function, kind: :function, target: {Fns, :normalize, 2}),
+      Step.new!(name: :action, kind: :action, target: AddAmount),
+      Step.new!(name: :agent, kind: :agent, target: EchoAgent, prompt: "hello"),
+      Step.new!(name: :gate, kind: :gate, condition: true),
+      Step.new!(name: :map, kind: :map, target: {Fns, :normalize, 2}, target_kind: :function, over: []),
+      Step.new!(name: :reduce, kind: :reduce, target: {Fns, :normalize, 2}, over: []),
+      Step.new!(
+        name: :loop,
+        kind: :loop,
+        target: {Fns, :normalize, 2},
+        initial: %{},
+        max_iterations: 1
+      )
+    ]
+
+    assert Enum.map(steps, &(&1 |> Map.from_struct() |> Map.fetch!(:kind))) == Step.kinds()
+
+    assert {:error, {:invalid_workflow_step_fields, :function, [:prompt]}} =
+             Step.new(name: :invalid, kind: :function, target: {Fns, :normalize, 2}, prompt: "wrong kind")
+
+    old_valid = %Step{name: :legacy, kind: :function, target: {Fns, :normalize, 2}}
+    assert {:ok, %Step{name: :legacy}} = Step.from_input(old_valid)
+
+    invalid_restored = %Step{old_valid | prompt: "wrong kind"}
+
+    assert {:error, _reason} =
+             Spec.new(id: "invalid_restored", module: __MODULE__, mode: :dsl, steps: [invalid_restored])
+  end
+
+  test "workflow parameter schemas preserve Zoi JSON Schema semantics" do
     schema =
       Zoi.object(%{
-        text: Zoi.string(),
-        count: Zoi.integer(),
-        score: Zoi.float(),
-        enabled: Zoi.boolean(),
-        tag: Zoi.atom(),
-        anything: Zoi.any(),
-        values: Zoi.array(Zoi.number())
+        name: Zoi.string(),
+        nickname: Zoi.string() |> Zoi.optional(),
+        count: Zoi.integer() |> Zoi.gte(1) |> Zoi.default(2),
+        tags: Zoi.array(Zoi.string()) |> Zoi.min(1),
+        nested:
+          Zoi.object(%{
+            required_value: Zoi.boolean(),
+            optional_value: Zoi.string() |> Zoi.optional()
+          })
       })
 
-    assert %{
-             "type" => "object",
-             "required" => required,
-             "properties" => %{
-               "text" => %{"type" => "string"},
-               "count" => %{"type" => "integer"},
-               "score" => %{"type" => "number"},
-               "enabled" => %{"type" => "boolean"},
-               "tag" => %{"type" => "string"},
-               "anything" => %{},
-               "values" => %{"type" => "array", "items" => %{"type" => "number"}}
-             }
-           } = ParametersSchema.from_zoi(schema)
+    published = ParametersSchema.from_zoi(schema)
 
-    assert MapSet.new(required) ==
-             MapSet.new(["text", "count", "score", "enabled", "tag", "anything", "values"])
+    assert published["type"] == "object"
+    assert MapSet.new(published["required"]) == MapSet.new(["name", "count", "tags", "nested"])
+    refute "nickname" in published["required"]
+    assert published["properties"]["count"] == %{"default" => 2, "minimum" => 1, "type" => "integer"}
+    assert published["properties"]["tags"]["items"] == %{"type" => "string"}
+    assert published["properties"]["tags"]["minItems"] == 1
+    assert published["properties"]["nested"]["required"] == ["required_value"]
+
+    validator = JSV.build!(published, warnings: :silent)
+
+    assert {:ok, _value} =
+             JSV.validate(
+               %{
+                 "name" => "Ada",
+                 "count" => 2,
+                 "tags" => ["workflow"],
+                 "nested" => %{"required_value" => true}
+               },
+               validator,
+               cast: false
+             )
+
+    assert {:error, _reason} =
+             JSV.validate(
+               %{"name" => "Ada", "count" => 0, "tags" => [], "nested" => %{}},
+               validator,
+               cast: false
+             )
 
     assert ParametersSchema.from_zoi(:not_a_schema) == nil
   end

@@ -37,7 +37,7 @@ defmodule Jidoka.Projection.Session do
       requests: Enum.map(session.requests, &Turn.project/1),
       snapshots: Enum.map(session.snapshots, &project/1),
       result: maybe_project_result(session.result),
-      pending_reviews: Enum.map(session.pending_reviews, &Review.project/1),
+      pending_reviews: Enum.map(Data.pending_reviews(session), &Review.project/1),
       error: Portable.project(session.error),
       lease: Portable.project(session.lease),
       lineage: Portable.project(session.lineage),

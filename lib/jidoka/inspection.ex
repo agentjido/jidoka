@@ -13,12 +13,14 @@ defmodule Jidoka.Inspection do
   alias Jidoka.Inspection.Preflight
   alias Jidoka.Instructions
   alias Jidoka.Memory
+  alias Jidoka.ModelPolicy
+  alias Jidoka.Operation.Registry
   alias Jidoka.Review
+  alias Jidoka.Runtime.Limits
   alias Jidoka.Session.Data
   alias Jidoka.Session.Replay
   alias Jidoka.Snapshot
   alias Jidoka.Turn
-  alias Jidoka.Runtime.Spine.Steps
   alias Jidoka.Workflow
   alias Jidoka.Workflow.Resolver, as: WorkflowResolver
 
@@ -100,12 +102,12 @@ defmodule Jidoka.Inspection do
     with {:ok, plan} <- resolve_plan(spec_or_plan),
          {:ok, request} <- request(request_input, opts),
          :ok <- Agent.Spec.validate_context(plan.spec, request.context),
-         {:ok, plan} <- Instructions.resolve(plan, request, opts),
-         {:ok, memory} <- Memory.Runtime.recall(plan.spec, request, opts) do
-      plan
-      |> initial_state(request, memory)
-      |> Steps.assemble_prompt()
-      |> preflight_from_state()
+         {:ok, plan} <- resolved_operations(plan, opts),
+         {:ok, plan, limits} <- resolved_limits(plan, opts),
+         {:ok, plan} <- resolved_instructions(plan, request, opts),
+         {:ok, memory} <- resolved_memory(plan.spec, opts),
+         {:ok, prepared} <- Turn.Prepared.new(plan, request, memory: memory, limits: limits) do
+      preflight_from_state(prepared.state)
     else
       {:error, reason} ->
         {:error, Error.normalize(reason, operation: :preflight)}
@@ -180,9 +182,10 @@ defmodule Jidoka.Inspection do
       journal: journal_view(snapshot.turn_state.journal, opts),
       pending_effects: Enum.map(snapshot.turn_state.pending_effects, &intent_view(&1, opts)),
       pending_review:
-        Jidoka.Projection.project(
-          Map.get(snapshot.metadata, "pending_review", Map.get(snapshot.metadata, :pending_review))
-        ),
+        snapshot
+        |> Data.pending_reviews()
+        |> List.first()
+        |> Jidoka.Projection.project(),
       metadata: Jidoka.Projection.project(snapshot.metadata)
     }
     |> maybe_put_full(:snapshot, snapshot, opts)
@@ -202,7 +205,7 @@ defmodule Jidoka.Inspection do
       status: session.status,
       request_count: length(session.requests),
       snapshot_count: length(session.snapshots),
-      pending_reviews: Enum.map(session.pending_reviews, &Jidoka.Projection.project/1),
+      pending_reviews: Enum.map(Data.pending_reviews(session), &Jidoka.Projection.project/1),
       latest_cursor: latest_cursor(session),
       replay: replay,
       result: Jidoka.Projection.project(session.result),
@@ -364,19 +367,73 @@ defmodule Jidoka.Inspection do
     end
   end
 
-  defp initial_state(%Turn.Plan{} = plan, %Turn.Request{} = request, memory) do
-    Turn.State.new!(
-      spec: plan.spec,
-      plan: plan,
-      request: request,
-      agent_state: request.agent_state,
-      memory: memory
-    )
+  defp resolved_operations(%Turn.Plan{} = plan, opts) do
+    sources = Keyword.get(opts, :operation_sources, [])
+
+    case {sources in [nil, []], Keyword.fetch(opts, :resolved_operations)} do
+      {true, :error} ->
+        {:ok, plan}
+
+      {false, :error} ->
+        {:error, {:unresolved_preflight_input, :operations}}
+
+      {_source_state, {:ok, operations}} when is_list(operations) ->
+        %Agent.Spec{} = spec = plan.spec
+
+        with {:ok, registry} <- Registry.new(spec.operations, operations) do
+          spec = %Agent.Spec{spec | operations: Registry.operations(registry)}
+
+          with :ok <- Agent.Spec.validate_operation_policies(spec) do
+            {:ok, %Turn.Plan{plan | spec: spec}}
+          end
+        end
+
+      {_source_state, {:ok, operations}} ->
+        {:error, {:invalid_resolved_operations, operations}}
+    end
+  end
+
+  defp resolved_limits(%Turn.Plan{} = plan, opts) do
+    with {:ok, model_policy} <- ModelPolicy.normalize(Keyword.get(opts, :model_policy)),
+         {:ok, model_candidates} <- ModelPolicy.declared_models(model_policy, plan.spec.model),
+         {:ok, plan} <- Turn.Plan.put_model_candidates(plan, model_candidates),
+         {:ok, limits} <- Limits.resolve(plan, opts) do
+      {:ok, Limits.apply_plan(plan, limits), limits}
+    end
+  end
+
+  defp resolved_instructions(%Turn.Plan{} = plan, %Turn.Request{} = request, opts) do
+    case Keyword.fetch(opts, :resolved_instructions) do
+      {:ok, instructions} ->
+        Instructions.resolve(plan, request, instructions: instructions)
+
+      :error ->
+        case Keyword.fetch(opts, :instructions) do
+          :error ->
+            {:ok, plan}
+
+          {:ok, instructions} when is_binary(instructions) ->
+            Instructions.resolve(plan, request, instructions: instructions)
+
+          {:ok, _provider} ->
+            {:error, {:unresolved_preflight_input, :instructions}}
+        end
+    end
+  end
+
+  defp resolved_memory(%Agent.Spec{memory: nil}, _opts), do: {:ok, nil}
+  defp resolved_memory(%Agent.Spec{memory: %{enabled: false}}, _opts), do: {:ok, nil}
+
+  defp resolved_memory(%Agent.Spec{}, opts) do
+    case Keyword.fetch(opts, :resolved_memory) do
+      {:ok, memory} -> {:ok, memory}
+      :error -> {:error, {:unresolved_preflight_input, :memory}}
+    end
   end
 
   defp preflight_from_state(%Turn.State{} = state) do
     Preflight.new(
-      agent: Jidoka.Projection.project(state.spec),
+      agent: Jidoka.Projection.project(state.plan.spec),
       plan: Jidoka.Projection.project(state.plan),
       request: Jidoka.Projection.project(state.request),
       prompt: Jidoka.Projection.project(state.prompt),

@@ -13,6 +13,7 @@ defmodule Jidoka.Operation.Source.Handoff do
   alias Jidoka.Context
   alias Jidoka.Effect
   alias Jidoka.Handoff
+  alias Jidoka.Operation.Source
   alias Jidoka.Schema
 
   @type forward_context ::
@@ -91,6 +92,14 @@ defmodule Jidoka.Operation.Source.Handoff do
   end
 
   @impl true
+  def compile(%__MODULE__{} = source, opts) do
+    with {:ok, operations} <- operations(source, opts),
+         {:ok, capability} <- capability(source, opts) do
+      Source.compiled(operations, capability)
+    end
+  end
+
+  @impl true
   def operations(%__MODULE__{} = source, _opts) do
     {:ok,
      [
@@ -121,9 +130,8 @@ defmodule Jidoka.Operation.Source.Handoff do
        %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
               :ok <- ensure_operation_name(source, request.name),
-              {:ok, handoff} <- build_handoff(source, request, context) do
-           Jidoka.Handoff.OwnerStore.put_owner(handoff.conversation_id, handoff)
-
+              {:ok, handoff} <- build_handoff(source, request, context),
+              :ok <- Jidoka.Handoff.OwnerStore.put_owner(handoff.conversation_id, handoff) do
            {:ok,
             %{
               handoff: project_handoff(handoff),
@@ -192,8 +200,6 @@ defmodule Jidoka.Operation.Source.Handoff do
   end
 
   defp public_context_data(%Context{} = context), do: Context.data(context)
-
-  defp target_agent_id(%__MODULE__{target: :auto, name: name}, nil, _context), do: {:ok, name}
 
   defp target_agent_id(%__MODULE__{target: :auto, name: name}, conversation_id, _context) do
     {:ok, "#{conversation_id}:#{name}"}

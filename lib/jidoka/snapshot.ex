@@ -46,6 +46,14 @@ defmodule Jidoka.Snapshot do
   @spec schema_version() :: pos_integer()
   def schema_version, do: @schema_version
 
+  @doc "Returns the snapshot schema versions that this release accepts."
+  @spec supported_schema_versions() :: [pos_integer()]
+  def supported_schema_versions, do: @supported_schema_versions
+
+  @doc "Returns the durable snapshot codec prefix, which is separate from the schema version."
+  @spec serialization_prefix() :: String.t()
+  def serialization_prefix, do: Codec.serialized_prefix()
+
   @doc "Builds a durable agent snapshot from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
   def new(attrs) do
@@ -55,6 +63,7 @@ defmodule Jidoka.Snapshot do
       |> normalize_portable_events()
 
     with {:ok, %__MODULE__{} = snapshot} <- Schema.parse(@schema, attrs),
+         {:ok, %__MODULE__{} = snapshot} <- normalize_pending_review(snapshot),
          :ok <- validate_schema_version(snapshot) do
       {:ok, snapshot}
     end
@@ -121,7 +130,7 @@ defmodule Jidoka.Snapshot do
       new(
         schema_version: @schema_version,
         snapshot_id: snapshot_id,
-        agent_id: state.spec.id,
+        agent_id: state.plan.spec.id,
         cursor: %Turn.Cursor{cursor | loop_index: state.loop_index},
         turn_state: state,
         environment: Keyword.get(opts, :environment),
@@ -212,15 +221,26 @@ defmodule Jidoka.Snapshot do
 
   defp normalize_portable_events(attrs), do: attrs
 
-  defp normalize_turn_state_events(%Turn.State{} = state), do: state
-
   defp normalize_turn_state_events(%{} = turn_state) do
     turn_state
+    |> Map.delete(:spec)
+    |> Map.delete("spec")
+    |> Map.delete(:operation_plan)
+    |> Map.delete("operation_plan")
+    |> normalize_legacy_turn_plan()
     |> normalize_event_list(:events)
     |> normalize_event_list("events")
   end
 
   defp normalize_turn_state_events(turn_state), do: turn_state
+
+  defp normalize_legacy_turn_plan(%{plan: plan} = state) when is_map(plan),
+    do: %{state | plan: Turn.Plan.normalize_legacy(plan)}
+
+  defp normalize_legacy_turn_plan(%{"plan" => plan} = state) when is_map(plan),
+    do: %{state | "plan" => Turn.Plan.normalize_legacy(plan)}
+
+  defp normalize_legacy_turn_plan(state), do: state
 
   defp normalize_event_list(%{} = turn_state, key) do
     case Map.fetch(turn_state, key) do
@@ -264,16 +284,66 @@ defmodule Jidoka.Snapshot do
   defp existing_atom_key(key), do: key
 
   defp snapshot_metadata(%Turn.State{} = state, opts) do
-    metadata =
-      opts
-      |> Keyword.get(:metadata, %{})
-      |> Conversation.put_snapshot_revision(state.request)
+    opts
+    |> Keyword.get(:metadata, %{})
+    |> Map.drop([:pending_review, "pending_review"])
+    |> Conversation.put_snapshot_revision(state.request)
+  end
 
-    case state.pending_interrupt do
-      nil -> metadata
-      %Review.Interrupt{} = interrupt -> Map.put(metadata, "pending_review", Review.Request.from_interrupt!(interrupt))
+  defp normalize_pending_review(%__MODULE__{turn_state: %Turn.State{pending_interrupt: %Review.Interrupt{}}} = snapshot) do
+    {:ok, %{snapshot | metadata: drop_legacy_pending_review(snapshot.metadata)}}
+  end
+
+  defp normalize_pending_review(%__MODULE__{turn_state: %Turn.State{} = state} = snapshot) do
+    case legacy_pending_review(snapshot.metadata) do
+      nil ->
+        {:ok, snapshot}
+
+      legacy ->
+        with {:ok, request} <- Review.Request.from_input(legacy),
+             %Jidoka.Effect.Intent{} = effect <- Turn.State.current_pending_effect(state) do
+          interrupt = legacy_interrupt(request, state, effect)
+
+          {:ok,
+           %{
+             snapshot
+             | turn_state: Turn.State.put_pending_interrupt(state, interrupt),
+               metadata: drop_legacy_pending_review(snapshot.metadata)
+           }}
+        else
+          nil -> {:error, :legacy_pending_review_missing_effect}
+          {:error, reason} -> {:error, {:invalid_legacy_pending_review, reason}}
+        end
     end
   end
+
+  defp legacy_interrupt(request, state, effect) do
+    Review.Interrupt.new!(
+      id: request.interrupt_id,
+      boundary: request.boundary,
+      control: Jidoka.Review.LegacyControl,
+      control_name: "legacy_review",
+      reason: request.reason,
+      agent_id: request.agent_id,
+      request_id: request.request_id,
+      loop_index: state.loop_index,
+      effect_id: effect.id,
+      effect_kind: effect.kind,
+      operation: request.operation,
+      arguments: request.arguments,
+      idempotency: effect.idempotency,
+      idempotency_key: effect.idempotency_key,
+      created_at_ms: request.created_at_ms,
+      expires_at_ms: request.expires_at_ms,
+      metadata: Map.put(request.metadata, "legacy_review", true)
+    )
+  end
+
+  defp legacy_pending_review(metadata) do
+    Map.get(metadata, "pending_review", Map.get(metadata, :pending_review))
+  end
+
+  defp drop_legacy_pending_review(metadata), do: Map.drop(metadata, [:pending_review, "pending_review"])
 
   defp sanitize_state(%Turn.State{request: %Turn.Request{} = request} = state) do
     request = %Turn.Request{request | context: Context.sanitize(request.context)}

@@ -7,6 +7,7 @@ defmodule Jidoka.ExecutionEnvironment.SessionSequenceTest do
   alias Jidoka.ExecutionEnvironment.Checkpoint
   alias Jidoka.ExecutionEnvironment.EnforcementEvidence
   alias Jidoka.ExecutionEnvironment.PolicyRequest
+  alias Jidoka.ExecutionEnvironment.ProfileResolver
   alias Jidoka.ExecutionEnvironment.Registration
   alias Jidoka.ExecutionEnvironment.SecurityProfile
   alias Jidoka.Policy.Decision
@@ -264,7 +265,9 @@ defmodule Jidoka.ExecutionEnvironment.SessionSequenceTest do
   end
 
   defp resolved_environment do
-    %{request: PolicyRequest.new!(profile_id: "restricted"), registration: registration()}
+    request = PolicyRequest.new!(profile_id: "restricted")
+    {:ok, selection} = ProfileResolver.resolve(request, fn _profile_id, _opts -> {:ok, registration()} end)
+    %{selection: selection}
   end
 
   defp registration do

@@ -49,6 +49,12 @@ defmodule Jidoka.CheckDocs do
     "Next Guide"
   ]
 
+  @durable_fact_guides [
+    "guides/snapshots-and-resume.md",
+    "guides/import-and-snapshot-contracts.md",
+    "guides/runtime-and-harness.md"
+  ]
+
   @hidden_module_link ~r/\]\(`Jidoka\.(?:Adapter|Runtime|Harness|Projection|(?:Turn|Session|Review)\.Execution)[^`]*`\)/
   @internal_invocation ~r/Jidoka\.(?:Harness|Turn\.Execution|Session\.Execution|Review\.Execution|Runtime\.(?:TurnRunner|EffectInterpreter)|Projection)\.[a-z_][a-z0-9_!?]*\(/
   @generated_invocation ~r/(?<![A-Za-z0-9_.])(?!Jidoka(?:\.|$))[A-Z][A-Za-z0-9_.]*\.(?:chat|run_turn)\(/
@@ -62,6 +68,7 @@ defmodule Jidoka.CheckDocs do
       []
       |> Kernel.++(link_failures(markdown_files))
       |> Kernel.++(version_failures(markdown_files))
+      |> Kernel.++(durable_contract_failures())
       |> Kernel.++(credential_failures())
       |> Kernel.++(start_here_failures())
       |> Kernel.++(canonical_path_failures(all_docs))
@@ -174,6 +181,26 @@ defmodule Jidoka.CheckDocs do
             ]
           end
         end)
+      end)
+    end)
+  end
+
+  defp durable_contract_failures do
+    facts = [
+      "Jidoka.Snapshot.schema_version() == #{Jidoka.Snapshot.schema_version()}",
+      "Jidoka.Snapshot.supported_schema_versions() == #{inspect(Jidoka.Snapshot.supported_schema_versions())}",
+      "Jidoka.Snapshot.serialization_prefix() == #{inspect(Jidoka.Snapshot.serialization_prefix())}",
+      "Jidoka.Session.Data.schema_version() == #{Jidoka.Session.Data.schema_version()}",
+      "Jidoka.Session.Data.supported_schema_versions() == #{inspect(Jidoka.Session.Data.supported_schema_versions())}"
+    ]
+
+    Enum.flat_map(@durable_fact_guides, fn file ->
+      content = File.read!(file)
+
+      Enum.flat_map(facts, fn fact ->
+        if String.contains?(content, fact),
+          do: [],
+          else: ["#{file} has a missing or stale durable contract fact: #{fact}"]
       end)
     end)
   end

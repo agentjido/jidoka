@@ -590,13 +590,13 @@ defmodule Jidoka.Runtime.LimitsTest do
 
   test "a sequence deadline stops before the next turn with portable evidence" do
     {:ok, session} = Jidoka.Session.start(spec(), "limits-deadline")
-    {:ok, clock} = Agent.start_link(fn -> [0, 0, 11, 11] end)
+    {:ok, clock} = Agent.start_link(fn -> 0 end)
 
-    now = fn ->
-      Agent.get_and_update(clock, fn
-        [next | rest] -> {next, rest}
-        [] -> {11, []}
-      end)
+    now = fn -> Agent.get(clock, & &1) end
+
+    on_event = fn
+      %{event: :turn_finished} -> Agent.update(clock, fn _current -> 11 end)
+      _event -> :ok
     end
 
     assert {:ok,
@@ -612,6 +612,7 @@ defmodule Jidoka.Runtime.LimitsTest do
              Jidoka.Session.run_sequence(session, ["one", "never"],
                llm: final_llm(),
                clock: now,
+               on_event: on_event,
                runtime_limits: %{sequence_timeout_ms: 10}
              )
   end
@@ -657,10 +658,13 @@ defmodule Jidoka.Runtime.LimitsTest do
         workspaces: [:ephemeral]
       )
 
-    %{
-      request: PolicyRequest.new!(profile_id: "blocking"),
-      registration: Registration.new!(profile: profile, adapter: BlockingEnvironment, capabilities: capabilities)
-    }
+    request = PolicyRequest.new!(profile_id: "blocking")
+    registration = Registration.new!(profile: profile, adapter: BlockingEnvironment, capabilities: capabilities)
+
+    {:ok, selection} =
+      Jidoka.ExecutionEnvironment.ProfileResolver.resolve(request, fn _profile_id, _opts -> {:ok, registration} end)
+
+    %{selection: selection}
   end
 
   defp allow_policy do

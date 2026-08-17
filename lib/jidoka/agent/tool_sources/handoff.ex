@@ -2,9 +2,19 @@ defmodule Jidoka.Agent.ToolSources.Handoff do
   @moduledoc false
 
   alias Jidoka.Agent.Dsl.Handoff
+  alias Jidoka.Agent.ToolSources.Common
   alias Jidoka.Operation.Source
   alias Jidoka.Operation.Source.Handoff, as: HandoffSource
   alias Jidoka.Review.Approval
+
+  @spec compiled!(term()) :: Jidoka.Operation.Source.Compiled.t()
+  def compiled!(%Handoff{} = handoff) do
+    source = source!(handoff)
+
+    Common.compile_source!(source, handoff.approval, fn source, _operations ->
+      metadata(source, handoff)
+    end)
+  end
 
   @spec source!(term()) :: HandoffSource.t()
   def source!(%Handoff{} = handoff) do
@@ -32,7 +42,10 @@ defmodule Jidoka.Agent.ToolSources.Handoff do
   @spec metadata!(term()) :: [map()]
   def metadata!(%Handoff{} = handoff) do
     source = source!(handoff)
+    metadata(source, handoff)
+  end
 
+  defp metadata(source, handoff) do
     [
       %{
         "source" => "handoff",

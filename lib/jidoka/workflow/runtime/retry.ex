@@ -1,12 +1,14 @@
 defmodule Jidoka.Workflow.Runtime.Retry do
   @moduledoc false
 
-  alias Jidoka.Workflow.Step
+  alias Jidoka.Workflow.{RetryPolicy, Step}
 
-  @spec call(Step.t(), (-> {:ok, term()} | {:error, term()})) :: {:ok, term()} | {:error, term()}
-  def call(%Step{retry: nil}, fun), do: safe_target_call(fun)
+  @spec call(Step.t() | RetryPolicy.t() | nil, (-> {:ok, term()} | {:error, term()})) ::
+          {:ok, term()} | {:error, term()}
+  def call(%Step{retry: retry}, fun), do: call(retry, fun)
+  def call(nil, fun), do: safe_target_call(fun)
 
-  def call(%Step{retry: %{max_attempts: max_attempts} = retry}, fun) do
+  def call(%RetryPolicy{max_attempts: max_attempts} = retry, fun) do
     do_call(fun, retry, max_attempts, 1)
   end
 

@@ -2,10 +2,12 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
+  alias Jidoka.Adapter.Runic.OperationBatch
   alias Jidoka.Effect
   alias Jidoka.Review
   alias Jidoka.Snapshot
   alias Jidoka.Runtime.LocalOperations
+  alias Jidoka.Runtime.Capabilities
   alias Jidoka.Turn
 
   import Jidoka.TestSupport, only: [count_results: 2, timeline: 1]
@@ -86,6 +88,80 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
              Task.await(task, 5_000)
 
     assert Enum.map(result.agent_state.operation_results, & &1.operation) == operation_names
+  end
+
+  test "operation batch capability timeouts run once and leave no orphan task" do
+    test_pid = self()
+    {:ok, calls} = Elixir.Agent.start_link(fn -> 0 end)
+    intents = [operation_intent("fast"), operation_intent("hung")]
+    state = operation_batch_state(intents)
+
+    operations =
+      LocalOperations.operations(%{
+        "fast" => fn _arguments, _context -> {:ok, %{value: "fast"}} end,
+        "hung" => fn _arguments, _context ->
+          Elixir.Agent.update(calls, &(&1 + 1))
+          send(test_pid, {:hung_operation_started, self()})
+          Process.sleep(5_000)
+          {:ok, %{value: "late"}}
+        end
+      })
+
+    capabilities = Capabilities.new!(llm: missing_llm(), operations: operations)
+
+    assert {:ok, results} =
+             OperationBatch.execute(state, intents, capabilities, state.journal,
+               capability_timeout_ms: 10,
+               max_parallel_operations: 2,
+               operation_retry: [max_attempts: 1]
+             )
+
+    assert_receive {:hung_operation_started, hung_pid}, 1_000
+
+    assert [
+             %Effect.Result{status: :ok, output: %{value: "fast"}},
+             %Effect.Result{
+               status: :error,
+               output: %Jidoka.Error.ExecutionError{details: %{reason: :capability_timeout}}
+             }
+           ] = Enum.map(intents, &Map.fetch!(results, &1.id))
+
+    assert Elixir.Agent.get(calls, & &1) == 1
+    refute Process.alive?(hung_pid)
+  end
+
+  test "operation batches keep the turn-wide deadline" do
+    test_pid = self()
+    intent = operation_intent("deadline")
+    %Turn.State{} = initial_state = operation_batch_state([intent])
+    %Turn.Plan{} = initial_plan = initial_state.plan
+
+    state = %Turn.State{
+      initial_state
+      | plan: %Turn.Plan{initial_plan | timeout_ms: 5},
+        started_at_ms: 0
+    }
+
+    operations =
+      LocalOperations.operations(%{
+        "deadline" => fn _arguments, _context ->
+          send(test_pid, {:deadline_operation_started, self()})
+          Process.sleep(5_000)
+          {:ok, %{value: "late"}}
+        end
+      })
+
+    capabilities = Capabilities.new!(llm: missing_llm(), operations: operations)
+    intent_id = intent.id
+
+    assert {:ok, %{^intent_id => %Effect.Result{status: :error}}} =
+             OperationBatch.execute(state, [intent], capabilities, state.journal,
+               capability_timeout_ms: :infinity,
+               clock: fn -> 4 end
+             )
+
+    assert_receive {:deadline_operation_started, operation_pid}, 1_000
+    refute Process.alive?(operation_pid)
   end
 
   test "a preflighted group can run serially and keeps observation order" do
@@ -386,6 +462,22 @@ defmodule Jidoka.ParallelToolCallingIntegrationTest do
       name when is_binary(name) -> %{name: name, arguments: %{}}
     end)
   end
+
+  defp operation_intent(name), do: Effect.Intent.new(:operation, %{name: name, arguments: %{}})
+
+  defp operation_batch_state(intents) do
+    spec = spec(Enum.map(intents, & &1.payload.name))
+    request = Turn.Request.new!(input: "Run the batch.")
+
+    Turn.State.new!(
+      spec: spec,
+      plan: Turn.Plan.new!(spec),
+      request: request,
+      agent_state: request.agent_state
+    )
+  end
+
+  defp missing_llm, do: fn _intent, _journal, _context -> {:error, :missing_llm} end
 
   defp blocking_operations(test_pid, operation_names) do
     handlers =

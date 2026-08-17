@@ -14,7 +14,7 @@ defmodule Jidoka.Handoff do
             __MODULE__,
             %{
               id: Schema.non_empty_string(),
-              conversation_id: Schema.non_empty_string() |> Zoi.nullish(),
+              conversation_id: Schema.non_empty_string(),
               from_agent: Zoi.any() |> Zoi.nullish(),
               to_agent: Zoi.atom(),
               to_agent_id: Schema.non_empty_string(),

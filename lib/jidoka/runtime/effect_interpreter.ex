@@ -21,6 +21,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Runtime.Limits
   alias Jidoka.Runtime.OperationGroupCheckpoint
   alias Jidoka.Runtime.OperationInvoker
+  alias Jidoka.Runtime.Review
   alias Jidoka.Turn
 
   @doc "Interprets the next pending effect or reuses its journaled result."
@@ -92,7 +93,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Effect.Intent{idempotency: :unsafe_once} = intent
        ) do
     cond do
-      approved_interrupt_id(intent) ->
+      Review.resumable_approval?(intent) ->
         :ok
 
       Effect.Journal.incomplete_intent?(journal, intent) ->
@@ -128,10 +129,6 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   end
 
   defp validate_incomplete_effect_replay(_state, _intent), do: :ok
-
-  defp approved_interrupt_id(%Effect.Intent{metadata: metadata}) when is_map(metadata) do
-    Map.get(metadata, :approved_interrupt_id) || Map.get(metadata, "approved_interrupt_id")
-  end
 
   defp interpret_after_controls(
          %Turn.State{} = state,
@@ -224,7 +221,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          Error.normalize(reason,
            operation: EffectTrace.operation(intent),
            phase: :control,
-           agent_id: state.spec.id,
+           agent_id: state.plan.spec.id,
            request_id: EffectTrace.request_id(state, intent),
            intent_id: intent.id,
            effect_kind: intent.kind
@@ -255,7 +252,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          Error.normalize({:policy_denied, decision.rule_id, decision.reason},
            operation: EffectTrace.operation(intent) || intent.kind,
            phase: :control,
-           agent_id: state.spec.id,
+           agent_id: state.plan.spec.id,
            request_id: EffectTrace.request_id(state, intent),
            intent_id: intent.id,
            effect_kind: intent.kind
@@ -269,7 +266,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          Error.normalize(reason,
            operation: EffectTrace.operation(intent) || intent.kind,
            phase: :control,
-           agent_id: state.spec.id,
+           agent_id: state.plan.spec.id,
            request_id: EffectTrace.request_id(state, intent),
            intent_id: intent.id,
            effect_kind: intent.kind

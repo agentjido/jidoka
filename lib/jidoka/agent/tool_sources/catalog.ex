@@ -7,6 +7,15 @@ defmodule Jidoka.Agent.ToolSources.Catalog do
   alias Jidoka.Operation.Source.Catalog, as: CatalogSource
   alias Jidoka.Review.Approval
 
+  @spec compiled!(term()) :: Jidoka.Operation.Source.Compiled.t()
+  def compiled!(%Catalog{} = catalog) do
+    source = source!(catalog)
+
+    Common.compile_source!(source, catalog.approval, fn source, _operations ->
+      metadata(source, catalog)
+    end)
+  end
+
   @spec source!(term()) :: CatalogSource.t()
   def source!(%Catalog{} = catalog) do
     CatalogSource.new!(
@@ -37,7 +46,10 @@ defmodule Jidoka.Agent.ToolSources.Catalog do
   @spec metadata!(term()) :: [map()]
   def metadata!(%Catalog{} = catalog) do
     source = source!(catalog)
+    metadata(source, catalog)
+  end
 
+  defp metadata(source, catalog) do
     [
       %{
         "source" => "catalog",

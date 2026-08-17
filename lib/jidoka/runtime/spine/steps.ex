@@ -18,20 +18,20 @@ defmodule Jidoka.Runtime.Spine.Steps do
 
     prefix =
       [
-        Agent.Message.system(state.spec.instructions),
-        memory_message(state.spec.memory, state.memory)
+        Agent.Message.system(state.plan.spec.instructions),
+        memory_message(state.plan.spec.memory, state.memory)
       ]
       |> Enum.reject(&is_nil/1)
 
-    operations = state.spec.operations |> Registry.new!() |> Registry.prompt_operations()
+    operations = state.plan.spec.operations |> Registry.new!() |> Registry.prompt_operations()
 
     prompt = %{
-      model: Config.model_ref(state.spec.model),
+      model: Config.model_ref(state.plan.spec.model),
       operations: operations,
-      result: result_contract(state.spec.result),
+      result: result_contract(state.plan.spec.result),
       memory: memory_contract(state.memory),
       context: Jidoka.Context.data(state.request.context),
-      generation: state.spec.generation.params,
+      generation: state.plan.spec.generation.params,
       loop_index: state.loop_index
     }
 
@@ -47,9 +47,9 @@ defmodule Jidoka.Runtime.Spine.Steps do
 
   def plan_model_effect(%Turn.State{} = state) do
     payload = %{
-      agent_id: state.spec.id,
-      model: state.spec.model,
-      generation: state.spec.generation,
+      agent_id: state.plan.spec.id,
+      model: state.plan.spec.model,
+      generation: state.plan.spec.generation,
       prompt: state.prompt,
       request_id: state.request.request_id,
       loop_index: state.loop_index
@@ -60,7 +60,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
         idempotency: :idempotent,
         idempotency_key:
           stable_key([
-            state.spec.id,
+            state.plan.spec.id,
             state.request.request_id,
             :llm,
             state.loop_index,
@@ -74,7 +74,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
     }
     |> transition()
     |> transition_event(:effect_planned,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       effect_id: effect.id,
@@ -122,7 +122,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
       |> transition()
       |> maybe_append_compaction_event()
       |> transition_event(:prompt_assembled,
-        agent_id: state.spec.id,
+        agent_id: state.plan.spec.id,
         request_id: state.request.request_id,
         loop_index: state.loop_index,
         data: %{context_projection: state.context_projection}
@@ -137,7 +137,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
     state = transition.state
 
     transition_event(transition, :context_compacted,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: state.context_projection
@@ -190,7 +190,7 @@ defmodule Jidoka.Runtime.Spine.Steps do
     state
     |> transition()
     |> transition_event(:memory_recalled,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: memory_contract(state.memory)

@@ -5,17 +5,20 @@ defmodule Jidoka.Policy.Gate do
   The runtime records a decision before it calls the protected capability. The
   default host policy allows normal model and operation effects for backward
   compatibility. It denies environment and process-extension effects unless a
-  host supplies an explicit policy capability.
+  host supplies an explicit policy capability. Human review is defined only
+  for operation effects; a review decision for another effect kind fails closed.
   """
 
   alias Jidoka.Cancellation
   alias Jidoka.Cancellation.Token
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Error
   alias Jidoka.Policy.Decision
   alias Jidoka.Policy.Request
   alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.EffectTrace
+  alias Jidoka.Runtime.Review, as: RuntimeReview
   alias Jidoka.Turn
 
   @task_supervisor Jidoka.Runtime.TaskSupervisor
@@ -72,9 +75,8 @@ defmodule Jidoka.Policy.Gate do
   def check(%Request{} = request, policy, opts) when is_function(policy, 2) do
     context = Context.from_data!(%{"request_id" => request.request_id})
 
-    with {:ok, output} <- invoke(policy, request, context, opts),
-         {:ok, %Decision{} = decision} <- Decision.new(output),
-         :ok <- allowed(decision) do
+    with {:ok, %Decision{} = decision} <- invoke(policy, request, context, opts),
+         :ok <- allowed(request, decision) do
       {:ok, stamp(decision, opts)}
     else
       {:error, _reason} = error -> error
@@ -87,8 +89,8 @@ defmodule Jidoka.Policy.Gate do
     request = build_request(state, intent)
     context = Context.from_data!(Context.data(state.request.context))
 
-    with {:ok, output} <- invoke(policy, request, context, opts),
-         {:ok, %Decision{} = decision} <- normalize_decision(output, opts) do
+    with {:ok, %Decision{} = decision} <- invoke(policy, request, context, opts) do
+      decision = stamp(decision, opts)
       journal = Effect.Journal.put_policy_decision(state.journal, intent, decision)
       apply_decision(%Turn.State{state | journal: journal}, intent, decision, opts)
     else
@@ -112,14 +114,37 @@ defmodule Jidoka.Policy.Gate do
     {:deny, decision, append_decision_event(state, intent, decision, :policy_unsupported, opts)}
   end
 
-  defp apply_decision(state, intent, %Decision{outcome: :require_review} = decision, opts) do
-    if approved?(intent) do
-      {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
-    else
-      interrupt = review_interrupt(state, intent, decision)
-      state = append_decision_event(state, intent, decision, :policy_review_requested, opts)
-      {:review, decision, interrupt, state}
+  defp apply_decision(
+         state,
+         %Effect.Intent{kind: :operation} = intent,
+         %Decision{outcome: :require_review} = decision,
+         opts
+       ) do
+    interrupt = review_interrupt(state, intent, decision)
+    gate_id = interrupt.metadata["gate_id"]
+    intent = current_intent(state, intent)
+
+    cond do
+      RuntimeReview.gate_completed?(intent, gate_id) ->
+        {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
+
+      RuntimeReview.approved_gate?(intent, gate_id, interrupt.id) ->
+        state = RuntimeReview.complete_gate(state, intent, gate_id)
+        {:allow, decision, append_decision_event(state, intent, decision, :policy_allowed, opts)}
+
+      true ->
+        state = append_decision_event(state, intent, decision, :policy_review_requested, opts)
+        {:review, decision, interrupt, state}
     end
+  end
+
+  defp apply_decision(
+         _state,
+         %Effect.Intent{kind: effect_kind},
+         %Decision{outcome: :require_review},
+         _opts
+       ) do
+    {:error, {:unsupported_policy_decision, :require_review, effect_kind}}
   end
 
   defp build_request(state, %Effect.Intent{kind: kind} = intent) do
@@ -131,7 +156,7 @@ defmodule Jidoka.Policy.Gate do
       request_id: EffectTrace.request_id(state, intent),
       intent_id: intent.id,
       advice: metadata_value(intent.metadata, :policy_advice) || %{},
-      metadata: %{"agent_id" => state.spec.id, "loop_index" => state.loop_index}
+      metadata: %{"agent_id" => state.plan.spec.id, "loop_index" => state.loop_index}
     )
   end
 
@@ -152,7 +177,7 @@ defmodule Jidoka.Policy.Gate do
   defp resource(_state, %Effect.Intent{kind: :llm}), do: %{"class" => "model"}
 
   defp declared_resource(state, operation_name, arguments) do
-    state.spec.operations
+    state.plan.spec.operations
     |> Enum.find(&(&1.name == operation_name))
     |> case do
       %{metadata: metadata} when is_map(metadata) ->
@@ -200,20 +225,25 @@ defmodule Jidoka.Policy.Gate do
     end
   end
 
-  defp normalize_decision(output, opts) do
-    with {:ok, decision} <- Decision.new(output), do: {:ok, stamp(decision, opts)}
-  end
-
   defp stamp(%Decision{decided_at_ms: nil} = decision, opts),
     do: %Decision{decision | decided_at_ms: clock_ms(opts)}
 
   defp stamp(%Decision{} = decision, _opts), do: decision
 
-  defp allowed(%Decision{outcome: :allow}), do: :ok
-  defp allowed(%Decision{outcome: :deny, reason: reason}), do: {:error, {:policy_denied, reason}}
-  defp allowed(%Decision{outcome: :consent_required, reason: reason}), do: {:error, {:policy_consent_required, reason}}
-  defp allowed(%Decision{outcome: :unsupported, reason: reason}), do: {:error, {:policy_unsupported, reason}}
-  defp allowed(%Decision{outcome: :require_review}), do: {:error, :policy_review_required}
+  defp allowed(_request, %Decision{outcome: :allow}), do: :ok
+  defp allowed(_request, %Decision{outcome: :deny, reason: reason}), do: {:error, {:policy_denied, reason}}
+
+  defp allowed(_request, %Decision{outcome: :consent_required, reason: reason}),
+    do: {:error, {:policy_consent_required, reason}}
+
+  defp allowed(_request, %Decision{outcome: :unsupported, reason: reason}),
+    do: {:error, {:policy_unsupported, reason}}
+
+  defp allowed(%Request{effect_class: :operation}, %Decision{outcome: :require_review}),
+    do: {:error, :policy_review_required}
+
+  defp allowed(%Request{effect_class: effect_kind}, %Decision{outcome: :require_review}),
+    do: {:error, {:unsupported_policy_decision, :require_review, effect_kind}}
 
   defp invoke(policy, request, context, opts) do
     with :ok <- Cancellation.check(opts) do
@@ -226,7 +256,7 @@ defmodule Jidoka.Policy.Gate do
           result
 
         {:exit, reason} ->
-          {:error, {:policy_exit, reason}}
+          invalid_policy_result(:task_exit, reason)
 
         nil ->
           _result = Task.shutdown(task, :brutal_kill)
@@ -237,10 +267,25 @@ defmodule Jidoka.Policy.Gate do
 
   defp safe_call(policy, request, context) do
     policy.(request, context)
+    |> normalize_policy_result()
   rescue
-    exception -> {:error, {:policy_exception, exception}}
+    exception -> invalid_policy_result(:exception, exception)
   catch
-    kind, reason -> {:error, {:policy_failure, {kind, reason}}}
+    kind, reason -> invalid_policy_result(kind, reason)
+  end
+
+  defp normalize_policy_result({:ok, output}) do
+    case Decision.new(output) do
+      {:ok, %Decision{} = decision} -> {:ok, decision}
+      {:error, reason} -> invalid_policy_result(:decision, reason)
+    end
+  end
+
+  defp normalize_policy_result({:error, reason}), do: {:error, reason}
+  defp normalize_policy_result(output), do: invalid_policy_result(:return, output)
+
+  defp invalid_policy_result(kind, cause) do
+    {:error, {:invalid_policy_callback_result, kind, Error.to_map(cause)}}
   end
 
   defp maybe_register(%Task{pid: pid}, opts) do
@@ -263,14 +308,15 @@ defmodule Jidoka.Policy.Gate do
 
   defp review_interrupt(state, intent, decision) do
     operation = EffectTrace.operation(intent) || action(intent)
+    gate_id = RuntimeReview.gate_id([intent.id, :host_policy_gate, decision.rule_id])
 
     Interrupt.new!(
-      id: Interrupt.stable_id([state.spec.id, state.request.request_id, intent.id, decision.rule_id]),
+      id: Interrupt.stable_id([state.plan.spec.id, state.request.request_id, intent.id, gate_id, decision.rule_id]),
       boundary: :operation,
       control: __MODULE__,
       control_name: "host_policy_gate",
       reason: decision.reason || :policy_review_required,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       effect_id: intent.id,
@@ -279,12 +325,13 @@ defmodule Jidoka.Policy.Gate do
       arguments: %{},
       idempotency: intent.idempotency,
       idempotency_key: intent.idempotency_key,
-      metadata: %{"policy_rule_id" => decision.rule_id}
+      metadata: %{"gate_id" => gate_id, "policy_rule_id" => decision.rule_id}
     )
   end
 
-  defp approved?(%Effect.Intent{metadata: metadata}),
-    do: not is_nil(metadata_value(metadata, :approved_interrupt_id))
+  defp current_intent(state, fallback) do
+    Enum.find(state.pending_effects, &(&1.id == fallback.id)) || fallback
+  end
 
   defp metadata_value(metadata, key) when is_map(metadata),
     do: Map.get(metadata, key) || Map.get(metadata, Atom.to_string(key))

@@ -101,20 +101,22 @@ defmodule Jidoka.Parity.BoundedDynamicWorkflowLoopTest do
     assert {:hibernate, %Snapshot{} = snapshot} =
              Workflow.run(DynamicLoopWorkflow, %{items: [1, 2]}, context: context)
 
-    assert snapshot.loop_cursor.next_iteration == 2
-    assert snapshot.loop_cursor.state == %{pending: [3], processed: [1, 2]}
-    assert Enum.flat_map(snapshot.loop_cursor.iterations, & &1.created_work) == [3]
+    assert {:ok, cursor} = Snapshot.cursor(snapshot)
+    assert cursor.next_iteration == 2
+    assert cursor.state == %{pending: [3], processed: [1, 2]}
+    assert Enum.flat_map(cursor.iterations, & &1.created_work) == [3]
     assert Elixir.Agent.get(seed_calls, & &1) == 1
 
     assert {:ok, binary} = Snapshot.serialize(snapshot)
     assert {:ok, %Snapshot{} = restored} = Snapshot.deserialize(binary)
 
-    non_portable = put_in(restored.loop_cursor.state, %{runtime: self()})
+    non_portable = put_in(restored.outcomes.process_queue.cursor.state, %{runtime: self()})
 
-    assert {:error, {:non_serializable_workflow_snapshot_value, [:loop_cursor, :state, :runtime], :pid}} =
+    assert {:error,
+            {:non_serializable_workflow_snapshot_value, [:outcomes, :process_queue, :cursor, :state, :runtime], :pid}} =
              Snapshot.serialize(non_portable)
 
-    changed_bound = put_in(restored.loop_cursor.max_iterations, 9)
+    changed_bound = put_in(restored.outcomes.process_queue.cursor.max_iterations, 9)
 
     assert {:error, {:workflow_loop_bound_changed, :process_queue, 9, 8}} =
              Workflow.resume(changed_bound)

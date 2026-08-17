@@ -47,7 +47,7 @@ defmodule Jidoka.Runtime.Context do
     Context.new(
       Map.merge(
         %{
-          agent_id: state.spec.id,
+          agent_id: state.plan.spec.id,
           request_id: state.request.request_id,
           session_id: session_id(state.request.metadata, attrs),
           loop_index: state.loop_index,
@@ -55,7 +55,7 @@ defmodule Jidoka.Runtime.Context do
           data: Context.data(state.request.context),
           runtime: Context.runtime(state.request.context),
           request_metadata: state.request.metadata,
-          spec: state.spec,
+          spec: state.plan.spec,
           plan: state.plan,
           request: state.request,
           agent_state: state.agent_state,
@@ -157,7 +157,7 @@ defmodule Jidoka.Runtime.Context do
     }
   end
 
-  defp operation_for(%Turn.State{spec: %{operations: operations}}, name) do
+  defp operation_for(%Turn.State{plan: %{spec: %{operations: operations}}}, name) do
     with {:ok, registry} <- Registry.new(operations),
          {:ok, operation} <- Registry.fetch(registry, name) do
       operation

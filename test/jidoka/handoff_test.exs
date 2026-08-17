@@ -104,12 +104,75 @@ defmodule Jidoka.HandoffTest do
                to_agent: BillingAgent,
                to_agent_id: "billing_agent",
                name: "billing_specialist",
-               message: ""
+               message: "valid message"
              })
 
     assert OwnerStore.owner(:not_a_conversation) == nil
-    assert OwnerStore.put_owner(nil, :not_a_handoff) == :ok
+
+    assert {:error, {:invalid_handoff, :not_a_handoff}} =
+             OwnerStore.put_owner(nil, :not_a_handoff)
+
     assert OwnerStore.reset(nil) == :ok
+  end
+
+  test "owner storage rejects a mismatched conversation identity" do
+    handoff = handoff("canonical-conversation")
+
+    assert {:error, {:handoff_conversation_id_mismatch, "different-conversation", "canonical-conversation"}} =
+             OwnerStore.put_owner("different-conversation", handoff)
+
+    assert Jidoka.handoff("different-conversation") == nil
+    assert Jidoka.handoff("canonical-conversation") == nil
+  end
+
+  test "owner storage derives identity fields from one canonical handoff" do
+    conversation_id = "canonical-round-trip"
+    handoff = handoff(conversation_id)
+
+    assert :ok = OwnerStore.put_owner(conversation_id, handoff)
+
+    assert %{
+             conversation_id: ^conversation_id,
+             agent: BillingAgent,
+             agent_id: "canonical-round-trip:billing_specialist",
+             handoff: ^handoff
+           } = Jidoka.handoff(conversation_id)
+
+    assert [{^conversation_id, %{handoff: ^handoff, updated_at_ms: updated_at_ms} = stored}] =
+             :ets.lookup(:jidoka_handoff_owners, conversation_id)
+
+    assert is_integer(updated_at_ms)
+    assert Map.keys(stored) |> Enum.sort() == [:handoff, :updated_at_ms]
+  end
+
+  test "legacy keyed owners safely restore a missing handoff conversation identity" do
+    conversation_id = "legacy-canonical-conversation"
+    legacy_handoff = %{handoff(conversation_id) | conversation_id: nil}
+
+    true =
+      :ets.insert(
+        :jidoka_handoff_owners,
+        {conversation_id,
+         %{
+           agent: RouterAgent,
+           agent_id: "stale-owner",
+           handoff: legacy_handoff,
+           updated_at_ms: 123
+         }}
+      )
+
+    assert %{
+             conversation_id: ^conversation_id,
+             agent: BillingAgent,
+             agent_id: "legacy-canonical-conversation:billing_specialist",
+             handoff: %Handoff{conversation_id: ^conversation_id},
+             updated_at_ms: 123
+           } = Jidoka.handoff(conversation_id)
+
+    assert [{^conversation_id, %{handoff: %Handoff{conversation_id: ^conversation_id}} = stored}] =
+             :ets.lookup(:jidoka_handoff_owners, conversation_id)
+
+    assert Map.keys(stored) |> Enum.sort() == [:handoff, :updated_at_ms]
   end
 
   test "handoff operations record a conversation owner" do
@@ -212,5 +275,17 @@ defmodule Jidoka.HandoffTest do
              agent_id: ^owner_agent_id,
              handoff: %Handoff{conversation_id: ^conversation_id}
            } = Jidoka.handoff(conversation_id)
+  end
+
+  defp handoff(conversation_id) do
+    Handoff.new!(
+      id: "handoff-#{conversation_id}",
+      conversation_id: conversation_id,
+      from_agent: RouterAgent,
+      to_agent: BillingAgent,
+      to_agent_id: "#{conversation_id}:billing_specialist",
+      name: "billing_specialist",
+      message: "Continue with billing."
+    )
   end
 end

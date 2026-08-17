@@ -14,7 +14,8 @@ defmodule Jidoka.CodingPack.GitTest do
     File.write!(Path.join(root, ".env"), "secret")
     {:ok, state} = Agent.start_link(fn -> %{events: []} end)
     {profile, registration} = environment()
-    {:ok, manager} = Manager.start_link(registration, policy(), state: state)
+    selection = Jidoka.TestSupport.environment_selection(registration)
+    {:ok, manager} = Manager.start_link(selection, policy(), state: state)
     {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: profile.profile_id))
 
     {:ok, shell} = ShellPort.new(manager, binding, profile, %{"git" => %{class: "git", mutation: "read"}})

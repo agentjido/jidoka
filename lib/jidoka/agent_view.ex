@@ -111,6 +111,15 @@ defmodule Jidoka.AgentView do
       def before_turn(view, message), do: Jidoka.AgentView.before_turn(view, message)
 
       @doc false
+      @spec before_turn(Jidoka.AgentView.t(), String.t(), String.t()) :: Jidoka.AgentView.t()
+      def before_turn(view, message, request_id),
+        do: Jidoka.AgentView.before_turn(view, message, request_id)
+
+      @doc false
+      @spec activate_request(Jidoka.AgentView.t(), String.t()) :: Jidoka.AgentView.t()
+      def activate_request(view, request_id), do: Jidoka.AgentView.activate_request(view, request_id)
+
+      @doc false
       @spec after_turn(
               Jidoka.AgentView.t(),
               {:ok, Jidoka.Turn.Result.t()}
@@ -118,6 +127,17 @@ defmodule Jidoka.AgentView do
               | {:error, term()}
             ) :: Jidoka.AgentView.t()
       def after_turn(view, result), do: Jidoka.AgentView.after_turn(view, result)
+
+      @doc false
+      @spec after_turn(
+              Jidoka.AgentView.t(),
+              {:ok, Jidoka.Turn.Result.t()}
+              | {:hibernate, Jidoka.Snapshot.t()}
+              | {:error, term()},
+              String.t()
+            ) :: Jidoka.AgentView.t()
+      def after_turn(view, result, request_id),
+        do: Jidoka.AgentView.after_turn(view, result, request_id)
 
       @doc false
       @spec apply_event(Jidoka.AgentView.t(), Jidoka.Event.t() | map()) :: Jidoka.AgentView.t()
@@ -143,6 +163,10 @@ defmodule Jidoka.AgentView do
       @doc false
       @spec request_id() :: String.t()
       def request_id, do: Jidoka.AgentView.request_id()
+
+      @doc false
+      @spec active_request_id(Jidoka.AgentView.t()) :: String.t() | nil
+      def active_request_id(view), do: Jidoka.AgentView.active_request_id(view)
 
       defoverridable prepare: 1,
                      agent_module: 1,
@@ -192,11 +216,20 @@ defmodule Jidoka.AgentView do
   """
   @spec before_turn(t(), String.t()) :: t()
   def before_turn(%__MODULE__{} = view, message) when is_binary(message) do
+    before_turn(view, message, request_id())
+  end
+
+  @doc "Applies optimistic state for a known request before an agent turn starts."
+  @spec before_turn(t(), String.t(), String.t()) :: t()
+  def before_turn(%__MODULE__{} = view, message, request_id)
+      when is_binary(message) and is_binary(request_id) do
     case String.trim(message) do
       "" ->
-        %{view | status: :idle}
+        view
 
       content ->
+        view = activate_request(view, request_id)
+
         %{
           view
           | visible_messages: view.visible_messages ++ [user_message(content, pending?: true)],
@@ -209,15 +242,42 @@ defmodule Jidoka.AgentView do
     end
   end
 
+  @doc "Marks a request as the only request that can update the view."
+  @spec activate_request(t(), String.t()) :: t()
+  def activate_request(%__MODULE__{} = view, request_id)
+      when is_binary(request_id) and byte_size(request_id) > 0 do
+    %{
+      view
+      | streaming_message: nil,
+        status: :running,
+        error: nil,
+        error_text: nil,
+        outcome: nil,
+        metadata:
+          view.metadata
+          |> Map.put(:active_request_id, request_id)
+          |> Map.put(:request_lifecycle, :running)
+          |> Map.put(:request_terminal_event, nil)
+    }
+  end
+
   @doc """
   Runs one turn for a view module and maps the runtime result back into view data.
   """
   @spec run(module(), t(), String.t(), keyword()) :: t()
   def run(view_module, %__MODULE__{} = view, message, opts \\ [])
       when is_atom(view_module) and is_binary(message) and is_list(opts) do
-    running = before_turn(view, message)
-    result = run_agent_turn(view_module, running, message, opts)
-    after_turn(running, result)
+    case String.trim(message) do
+      "" ->
+        view
+
+      _content ->
+        request_id = request_id_from_opts(opts)
+        running = before_turn(view, message, request_id)
+        opts = Keyword.put(opts, :request_id, request_id)
+        result = run_agent_turn(view_module, running, message, opts)
+        after_turn(running, result, request_id)
+    end
   end
 
   @doc """
@@ -227,7 +287,30 @@ defmodule Jidoka.AgentView do
           t(),
           {:ok, Turn.Result.t()} | {:hibernate, Jidoka.Snapshot.t()} | {:error, term()}
         ) :: t()
-  def after_turn(%__MODULE__{} = view, {:ok, %Turn.Result{} = result}) do
+  def after_turn(%__MODULE__{} = view, result) do
+    case active_request_id(view) do
+      request_id when is_binary(request_id) -> after_turn(view, result, request_id)
+      nil -> view
+    end
+  end
+
+  @doc "Applies a runtime result only when it belongs to the active request."
+  @spec after_turn(
+          t(),
+          {:ok, Turn.Result.t()} | {:hibernate, Jidoka.Snapshot.t()} | {:error, term()},
+          String.t()
+        ) :: t()
+  def after_turn(%__MODULE__{} = view, result, request_id) when is_binary(request_id) do
+    if active_result?(view, request_id, result) do
+      view
+      |> apply_turn_result(result)
+      |> settle_request(request_id)
+    else
+      view
+    end
+  end
+
+  defp apply_turn_result(%__MODULE__{} = view, {:ok, %Turn.Result{} = result}) do
     %{
       view
       | visible_messages: commit_pending(view.visible_messages) ++ [assistant_message(result.content)],
@@ -244,7 +327,7 @@ defmodule Jidoka.AgentView do
     }
   end
 
-  def after_turn(%__MODULE__{} = view, {:hibernate, snapshot}) do
+  defp apply_turn_result(%__MODULE__{} = view, {:hibernate, snapshot}) do
     %{
       view
       | visible_messages: commit_pending(view.visible_messages),
@@ -257,7 +340,7 @@ defmodule Jidoka.AgentView do
     }
   end
 
-  def after_turn(%__MODULE__{} = view, {:error, reason}) do
+  defp apply_turn_result(%__MODULE__{} = view, {:error, reason}) do
     %{
       view
       | visible_messages: commit_pending(view.visible_messages),
@@ -289,6 +372,15 @@ defmodule Jidoka.AgentView do
   @doc "Generates a request id suitable for UI-initiated turns."
   @spec request_id() :: String.t()
   def request_id, do: Jidoka.Id.random("agent_view")
+
+  @doc "Returns the request that can still update the view."
+  @spec active_request_id(t()) :: String.t() | nil
+  def active_request_id(%__MODULE__{metadata: metadata}) do
+    case Map.get(metadata, :active_request_id) do
+      request_id when is_binary(request_id) -> request_id
+      _request_id -> nil
+    end
+  end
 
   @doc "Derives a conversation id from keyword, atom-key map, or string-key map input."
   @spec default_conversation_id(term()) :: String.t()
@@ -415,6 +507,42 @@ defmodule Jidoka.AgentView do
 
   defp maybe_put_agent_state(request_input, agent_state),
     do: Map.put(request_input, :agent_state, agent_state)
+
+  defp active_result?(%__MODULE__{} = view, request_id, result) do
+    active_request_id(view) == request_id and result_matches_lifecycle?(view.metadata, result)
+  end
+
+  defp result_matches_lifecycle?(%{request_lifecycle: :running}, _result), do: true
+
+  defp result_matches_lifecycle?(%{request_lifecycle: :terminal} = metadata, result) do
+    Map.get(metadata, :request_terminal_event) == result_terminal_event(result)
+  end
+
+  defp result_matches_lifecycle?(_metadata, _result), do: false
+
+  defp result_terminal_event({:ok, %Turn.Result{}}), do: :turn_finished
+  defp result_terminal_event({:hibernate, _snapshot}), do: :turn_hibernated
+  defp result_terminal_event({:error, _reason}), do: :turn_failed
+  defp result_terminal_event(_result), do: nil
+
+  defp settle_request(%__MODULE__{} = view, request_id) do
+    %{
+      view
+      | metadata:
+          view.metadata
+          |> Map.put(:active_request_id, nil)
+          |> Map.put(:last_request_id, request_id)
+          |> Map.put(:request_lifecycle, :settled)
+          |> Map.put(:request_terminal_event, nil)
+    }
+  end
+
+  defp request_id_from_opts(opts) do
+    case Keyword.get(opts, :request_id) do
+      request_id when is_binary(request_id) and byte_size(request_id) > 0 -> request_id
+      _request_id -> request_id()
+    end
+  end
 
   defp loaded_agent_module?(agent), do: is_atom(agent) and Code.ensure_loaded?(agent)
 end

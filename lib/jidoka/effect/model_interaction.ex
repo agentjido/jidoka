@@ -92,7 +92,7 @@ defmodule Jidoka.Effect.ModelInteraction do
        do: {:ok, []}
 
   defp tool_call_groups(%{__struct__: Effect.LLMDecision} = decision, interaction_id, opts) do
-    operations = normalized_operations(decision)
+    operations = decision.operations
 
     with {:ok, group_id} <- id(:group, opts, :group_id),
          {:ok, group} <-
@@ -104,29 +104,6 @@ defmodule Jidoka.Effect.ModelInteraction do
       {:ok, [group]}
     end
   end
-
-  defp normalized_operations(%{
-         __struct__: Effect.LLMDecision,
-         type: :operation,
-         operations: [operation]
-       }),
-       do: [operation]
-
-  defp normalized_operations(%{
-         __struct__: Effect.LLMDecision,
-         type: :operation,
-         name: name,
-         arguments: arguments
-       }) do
-    [Effect.OperationRequest.new!(name: name, arguments: arguments)]
-  end
-
-  defp normalized_operations(%{
-         __struct__: Effect.LLMDecision,
-         type: :operations,
-         operations: operations
-       }),
-       do: operations
 
   defp validate_groups(%__MODULE__{} = interaction) do
     interaction.tool_call_groups

@@ -14,6 +14,7 @@ defmodule Jidoka.Memory.Store.JidoMemory do
   alias Jidoka.Memory.Entry
   alias Jidoka.Memory.RecallRequest
   alias Jidoka.Memory.RecallResult
+  alias Jidoka.Memory.Route
   alias Jidoka.Memory.WriteRequest
   alias Jidoka.Memory.WriteResult
 
@@ -25,7 +26,8 @@ defmodule Jidoka.Memory.Store.JidoMemory do
 
   @impl true
   def recall(%RecallRequest{} = request, opts) do
-    namespace = namespace(request.agent_id, request.session_id, request.scope, opts)
+    route = request.route
+    namespace = namespace(route)
 
     query =
       %{
@@ -36,11 +38,11 @@ defmodule Jidoka.Memory.Store.JidoMemory do
       |> maybe_put_text_filter(request.query, opts)
 
     with :ok <- ensure_jido_memory(),
-         {:ok, result} <- retrieve(target(request.agent_id), query, runtime_opts(opts)) do
+         {:ok, result} <- retrieve(target(route.agent_id), query, runtime_opts(opts)) do
       entries =
         result
         |> records()
-        |> Enum.map(&record_to_entry(&1, request.agent_id, request.session_id))
+        |> Enum.map(&record_to_entry(&1, route.agent_id, route.session_id))
 
       RecallResult.new(
         request: request,
@@ -55,11 +57,11 @@ defmodule Jidoka.Memory.Store.JidoMemory do
   end
 
   @impl true
-  def write(%WriteRequest{entry: %Entry{} = entry} = request, opts) do
-    namespace = namespace(entry.agent_id, entry.session_id, scope(entry), opts)
+  def write(%WriteRequest{entry: %Entry{} = entry, route: %Route{} = route} = request, opts) do
+    namespace = namespace(route)
 
     attrs = %{
-      id: request.idempotency_key || entry.id,
+      id: idempotency_entry_id(route, entry, request.idempotency_key),
       namespace: namespace,
       class: metadata_value(entry.metadata, :class, :semantic),
       kind: metadata_value(entry.metadata, :kind, :fact),
@@ -69,7 +71,6 @@ defmodule Jidoka.Memory.Store.JidoMemory do
       source: metadata_value(entry.metadata, :source, "jidoka"),
       metadata:
         entry.metadata
-        |> maybe_put_metadata("idempotency_key", request.idempotency_key)
         |> Map.put("jidoka_agent_id", entry.agent_id)
         |> maybe_put_metadata("jidoka_session_id", entry.session_id)
     }
@@ -105,24 +106,22 @@ defmodule Jidoka.Memory.Store.JidoMemory do
   end
 
   @doc false
-  @spec namespace(String.t(), String.t() | nil, atom(), keyword()) :: String.t()
-  def namespace(agent_id, session_id, scope, opts) do
-    base = Keyword.get(opts, :namespace)
+  @spec namespace(Route.t()) :: String.t()
+  def namespace(%Route{kind: :agent, agent_id: agent_id}),
+    do: "agent:" <> agent_id
 
-    cond do
-      is_binary(base) and scope == :session and is_binary(session_id) ->
-        base <> ":session:" <> session_id
+  def namespace(%Route{kind: :session, agent_id: agent_id, session_id: session_id}),
+    do: "agent:" <> agent_id <> ":session:" <> session_id
 
-      is_binary(base) ->
-        base
+  def namespace(%Route{kind: :namespace, namespace: namespace}), do: namespace
 
-      scope == :session and is_binary(session_id) ->
-        "agent:" <> to_string(agent_id) <> ":session:" <> session_id
+  @doc false
+  @spec idempotency_entry_id(Route.t(), Entry.t(), String.t() | nil) :: String.t()
+  def idempotency_entry_id(_route, %Entry{id: id}, nil), do: id
+  def idempotency_entry_id(_route, %Entry{id: id}, id), do: id
 
-      true ->
-        "agent:" <> to_string(agent_id)
-    end
-  end
+  def idempotency_entry_id(%Route{} = route, %Entry{}, key),
+    do: Jidoka.Id.stable("mem", [Route.key(route), key])
 
   defp list_namespace(opts) do
     cond do
@@ -130,22 +129,19 @@ defmodule Jidoka.Memory.Store.JidoMemory do
         {:ok, Keyword.fetch!(opts, :list_namespace)}
 
       is_binary(Keyword.get(opts, :namespace)) ->
-        {:ok,
-         namespace(
-           Keyword.get(opts, :agent_id, "jidoka"),
-           Keyword.get(opts, :session_id),
-           Keyword.get(opts, :scope, :agent),
-           opts
-         )}
+        {:ok, Keyword.fetch!(opts, :namespace)}
 
       is_binary(Keyword.get(opts, :agent_id)) ->
-        {:ok,
-         namespace(
-           Keyword.fetch!(opts, :agent_id),
-           Keyword.get(opts, :session_id),
-           Keyword.get(opts, :scope, :agent),
-           opts
-         )}
+        route =
+          case Keyword.get(opts, :session_id) do
+            session_id when is_binary(session_id) ->
+              Route.new!(kind: :session, agent_id: Keyword.fetch!(opts, :agent_id), session_id: session_id)
+
+            _session_id ->
+              Route.new!(kind: :agent, agent_id: Keyword.fetch!(opts, :agent_id))
+          end
+
+        {:ok, namespace(route)}
 
       true ->
         {:error, :missing_memory_namespace}
@@ -165,9 +161,6 @@ defmodule Jidoka.Memory.Store.JidoMemory do
   end
 
   defp target(agent_id), do: %{id: to_string(agent_id || "jidoka")}
-
-  defp scope(%Entry{session_id: session_id}) when is_binary(session_id), do: :session
-  defp scope(%Entry{}), do: :agent
 
   defp maybe_put_text_filter(query, text, opts) do
     if Keyword.get(opts, :filter_text?, false) and is_binary(text) and String.trim(text) != "" do

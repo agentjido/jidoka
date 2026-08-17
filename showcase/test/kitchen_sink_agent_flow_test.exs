@@ -87,7 +87,8 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
     assert "ash_resource" in result_features
     assert "memory" in result_features
 
-    assert {:ok, memory_entries} = Store.list_entries(Memory.store(context.session_id))
+    assert {:ok, memory_entries} =
+             Store.list_entries(Memory.store(context.session_id, "kitchen_sink_agent"))
     assert Enum.any?(memory_entries, &String.contains?(&1.content, "concise answers"))
   end
 
@@ -288,7 +289,8 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
                session_run_opts(remember_llm, context, memory_store)
              )
 
-    assert {:ok, entries} = Store.list_entries(Memory.store(context.session_id))
+    assert {:ok, entries} =
+             Store.list_entries(Memory.store(context.session_id, "kitchen_sink_agent"))
     assert Enum.any?(entries, &String.contains?(&1.content, "concise answers"))
 
     recall_llm = fn %Effect.Intent{payload: payload}, _journal, _ctx ->
@@ -377,7 +379,10 @@ defmodule JidokaShowcase.KitchenSinkAgentFlowTest do
              |> request(context)
              |> Agent.run_turn(agent_run_opts(refund_llm, context, memory_store))
 
-    interrupted = View.after_turn(view, {:hibernate, snapshot})
+    interrupted =
+      view
+      |> View.activate_request(snapshot.turn_state.request.request_id)
+      |> View.after_turn({:hibernate, snapshot})
 
     assert interrupted.status == :interrupted
     assert interrupted.metadata.last_snapshot.cursor.phase == :review

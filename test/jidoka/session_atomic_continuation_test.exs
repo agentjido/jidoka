@@ -236,6 +236,11 @@ defmodule Jidoka.SessionAtomicContinuationTest do
 
     assert checkpointed.conversation == committed
 
+    assert {:ok,
+            {:resume,
+             %Snapshot{turn_state: %Turn.State{request: %Turn.Request{request_id: "recover-continuation-second"}}}}} =
+             Data.recovery_target(checkpointed)
+
     llm = fn intent, _journal, _context ->
       assert conversation_messages(intent) == [
                {:user, "First question"},
@@ -257,6 +262,99 @@ defmodule Jidoka.SessionAtomicContinuationTest do
              )
 
     assert_completed_conversation(recovered)
+  end
+
+  test "recovery restarts a newer leased request instead of an older snapshot" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+
+    assert {:ok, _session} = Session.start(spec(), "recover-newer-request", store: store)
+    assert {:ok, first} = run_first_call("recover-newer-request", store: store)
+    assert [%Snapshot{} | _snapshots] = first.snapshots
+
+    request = Turn.Request.new!(input: "New work", request_id: "recover-newer-request-second")
+    assert {:ok, request} = Conversation.prepare_request(first.conversation, request, [])
+
+    assert {:ok, claimed} =
+             Store.claim_session(store, first.session_id, request,
+               clock: fn -> 100 end,
+               lease_ttl_ms: 50,
+               owner_id: "newer-worker"
+             )
+
+    assert {:ok, {:restart, %Turn.Request{request_id: "recover-newer-request-second"}}} =
+             Data.recovery_target(claimed)
+
+    assert {:ok, replay} = Session.replay(claimed)
+    assert replay.journal == %{intents: [], results: []}
+
+    llm = fn intent, _journal, _context ->
+      assert conversation_messages(intent) == [
+               {:user, "First question"},
+               {:assistant, "First answer"},
+               {:user, "New work"}
+             ]
+
+      {:ok, %{type: :final, content: "New work recovered"}}
+    end
+
+    assert {:ok, recovered, %Turn.Result{content: "New work recovered"}} =
+             Session.recover(first.session_id,
+               store: store,
+               llm: llm,
+               clock: fn -> 150 end,
+               lease_ttl_ms: 50,
+               lease_heartbeat: false,
+               owner_id: "recovery-worker"
+             )
+
+    assert recovered.conversation.last_completed_request_id == "recover-newer-request-second"
+    assert List.last(recovered.requests).request_id == "recover-newer-request-second"
+  end
+
+  test "recovery rejects a snapshot that has no request identity in session history" do
+    assert {:ok, session} = Session.start(spec(), "recover-mismatched-snapshot")
+
+    current = Turn.Request.new!(input: "Current", request_id: "current-request")
+    assert {:ok, current} = Conversation.prepare_request(session.conversation, current, [])
+
+    assert {:ok, %Data{} = claimed} =
+             Transitions.claim(session, current,
+               clock: fn -> 100 end,
+               lease_ttl_ms: 50,
+               owner_id: "first-worker"
+             )
+
+    orphan = Turn.Request.new!(input: "Orphan", request_id: "orphan-request")
+    assert {:ok, orphan} = Conversation.prepare_request(session.conversation, orphan, [])
+
+    orphan_state =
+      Turn.State.new!(
+        spec: session.spec,
+        plan: Turn.Plan.new!(session.spec),
+        request: orphan,
+        agent_state: orphan.agent_state
+      )
+
+    snapshot =
+      Snapshot.from_turn_state!(orphan_state, Turn.Cursor.after_prompt(), snapshot_id: "orphan-snapshot")
+
+    inconsistent = %Data{claimed | snapshots: [snapshot]}
+
+    assert {:error,
+            {:recovery_snapshot_request_mismatch, "recover-mismatched-snapshot", "orphan-snapshot", "orphan-request",
+             "current-request"}} = Data.recovery_target(inconsistent)
+
+    refute Transitions.recoverable?(inconsistent, 150)
+
+    assert {:error,
+            {:recovery_snapshot_request_mismatch, "recover-mismatched-snapshot", "orphan-snapshot", "orphan-request",
+             "current-request"}} =
+             Transitions.recover(inconsistent,
+               clock: fn -> 150 end,
+               lease_ttl_ms: 50,
+               owner_id: "recovery-worker"
+             )
   end
 
   test "source and fork promote active work into isolated conversations" do

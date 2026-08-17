@@ -8,6 +8,7 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
   alias Jidoka.ExecutionEnvironment.Error
   alias Jidoka.ExecutionEnvironment.Manager
   alias Jidoka.ExecutionEnvironment.PolicyRequest
+  alias Jidoka.ExecutionEnvironment.ProfileResolver
   alias Jidoka.ExecutionEnvironment.Registration
   alias Jidoka.ExecutionEnvironment.SecurityProfile
   alias Jidoka.Policy.Decision
@@ -147,7 +148,7 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
 
   test "runs the full lifecycle, rotates restore identity, forks immutably, and cleans once" do
     {:ok, probe} = Agent.start_link(fn -> [] end)
-    {:ok, manager} = Manager.start_link(registration(), allow_policy(probe), probe: probe)
+    {:ok, manager} = Manager.start_link(selection(), allow_policy(probe), probe: probe)
     request = PolicyRequest.new!(profile_id: "restricted", capability_ids: ["files.read"])
 
     assert {:ok, binding, %EnforcementEvidence{status: :confirmed}} = Manager.open(manager, request)
@@ -176,7 +177,7 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
 
   test "with_acquired closes after success and callback failure" do
     {:ok, probe} = Agent.start_link(fn -> [] end)
-    {:ok, manager} = Manager.start_link(registration(), allow_policy(probe), probe: probe)
+    {:ok, manager} = Manager.start_link(selection(), allow_policy(probe), probe: probe)
     {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: "restricted"))
 
     assert {:ok, :worked, _evidence} = Manager.with_acquired(manager, binding, fn _handle -> :worked end)
@@ -189,7 +190,7 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
 
   test "executes a portable request only through an acquired handle and closes it" do
     {:ok, probe} = Agent.start_link(fn -> [] end)
-    {:ok, manager} = Manager.start_link(registration(), allow_policy(probe), probe: probe)
+    {:ok, manager} = Manager.start_link(selection(), allow_policy(probe), probe: probe)
     {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: "restricted"))
 
     request = %{
@@ -211,14 +212,14 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
     {:ok, probe} = Agent.start_link(fn -> [] end)
 
     {:ok, manager} =
-      Manager.start_link(registration(), allow_policy(probe), probe: probe, weak_acquire_evidence: true)
+      Manager.start_link(selection(), allow_policy(probe), probe: probe, weak_acquire_evidence: true)
 
     {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: "restricted"))
     assert {:error, %Error{}} = Manager.acquire(manager, binding)
     assert [:open, :acquire, :close] = probe |> Agent.get(&Enum.reverse/1)
 
     {:ok, probe2} = Agent.start_link(fn -> [] end)
-    {:ok, manager2} = Manager.start_link(registration(), allow_policy(probe2), probe: probe2)
+    {:ok, manager2} = Manager.start_link(selection(), allow_policy(probe2), probe: probe2)
     {:ok, binding2, _evidence} = Manager.open(manager2, PolicyRequest.new!(profile_id: "restricted"))
     {:ok, handle2, _evidence} = Manager.acquire(manager2, binding2)
 
@@ -234,14 +235,23 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
       {:ok, Decision.new!(outcome: :deny, rule_id: "host.deny")}
     end
 
-    {:ok, manager} = Manager.start_link(registration(), deny, probe: probe)
+    {:ok, manager} = Manager.start_link(selection(), deny, probe: probe)
     assert {:error, %Error{}} = Manager.open(manager, PolicyRequest.new!(profile_id: "restricted"))
+    assert Agent.get(probe, & &1) == []
+  end
+
+  test "raw registrations cannot start a manager or call an adapter" do
+    {:ok, probe} = Agent.start_link(fn -> [] end)
+
+    assert {:error, :invalid_environment_selection} =
+             Manager.start_link(registration(), allow_policy(probe), probe: probe)
+
     assert Agent.get(probe, & &1) == []
   end
 
   test "rejects mismatched, stale, cleaned, and nonforkable data" do
     {:ok, probe} = Agent.start_link(fn -> [] end)
-    {:ok, manager} = Manager.start_link(registration(), allow_policy(probe), probe: probe)
+    {:ok, manager} = Manager.start_link(selection(), allow_policy(probe), probe: probe)
     {:ok, binding, _evidence} = Manager.open(manager, PolicyRequest.new!(profile_id: "restricted"))
     {:ok, handle, _evidence} = Manager.acquire(manager, binding)
 
@@ -290,6 +300,12 @@ defmodule Jidoka.ExecutionEnvironment.ManagerTest do
       )
 
     Registration.new!(profile: profile, adapter: FakeAdapter, capabilities: capabilities)
+  end
+
+  defp selection do
+    request = PolicyRequest.new!(profile_id: "restricted", capability_ids: ["files.read"])
+    {:ok, selection} = ProfileResolver.resolve(request, fn _profile_id, _opts -> {:ok, registration()} end)
+    selection
   end
 
   defp allow_policy(_probe) do

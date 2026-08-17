@@ -27,26 +27,40 @@ defmodule Jidoka.Runtime.TurnRunner do
           | {:error, term()}
 
   @doc "Runs a new turn through the pure spine and effect interpreter."
+  @spec run(Turn.Plan.t(), Turn.Request.t(), Capabilities.t()) :: run_result()
+  def run(%Turn.Plan{} = plan, %Turn.Request{} = request, %Capabilities{} = capabilities),
+    do: run(plan, request, capabilities, [])
+
+  @doc false
+  @spec run(Turn.Prepared.t(), Capabilities.t(), keyword()) :: run_result()
+  def run(%Turn.Prepared{} = prepared, %Capabilities{} = capabilities, opts),
+    do: run_prepared(prepared, capabilities, opts)
+
   @spec run(Turn.Plan.t(), Turn.Request.t(), Capabilities.t(), keyword()) :: run_result()
   def run(
         %Turn.Plan{} = plan,
         %Turn.Request{} = request,
         %Capabilities{} = capabilities,
-        opts \\ []
+        opts
       ) do
+    with {:ok, prepared} <-
+           Turn.Prepared.new(plan, request,
+             memory: Keyword.get(opts, :memory),
+             limits: Keyword.get(opts, :runtime_limits)
+           ) do
+      run(prepared, capabilities, opts)
+    end
+  end
+
+  defp run_prepared(%Turn.Prepared{} = prepared, %Capabilities{} = capabilities, opts) do
+    plan = prepared.plan
+    request = prepared.request
+    %Turn.State{} = base_state = prepared.base_state
+
     result =
       with :ok <- Cancellation.check(opts),
            :ok <- Agent.Spec.validate_operation_policies(plan.spec),
-           state <-
-             Turn.State.new!(
-               spec: plan.spec,
-               plan: plan,
-               request: request,
-               agent_state: request.agent_state,
-               memory: Keyword.get(opts, :memory),
-               limits: limit_attrs(Keyword.get(opts, :runtime_limits)),
-               started_at_ms: clock_ms(opts)
-             ),
+           state <- %Turn.State{base_state | started_at_ms: clock_ms(opts)},
            :ok <- emit_turn_started(state, opts),
            :ok <- Cancellation.check(opts),
            {:ok, state} <- run_and_emit(state, opts, &Controls.run_input_controls/1),
@@ -290,7 +304,7 @@ defmodule Jidoka.Runtime.TurnRunner do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:turn_finished,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: result_parts_data(state.result_parts)
@@ -305,7 +319,7 @@ defmodule Jidoka.Runtime.TurnRunner do
 
   defp emit_turn_started(%Turn.State{} = state, opts) do
     Event.build(:turn_started, state.events,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index
     )
@@ -316,7 +330,7 @@ defmodule Jidoka.Runtime.TurnRunner do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:turn_hibernated,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: %{cursor: cursor_contract(cursor)}
@@ -397,7 +411,4 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp snapshot_opts(opts) do
     Keyword.take(opts, [:snapshot_id, :id_generator])
   end
-
-  defp limit_attrs(%_{} = limits), do: Map.from_struct(limits)
-  defp limit_attrs(limits), do: limits
 end

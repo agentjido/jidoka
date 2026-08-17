@@ -5,6 +5,7 @@ defmodule Jidoka.Runtime.EventDispatcher do
   alias Jidoka.Runtime.EventSequence
 
   @message_tag :jidoka_turn_event
+  @relay_option :event_relay_to
   @terminal_events [:turn_finished, :turn_failed, :turn_hibernated]
 
   @spec message_tag() :: atom()
@@ -15,11 +16,17 @@ defmodule Jidoka.Runtime.EventDispatcher do
 
   @spec emit(Event.t(), keyword()) :: :ok
   def emit(%Event{} = event, opts) when is_list(opts) do
-    event = if Keyword.get(opts, :sequence, true), do: EventSequence.stamp(event), else: event
-    emit_to_mailbox(event, Keyword.get(opts, :stream_to))
-    emit_to_callback(event, Keyword.get(opts, :on_event))
-    Jidoka.Extension.RuntimeEvents.emit_runtime(event, opts)
-    :ok
+    case Keyword.get(opts, @relay_option) do
+      relay when is_pid(relay) ->
+        emit_to_mailbox(event, relay)
+
+      _relay ->
+        event = if Keyword.get(opts, :sequence, true), do: EventSequence.stamp(event), else: event
+        emit_to_mailbox(event, Keyword.get(opts, :stream_to))
+        emit_to_callback(event, Keyword.get(opts, :on_event))
+        Jidoka.Extension.RuntimeEvents.emit_runtime(event, opts)
+        :ok
+    end
   end
 
   @spec emit_events([Event.t()], keyword()) :: :ok

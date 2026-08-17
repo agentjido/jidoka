@@ -11,6 +11,8 @@ defmodule Jidoka.Runtime.Review do
   alias Jidoka.Review
   alias Jidoka.Turn
 
+  @progress_key "approval_progress"
+
   @doc "Reads and normalizes an optional approval response from runtime options."
   @spec approval_response(keyword()) ::
           :missing | {:ok, Review.Response.t()} | {:error, {:invalid_approval_response, term()}}
@@ -112,6 +114,61 @@ defmodule Jidoka.Runtime.Review do
     end
   end
 
+  @doc "Builds a stable identity for one exact review gate."
+  @spec gate_id([term()]) :: String.t()
+  def gate_id(parts) when is_list(parts) do
+    digest =
+      :crypto.hash(:sha256, :erlang.term_to_binary(parts))
+      |> Base.url_encode64(padding: false)
+
+    "gate:" <> digest
+  end
+
+  @doc "Returns true when one exact gate completed for this intent."
+  @spec gate_completed?(Effect.Intent.t(), String.t()) :: boolean()
+  def gate_completed?(%Effect.Intent{} = intent, gate_id) when is_binary(gate_id) do
+    Enum.any?(progress(intent), fn entry ->
+      entry["intent_id"] == intent.id and entry["gate_id"] == gate_id and
+        entry["status"] == "completed"
+    end)
+  end
+
+  @doc "Returns true when an approval matches one exact gate and interrupt."
+  @spec approved_gate?(Effect.Intent.t(), String.t(), String.t()) :: boolean()
+  def approved_gate?(%Effect.Intent{} = intent, gate_id, interrupt_id)
+      when is_binary(gate_id) and is_binary(interrupt_id) do
+    Enum.any?(progress(intent), fn entry ->
+      entry["intent_id"] == intent.id and entry["gate_id"] == gate_id and
+        entry["interrupt_id"] == interrupt_id and entry["status"] == "approved"
+    end)
+  end
+
+  @doc "Returns true when exact gate progress permits an incomplete reviewed effect to resume."
+  @spec resumable_approval?(Effect.Intent.t()) :: boolean()
+  def resumable_approval?(%Effect.Intent{} = intent) do
+    Enum.any?(progress(intent), fn entry ->
+      entry["intent_id"] == intent.id and entry["approved"] == true
+    end)
+  end
+
+  @doc "Marks one exact gate as complete on the pending intent."
+  @spec complete_gate(Turn.State.t(), Effect.Intent.t(), String.t()) :: Turn.State.t()
+  def complete_gate(%Turn.State{} = state, %Effect.Intent{} = intent, gate_id)
+      when is_binary(gate_id) do
+    intent = Enum.find(state.pending_effects, &(&1.id == intent.id)) || intent
+    existing = Enum.find(progress(intent), &(&1["intent_id"] == intent.id and &1["gate_id"] == gate_id))
+
+    entry = %{
+      "intent_id" => intent.id,
+      "gate_id" => gate_id,
+      "interrupt_id" => if(existing, do: existing["interrupt_id"]),
+      "approved" => not is_nil(existing) and existing["approved"] == true,
+      "status" => "completed"
+    }
+
+    put_progress(state, intent, entry)
+  end
+
   defp normalize_response(response) do
     case Review.Response.from_input(response) do
       {:ok, response} -> {:ok, response}
@@ -122,19 +179,28 @@ defmodule Jidoka.Runtime.Review do
   defp mark_current_effect_approved(
          %Turn.State{} = state,
          %Review.Interrupt{} = interrupt,
-         response
+         _response
        ) do
     case Enum.find(state.pending_effects, fn
            %Effect.Intent{id: effect_id} -> effect_id == interrupt.effect_id
            _other -> false
          end) do
       %Effect.Intent{} = effect ->
-        metadata =
-          effect.metadata
-          |> Map.put("approved_interrupt_id", interrupt.id)
-          |> Map.put("approval_decision", response.decision)
+        case interrupt_gate_id(interrupt) do
+          gate_id when is_binary(gate_id) ->
+            entry = %{
+              "intent_id" => effect.id,
+              "gate_id" => gate_id,
+              "interrupt_id" => interrupt.id,
+              "approved" => true,
+              "status" => "approved"
+            }
 
-        {:ok, replace_pending_effect(state, %Effect.Intent{effect | metadata: metadata})}
+            {:ok, put_progress(state, effect, entry)}
+
+          nil ->
+            {:error, {:approval_gate_identity_missing, interrupt.id}}
+        end
 
       nil ->
         case Turn.State.current_pending_effect(state) do
@@ -145,6 +211,28 @@ defmodule Jidoka.Runtime.Review do
             {:error, {:missing_pending_effect, state}}
         end
     end
+  end
+
+  defp progress(%Effect.Intent{metadata: metadata}) when is_map(metadata) do
+    case Map.get(metadata, @progress_key, Map.get(metadata, :approval_progress)) do
+      entries when is_list(entries) -> Enum.filter(entries, &is_map/1)
+      _legacy_or_missing -> []
+    end
+  end
+
+  defp put_progress(%Turn.State{} = state, %Effect.Intent{} = effect, entry) do
+    entries =
+      effect
+      |> progress()
+      |> Enum.reject(&(&1["intent_id"] == entry["intent_id"] and &1["gate_id"] == entry["gate_id"]))
+      |> Kernel.++([entry])
+
+    metadata = Map.put(effect.metadata, @progress_key, entries)
+    replace_pending_effect(state, %Effect.Intent{effect | metadata: metadata})
+  end
+
+  defp interrupt_gate_id(%Review.Interrupt{metadata: metadata}) when is_map(metadata) do
+    Map.get(metadata, "gate_id") || Map.get(metadata, :gate_id)
   end
 
   defp replace_pending_effect(%Turn.State{} = state, %Effect.Intent{id: effect_id} = effect) do
@@ -161,7 +249,7 @@ defmodule Jidoka.Runtime.Review do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:approval_requested,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       operation: interrupt.operation,
@@ -184,7 +272,7 @@ defmodule Jidoka.Runtime.Review do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(:approval_responded,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       operation: interrupt.operation,

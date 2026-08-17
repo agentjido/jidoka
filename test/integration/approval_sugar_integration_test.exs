@@ -150,7 +150,7 @@ defmodule Jidoka.ApprovalSugarIntegrationTest do
              )
 
     assert session.status == :finished
-    assert session.pending_reviews == []
+    assert Jidoka.Session.Data.pending_reviews(session) == []
     assert_receive {:operation_called, "approved_lookup"}, 1_000
   end
 

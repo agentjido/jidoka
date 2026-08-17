@@ -264,7 +264,7 @@ sanitized `context` data map and the canonical `ctx` struct:
   control_name: control_name(control.control),
   metadata: control.metadata,
   request_metadata: state.request.metadata,
-  spec: state.spec,
+  spec: state.plan.spec,
   plan: state.plan,
   request: state.request,
   input: state.request.input,

@@ -167,10 +167,16 @@ Jidoka.inspect(MyApp.SupportAgent).spec.operations
 
 ### Step 3: Preflight A Turn
 
-`Jidoka.preflight/3` mirrors `Jidoka.turn/3`'s arguments minus the
-capabilities. It validates the context, calls `Memory.Runtime.recall/3`
-(passing through `memory_store:` and `session_id:` like a real turn),
-and runs `Steps.assemble_prompt/1` to build the final messages.
+`Jidoka.preflight/3` validates the context and uses the same pure turn builder
+as execution. It does not call an operation source, instruction provider, or
+memory store. Pass effectful data after you resolve it:
+
+- `resolved_operations:` for operations from an external source;
+- `resolved_instructions:` for output from an instruction provider;
+- `resolved_memory:` for a memory recall result.
+
+If configured data is not resolved, preflight returns an
+`unresolved_preflight_input` error.
 
 ```elixir
 {:ok, preflight} =
@@ -411,7 +417,7 @@ less between releases.
 | --- | --- | --- |
 | `Jidoka.inspect(agent)` returns a plain projection without `:plan` | `Turn.Plan.new/1` failed for the spec. | Check the `:error` key in the view; it carries a normalized error from `Jidoka.error_to_map/1`. |
 | `Jidoka.preflight/3` returns `{:error, %Jidoka.Error.Invalid{}}` | The supplied `context:` did not match the agent's `context` schema. | Either update the context or relax the schema; preflight runs the same `validate_context/2` as a real turn. |
-| Memory does not appear in `preflight.prompt` | The `memory_store:` option was not threaded through. | Pass `memory_store: store` (and `session_id:` when needed) to `preflight/3`. |
+| Memory does not appear in `preflight.prompt` | Preflight did not receive resolved memory. | Recall memory through the runtime or store, then pass the result as `resolved_memory:`. |
 | `preflight.diagnostics` is non-empty | The prompt assembler flagged a warning (oversized description, missing schema). | Read the diagnostic and adjust the source; warnings here are runtime issues at slightly higher cost. |
 | Turn result view has no `:timeline` entries | The turn never made a model or tool call. | Confirm the model returned an operation or final answer. |
 

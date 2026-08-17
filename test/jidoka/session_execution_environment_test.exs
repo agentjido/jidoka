@@ -6,8 +6,10 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
   alias Jidoka.ExecutionEnvironment.Binding
   alias Jidoka.ExecutionEnvironment.Checkpoint
   alias Jidoka.ExecutionEnvironment.EnforcementEvidence
+  alias Jidoka.ExecutionEnvironment.Error
   alias Jidoka.ExecutionEnvironment.Manager
   alias Jidoka.ExecutionEnvironment.PolicyRequest
+  alias Jidoka.ExecutionEnvironment.ProfileResolver
   alias Jidoka.ExecutionEnvironment.Registration
   alias Jidoka.ExecutionEnvironment.SecurityProfile
   alias Jidoka.Policy.Decision
@@ -106,7 +108,12 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
     @impl true
     def close(_handle, opts) do
       record(opts, :close)
-      {:ok, evidence(opts)}
+
+      if Keyword.get(opts, :fail_close, false) do
+        {:error, :forced_close_failure}
+      else
+        {:ok, evidence(opts)}
+      end
     end
 
     @impl true
@@ -233,6 +240,30 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
              Jidoka.Session.EnvironmentRuntime.finish(lease, :hibernated, runtime_opts)
   end
 
+  test "environment finish failures retain the last observed environment" do
+    {manager, _probe, request} = runtime(fail_close: true)
+    environment_opts = runtime_opts(manager, request, :durable)
+
+    assert {:ok, session} =
+             Jidoka.Session.start(spec(), "session-close-failure", execution_environment: environment_opts)
+
+    assert {:ok, acquired, runtime_opts, lease} =
+             Jidoka.Session.EnvironmentRuntime.acquire(session,
+               execution_environment: environment_opts
+             )
+
+    assert acquired.environment.status == :available
+
+    assert {:error, retained,
+            %Error{
+              code: :execution_environment_lifecycle_failed,
+              details: %{reason: ":forced_close_failure"}
+            }} =
+             Jidoka.Session.EnvironmentRuntime.finish(lease, :completed, runtime_opts)
+
+    assert retained == acquired.environment
+  end
+
   test "DETS keeps portable environment data and old sessions still run" do
     {manager, _probe, request} = runtime()
     environment_opts = runtime_opts(manager, request, :durable)
@@ -344,10 +375,12 @@ defmodule Jidoka.SessionExecutionEnvironmentTest do
     assert source_for_fork.environment.checkpoint.checkpoint_ref == "checkpoint-1"
   end
 
-  defp runtime do
+  defp runtime(opts \\ []) do
     {:ok, probe} = Agent.start_link(fn -> [] end)
-    {:ok, manager} = Manager.start_link(registration(), allow_policy(), probe: probe)
-    {manager, probe, PolicyRequest.new!(profile_id: "restricted")}
+    request = PolicyRequest.new!(profile_id: "restricted")
+    {:ok, selection} = ProfileResolver.resolve(request, fn _profile_id, _opts -> {:ok, registration()} end)
+    {:ok, manager} = Manager.start_link(selection, allow_policy(), Keyword.put(opts, :probe, probe))
+    {manager, probe, request}
   end
 
   defp runtime_opts(manager, request, retention) do

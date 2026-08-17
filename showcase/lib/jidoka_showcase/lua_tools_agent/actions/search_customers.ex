@@ -1,6 +1,8 @@
 defmodule JidokaShowcase.LuaToolsAgent.Actions.SearchCustomers do
   @moduledoc false
 
+  @selector_fields [:query, :name, :company, :tier, :status, :tag, :value]
+
   use Jidoka.Action,
     name: "lua_demo_search_customers",
     description: "Searches demo CRM customers by name, company, tags, or account status.",
@@ -18,15 +20,17 @@ defmodule JidokaShowcase.LuaToolsAgent.Actions.SearchCustomers do
 
   @impl true
   def run(params, _context) do
-    query = params |> query() |> String.downcase()
-    limit = params |> get(:limit, 5) |> clamp_limit()
+    with {:ok, query} <- query(params) do
+      query = String.downcase(query)
+      limit = params |> get(:limit, 5) |> clamp_limit()
 
-    customers =
-      customers()
-      |> Enum.filter(&matches?(&1, query))
-      |> Enum.take(limit)
+      customers =
+        customers()
+        |> Enum.filter(&matches?(&1, query))
+        |> Enum.take(limit)
 
-    {:ok, %{"customers" => customers, "count" => length(customers)}}
+      {:ok, %{"customers" => customers, "count" => length(customers)}}
+    end
   end
 
   defp matches?(_customer, ""), do: true
@@ -55,12 +59,21 @@ defmodule JidokaShowcase.LuaToolsAgent.Actions.SearchCustomers do
   end
 
   defp query(params) do
-    [:query, :name, :company, :tier, :status, :tag, :value]
-    |> Enum.map(&get(params, &1, nil))
-    |> Enum.find(&present?/1)
-    |> case do
-      nil -> ""
-      value -> to_string(value)
+    selectors =
+      for field <- @selector_fields,
+          value = get(params, field, nil),
+          present?(value),
+          do: {field, value}
+
+    case selectors do
+      [{_field, value}] ->
+        {:ok, to_string(value)}
+
+      [] ->
+        {:error, {:invalid_customer_search_selectors, []}}
+
+      selectors ->
+        {:error, {:invalid_customer_search_selectors, Enum.map(selectors, &elem(&1, 0))}}
     end
   end
 

@@ -27,18 +27,18 @@ A complete memory round-trip uses the in-memory store and the three core
 contracts: `WriteRequest`, `RecallRequest`, `RecallResult`.
 
 ```elixir
-alias Jidoka.Memory.{Entry, RecallRequest, WriteRequest, Store}
+alias Jidoka.Memory.{Entry, RecallRequest, Route, WriteRequest, Store}
 
 {:ok, pid} = Jidoka.Memory.Store.InMemory.start_link([])
 store = {Jidoka.Memory.Store.InMemory, pid: pid}
 
 entry = Entry.new!(agent_id: "time_agent", content: "User prefers Chicago time")
-{:ok, _write} = Store.write(store, WriteRequest.new!(entry: entry))
+route = Route.new!(kind: :agent, agent_id: "time_agent")
+{:ok, _write} = Store.write(store, WriteRequest.new!(entry: entry, route: route))
 
 request =
   RecallRequest.new!(
-    agent_id: "time_agent",
-    scope: :agent,
+    route: route,
     query: "preferred timezone",
     limit: 3
   )
@@ -87,9 +87,7 @@ Request sent to a store before prompt assembly.
 
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
-| `agent_id` | non-empty string | required | Whose memory to read. |
-| `session_id` | non-empty string or `nil` | `nil` | Session scope for `:session` policies. |
-| `scope` | `:agent \| :session` | `:agent` | Mirrors `Spec.Memory.scope`. |
+| `route` | `Memory.Route.t()` | required | Exact agent, session, or named namespace partition. |
 | `query` | non-empty string | required | Query used by the store (free text, embedding key, etc.). |
 | `limit` | positive integer | `5` | Maximum entries to return. |
 | `metadata` | map | `%{}` | Caller metadata for tracing or routing. |
@@ -111,7 +109,21 @@ Request to upsert one entry.
 | Field | Type | Default | Purpose |
 | --- | --- | --- | --- |
 | `entry` | `Entry.t()` | required | Entry to persist. |
+| `route` | `Memory.Route.t()` | required | Exact partition that receives the entry. |
+| `idempotency_key` | non-empty string or `nil` | `nil` | Private dedupe key within the route. |
 | `metadata` | map | `%{}` | Write-specific metadata. |
+
+### `Jidoka.Memory.Route`
+
+One closed value selects a store partition:
+
+- `:agent` requires `agent_id`;
+- `:session` requires `agent_id` and `session_id`;
+- `:namespace` requires `agent_id` and a non-empty `namespace`.
+
+The runtime rejects a policy that combines a session scope with a named
+namespace. Legacy recall fields and legacy write entries normalize to an agent
+or session route at request construction.
 
 ### `Jidoka.Memory.WriteResult`
 
@@ -144,13 +156,21 @@ dispatching.
 - **Reuse `Entry.new!/1` to generate ids.** The default prefixed UUIDv7 `"mem_…"` id is enough
   for most stores; supply your own only when integrating with an external
   primary key.
-- **Carry routing data in `metadata`.** Stores should ignore unknown keys, so
-  feel free to thread tenant ids, embedding model names, or trace ids through
-  any of the request/result maps.
-- **Use scope to gate session-only memory.** `RecallRequest.scope: :session`
-  with a `session_id` lets a store filter cross-session data without app code.
+- **Use one route for read and write.** Do not infer partitions from metadata
+  or store options. Stores must use `request.route`.
+- **Keep metadata opaque.** Tenant facts, embedding model names, and trace ids
+  can use metadata, but they do not change the partition.
+- **Keep idempotency private.** Stores index `{route, idempotency_key}` without
+  adding the key to entry metadata. A metadata field named `idempotency_key`
+  has no special meaning.
 - **Keep stores small.** Implementing the three callbacks is enough; the
   runtime handles policy, capture, and injection.
+
+Older entries do not establish private dedupe evidence. The in-memory store
+starts an empty index when it receives its former list state. The Jido adapter
+uses a route-key-derived record identity for the first keyed write after this
+version boundary. Later writes with the same route and key use that identity.
+Keys in different routes remain independent.
 
 ## Testing
 
@@ -165,15 +185,16 @@ end
 
 test "writes and recalls a single entry", %{store: store} do
   entry = Jidoka.Memory.Entry.new!(agent_id: "demo", content: "hello")
+  route = Jidoka.Memory.Route.new!(kind: :agent, agent_id: "demo")
 
   assert {:ok, _} =
            Jidoka.Memory.Store.write(store,
-             Jidoka.Memory.WriteRequest.new!(entry: entry)
+             Jidoka.Memory.WriteRequest.new!(entry: entry, route: route)
            )
 
   request =
     Jidoka.Memory.RecallRequest.new!(
-      agent_id: "demo",
+      route: route,
       query: "hello",
       limit: 5
     )
@@ -188,7 +209,7 @@ end
 | Symptom | Likely Cause | Fix |
 | --- | --- | --- |
 | `ArgumentError: invalid memory entry: ...` | `agent_id` or `content` was empty. | Both are required non-empty strings. |
-| `Recall returns no entries` despite writes | Scope/session_id mismatch. | Use `scope: :agent` for shared memory; provide a matching `session_id` for session scope. |
+| `Recall returns no entries` despite writes | Read and write routes differ. | Use the same typed route for both requests. |
 | `in-memory memory store requires :pid` | Used `Memory.Store.InMemory` without the `pid:` opt. | Pass `{Jidoka.Memory.Store.InMemory, pid: pid}` as the store value. |
 | `Recall ignores limit` | A custom store did not honor `RecallRequest.limit`. | Truncate inside the store; the runtime trusts the result. |
 
@@ -196,6 +217,7 @@ end
 
 - [`Jidoka.Memory`](`Jidoka.Memory`) - public type aliases.
 - [`Jidoka.Memory.Entry`](`Jidoka.Memory.Entry`)
+- [`Jidoka.Memory.Route`](`Jidoka.Memory.Route`)
 - [`Jidoka.Memory.RecallRequest`](`Jidoka.Memory.RecallRequest`)
 - [`Jidoka.Memory.RecallResult`](`Jidoka.Memory.RecallResult`)
 - [`Jidoka.Memory.WriteRequest`](`Jidoka.Memory.WriteRequest`)

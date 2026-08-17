@@ -178,7 +178,7 @@ defmodule Jidoka.Adapter.ReqLLM do
 
   defp stream_enabled?(opts) do
     case Keyword.fetch(opts, :stream) do
-      {:ok, enabled?} -> enabled? == true
+      {:ok, enabled?} -> enabled?
       :error -> Keyword.has_key?(opts, :stream_to) or Keyword.has_key?(opts, :on_event)
     end
   end
@@ -210,12 +210,13 @@ defmodule Jidoka.Adapter.ReqLLM do
     {:error, reason}
   end
 
-  defp response_text(%NormalizedStream{raw_text: raw}, response) do
+  defp response_text(%NormalizedStream{} = state, response) do
     text = ReqLLM.Response.text(response)
+    raw = NormalizedStream.raw_text(state)
 
     cond do
       is_binary(text) and String.trim(text) != "" -> text
-      is_binary(raw) and String.trim(raw) != "" -> raw
+      String.trim(raw) != "" -> raw
       true -> text
     end
   end

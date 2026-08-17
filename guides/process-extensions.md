@@ -74,6 +74,13 @@ context, policy advice, results, and portable UI data use their protocol-v1
 methods and registered namespace. A tool, command, or provider not in the
 verified manifest is rejected before transport.
 
+The handshake normalizes the manifest once. Tool, command, and provider names
+must be non-empty and unique after normalization. Context and policy-advice
+flags must be Boolean values. Tool idempotency must be `pure`, `idempotent`,
+`dedupe`, `reconcile`, or `unsafe_once`. Tool input policy and initial state,
+result, and UI data must be safe maps. Protocol-v1 ignores unknown safe
+manifest fields. It rejects unsafe unknown fields.
+
 The process host monitors the active caller. Caller cancellation, timeout,
 child exit, malformed protocol, broken transport, and shutdown failure become
 stable extension errors. Cancellation sends the transport cancel operation.

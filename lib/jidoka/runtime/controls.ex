@@ -22,12 +22,12 @@ defmodule Jidoka.Runtime.Controls do
   @doc "Runs the configured input controls for a turn."
   @spec run_input_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
   def run_input_controls(%Turn.State{} = state),
-    do: run_controls(state, :input, state.spec.controls.inputs)
+    do: run_controls(state, :input, state.plan.spec.controls.inputs)
 
   @doc "Runs the configured output controls for a turn."
   @spec run_output_controls(Turn.State.t()) :: {:ok, Turn.State.t()} | {:error, term()}
   def run_output_controls(%Turn.State{} = state),
-    do: run_controls(state, :output, state.spec.controls.outputs)
+    do: run_controls(state, :output, state.plan.spec.controls.outputs)
 
   @doc "Runs controls and review policy for one operation intent."
   @spec run_operation_controls(Turn.State.t(), Effect.Intent.t(), keyword()) ::
@@ -74,7 +74,7 @@ defmodule Jidoka.Runtime.Controls do
       control_name: control_name(control.control),
       metadata: control.metadata,
       request_metadata: state.request.metadata,
-      spec: state.spec,
+      spec: state.plan.spec,
       plan: state.plan,
       request: state.request,
       input: state.request.input,
@@ -96,7 +96,7 @@ defmodule Jidoka.Runtime.Controls do
     state
     |> Turn.Transition.new!()
     |> Turn.Transition.event(event,
-      agent_id: state.spec.id,
+      agent_id: state.plan.spec.id,
       request_id: state.request.request_id,
       loop_index: state.loop_index,
       data: %{
