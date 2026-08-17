@@ -91,7 +91,8 @@ session data between turns.
 - [`Jidoka.Session`](`Jidoka.Session`) is the developer-facing facade. It
   wraps `start/run/chat/resume` and derives sensible defaults.
 - [`Jidoka.Session.Data`](`Jidoka.Session.Data`) is the durable data
-  struct. Its `schema_version/0` is `1`; older or newer payloads fail at
+  struct. Its `schema_version/0` is `3`, and
+  `supported_schema_versions/0` is `[1, 2, 3]`. Future payloads fail at
   normalization rather than silently loading a half-valid session.
 - [`Jidoka.Session.Store`](`Jidoka.Session.Store`) is the persistence
   behaviour. Its base callbacks store and read session data. Lease-aware
@@ -103,7 +104,7 @@ pending reviews, the latest result, and typed cancellation evidence.
 
 The session schema version is the serialized-data contract. It is not a turn
 counter. Conversation `turn_count` and `continuation_revision` can increase
-while `schema_version` stays at `1`.
+while `schema_version` stays at `3`.
 
 ## How To
 
@@ -412,9 +413,25 @@ transitions:
 - `renew_session/3` to extend ownership;
 - `commit_session/4` to save final state and release ownership.
 
-Use the helpers in `Jidoka.Session.Store` to apply the standard transition
-rules. A backend transaction, row lock, compare-and-set, or single-owner
-process must make each transition atomic.
+A custom store calls the matching public function in
+`Jidoka.Session.Transitions` while it owns the backend transaction. It writes
+the returned session and makes the transaction durable before it returns
+`{:ok, committed_session}`. After a checkpoint, form the host link from the
+committed result:
+
+```elixir
+{:ok, committed_session} =
+  Jidoka.Session.Transitions.checkpoint(current, lease_id, snapshot, opts)
+
+:ok = MyApp.Repo.write_and_commit(committed_session)
+
+{:ok, identity} =
+  Jidoka.Session.Store.checkpoint_identity(committed_session, snapshot)
+```
+
+The identity contains `session_id`, `durable_revision`, `request_id`,
+`lease_id`, and `snapshot_id`. Do not form it from a terminal session after
+`commit_session/4` clears the lease.
 
 Callers reference a store as either `Module` or `{Module, opts}`. The
 in-memory store is `{Jidoka.Session.Store.InMemory, pid: pid}` so the same
@@ -492,7 +509,7 @@ twice concurrently against the same id and assert one call returns
 | `{:error, {:session_already_running, id}}` | Two callers tried to run the same session at the same time. | Serialize callers; if this is expected, retry after the prior call returns. |
 | `{:error, {:missing_session_snapshot, id}}` | Resume was called on a session that never hibernated. | Run a new turn instead, or hibernate explicitly with a checkpoint policy. |
 | `{:error, {:conflicting_session_ids, _, _}}` | Both `:id` and `:session_id` were passed with different values. | Pass only `:session_id`, or make them equal. |
-| `{:error, {:unsupported_session_schema_version, _, 1}}` | A persisted payload predates the current schema. | Migrate the row to schema version 1 or discard it. |
+| `{:error, {:unsupported_session_schema_version, _, 3}}` | A persisted payload has an unsupported schema. | Migrate it to a supported version or reject it without mutation. |
 
 ## Reference
 
@@ -501,7 +518,7 @@ Key modules touched in this guide:
 - [`Jidoka.Session`](`Jidoka.Session`) - public facade for `start/2`,
   `run/3`, `chat/3`, `resume/2`, `pending_reviews/1`, `replay/1`.
 - [`Jidoka.Session.Data`](`Jidoka.Session.Data`) - durable session
-  struct with `schema_version/0 == 1`.
+  struct with `schema_version/0 == 3` and supported versions `[1, 2, 3]`.
 - [`Jidoka.Session.Store`](`Jidoka.Session.Store`) - persistence behaviour.
 - [`Jidoka.Session.Store.InMemory`](`Jidoka.Session.Store.InMemory`) -
   reference store for tests and examples.

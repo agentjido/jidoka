@@ -5,15 +5,34 @@ defmodule Jidoka.Session.Store do
   Store implementations persist `Jidoka.Session.Data` values. Lease-aware
   stores also provide atomic claim, checkpoint, commit, renewal, and recovery
   transitions. Runtime clients and provider credentials never enter the store.
+
+  A custom durable store must implement the complete durable callback set. It
+  applies the public functions in `Jidoka.Session.Transitions` inside its own
+  transaction and sends a successful reply only after that transaction is
+  durable. `durable_mode/1` rejects a partial implementation before work can
+  be claimed.
+
+  After a checkpoint commits, `checkpoint_identity/2` returns the stable,
+  portable identity that a host can join to its own durable records. The host
+  must form this value from the committed session returned by the store. It
+  must not reconstruct a lease after a terminal commit clears it.
   """
 
   alias Jidoka.Session.Data
+  alias Jidoka.Session.Lease
   alias Jidoka.Session.Transitions
   alias Jidoka.Snapshot
   alias Jidoka.Turn
 
   @type store :: module() | {module(), keyword()}
   @type durable_mode :: :none | :durable
+  @type checkpoint_identity :: %{
+          session_id: String.t(),
+          durable_revision: non_neg_integer(),
+          request_id: String.t(),
+          lease_id: String.t(),
+          snapshot_id: String.t()
+        }
 
   @durable_callbacks [
     claim_session: 3,
@@ -106,6 +125,43 @@ defmodule Jidoka.Session.Store do
   def list_sessions(store) do
     {module, opts} = normalize_store(store)
     module.list_sessions(opts)
+  end
+
+  @doc "Returns the stable identity of one committed durable checkpoint."
+  @spec checkpoint_identity(Data.t(), Snapshot.t()) ::
+          {:ok, checkpoint_identity()} | {:error, term()}
+  def checkpoint_identity(
+        %Data{
+          session_id: session_id,
+          revision: revision,
+          lease: %Lease{lease_id: lease_id, request_id: request_id},
+          snapshots: snapshots
+        },
+        %Snapshot{
+          snapshot_id: snapshot_id,
+          turn_state: %{request: %Turn.Request{request_id: request_id}}
+        }
+      )
+      when is_binary(session_id) and is_integer(revision) and revision >= 0 and
+             is_binary(lease_id) and is_binary(request_id) and is_binary(snapshot_id) do
+    if Enum.any?(snapshots, &checkpoint_snapshot?(&1, snapshot_id, request_id)) do
+      {:ok,
+       %{
+         session_id: session_id,
+         durable_revision: revision,
+         request_id: request_id,
+         lease_id: lease_id,
+         snapshot_id: snapshot_id
+       }}
+    else
+      {:error, {:checkpoint_identity_not_committed, session_id, revision, request_id, lease_id, snapshot_id}}
+    end
+  end
+
+  def checkpoint_identity(%Data{} = session, %Snapshot{} = snapshot) do
+    {:error,
+     {:checkpoint_identity_mismatch, session.session_id, session.revision, checkpoint_lease_id(session),
+      checkpoint_request_id(snapshot), snapshot.snapshot_id}}
   end
 
   @doc "Claims a session for one new request and rejects concurrent use."
@@ -263,6 +319,23 @@ defmodule Jidoka.Session.Store do
       _clock -> System.system_time(:millisecond)
     end
   end
+
+  defp checkpoint_snapshot?(
+         %Snapshot{snapshot_id: snapshot_id, turn_state: %{request: %Turn.Request{request_id: request_id}}},
+         snapshot_id,
+         request_id
+       ),
+       do: true
+
+  defp checkpoint_snapshot?(_snapshot, _snapshot_id, _request_id), do: false
+
+  defp checkpoint_lease_id(%Data{lease: %Lease{lease_id: lease_id}}), do: lease_id
+  defp checkpoint_lease_id(%Data{}), do: nil
+
+  defp checkpoint_request_id(%Snapshot{turn_state: %{request: %Turn.Request{request_id: request_id}}}),
+    do: request_id
+
+  defp checkpoint_request_id(%Snapshot{}), do: nil
 
   defp normalize_store({module, opts}) when is_atom(module) and is_list(opts), do: {module, opts}
   defp normalize_store(module) when is_atom(module), do: {module, []}
