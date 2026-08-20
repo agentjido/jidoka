@@ -13,6 +13,7 @@ defmodule Jidoka.Session.Store.Dets do
   @behaviour Jidoka.Session.Store
 
   alias Jidoka.Session.Data
+  alias Jidoka.Session.Store
   alias Jidoka.Session.Transitions
   alias Jidoka.Snapshot
   alias Jidoka.Turn
@@ -68,34 +69,40 @@ defmodule Jidoka.Session.Store.Dets do
 
   @impl true
   def claim_session(session_id, %Turn.Request{} = request, opts) when is_binary(session_id) do
+    opts = Store.transition_opts(opts)
     transition(opts, session_id, &Transitions.claim(&1, request, opts))
   end
 
   @impl true
   def claim_resume(session_id, opts) when is_binary(session_id) do
+    opts = Store.transition_opts(opts)
     transition(opts, session_id, &Transitions.resume(&1, opts))
   end
 
   @impl true
   def recover_session(session_id, opts) when is_binary(session_id) do
+    opts = Store.transition_opts(opts)
     transition(opts, session_id, &Transitions.recover(&1, opts))
   end
 
   @impl true
   def checkpoint_session(session_id, lease_id, %Snapshot{} = snapshot, opts)
       when is_binary(session_id) and is_binary(lease_id) do
+    opts = Store.transition_opts(opts)
     transition(opts, session_id, &Transitions.checkpoint(&1, lease_id, snapshot, opts))
   end
 
   @impl true
   def commit_session(session_id, lease_id, %Data{} = session, opts)
       when is_binary(session_id) and is_binary(lease_id) do
+    opts = Store.transition_opts(opts)
     transition(opts, session_id, &Transitions.commit(&1, lease_id, session, opts))
   end
 
   @impl true
   def renew_session(session_id, lease_id, opts)
       when is_binary(session_id) and is_binary(lease_id) do
+    opts = Store.transition_opts(opts)
     transition(opts, session_id, &Transitions.renew(&1, lease_id, opts))
   end
 

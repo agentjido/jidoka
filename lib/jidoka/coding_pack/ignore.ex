@@ -291,56 +291,55 @@ defmodule Jidoka.CodingPack.Ignore do
 
     case ignore_list_dir(opts).(absolute) do
       {:ok, names} ->
-        Enum.reduce_while(Enum.sort(names), {:ok, directories, visited}, fn name, {:ok, directories, visited} ->
-          relative = join_relative(directory, name)
-          visited = visited + 1
-
-          cond do
-            visited > workspace.limits.max_search_files ->
-              {:halt,
-               {:error,
-                Error.new(:coding_search_file_limit_exceeded, %{
-                  limit: workspace.limits.max_search_files
-                })}}
-
-            first_match(hard_rules, relative) != nil ->
-              {:cont, {:ok, directories, visited}}
-
-            true ->
-              case ignore_lstat(opts).(Path.join(workspace.root, relative)) do
-                {:ok, %{type: :directory}} ->
-                  case collect_directory(
-                         workspace,
-                         relative,
-                         hard_rules,
-                         directories ++ [relative],
-                         visited,
-                         opts
-                       ) do
-                    {:ok, next_directories, next_visited} ->
-                      {:cont, {:ok, next_directories, next_visited}}
-
-                    {:error, reason} ->
-                      {:halt, {:error, reason}}
-                  end
-
-                {:ok, _stat} ->
-                  {:cont, {:ok, directories, visited}}
-
-                {:error, reason} ->
-                  {:halt,
-                   {:error,
-                    Error.new(:coding_search_io_error, %{
-                      path: relative,
-                      reason: inspect(reason)
-                    })}}
-              end
-          end
-        end)
+        collect_entries(Enum.sort(names), workspace, directory, hard_rules, directories, visited, opts)
 
       {:error, reason} ->
         {:error, Error.new(:coding_search_io_error, %{path: directory, reason: inspect(reason)})}
     end
+  end
+
+  defp collect_entries(names, workspace, directory, hard_rules, directories, visited, opts) do
+    Enum.reduce_while(names, {:ok, directories, visited}, fn name, {:ok, directories, visited} ->
+      relative = join_relative(directory, name)
+      collect_entry(workspace, relative, hard_rules, directories, visited + 1, opts)
+    end)
+  end
+
+  defp collect_entry(workspace, relative, hard_rules, directories, visited, opts) do
+    cond do
+      visited > workspace.limits.max_search_files ->
+        {:halt, search_limit_error(workspace)}
+
+      first_match(hard_rules, relative) != nil ->
+        {:cont, {:ok, directories, visited}}
+
+      true ->
+        collect_entry_stat(workspace, relative, hard_rules, directories, visited, opts)
+    end
+  end
+
+  defp collect_entry_stat(workspace, relative, hard_rules, directories, visited, opts) do
+    case ignore_lstat(opts).(Path.join(workspace.root, relative)) do
+      {:ok, %{type: :directory}} ->
+        collect_subdirectory(workspace, relative, hard_rules, directories, visited, opts)
+
+      {:ok, _stat} ->
+        {:cont, {:ok, directories, visited}}
+
+      {:error, reason} ->
+        {:halt, {:error, Error.new(:coding_search_io_error, %{path: relative, reason: inspect(reason)})}}
+    end
+  end
+
+  defp collect_subdirectory(workspace, relative, hard_rules, directories, visited, opts) do
+    case collect_directory(workspace, relative, hard_rules, directories ++ [relative], visited, opts) do
+      {:ok, next_directories, next_visited} -> {:cont, {:ok, next_directories, next_visited}}
+      {:error, reason} -> {:halt, {:error, reason}}
+    end
+  end
+
+  defp search_limit_error(workspace) do
+    {:error, Error.new(:coding_search_file_limit_exceeded, %{limit: workspace.limits.max_search_files})}
   end
 
   defp load_directory_rules(workspace, directories, opts) do

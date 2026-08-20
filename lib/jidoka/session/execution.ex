@@ -12,17 +12,17 @@ defmodule Jidoka.Session.Execution do
   alias Jidoka.Session.Replay
   alias Jidoka.Session.Conversation
   alias Jidoka.Session.EnvironmentRuntime
+  alias Jidoka.Session.Fork
   alias Jidoka.Session.LeaseHeartbeat
   alias Jidoka.Session.Data, as: Session
   alias Jidoka.Session.Lease
-  alias Jidoka.Session.Lineage
   alias Jidoka.Session.Sequence
+  alias Jidoka.Session.Sequence.Execution, as: SequenceExecution
   alias Jidoka.Session.Store
   alias Jidoka.Session.Transitions
   alias Jidoka.Memory
   alias Jidoka.Snapshot
   alias Jidoka.Runtime.Capabilities
-  alias Jidoka.Runtime.Limits
   alias Jidoka.Runtime.TurnRunner
   alias Jidoka.Turn
   alias Jidoka.Turn.Execution, as: TurnExecution
@@ -96,87 +96,14 @@ defmodule Jidoka.Session.Execution do
 
   @doc "Runs a nonempty ordered request sequence in one session."
   @spec run_sequence(session_input(), Sequence.input(), runtime_opts()) :: session_sequence_result()
-  def run_sequence(session_input, request_inputs, opts \\ [])
-
-  def run_sequence(session_input, [_request | _rest] = request_inputs, opts)
-      when is_list(request_inputs) and is_list(opts) do
-    EnvironmentRuntime.with_manager(opts, fn runtime_opts ->
-      run_sequence_with_runtime(session_input, request_inputs, runtime_opts)
-    end)
-  end
-
-  def run_sequence(_session_input, [], opts) when is_list(opts),
-    do: {:error, :empty_session_sequence}
-
-  def run_sequence(_session_input, request_inputs, opts) when is_list(opts),
-    do: {:error, {:invalid_session_sequence, request_inputs}}
-
-  defp run_sequence_with_runtime(session_input, request_inputs, opts) do
-    with :ok <- validate_store_mode(opts),
-         {:ok, session} <- resolve_session(session_input, opts),
-         {:ok, plan} <- TurnExecution.plan(session.spec),
-         {:ok, limits} <- Limits.resolve(plan, opts) do
-      opts =
-        opts
-        |> Keyword.put(:runtime_limits, limits)
-        |> Keyword.put(:runtime_sequence_started_at_ms, runtime_clock_ms(opts))
-
-      Jidoka.Extension.RuntimeEvents.emit(
-        "session.start",
-        %{session_ref: session.session_id, data: %{request_count: length(request_inputs)}},
-        opts
-      )
-
-      with_sequence_environment_observer(session, opts, fn runtime_opts ->
-        state = %{
-          session: session,
-          steps: [],
-          operation_count: sequence_operation_count(session, opts),
-          request_ids: []
-        }
-
-        result =
-          request_inputs
-          |> run_sequence_steps(state, 1, runtime_opts)
-          |> put_sequence_limits(limits, runtime_opts)
-
-        Jidoka.Extension.RuntimeEvents.emit(
-          "session.end",
-          %{session_ref: session.session_id, data: %{status: result.status}},
-          opts
-        )
-
-        result
-      end)
-    end
-  end
-
-  defp with_sequence_environment_observer(session, opts, run) do
-    {:ok, tracker} = Elixir.Agent.start_link(fn -> session.environment end)
-    observer = fn environment -> Elixir.Agent.update(tracker, fn _current -> environment end) end
-    runtime_opts = Keyword.put(opts, :session_environment_observer, observer)
-
-    try do
-      result = run.(runtime_opts)
-
-      case Elixir.Agent.get(tracker, & &1) do
-        nil -> {:ok, result}
-        environment -> {:ok, put_sequence_environment(result, environment)}
-      end
-    after
-      Elixir.Agent.stop(tracker)
-    end
-  end
-
-  defp put_sequence_environment(%Sequence.Result{} = result, environment) do
-    %{result | session: Session.put_environment(result.session, environment)}
-  end
+  def run_sequence(session_input, request_inputs, opts \\ []),
+    do: SequenceExecution.run(session_input, request_inputs, opts, &run_session_internal/3)
 
   @doc false
   @spec resolve_sequence_session(session_input(), runtime_opts()) ::
           {:ok, Session.t()} | {:error, term()}
   def resolve_sequence_session(session_input, opts) when is_list(opts) do
-    resolve_session(session_input, opts)
+    SequenceExecution.resolve_session(session_input, opts)
   end
 
   @doc false
@@ -184,14 +111,7 @@ defmodule Jidoka.Session.Execution do
           {:ok, Session.t()} | {:error, term()}
   def persist_sequence_cancellation(progress, %Cancellation{} = cancellation, opts)
       when is_map(progress) and is_list(opts) do
-    with {:ok, session} <- cancellation_session(progress, opts) do
-      cancelled =
-        session
-        |> maybe_put_sequence_request(Map.get(progress, :request))
-        |> Session.put_cancellation(cancellation)
-
-      persist_sequence_cancellation_session(cancelled, opts)
-    end
+    SequenceExecution.persist_cancellation(progress, cancellation, opts)
   end
 
   @doc """
@@ -255,22 +175,8 @@ defmodule Jidoka.Session.Execution do
           {:ok, Session.t()} | {:error, term()}
   def fork_session(session_input, opts \\ []) do
     with :ok <- validate_store_mode(opts),
-         {:ok, source} <- resolve_session(session_input, opts),
-         :ok <- ensure_forkable_session(source),
-         {:ok, source_snapshot} <- select_fork_snapshot(source, Keyword.get(opts, :snapshot, :latest)),
-         {:ok, lineage} <-
-           Lineage.next(
-             source.lineage,
-             source.session_id,
-             source_snapshot.snapshot_id,
-             clock_ms(opts)
-           ),
-         {:ok, environment} <- EnvironmentRuntime.fork(source, opts),
-         {:ok, fork_snapshot} <-
-           fork_snapshot(source_snapshot, source, lineage, environment, opts),
-         {:ok, fork} <- Session.fork(source, fork_snapshot, lineage, fork_session_opts(opts)),
-         :ok <- ensure_fork_destination_available(fork, opts) do
-      persist_session(fork, opts)
+         {:ok, source} <- resolve_session(session_input, opts) do
+      Fork.create(source, opts)
     end
   end
 
@@ -376,285 +282,6 @@ defmodule Jidoka.Session.Execution do
       )
     end)
   end
-
-  defp run_sequence_steps([], state, _index, _opts) do
-    Sequence.Result.new!(
-      status: :completed,
-      session: state.session,
-      steps: state.steps,
-      terminal: nil
-    )
-  end
-
-  defp run_sequence_steps([input | rest], state, index, opts) do
-    with {:ok, request} <- normalize_sequence_request(input, opts),
-         :ok <- ensure_unique_sequence_request(request, state.request_ids, index) do
-      notify_sequence_progress(state, index, request, opts)
-
-      case Limits.check_sequence_deadline(opts, index) do
-        :ok ->
-          run_sequence_after_deadline(state, request, rest, index, opts)
-
-        {:error, exceeded} ->
-          sequence_run_error(state, request, {:runtime_limit_exceeded, exceeded}, index, opts)
-      end
-    else
-      {:error, reason} ->
-        terminal_sequence_result(
-          :error,
-          state.session,
-          state.steps,
-          index,
-          sequence_request_id(input),
-          nil,
-          reason
-        )
-    end
-  end
-
-  defp run_sequence_after_deadline(state, request, rest, index, opts) do
-    case Cancellation.check(opts) do
-      :ok -> run_sequence_request(state, request, rest, index, opts)
-      {:error, reason} -> sequence_run_error(state, request, reason, index, opts)
-    end
-  end
-
-  defp run_sequence_request(state, request, rest, index, opts) do
-    run_opts =
-      opts
-      |> Keyword.put(:session_sequence_active, true)
-      |> Keyword.put(:session_sequence_terminal, rest == [])
-      |> Keyword.put(:fresh_conversation, index == 1 and Keyword.get(opts, :fresh_conversation, false))
-
-    case run_session_internal(sequence_session_input(state.session, opts), request, run_opts) do
-      {:ok, session, %Turn.Result{} = result} ->
-        operation_results =
-          Enum.drop(result.agent_state.operation_results, state.operation_count)
-
-        step =
-          Sequence.Step.new!(
-            index: index,
-            request: request,
-            result: result,
-            operation_results: operation_results
-          )
-
-        next_state = %{
-          session: session,
-          steps: state.steps ++ [step],
-          operation_count: length(result.agent_state.operation_results),
-          request_ids: [request.request_id | state.request_ids]
-        }
-
-        check =
-          if rest == [] do
-            Limits.check_usage(next_state.steps, Keyword.fetch!(opts, :runtime_limits), index)
-          else
-            Limits.check_usage_before_next(
-              next_state.steps,
-              Keyword.fetch!(opts, :runtime_limits),
-              index
-            )
-          end
-
-        case check do
-          :ok ->
-            run_sequence_steps(rest, next_state, index + 1, opts)
-
-          {:error, exceeded} ->
-            sequence_run_error(
-              next_state,
-              request,
-              {:runtime_limit_exceeded, exceeded},
-              index,
-              opts
-            )
-        end
-
-      {:hibernate, session, %Snapshot{} = snapshot} ->
-        terminal_sequence_result(
-          :hibernated,
-          session,
-          state.steps,
-          index,
-          request.request_id,
-          snapshot,
-          nil
-        )
-
-      {:error, session, reason} ->
-        sequence_run_error(%{state | session: session}, request, reason, index, opts)
-
-      {:error, reason} ->
-        sequence_run_error(state, request, reason, index, opts)
-    end
-  end
-
-  defp notify_sequence_progress(state, index, request, opts) do
-    case Keyword.get(opts, :sequence_progress) do
-      callback when is_function(callback, 1) ->
-        _result =
-          safe_sequence_progress(callback, %{session: state.session, steps: state.steps, index: index, request: request})
-
-        :ok
-
-      _callback ->
-        :ok
-    end
-  end
-
-  defp safe_sequence_progress(callback, progress) do
-    callback.(progress)
-  rescue
-    _exception -> :ok
-  catch
-    _kind, _reason -> :ok
-  end
-
-  defp normalize_sequence_request(input, opts) do
-    Turn.Request.from_input(input, Keyword.take(opts, [:id_generator]))
-  end
-
-  defp sequence_run_error(state, request, reason, index, opts) do
-    status = if Cancellation.cancelled_reason?(reason), do: :cancelled, else: :error
-    session = sequence_error_session(state.session, request, status, reason, opts)
-
-    terminal_sequence_result(
-      status,
-      session,
-      state.steps,
-      index,
-      request.request_id,
-      nil,
-      reason
-    )
-  end
-
-  defp ensure_unique_sequence_request(%Turn.Request{request_id: request_id}, request_ids, index) do
-    if request_id in request_ids do
-      {:error, {:duplicate_sequence_request_id, index, request_id}}
-    else
-      :ok
-    end
-  end
-
-  defp sequence_session_input(%Session{session_id: session_id} = session, opts) do
-    if Keyword.has_key?(opts, :store), do: session_id, else: session
-  end
-
-  defp sequence_error_session(session, request, status, reason, opts) do
-    case Keyword.fetch(opts, :store) do
-      {:ok, store} ->
-        case Store.get_session(store, session.session_id) do
-          {:ok, stored} -> stored
-          {:error, _reason} -> put_sequence_error(session, request, status, reason)
-        end
-
-      :error ->
-        put_sequence_error(session, request, status, reason)
-    end
-  end
-
-  defp sequence_operation_count(%Session{} = session, opts) do
-    if Keyword.get(opts, :fresh_conversation, false),
-      do: 0,
-      else: length(session.conversation.agent_state.operation_results)
-  end
-
-  defp put_sequence_error(session, request, :cancelled, reason) do
-    session |> maybe_put_sequence_request(request) |> Session.put_cancellation(reason)
-  end
-
-  defp put_sequence_error(session, request, :error, reason) do
-    session |> maybe_put_sequence_request(request) |> Session.put_error(reason)
-  end
-
-  defp terminal_sequence_result(status, session, steps, index, request_id, snapshot, reason) do
-    cancellation = if match?(%Cancellation{}, reason), do: reason, else: nil
-
-    terminal =
-      Sequence.Terminal.new!(
-        kind: status,
-        index: index,
-        request_id: request_id,
-        reason: reason,
-        snapshot: snapshot,
-        cancellation: cancellation
-      )
-
-    Sequence.Result.new!(status: status, session: session, steps: steps, terminal: terminal)
-  end
-
-  defp put_sequence_limits(%Sequence.Result{} = result, limits, opts) do
-    reason = if result.terminal, do: result.terminal.reason, else: nil
-    evidence = Limits.evidence(limits, result.steps, Limits.sequence_elapsed_ms(opts), reason)
-    %{result | limits: evidence}
-  end
-
-  defp runtime_clock_ms(opts) do
-    case Keyword.get(opts, :clock) do
-      clock when is_function(clock, 0) -> clock.()
-      _clock -> System.monotonic_time(:millisecond)
-    end
-  end
-
-  defp cancellation_session(%{session: %Session{} = session}, opts) do
-    case Keyword.fetch(opts, :store) do
-      {:ok, store} -> Store.get_session(store, session.session_id)
-      :error -> {:ok, session}
-    end
-  end
-
-  defp cancellation_session(_progress, _opts),
-    do: {:error, :invalid_sequence_cancellation_progress}
-
-  defp maybe_put_sequence_request(session, %Turn.Request{request_id: request_id} = request) do
-    case List.last(session.requests) do
-      %Turn.Request{request_id: ^request_id} -> session
-      _last -> Session.put_request(session, request)
-    end
-  end
-
-  defp maybe_put_sequence_request(session, _request), do: session
-
-  defp persist_sequence_cancellation_session(
-         %Session{lease: %Lease{lease_id: lease_id}} = session,
-         opts
-       ) do
-    with {:ok, store} <- fetch_store(opts) do
-      Store.commit_session(
-        store,
-        session.session_id,
-        lease_id,
-        session,
-        lease_store_opts(opts)
-      )
-    end
-  end
-
-  defp persist_sequence_cancellation_session(%Session{} = session, opts) do
-    case Keyword.fetch(opts, :store) do
-      {:ok, store} -> Store.put_session(store, Session.clear_lease(session))
-      :error -> {:ok, Session.clear_lease(session)}
-    end
-  end
-
-  defp sequence_request_id(%Turn.Request{request_id: request_id}), do: request_id
-
-  defp sequence_request_id(input) do
-    input
-    |> Jidoka.Schema.normalize_attrs()
-    |> sequence_request_id_from_attrs()
-  end
-
-  defp sequence_request_id_from_attrs(attrs) when is_map(attrs) do
-    case Jidoka.Schema.get_key(attrs, :request_id) do
-      request_id when is_binary(request_id) -> request_id
-      _request_id -> nil
-    end
-  end
-
-  defp sequence_request_id_from_attrs(_attrs), do: nil
 
   defp resume_session_snapshot(
          %Session{} = session,
@@ -797,94 +424,32 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp restart_recovered_request(%Session{} = session, %Turn.Request{} = request, opts) do
-    with opts = Keyword.put(opts, :session_id, session.session_id),
-         {:ok, prepared} <- TurnExecution.prepare(session.spec, request, opts) do
-      runtime_opts = Keyword.put(prepared.opts, :session_id, session.session_id)
+    opts = Keyword.put(opts, :session_id, session.session_id)
 
-      with_session_lease(session, runtime_opts, fn leased_opts ->
-        run_session_turn(
-          session,
-          prepared.plan,
-          prepared.request,
-          prepared.capabilities,
-          leased_opts
-        )
-      end)
-    else
+    case TurnExecution.prepare(session.spec, request, opts) do
+      {:ok, prepared} -> run_recovered_request(session, prepared)
       {:error, _reason} = error -> error
     end
+  end
+
+  defp run_recovered_request(session, prepared) do
+    runtime_opts = Keyword.put(prepared.opts, :session_id, session.session_id)
+
+    with_session_lease(session, runtime_opts, fn leased_opts ->
+      run_session_turn(
+        session,
+        prepared.plan,
+        prepared.request,
+        prepared.capabilities,
+        leased_opts
+      )
+    end)
   end
 
   defp latest_snapshot(%Session{} = session) do
     case Session.latest_snapshot(session) do
       %Snapshot{} = snapshot -> {:ok, snapshot}
       nil -> {:error, {:missing_session_snapshot, session.session_id}}
-    end
-  end
-
-  defp select_fork_snapshot(%Session{} = session, :latest), do: latest_snapshot(session)
-
-  defp select_fork_snapshot(%Session{} = session, %Snapshot{} = candidate) do
-    case Enum.find(session.snapshots, &(&1.snapshot_id == candidate.snapshot_id)) do
-      ^candidate -> {:ok, candidate}
-      %Snapshot{} -> {:error, {:session_snapshot_mismatch, candidate.snapshot_id}}
-      nil -> {:error, {:session_snapshot_not_found, session.session_id, candidate.snapshot_id}}
-    end
-  end
-
-  defp select_fork_snapshot(%Session{} = session, snapshot_input) when is_binary(snapshot_input) do
-    case Enum.find(session.snapshots, &(&1.snapshot_id == snapshot_input)) do
-      %Snapshot{} = snapshot ->
-        {:ok, snapshot}
-
-      nil ->
-        with {:ok, %Snapshot{} = snapshot} <- Snapshot.from_input(snapshot_input) do
-          select_fork_snapshot(session, snapshot)
-        end
-    end
-  end
-
-  defp select_fork_snapshot(%Session{} = session, snapshot_input) do
-    {:error, {:invalid_session_snapshot_selector, session.session_id, snapshot_input}}
-  end
-
-  defp fork_snapshot(%Snapshot{} = snapshot, %Session{} = source, lineage, environment, opts) do
-    fork_opts =
-      [
-        snapshot_id: Keyword.get(opts, :fork_snapshot_id),
-        id_generator: Keyword.get(opts, :id_generator),
-        parent_session_id: source.session_id,
-        root_session_id: lineage.root_session_id
-      ]
-      |> Enum.reject(fn {_key, value} -> is_nil(value) end)
-
-    with {:ok, %Snapshot{} = fork} <- Snapshot.fork(snapshot, fork_opts) do
-      Snapshot.new(%Snapshot{
-        fork
-        | schema_version: Snapshot.schema_version(),
-          environment: environment
-      })
-    end
-  end
-
-  defp ensure_forkable_session(%Session{status: :running, session_id: session_id}) do
-    {:error, {:cannot_fork_running_session, session_id}}
-  end
-
-  defp ensure_forkable_session(%Session{}), do: :ok
-
-  defp ensure_fork_destination_available(%Session{} = fork, opts) do
-    case Keyword.fetch(opts, :store) do
-      {:ok, store} -> ensure_session_absent(store, fork.session_id)
-      :error -> :ok
-    end
-  end
-
-  defp ensure_session_absent(store, session_id) do
-    case Store.get_session(store, session_id) do
-      {:error, {:session_not_found, ^session_id}} -> :ok
-      {:ok, %Session{}} -> {:error, {:fork_session_already_exists, session_id}}
-      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -915,16 +480,6 @@ defmodule Jidoka.Session.Execution do
   end
 
   defp session_opts(opts), do: Keyword.take(opts, [:session_id, :id_generator, :metadata])
-
-  defp fork_session_opts(opts),
-    do: Keyword.take(opts, [:session_id, :id_generator, :metadata])
-
-  defp clock_ms(opts) do
-    case Keyword.get(opts, :clock) do
-      clock when is_function(clock, 0) -> clock.()
-      _clock -> System.system_time(:millisecond)
-    end
-  end
 
   defp with_session_lease(%Session{} = session, opts, run) when is_function(run, 1) do
     opts = durable_runtime_opts(session, opts)
@@ -1032,14 +587,19 @@ defmodule Jidoka.Session.Execution do
   defp persist_result_environment({:error, reason}, environment, opts) do
     case Keyword.fetch(opts, :store) do
       {:ok, store} ->
-        with {:ok, session} <- Store.get_session(store, Keyword.fetch!(opts, :session_id)) do
-          session = Session.put_environment(session, environment)
-          persist_session_result(session, opts, fn session -> {:error, session, reason} end)
+        case Store.get_session(store, Keyword.fetch!(opts, :session_id)) do
+          {:ok, session} -> persist_environment_error(session, environment, reason, opts)
+          {:error, _reason} = error -> error
         end
 
       :error ->
         {:error, reason}
     end
+  end
+
+  defp persist_environment_error(session, environment, reason, opts) do
+    session = Session.put_environment(session, environment)
+    persist_session_result(session, opts, fn session -> {:error, session, reason} end)
   end
 
   defp combine_environment_finish_error({:error, %Session{} = session, reason}, finish_reason),

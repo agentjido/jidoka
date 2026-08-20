@@ -111,13 +111,17 @@ defmodule Jidoka.Memory.Runtime do
           Route.new(kind: :namespace, agent_id: agent_id, namespace: namespace)
 
         memory.scope == :session ->
-          with {:ok, session_id} <- resolve_session_id(memory, opts) do
-            Route.new(kind: :session, agent_id: agent_id, session_id: session_id)
-          end
+          session_route(memory, agent_id, opts)
 
         true ->
           Route.new(kind: :agent, agent_id: agent_id)
       end
+    end
+  end
+
+  defp session_route(memory, agent_id, opts) do
+    with {:ok, session_id} <- resolve_session_id(memory, opts) do
+      Route.new(kind: :session, agent_id: agent_id, session_id: session_id)
     end
   end
 

@@ -26,6 +26,11 @@ defmodule Jidoka.Architecture.BoundariesTest do
     "lib/jidoka/workflow/runtime/**/*.ex"
   ]
 
+  @pure_transition_files [
+    "lib/jidoka/session/transitions.ex",
+    "lib/jidoka/turn/transition.ex"
+  ]
+
   @outward_namespaces [
     "Jidoka.Adapter",
     "Jidoka.Harness",
@@ -78,6 +83,23 @@ defmodule Jidoka.Architecture.BoundariesTest do
       end)
 
     assert violations == [], format_violations("outward runtime dependencies", violations)
+  end
+
+  test "pure transitions do not read clocks or start effects" do
+    forbidden = ~r/\b(?:System\.(?:system_time|monotonic_time)|DateTime\.utc_now|Task\.|GenServer\.|Process\.)/
+
+    violations =
+      Enum.flat_map(@pure_transition_files, fn relative_file ->
+        relative_file
+        |> then(&Path.join(@root, &1))
+        |> File.stream!()
+        |> Enum.with_index(1)
+        |> Enum.flat_map(fn {line, line_number} ->
+          if Regex.match?(forbidden, line), do: [{relative_file, line_number}], else: []
+        end)
+      end)
+
+    assert violations == [], format_violations("effects in pure transitions", violations)
   end
 
   test "internal production modules do not call the root facade" do

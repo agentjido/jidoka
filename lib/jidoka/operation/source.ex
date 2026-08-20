@@ -58,7 +58,7 @@ defmodule Jidoka.Operation.Source do
   end
 
   def load(%module{} = source, opts) when is_list(opts) do
-    if function_exported?(module, :compile, 2) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :compile, 2) do
       case module.compile(source, opts) do
         {:ok, %Compiled{} = compiled} ->
           Compiled.new(compiled.operations, compiled.routes_by_name, compiled.metadata)

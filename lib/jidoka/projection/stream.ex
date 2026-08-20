@@ -86,18 +86,16 @@ defmodule Jidoka.Projection.Stream do
   defp project_data(data) when is_map(data) do
     projected = data |> Portable.project() |> drop_runtime() |> stringify_keys()
 
-    cond do
-      encoded_size(projected) > @max_data_bytes ->
-        {:error, :projection_too_large}
+    if encoded_size(projected) > @max_data_bytes do
+      {:error, :projection_too_large}
+    else
+      {known, unknown} = split_unknown(projected)
 
-      true ->
-        {known, unknown} = split_unknown(projected)
-
-        if encoded_size(unknown) > @max_unknown_bytes do
-          {:error, :unknown_projection_overflow}
-        else
-          {:ok, maybe_put(known, "unknown", empty_to_nil(unknown))}
-        end
+      if encoded_size(unknown) > @max_unknown_bytes do
+        {:error, :unknown_projection_overflow}
+      else
+        {:ok, maybe_put(known, "unknown", empty_to_nil(unknown))}
+      end
     end
   end
 

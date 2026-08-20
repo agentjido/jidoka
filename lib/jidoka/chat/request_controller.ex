@@ -115,7 +115,7 @@ defmodule Jidoka.Chat.RequestController do
   end
 
   def handle_call(:await, _from, %{status: :finished} = state) do
-    {:reply, state.result, state}
+    {:reply, state.result, schedule_expiry(state, state.retention_ms)}
   end
 
   def handle_call(:await, from, state) do
@@ -335,10 +335,11 @@ defmodule Jidoka.Chat.RequestController do
   defp finish(state, result) do
     cancel_timeout(state)
     terminate_cancellation_members(state)
+    delivered? = state.awaiters != []
     Enum.each(state.awaiters, &GenServer.reply(&1, result))
     Enum.each(state.cancellers, &GenServer.reply(&1, {:error, :request_already_finished}))
 
-    %{
+    state = %{
       state
       | status: :finished,
         result: result,
@@ -352,7 +353,12 @@ defmodule Jidoka.Chat.RequestController do
         cancellers: [],
         cancellation_members: %{}
     }
-    |> maybe_schedule_expiry()
+
+    if delivered? do
+      schedule_expiry(state, state.retention_ms)
+    else
+      maybe_schedule_undelivered_expiry(state)
+    end
   end
 
   defp cancel_timeout(%{timeout_ref: ref}) when is_reference(ref), do: Process.cancel_timer(ref)
@@ -403,16 +409,20 @@ defmodule Jidoka.Chat.RequestController do
   defp mark_runtime_ready(state) do
     state
     |> Map.put(:runtime_ready?, true)
-    |> maybe_schedule_expiry()
+    |> maybe_schedule_undelivered_expiry()
   end
 
-  defp maybe_schedule_expiry(%{status: :finished, runtime_ready?: true, expiry_ref: nil} = state) do
+  defp maybe_schedule_undelivered_expiry(%{status: :finished, runtime_ready?: true} = state),
+    do: schedule_expiry(state, max(state.retention_ms, @default_retention_ms))
+
+  defp maybe_schedule_undelivered_expiry(state), do: state
+
+  defp schedule_expiry(state, delay_ms) do
+    if is_reference(state.expiry_ref), do: Process.cancel_timer(state.expiry_ref)
     expiry_ref = make_ref()
-    Process.send_after(self(), {:expire_request, expiry_ref}, state.retention_ms)
+    Process.send_after(self(), {:expire_request, expiry_ref}, delay_ms)
     %{state | expiry_ref: expiry_ref}
   end
-
-  defp maybe_schedule_expiry(state), do: state
 
   defp terminal_event({:ok, _result}), do: :turn_finished
   defp terminal_event({:ok, _session, _text}), do: :turn_finished

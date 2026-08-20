@@ -380,12 +380,10 @@ defmodule Jidoka.Inspection do
       {_source_state, {:ok, operations}} when is_list(operations) ->
         %Agent.Spec{} = spec = plan.spec
 
-        with {:ok, registry} <- Registry.new(spec.operations, operations) do
-          spec = %Agent.Spec{spec | operations: Registry.operations(registry)}
-
-          with :ok <- Agent.Spec.validate_operation_policies(spec) do
-            {:ok, %Turn.Plan{plan | spec: spec}}
-          end
+        with {:ok, registry} <- Registry.new(spec.operations, operations),
+             spec = %Agent.Spec{spec | operations: Registry.operations(registry)},
+             :ok <- Agent.Spec.validate_operation_policies(spec) do
+          {:ok, %Turn.Plan{plan | spec: spec}}
         end
 
       {_source_state, {:ok, operations}} ->

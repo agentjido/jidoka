@@ -89,12 +89,17 @@ defmodule Jidoka.AgentView.Events do
   end
 
   defp reject_event(%{} = view, %Event{} = event, reason) do
-    Logger.debug("Ignored AgentView event",
-      reason: reason,
-      request_id: event.request_id,
-      active_request_id: view |> Map.get(:metadata, %{}) |> Map.get(:active_request_id),
-      lifecycle: view |> Map.get(:metadata, %{}) |> Map.get(:request_lifecycle)
-    )
+    metadata = Map.get(view, :metadata, %{})
+
+    Logger.debug(fn ->
+      "Ignored AgentView event: " <>
+        inspect(%{
+          reason: reason,
+          request_id: event.request_id,
+          active_request_id: Map.get(metadata, :active_request_id),
+          lifecycle: Map.get(metadata, :request_lifecycle)
+        })
+    end)
 
     view
   end

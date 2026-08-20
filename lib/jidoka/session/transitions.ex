@@ -289,9 +289,10 @@ defmodule Jidoka.Session.Transitions do
   end
 
   defp clock_ms(opts) do
-    case Keyword.get(opts, :clock) do
-      clock when is_function(clock, 0) -> clock.()
-      _clock -> System.system_time(:millisecond)
+    case Keyword.fetch(opts, :now_ms) do
+      {:ok, now_ms} when is_integer(now_ms) and now_ms >= 0 -> now_ms
+      {:ok, now_ms} -> raise ArgumentError, "now_ms must be a non-negative integer, got: #{inspect(now_ms)}"
+      :error -> raise ArgumentError, "pure session transitions require :now_ms"
     end
   end
 end

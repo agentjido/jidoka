@@ -1,5 +1,5 @@
 defmodule Jidoka.CatalogLuaWorkflowIntegrationTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Jido.Action.Catalog, as: ActionCatalog
   alias Jidoka.Effect

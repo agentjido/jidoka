@@ -23,7 +23,7 @@ jobs:
     with:
       docs_command: mix docs --warnings-as-errors && mix run scripts/check_docs.exs && mix doctor --raise
       test_command: mix test --cover && mix test.coverage
-      credo_command: mix credo --min-priority higher
+      credo_command: mix credo
 
   examples:
     name: Example Livebooks and showcase

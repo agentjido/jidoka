@@ -41,6 +41,10 @@ defmodule Jidoka.Session.Sequence.RequestController do
   end
 
   @doc false
+  @spec ready(pid()) :: :ok
+  def ready(controller) when is_pid(controller), do: GenServer.call(controller, :ready)
+
+  @doc false
   @spec cancel(pid(), keyword()) :: {:ok, Cancellation.t()} | {:error, term()}
   def cancel(controller, opts) when is_pid(controller) and is_list(opts) do
     grace_ms = positive_integer(Keyword.get(opts, :grace_ms), @default_grace_ms)
@@ -101,13 +105,19 @@ defmodule Jidoka.Session.Sequence.RequestController do
        cancellation_members: %{},
        progress: %{session: session, steps: [], index: 1, request: nil},
        retention_ms: retention_ms,
-       expiry_ref: nil
+       expiry_ref: nil,
+       runtime_ready?: false
      }}
   end
 
   @impl true
+  def handle_call(:ready, _from, state) do
+    state = state |> Map.put(:runtime_ready?, true) |> maybe_schedule_undelivered_expiry()
+    {:reply, :ok, state}
+  end
+
   def handle_call(:await, _from, %{status: :finished} = state) do
-    {:reply, state.result, state}
+    {:reply, state.result, schedule_expiry(state, state.retention_ms)}
   end
 
   def handle_call(:await, from, state) do
@@ -340,11 +350,28 @@ defmodule Jidoka.Session.Sequence.RequestController do
 
   defp finish(state, result) do
     terminate_cancellation_members(state)
+    delivered? = state.awaiters != []
     Enum.each(state.awaiters, &GenServer.reply(&1, result))
-    expiry_ref = make_ref()
-    Process.send_after(self(), {:expire_request, expiry_ref}, state.retention_ms)
 
-    %{state | status: :finished, result: result, awaiters: [], expiry_ref: expiry_ref}
+    state = %{state | status: :finished, result: result, awaiters: []}
+
+    if delivered? do
+      schedule_expiry(state, state.retention_ms)
+    else
+      maybe_schedule_undelivered_expiry(state)
+    end
+  end
+
+  defp maybe_schedule_undelivered_expiry(%{status: :finished, runtime_ready?: true} = state),
+    do: schedule_expiry(state, max(state.retention_ms, @default_retention_ms))
+
+  defp maybe_schedule_undelivered_expiry(state), do: state
+
+  defp schedule_expiry(state, delay_ms) do
+    if is_reference(state.expiry_ref), do: Process.cancel_timer(state.expiry_ref)
+    expiry_ref = make_ref()
+    Process.send_after(self(), {:expire_request, expiry_ref}, delay_ms)
+    %{state | expiry_ref: expiry_ref}
   end
 
   defp positive_integer(value, _default) when is_integer(value) and value > 0, do: value

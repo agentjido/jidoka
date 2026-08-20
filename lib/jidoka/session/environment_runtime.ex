@@ -272,15 +272,16 @@ defmodule Jidoka.Session.EnvironmentRuntime do
             {:ok, selection}
 
           {:error, reason} ->
-            if is_struct(config, Selection),
-              do: {:error, reason},
-              else: unresolved_selection_config(config)
+            invalid_selection(config, reason)
         end
 
       config ->
         {:error, {:invalid_execution_environment_runtime, config}}
     end
   end
+
+  defp invalid_selection(%Selection{}, reason), do: {:error, reason}
+  defp invalid_selection(config, _reason), do: unresolved_selection_config(config)
 
   defp unresolved_selection_config(config) do
     selection = Map.get(config, :selection, Map.get(config, "selection"))

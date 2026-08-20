@@ -320,7 +320,7 @@ defmodule Jidoka.SessionAtomicContinuationTest do
 
     assert {:ok, %Data{} = claimed} =
              Transitions.claim(session, current,
-               clock: fn -> 100 end,
+               now_ms: 100,
                lease_ttl_ms: 50,
                owner_id: "first-worker"
              )
@@ -351,7 +351,7 @@ defmodule Jidoka.SessionAtomicContinuationTest do
             {:recovery_snapshot_request_mismatch, "recover-mismatched-snapshot", "orphan-snapshot", "orphan-request",
              "current-request"}} =
              Transitions.recover(inconsistent,
-               clock: fn -> 150 end,
+               now_ms: 150,
                lease_ttl_ms: 50,
                owner_id: "recovery-worker"
              )

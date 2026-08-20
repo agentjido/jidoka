@@ -69,6 +69,7 @@ defmodule Jidoka.Extension.ProcessHost do
          true <- binding.identity.source_type == :process,
          descriptor when is_map(descriptor) <- Keyword.get(opts, :descriptor),
          transport when is_atom(transport) <- Map.get(descriptor, :transport),
+         {:module, ^transport} <- Code.ensure_loaded(transport),
          true <- function_exported?(transport, :open, 2),
          {:ok, handle, evidence} <- safe_transport(fn -> transport.open(descriptor, opts) end) do
       finish_init(binding, descriptor, transport, handle, evidence, opts)

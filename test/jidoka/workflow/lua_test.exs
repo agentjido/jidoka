@@ -1,5 +1,5 @@
 defmodule Jidoka.Workflow.LuaTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case, async: false
 
   alias Jido.Action.Catalog
   alias Jidoka.Workflow.Lua

@@ -54,23 +54,26 @@ defmodule Jidoka.Handoff.OwnerStore.InMemory do
   end
 
   defp normalize_owner(conversation_id, %{handoff: %Handoff{} = handoff, updated_at_ms: updated_at_ms}) do
-    with {:ok, handoff} <- normalize_handoff(conversation_id, handoff) do
-      record = %{handoff: handoff, updated_at_ms: updated_at_ms}
-      true = :ets.insert(@table, {conversation_id, record})
-
-      %{
-        conversation_id: handoff.conversation_id,
-        agent: handoff.to_agent,
-        agent_id: handoff.to_agent_id,
-        handoff: handoff,
-        updated_at_ms: updated_at_ms
-      }
-    else
+    case normalize_handoff(conversation_id, handoff) do
+      {:ok, handoff} -> put_normalized_owner(conversation_id, handoff, updated_at_ms)
       {:error, _reason} -> nil
     end
   end
 
   defp normalize_owner(_conversation_id, _record), do: nil
+
+  defp put_normalized_owner(conversation_id, handoff, updated_at_ms) do
+    record = %{handoff: handoff, updated_at_ms: updated_at_ms}
+    true = :ets.insert(@table, {conversation_id, record})
+
+    %{
+      conversation_id: handoff.conversation_id,
+      agent: handoff.to_agent,
+      agent_id: handoff.to_agent_id,
+      handoff: handoff,
+      updated_at_ms: updated_at_ms
+    }
+  end
 
   defp normalize_handoff(conversation_id, %Handoff{conversation_id: nil} = handoff) do
     handoff

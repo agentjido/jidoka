@@ -84,18 +84,16 @@ defmodule Jidoka.Extension.ProcessHost.Manifest do
     with {:ok, name} <- normalize_name(get(tool, :name), :tool),
          {:ok, description} <- normalize_description(get(tool, :description)),
          {:ok, idempotency} <- normalize_idempotency(get(tool, :idempotency, :idempotent)),
-         {:ok, input_policy} <- normalize_map(get(tool, :input_policy, %{}), :input_policy),
-         {:ok, operation} <-
-           Operation.new(
-             name: name,
-             description: description,
-             idempotency: idempotency,
-             metadata: %{
-               "source" => "process_extension",
-               "input_policy" => input_policy
-             }
-           ) do
-      {:ok, operation}
+         {:ok, input_policy} <- normalize_map(get(tool, :input_policy, %{}), :input_policy) do
+      Operation.new(
+        name: name,
+        description: description,
+        idempotency: idempotency,
+        metadata: %{
+          "source" => "process_extension",
+          "input_policy" => input_policy
+        }
+      )
     end
   end
 

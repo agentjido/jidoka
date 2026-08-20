@@ -89,12 +89,14 @@ defmodule Jidoka.Policy.Gate do
     request = build_request(state, intent)
     context = Context.from_data!(Context.data(state.request.context))
 
-    with {:ok, %Decision{} = decision} <- invoke(policy, request, context, opts) do
-      decision = stamp(decision, opts)
-      journal = Effect.Journal.put_policy_decision(state.journal, intent, decision)
-      apply_decision(%Turn.State{state | journal: journal}, intent, decision, opts)
-    else
-      {:error, reason} -> {:error, {:policy_check_failed, request.effect_class, reason}}
+    case invoke(policy, request, context, opts) do
+      {:ok, %Decision{} = decision} ->
+        decision = stamp(decision, opts)
+        journal = Effect.Journal.put_policy_decision(state.journal, intent, decision)
+        apply_decision(%Turn.State{state | journal: journal}, intent, decision, opts)
+
+      {:error, reason} ->
+        {:error, {:policy_check_failed, request.effect_class, reason}}
     end
   end
 

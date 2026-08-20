@@ -150,20 +150,7 @@ defmodule CodingScenario.Oracle do
   defp operation_errors(operations, scenario) do
     requirements = get_in(scenario, ["operations", "requirements"])
     groups = Enum.group_by(operations, & &1["id"])
-
-    requirement_errors =
-      Enum.flat_map(requirements, fn required ->
-        case Map.get(groups, required["id"], []) do
-          [] ->
-            [{:missing_operation, required["id"]}]
-
-          [actual] ->
-            if Map.take(actual, Map.keys(required)) == required, do: [], else: [{:operation_mismatch, required["id"]}]
-
-          _many ->
-            [{:duplicate_operation, required["id"]}]
-        end
-      end)
+    requirement_errors = Enum.flat_map(requirements, &requirement_error(&1, groups))
 
     unauthorized_mutations =
       operations
@@ -189,6 +176,20 @@ defmodule CodingScenario.Oracle do
 
     requirement_errors ++
       mutation_error(unauthorized_mutations) ++ order_errors ++ verification_errors
+  end
+
+  defp requirement_error(required, groups) do
+    case Map.get(groups, required["id"], []) do
+      [] -> [{:missing_operation, required["id"]}]
+      [actual] -> operation_match_error(actual, required)
+      _many -> [{:duplicate_operation, required["id"]}]
+    end
+  end
+
+  defp operation_match_error(actual, required) do
+    if Map.take(actual, Map.keys(required)) == required,
+      do: [],
+      else: [{:operation_mismatch, required["id"]}]
   end
 
   defp mutation_error([]), do: []
@@ -352,16 +353,49 @@ defmodule CodingScenario.Oracle do
            "expected_git" => expected_git,
            "digests" => %{"before" => before_digest, "after" => after_digest}
          } = scenario
-       )
-       when is_binary(id) and is_list(files) and is_list(allowed) and is_list(protected) and
-              is_binary(command) and is_binary(program) and is_integer(timeout_ms) and timeout_ms > 0 and
-              is_list(requirements) and is_list(order) and is_map(expected_git) and
-              is_binary(before_digest) and is_binary(after_digest) do
-    Enum.each(files ++ allowed ++ protected, &safe_join!(@fixture_root, &1))
-    scenario
+       ) do
+    if valid_scenario_fields?(%{
+         id: id,
+         files: files,
+         allowed: allowed,
+         protected: protected,
+         command: command,
+         program: program,
+         timeout_ms: timeout_ms,
+         requirements: requirements,
+         order: order,
+         expected_git: expected_git,
+         before_digest: before_digest,
+         after_digest: after_digest
+       }) do
+      Enum.each(files ++ allowed ++ protected, &safe_join!(@fixture_root, &1))
+      scenario
+    else
+      raise "invalid coding scenario data"
+    end
   end
 
   defp validate_scenario!(_scenario), do: raise("invalid coding scenario data")
+
+  defp valid_scenario_fields?(fields) do
+    valid_repository_fields?(fields) and valid_verification_fields?(fields) and
+      valid_operation_fields?(fields) and valid_digest_fields?(fields)
+  end
+
+  defp valid_repository_fields?(fields) do
+    is_binary(fields.id) and is_list(fields.files) and is_list(fields.allowed) and is_list(fields.protected)
+  end
+
+  defp valid_verification_fields?(fields) do
+    is_binary(fields.command) and is_binary(fields.program) and is_integer(fields.timeout_ms) and fields.timeout_ms > 0
+  end
+
+  defp valid_operation_fields?(fields) do
+    is_list(fields.requirements) and is_list(fields.order) and is_map(fields.expected_git)
+  end
+
+  defp valid_digest_fields?(fields),
+    do: is_binary(fields.before_digest) and is_binary(fields.after_digest)
 
   defp initial_paths(scenario), do: get_in(scenario, ["repository", "initial_files"])
   defp allowed_paths(scenario), do: get_in(scenario, ["repository", "allowed_changes"])

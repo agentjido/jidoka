@@ -86,23 +86,26 @@ defmodule Jidoka.Session.Store do
   def durable_mode(store) do
     {module, _opts} = normalize_store(store)
 
-    with {:module, ^module} <- Code.ensure_loaded(module) do
-      implemented =
-        Enum.filter(@durable_callbacks, fn {callback, arity} -> function_exported?(module, callback, arity) end)
-
-      cond do
-        implemented == [] ->
-          {:ok, :none}
-
-        implemented == @durable_callbacks ->
-          {:ok, :durable}
-
-        true ->
-          missing = @durable_callbacks -- implemented
-          {:error, {:partial_durable_session_store, module, implemented, missing}}
-      end
-    else
+    case Code.ensure_loaded(module) do
+      {:module, ^module} -> durable_callbacks_mode(module)
       {:error, reason} -> {:error, {:invalid_session_store_module, module, reason}}
+    end
+  end
+
+  defp durable_callbacks_mode(module) do
+    implemented =
+      Enum.filter(@durable_callbacks, fn {callback, arity} -> function_exported?(module, callback, arity) end)
+
+    cond do
+      implemented == [] ->
+        {:ok, :none}
+
+      implemented == @durable_callbacks ->
+        {:ok, :durable}
+
+      true ->
+        missing = @durable_callbacks -- implemented
+        {:error, {:partial_durable_session_store, module, implemented, missing}}
     end
   end
 
@@ -263,33 +266,39 @@ defmodule Jidoka.Session.Store do
   @spec claim_transition(Data.t(), Turn.Request.t(), keyword()) ::
           {:ok, Data.t()} | {:error, term()}
   def claim_transition(%Data{} = session, %Turn.Request{} = request, opts),
-    do: Transitions.claim(session, request, opts)
+    do: Transitions.claim(session, request, transition_opts(opts))
 
   @doc false
   @spec resume_transition(Data.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
-  def resume_transition(%Data{} = session, opts), do: Transitions.resume(session, opts)
+  def resume_transition(%Data{} = session, opts), do: Transitions.resume(session, transition_opts(opts))
 
   @doc false
   @spec recover_transition(Data.t(), keyword()) :: {:ok, Data.t()} | {:error, term()}
-  def recover_transition(%Data{} = session, opts), do: Transitions.recover(session, opts)
+  def recover_transition(%Data{} = session, opts), do: Transitions.recover(session, transition_opts(opts))
 
   @doc false
   @spec checkpoint_transition(Data.t(), String.t(), Snapshot.t(), keyword()) ::
           {:ok, Data.t()} | {:error, term()}
   def checkpoint_transition(%Data{} = session, lease_id, %Snapshot{} = snapshot, opts),
-    do: Transitions.checkpoint(session, lease_id, snapshot, opts)
+    do: Transitions.checkpoint(session, lease_id, snapshot, transition_opts(opts))
 
   @doc false
   @spec commit_transition(Data.t(), String.t(), Data.t(), keyword()) ::
           {:ok, Data.t()} | {:error, term()}
   def commit_transition(%Data{} = current, lease_id, %Data{} = completed, opts),
-    do: Transitions.commit(current, lease_id, completed, opts)
+    do: Transitions.commit(current, lease_id, completed, transition_opts(opts))
 
   @doc false
   @spec renew_transition(Data.t(), String.t(), keyword()) ::
           {:ok, Data.t()} | {:error, term()}
   def renew_transition(%Data{} = session, lease_id, opts),
-    do: Transitions.renew(session, lease_id, opts)
+    do: Transitions.renew(session, lease_id, transition_opts(opts))
+
+  @doc false
+  @spec transition_opts(keyword()) :: keyword()
+  def transition_opts(opts) when is_list(opts) do
+    if Keyword.has_key?(opts, :now_ms), do: opts, else: Keyword.put(opts, :now_ms, clock_ms(opts))
+  end
 
   defp call_durable(store, callback, args, runtime_opts) do
     {module, store_opts} = normalize_store(store)

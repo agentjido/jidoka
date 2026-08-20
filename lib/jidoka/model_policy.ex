@@ -183,9 +183,8 @@ defmodule Jidoka.ModelPolicy do
     with {:ok, models} <- base_models(policy.models, intent),
          {:ok, selected} <- select(policy.select, models, context),
          {:ok, selected} <- normalize_selection(selected),
-         :ok <- require_models(selected),
-         {:ok, selected} <- resolve_declared_selection(selected, models) do
-      {:ok, selected}
+         :ok <- require_models(selected) do
+      resolve_declared_selection(selected, models)
     end
   end
 

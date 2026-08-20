@@ -109,7 +109,8 @@ defmodule Jidoka.Workflow.Scheduler do
   end
 
   def handle_call({:history, schedule_id}, _from, state) do
-    {:reply, Map.get(state.history, schedule_id, []), state}
+    history = state.history |> Map.get(schedule_id, :queue.new()) |> history_entries()
+    {:reply, history, state}
   end
 
   def handle_call({:trigger, schedule_id, supplied_now}, _from, state) do
@@ -258,7 +259,14 @@ defmodule Jidoka.Workflow.Scheduler do
       attempts: attempts
     }
 
-    history = Map.update(state.history, schedule.id, [trigger], &(&1 ++ [trigger]))
+    history =
+      Map.update(
+        state.history,
+        schedule.id,
+        :queue.in(trigger, :queue.new()),
+        &:queue.in(trigger, history_queue(&1))
+      )
+
     state = %{state | history: history}
     state = if status == :started, do: put_active_run(state, schedule.id, run_id), else: state
     {trigger, state}
@@ -358,12 +366,7 @@ defmodule Jidoka.Workflow.Scheduler do
     active =
       state.active_runs
       |> Map.get(schedule_id, MapSet.new())
-      |> Enum.reduce(MapSet.new(), fn run_id, active ->
-        case state.background.get(state.runner, run_id) do
-          {:ok, %Run{} = run} -> if Run.terminal?(run), do: active, else: MapSet.put(active, run_id)
-          {:error, _reason} -> active
-        end
-      end)
+      |> active_run_ids(state)
 
     put_in(state, [:active_runs, schedule_id], active)
   end
@@ -371,27 +374,39 @@ defmodule Jidoka.Workflow.Scheduler do
   defp rebuild_active_runs(state) do
     active_runs =
       Map.new(state.history, fn {schedule_id, triggers} ->
-        candidates =
-          triggers
-          |> Enum.reduce(MapSet.new(), fn
-            %Trigger{status: :started, run_id: run_id}, run_ids when is_binary(run_id) ->
-              MapSet.put(run_ids, run_id)
-
-            _trigger, run_ids ->
-              run_ids
-          end)
-
-        active =
-          Enum.reduce(candidates, MapSet.new(), fn run_id, active ->
-            case state.background.get(state.runner, run_id) do
-              {:ok, %Run{} = run} -> if Run.terminal?(run), do: active, else: MapSet.put(active, run_id)
-              {:error, _reason} -> active
-            end
-          end)
+        active = triggers |> history_entries() |> started_run_ids() |> active_run_ids(state)
 
         {schedule_id, active}
       end)
 
     %{state | active_runs: active_runs}
   end
+
+  defp started_run_ids(triggers) do
+    Enum.reduce(triggers, MapSet.new(), fn
+      %Trigger{status: :started, run_id: run_id}, run_ids when is_binary(run_id) -> MapSet.put(run_ids, run_id)
+      _trigger, run_ids -> run_ids
+    end)
+  end
+
+  defp active_run_ids(run_ids, state) do
+    Enum.reduce(run_ids, MapSet.new(), fn run_id, active ->
+      update_active_run(state.background.get(state.runner, run_id), run_id, active)
+    end)
+  end
+
+  defp update_active_run({:ok, %Run{} = run}, run_id, active) do
+    if Run.terminal?(run), do: active, else: MapSet.put(active, run_id)
+  end
+
+  defp update_active_run({:error, :not_found}, _run_id, active), do: active
+  defp update_active_run({:error, _reason}, run_id, active), do: MapSet.put(active, run_id)
+
+  @spec history_queue(:queue.queue(Trigger.t()) | [Trigger.t()]) :: :queue.queue(Trigger.t())
+  defp history_queue(entries) when is_list(entries), do: :queue.from_list(entries)
+  defp history_queue(queue), do: queue
+
+  @spec history_entries(:queue.queue(Trigger.t()) | [Trigger.t()]) :: [Trigger.t()]
+  defp history_entries(entries) when is_list(entries), do: entries
+  defp history_entries(queue), do: :queue.to_list(queue)
 end

@@ -29,14 +29,16 @@ defmodule Jidoka.Session.Sequence.Async do
              request_inputs: request_inputs,
              runtime_opts: opts
            ) do
-      {:ok,
-       Request.new(
-         request_id: request_id,
-         controller: controller,
-         session_id: session.session_id,
-         started_at_ms: System.system_time(:millisecond),
-         metadata: metadata(opts)
-       )}
+      request =
+        Request.new(
+          request_id: request_id,
+          controller: controller,
+          session_id: session.session_id,
+          started_at_ms: System.system_time(:millisecond),
+          metadata: metadata(opts)
+        )
+
+      with :ok <- RequestController.ready(controller), do: {:ok, request}
     end
   rescue
     exception -> {:error, exception}

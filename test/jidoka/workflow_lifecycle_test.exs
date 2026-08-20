@@ -127,9 +127,19 @@ defmodule Jidoka.WorkflowLifecycleTest do
 
     def get(probe, run_id) do
       Elixir.Agent.get_and_update(probe, fn state ->
-        status = Map.fetch!(state.runs, run_id)
-        run = %Run{id: run_id, workflow_id: "probe", status: status, outcomes: %{}, event_count: 0}
-        {{:ok, run}, %{state | gets: state.gets ++ [run_id]}}
+        result =
+          case Map.fetch(state.runs, run_id) do
+            {:ok, {:error, reason}} ->
+              {:error, reason}
+
+            {:ok, status} ->
+              {:ok, %Run{id: run_id, workflow_id: "probe", status: status, outcomes: %{}, event_count: 0}}
+
+            :error ->
+              {:error, :not_found}
+          end
+
+        {result, %{state | gets: state.gets ++ [run_id]}}
       end)
     end
 
@@ -441,6 +451,38 @@ defmodule Jidoka.WorkflowLifecycleTest do
 
     assert active_run_ids(scheduler, schedule.id) == MapSet.new()
     assert length(Scheduler.history(scheduler, schedule.id)) == 1_001
+  end
+
+  test "active lookup errors keep overlap protection closed" do
+    {:ok, probe} =
+      Elixir.Agent.start_link(fn ->
+        %{runs: %{"uncertain-run" => {:error, :backend_unavailable}}, gets: [], stops: []}
+      end)
+
+    scheduler = __MODULE__.UncertainScheduler
+
+    start_supervised!(
+      {Scheduler,
+       name: scheduler, runner: probe, background: BackgroundProbe, auto_schedule: false, clock: fn -> @now end}
+    )
+
+    assert {:ok, schedule} =
+             Scheduler.add(scheduler, %{
+               id: "uncertain",
+               workflow: LifecycleWorkflow,
+               input: %{value: 1},
+               trigger: {:at, @now},
+               overlap: :skip
+             })
+
+    :sys.replace_state(scheduler, fn state ->
+      %{state | active_runs: %{schedule.id => MapSet.new(["uncertain-run"])}}
+    end)
+
+    assert {:ok, %Trigger{status: :skipped, reason: :overlap}} =
+             Scheduler.trigger(scheduler, schedule.id, @now)
+
+    assert active_run_ids(scheduler, schedule.id) == MapSet.new(["uncertain-run"])
   end
 
   test "legacy scheduler state rebuilds only nonterminal active runs" do
