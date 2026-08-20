@@ -11,9 +11,21 @@ defmodule Jidoka.Agent.RuntimeOptions do
   def resolve(agent_module, %Spec{} = spec, opts)
       when is_atom(agent_module) and is_list(opts) do
     opts
+    |> ensure_operation_source(agent_module)
     |> Keyword.put(:operation_context, operation_context(agent_module, spec, opts))
-    |> Keyword.put_new(:operations, ToolSources.operation_capability(agent_module))
-    |> Keyword.put_new(:llm, ReqLLM.llm(default_llm_opts(spec, opts)))
+    |> Keyword.put_new_lazy(:llm, fn -> ReqLLM.llm(default_llm_opts(spec, opts)) end)
+  end
+
+  defp ensure_operation_source(opts, agent_module) do
+    if Keyword.has_key?(opts, :operations) and Keyword.has_key?(opts, :dsl_operation_source_digest) do
+      opts
+    else
+      compiled = ToolSources.compile!(agent_module)
+
+      opts
+      |> Keyword.put_new(:operations, compiled.capability)
+      |> Keyword.put_new(:dsl_operation_source_digest, compiled.digest)
+    end
   end
 
   defp operation_context(agent_module, %Spec{} = spec, opts) do

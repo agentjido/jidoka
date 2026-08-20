@@ -13,6 +13,7 @@ defmodule Jidoka.Session.Data do
   alias Jidoka.Session.Lease
   alias Jidoka.Session.Lineage
   alias Jidoka.Id
+  alias Jidoka.Operation.Continuation
   alias Jidoka.Review
   alias Jidoka.Snapshot
   alias Jidoka.Schema
@@ -277,6 +278,25 @@ defmodule Jidoka.Session.Data do
 
   def pending_reviews(%Snapshot{turn_state: %Turn.State{pending_interrupt: %Review.Interrupt{} = interrupt}}) do
     [Review.Request.from_interrupt!(interrupt)]
+  end
+
+  def pending_reviews(%Snapshot{cursor: %{phase: :wait}, metadata: metadata}) do
+    metadata
+    |> Map.get("operation_continuations", Map.get(metadata, :operation_continuations, []))
+    |> Continuation.list_from_input()
+    |> case do
+      {:ok, continuations} ->
+        Enum.flat_map(continuations, fn
+          %Continuation{kind: :subagent, snapshot: %Snapshot{} = child_snapshot} ->
+            pending_reviews(child_snapshot)
+
+          _continuation ->
+            []
+        end)
+
+      {:error, _reason} ->
+        []
+    end
   end
 
   def pending_reviews(%Snapshot{}), do: []

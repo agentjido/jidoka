@@ -20,7 +20,7 @@ defmodule Jidoka.Operation.Source do
           routes_by_name: %{required(String.t()) => Capability.t()},
           capability: Capability.t(),
           metadata: [map()],
-          digest: String.t() | nil
+          digest: String.t()
         }
 
   @doc "Compiles one source into one atomic snapshot."
@@ -179,6 +179,5 @@ defmodule Jidoka.Operation.Source do
     end
   end
 
-  defp digest([]), do: nil
   defp digest(entries), do: Codec.digest(Enum.map(entries, & &1.digest))
 end

@@ -26,6 +26,7 @@ defmodule Jidoka.Turn.Execution do
   alias Jidoka.Turn
 
   @operation_source_digest_key "operation_source_digest"
+  @dsl_operation_source_digest_key "dsl_operation_source_digest"
 
   @type plan_input :: module() | Agent.Spec.t() | Turn.Plan.t() | keyword() | map()
   @type request_input ::
@@ -54,9 +55,11 @@ defmodule Jidoka.Turn.Execution do
   @spec prepare(plan_input(), request_input(), opts()) :: {:ok, prepared()} | {:error, term()}
   def prepare(spec_or_plan, request_input, opts \\ []) do
     with {:ok, plan} <- plan(spec_or_plan),
+         opts = runtime_opts(plan, opts),
+         :ok <- validate_initial_dsl_operation_source_digest(plan, opts),
+         plan = put_dsl_operation_source_digest(plan, opts),
          {:ok, operation_setup} <- prepare_operation_setup(plan, opts),
          plan = operation_setup.plan,
-         opts = runtime_opts(plan, opts),
          {:ok, plan, opts} <- prepare_model_policy(plan, opts),
          {:ok, limits} <- Limits.resolve(plan, opts),
          plan = Limits.apply_plan(plan, limits),
@@ -97,6 +100,7 @@ defmodule Jidoka.Turn.Execution do
          {:ok, operation_setup} <- prepare_resume_operation_setup(snapshot, opts),
          snapshot = operation_setup.snapshot,
          opts = runtime_opts(snapshot, opts),
+         :ok <- validate_dsl_operation_source_digest(snapshot, opts),
          {:ok, snapshot, opts} <- prepare_snapshot_model_policy(snapshot, opts),
          {:ok, limits} <- Limits.resolve(snapshot.turn_state.plan, opts),
          snapshot = apply_snapshot_limits(snapshot, limits),
@@ -137,9 +141,30 @@ defmodule Jidoka.Turn.Execution do
       end
 
     opts
+    |> put_subagent_resume()
     |> Keyword.put_new(:model_turn_executor, &TurnCompiler.run_model_turn/2)
     |> Keyword.put_new(:operation_batch_executor, &OperationBatch.execute/5)
   end
+
+  defp put_subagent_resume(opts) do
+    operation_context =
+      opts
+      |> Keyword.get(:operation_context, %{})
+      |> normalize_operation_context()
+      |> Map.put_new(:subagent_resume, &__MODULE__.resume/2)
+
+    Keyword.put(opts, :operation_context, operation_context)
+  end
+
+  defp normalize_operation_context(%Jidoka.Context{} = context),
+    do: Jidoka.Context.runtime(context)
+
+  defp normalize_operation_context(context) when is_list(context) do
+    if Keyword.keyword?(context), do: Map.new(context), else: %{}
+  end
+
+  defp normalize_operation_context(context) when is_map(context), do: context
+  defp normalize_operation_context(_context), do: %{}
 
   defp dsl_agent_module(%Agent.Spec{metadata: metadata}) when is_map(metadata) do
     metadata
@@ -250,6 +275,40 @@ defmodule Jidoka.Turn.Execution do
       is_nil(expected) -> :ok
       expected == actual -> :ok
       true -> {:error, {:operation_source_digest_mismatch, expected, actual}}
+    end
+  end
+
+  defp put_dsl_operation_source_digest(%Turn.Plan{} = plan, opts) do
+    expected = Map.get(plan.spec.metadata, @dsl_operation_source_digest_key)
+
+    case expected || Keyword.get(opts, :dsl_operation_source_digest) do
+      digest when is_binary(digest) and digest != "" ->
+        %Turn.Plan{plan | metadata: Map.put(plan.metadata, @dsl_operation_source_digest_key, digest)}
+
+      _digest ->
+        plan
+    end
+  end
+
+  defp validate_initial_dsl_operation_source_digest(%Turn.Plan{} = plan, opts) do
+    expected = Map.get(plan.spec.metadata, @dsl_operation_source_digest_key)
+    actual = Keyword.get(opts, :dsl_operation_source_digest)
+
+    cond do
+      is_nil(expected) -> :ok
+      expected == actual -> :ok
+      true -> {:error, {:dsl_operation_source_digest_mismatch, expected, actual}}
+    end
+  end
+
+  defp validate_dsl_operation_source_digest(%Snapshot{} = snapshot, opts) do
+    expected = Map.get(snapshot.turn_state.plan.metadata, @dsl_operation_source_digest_key)
+    actual = Keyword.get(opts, :dsl_operation_source_digest)
+
+    cond do
+      is_nil(expected) -> :ok
+      expected == actual -> :ok
+      true -> {:error, {:dsl_operation_source_digest_mismatch, expected, actual}}
     end
   end
 

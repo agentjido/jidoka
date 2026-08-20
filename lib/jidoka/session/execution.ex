@@ -12,8 +12,8 @@ defmodule Jidoka.Session.Execution do
   alias Jidoka.Session.Replay
   alias Jidoka.Session.Conversation
   alias Jidoka.Session.EnvironmentRuntime
+  alias Jidoka.Session.Execution.Durability
   alias Jidoka.Session.Fork
-  alias Jidoka.Session.LeaseHeartbeat
   alias Jidoka.Session.Data, as: Session
   alias Jidoka.Session.Lease
   alias Jidoka.Session.Sequence
@@ -153,7 +153,7 @@ defmodule Jidoka.Session.Execution do
     result =
       with :ok <- validate_store_mode(opts),
            {:ok, store} <- fetch_store(opts),
-           {:ok, session} <- Store.recover_session(store, session_id, lease_store_opts(opts)),
+           {:ok, session} <- Store.recover_session(store, session_id, Durability.store_opts(opts)),
            {:ok, session} <- EnvironmentRuntime.restore(session, opts) do
         with_session_environment(session, opts, fn environment_session, environment_opts ->
           recover_claimed_session(environment_session, environment_opts)
@@ -357,7 +357,7 @@ defmodule Jidoka.Session.Execution do
          %Session{lease: %Lease{lease_id: lease_id}} = session,
          opts
        ) do
-    Store.commit_session(store, session.session_id, lease_id, session, lease_store_opts(opts))
+    Store.commit_session(store, session.session_id, lease_id, session, Durability.store_opts(opts))
   end
 
   defp persist_stored_session(store, %Session{} = session, _opts),
@@ -365,7 +365,7 @@ defmodule Jidoka.Session.Execution do
 
   defp claim_session(session_id, _session, %Turn.Request{} = request, opts) when is_binary(session_id) do
     with {:ok, store} <- fetch_store(opts) do
-      Store.claim_session(store, session_id, request, lease_store_opts(opts))
+      Store.claim_session(store, session_id, request, Durability.store_opts(opts))
     end
   end
 
@@ -397,7 +397,7 @@ defmodule Jidoka.Session.Execution do
 
   defp claim_resume_session(%Session{} = session, opts) do
     case Keyword.fetch(opts, :store) do
-      {:ok, store} -> Store.claim_resume(store, session.session_id, lease_store_opts(opts))
+      {:ok, store} -> Store.claim_resume(store, session.session_id, Durability.store_opts(opts))
       :error -> Transitions.resume_without_lease(session)
     end
   end
@@ -482,14 +482,14 @@ defmodule Jidoka.Session.Execution do
   defp session_opts(opts), do: Keyword.take(opts, [:session_id, :id_generator, :metadata])
 
   defp with_session_lease(%Session{} = session, opts, run) when is_function(run, 1) do
-    opts = durable_runtime_opts(session, opts)
+    opts = Durability.runtime_opts(session, opts)
 
-    case start_lease_heartbeat(session, opts) do
+    case Durability.start_heartbeat(session, opts) do
       {:ok, heartbeat} ->
         try do
           run.(opts)
         after
-          stop_lease_heartbeat(heartbeat)
+          Durability.stop_heartbeat(heartbeat)
         end
 
       {:error, reason} ->
@@ -619,83 +619,4 @@ defmodule Jidoka.Session.Execution do
 
   defp public_session_result({:error, %Session{}, reason}), do: {:error, reason}
   defp public_session_result(result), do: result
-
-  defp durable_runtime_opts(
-         %Session{lease: %Lease{} = lease} = session,
-         opts
-       ) do
-    case Keyword.fetch(opts, :store) do
-      {:ok, store} ->
-        opts = Keyword.put_new(opts, :cancellation, Cancellation.Token.new())
-
-        checkpoint = fn state, intent, stage ->
-          durable_checkpoint(store, session, lease, state, intent, stage, opts)
-        end
-
-        Keyword.put(opts, :durable_checkpoint, checkpoint)
-
-      :error ->
-        opts
-    end
-  end
-
-  defp durable_runtime_opts(%Session{}, opts), do: opts
-
-  defp durable_checkpoint(store, session, lease, state, intent, stage, opts) do
-    cursor = Turn.Cursor.before_effect(intent)
-
-    with {:ok, environment} <- EnvironmentRuntime.checkpoint(opts),
-         {:ok, snapshot} <-
-           Snapshot.from_turn_state(state, cursor,
-             id_generator: Keyword.get(opts, :id_generator),
-             environment: environment,
-             metadata: %{"durable_checkpoint" => Atom.to_string(stage)}
-           ),
-         {:ok, stored} <-
-           Store.checkpoint_session(
-             store,
-             session.session_id,
-             lease.lease_id,
-             snapshot,
-             lease_store_opts(opts)
-           ) do
-      run_durable_checkpoint_hook(stage, snapshot, stored, opts)
-    end
-  end
-
-  defp run_durable_checkpoint_hook(stage, snapshot, stored, opts) do
-    case Keyword.get(opts, :on_durable_checkpoint) do
-      hook when is_function(hook, 3) -> hook.(stage, snapshot, stored)
-      _hook -> :ok
-    end
-  end
-
-  defp start_lease_heartbeat(
-         %Session{lease: %Lease{lease_id: lease_id}, session_id: session_id},
-         opts
-       ) do
-    cond do
-      not Keyword.has_key?(opts, :store) ->
-        {:ok, nil}
-
-      Keyword.get(opts, :lease_heartbeat, true) == false ->
-        {:ok, nil}
-
-      true ->
-        LeaseHeartbeat.start_link(Keyword.fetch!(opts, :store), session_id, lease_id, opts)
-    end
-  end
-
-  defp start_lease_heartbeat(%Session{}, _opts), do: {:ok, nil}
-
-  defp stop_lease_heartbeat(nil), do: :ok
-
-  defp stop_lease_heartbeat(pid) when is_pid(pid) do
-    if Process.alive?(pid), do: GenServer.stop(pid, :normal)
-    :ok
-  end
-
-  defp lease_store_opts(opts) do
-    Keyword.take(opts, [:clock, :id_generator, :lease_ttl_ms, :owner_id])
-  end
 end

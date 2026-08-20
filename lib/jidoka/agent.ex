@@ -22,7 +22,6 @@ defmodule Jidoka.Agent do
   """
 
   alias Jidoka.Agent.ControlCompiler
-  alias Jidoka.Agent.RuntimeOptions
   alias Jidoka.Agent.ServerOptions
   alias Jidoka.Agent.Spec
   alias Jidoka.Agent.Spec.Generation
@@ -141,6 +140,7 @@ defmodule Jidoka.Agent do
           required(:actions) => [module()],
           required(:operations) => [Spec.Operation.t()],
           required(:operation_capability) => Jidoka.Operation.Capability.t(),
+          required(:operation_source_digest) => String.t(),
           required(:tool_sources) => [map()],
           required(:controls) => Jidoka.Agent.Spec.Controls.t()
         }
@@ -161,6 +161,7 @@ defmodule Jidoka.Agent do
       actions: tools.actions,
       operations: tools.operations,
       operation_capability: tools.capability,
+      operation_source_digest: tools.digest,
       tool_sources: tools.metadata,
       controls: controls
     }
@@ -221,6 +222,7 @@ defmodule Jidoka.Agent do
       metadata:
         %{
           "dsl_module" => inspect(agent_module),
+          "dsl_operation_source_digest" => definition.operation_source_digest,
           "jido_agent" => true,
           "context_schema?" => not is_nil(definition.context_schema),
           "result_schema?" => not is_nil(definition.result)
@@ -239,9 +241,13 @@ defmodule Jidoka.Agent do
   def run_turn(agent_module, input, opts \\ []) when is_atom(agent_module) and is_list(opts) do
     definition = definition!(agent_module)
     spec = spec_from_definition(definition, agent_module)
-    opts = Keyword.put_new(opts, :operations, definition.operation_capability)
 
-    case TurnExecution.run(spec, input, RuntimeOptions.resolve(agent_module, spec, opts)) do
+    opts =
+      opts
+      |> Keyword.put_new(:operations, definition.operation_capability)
+      |> Keyword.put_new(:dsl_operation_source_digest, definition.operation_source_digest)
+
+    case TurnExecution.run(spec, input, opts) do
       {:ok, _result} = ok -> ok
       {:hibernate, _snapshot} = hibernate -> hibernate
       {:error, reason} -> {:error, Error.normalize(reason, operation: :turn, phase: :harness)}

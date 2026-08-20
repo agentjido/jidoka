@@ -42,6 +42,21 @@ defmodule Jidoka.WorkflowDslTest do
     def run(%{value: value}, _context), do: {:ok, %{value: value * 2}}
   end
 
+  defmodule CountedOperation do
+    @moduledoc false
+
+    use Jidoka.Action,
+      name: "counted_operation",
+      description: "Records one completed operation call.",
+      schema: Zoi.object(%{})
+
+    @impl true
+    def run(_params, _context) do
+      count = :ets.update_counter(Jidoka.WorkflowDslTest.OperationCounter, :calls, 1)
+      {:ok, %{count: count}}
+    end
+  end
+
   defmodule InspectActionContext do
     @moduledoc false
 
@@ -75,6 +90,10 @@ defmodule Jidoka.WorkflowDslTest do
     def sleep(%{ms: ms}, _context) do
       Process.sleep(ms)
       {:ok, %{slept: ms}}
+    end
+
+    def suspend_loop(%{state: state}, context) do
+      if Jidoka.Context.get(context, :pause), do: {:suspend, state}, else: {:halt, state}
     end
 
     def wait_for_release(%{tag: tag}, context) do
@@ -358,6 +377,27 @@ defmodule Jidoka.WorkflowDslTest do
     output from(:sleep)
   end
 
+  defmodule SuspendingOperationWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:suspending_operation_workflow)
+      input Zoi.object(%{value: Zoi.integer()})
+    end
+
+    steps do
+      loop :pause,
+        initial: %{value: input(:value)},
+        using: {Fns, :suspend_loop, 2},
+        input: %{state: loop_state()},
+        max_iterations: 2
+    end
+
+    output from(:pause)
+  end
+
   defmodule ParallelWorkflow do
     @moduledoc false
 
@@ -480,6 +520,64 @@ defmodule Jidoka.WorkflowDslTest do
         max_concurrency: 4,
         forward_context: {:only, [:suffix]},
         result: :structured
+    end
+  end
+
+  defmodule SuspendingWorkflowAgent do
+    @moduledoc false
+
+    use Jidoka.Agent
+
+    agent :suspending_workflow_agent do
+      model %{provider: :test, id: "model"}
+      instructions "Run the workflow and wait for its durable result."
+    end
+
+    tools do
+      workflow SuspendingOperationWorkflow,
+        as: :run_suspending_workflow,
+        result: :structured
+    end
+  end
+
+  defmodule ParallelSuspendingWorkflowAgent do
+    @moduledoc false
+
+    use Jidoka.Agent
+
+    agent :parallel_suspending_workflow_agent do
+      model %{provider: :test, id: "model"}
+      instructions "Run independent operations and preserve suspended work."
+    end
+
+    tools do
+      action CountedOperation
+
+      workflow SuspendingOperationWorkflow,
+        as: :run_suspending_workflow,
+        result: :structured
+    end
+  end
+
+  defmodule UnsafeSuspendingWorkflowAgent do
+    @moduledoc false
+
+    use Jidoka.Agent
+
+    agent :unsafe_suspending_workflow_agent do
+      model %{provider: :test, id: "model"}
+      instructions "Run the controlled workflow once."
+    end
+
+    controls do
+      operation AllowControl, when: [kind: :workflow, name: "run_unsafe_suspending_workflow"]
+    end
+
+    tools do
+      workflow SuspendingOperationWorkflow,
+        as: :run_unsafe_suspending_workflow,
+        result: :structured,
+        idempotency: :unsafe_once
     end
   end
 
@@ -1296,6 +1394,138 @@ defmodule Jidoka.WorkflowDslTest do
            ] = result.agent_state.operation_results
   end
 
+  test "a parent turn preserves and resumes a suspended workflow operation" do
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
+      case count_results(journal, :llm) do
+        0 ->
+          {:ok,
+           %{
+             type: :operation,
+             name: "run_suspending_workflow",
+             arguments: %{"value" => 7}
+           }}
+
+        1 ->
+          {:ok, %{type: :final, content: "The suspended workflow completed."}}
+      end
+    end
+
+    assert {:hibernate, snapshot} =
+             SuspendingWorkflowAgent.run_turn("Run the durable workflow.",
+               llm: llm,
+               context: %{pause: true}
+             )
+
+    assert snapshot.cursor.phase == :wait
+
+    assert [
+             %Jidoka.Operation.Continuation{
+               kind: :workflow,
+               operation: "run_suspending_workflow"
+             }
+           ] = snapshot.metadata["operation_continuations"]
+
+    assert {:ok, restored_snapshot} =
+             snapshot
+             |> Jidoka.Snapshot.serialize!()
+             |> Jidoka.Snapshot.deserialize()
+
+    assert {:ok, %Turn.Result{content: "The suspended workflow completed."} = result} =
+             Jidoka.Harness.resume(restored_snapshot,
+               llm: llm,
+               nested_resume_opts: [context: %{pause: false}]
+             )
+
+    assert [operation_result] = result.agent_state.operation_results
+    assert operation_result.operation == "run_suspending_workflow"
+    assert operation_result.output.output.value == %{value: 7}
+  end
+
+  test "a parallel operation group checkpoints completed work while one workflow suspends" do
+    :ets.new(Jidoka.WorkflowDslTest.OperationCounter, [:named_table, :public])
+    :ets.insert(Jidoka.WorkflowDslTest.OperationCounter, {:calls, 0})
+
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
+      case count_results(journal, :llm) do
+        0 ->
+          {:ok,
+           %{
+             type: :operations,
+             operations: [
+               %{name: "counted_operation", arguments: %{}},
+               %{name: "run_suspending_workflow", arguments: %{"value" => 9}}
+             ]
+           }}
+
+        1 ->
+          {:ok, %{type: :final, content: "Parallel durable work completed."}}
+      end
+    end
+
+    assert {:hibernate, snapshot} =
+             ParallelSuspendingWorkflowAgent.run_turn("Run both operations.",
+               llm: llm,
+               context: %{pause: true}
+             )
+
+    assert :ets.lookup_element(Jidoka.WorkflowDslTest.OperationCounter, :calls, 2) == 1
+
+    assert {:ok, %Turn.Result{} = result} =
+             Jidoka.Harness.resume(snapshot,
+               llm: llm,
+               nested_resume_opts: [context: %{pause: false}]
+             )
+
+    assert :ets.lookup_element(Jidoka.WorkflowDslTest.OperationCounter, :calls, 2) == 1
+
+    assert Enum.map(result.agent_state.operation_results, & &1.operation) == [
+             "counted_operation",
+             "run_suspending_workflow"
+           ]
+  end
+
+  test "an unsafe-once workflow resumes only through its exact continuation" do
+    llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
+      case count_results(journal, :llm) do
+        0 ->
+          {:ok,
+           %{
+             type: :operation,
+             name: "run_unsafe_suspending_workflow",
+             arguments: %{"value" => 11}
+           }}
+
+        1 ->
+          {:ok, %{type: :final, content: "Unsafe workflow resumed safely."}}
+      end
+    end
+
+    assert {:hibernate, snapshot} =
+             UnsafeSuspendingWorkflowAgent.run_turn("Run controlled work.",
+               llm: llm,
+               context: %{pause: true}
+             )
+
+    [continuation] = snapshot.metadata["operation_continuations"]
+    wrong_continuation = %{continuation | source: "wrong_workflow_source"}
+
+    wrong_snapshot = %{
+      snapshot
+      | metadata: Map.put(snapshot.metadata, "operation_continuations", [wrong_continuation])
+    }
+
+    assert {:error,
+            %Jidoka.Error.ExecutionError{
+              details: %{reason: :unsafe_once_incomplete_effect, idempotency: :unsafe_once}
+            }} = Jidoka.Harness.resume(wrong_snapshot, llm: llm)
+
+    assert {:ok, %Turn.Result{content: "Unsafe workflow resumed safely."}} =
+             Jidoka.Harness.resume(snapshot,
+               llm: llm,
+               nested_resume_opts: [context: %{pause: false}]
+             )
+  end
+
   test "workflow depth operations execute through the agent tool path" do
     llm = fn _intent, %Effect.Journal{} = journal, _ctx ->
       case count_results(journal, :llm) do
@@ -1393,6 +1623,23 @@ defmodule Jidoka.WorkflowDslTest do
     assert_raise ArgumentError, ~r/invalid workflow source/, fn ->
       WorkflowSource.new!(workflow: "bad")
     end
+  end
+
+  test "the workflow adapter owns workflow-source timeout results" do
+    source = WorkflowSource.new!(workflow: SlowWorkflow, timeout: 10, result: :output)
+    assert {:ok, capability} = WorkflowSource.capability(source, [])
+
+    intent =
+      Effect.Intent.new(:operation, %{
+        name: "slow_workflow",
+        arguments: %{"ms" => 100}
+      })
+
+    assert {:error, {:workflow_failed, "slow_workflow", error}} =
+             capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
+
+    assert error.details.reason == :timeout
+    assert error.details.timeout == 10
   end
 
   test "workflow operation source forwards and overrides context defensively" do

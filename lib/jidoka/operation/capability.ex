@@ -8,7 +8,9 @@ defmodule Jidoka.Operation.Capability do
 
   @type t ::
           (Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t(), Jidoka.Context.t() ->
-             {:ok, term()} | {:error, term()})
+             {:ok, term()}
+             | {:hibernate, Jidoka.Operation.Continuation.t()}
+             | {:error, term()})
 
   @doc false
   @spec missing(Jidoka.Effect.Intent.t(), Jidoka.Effect.Journal.t(), Jidoka.Context.t()) ::

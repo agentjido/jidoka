@@ -110,6 +110,32 @@ The parent receives an operation result like:
 The parent then continues the same turn and produces the final answer.
 Conversation ownership never changes.
 
+If the child hibernates, the parent turn also hibernates. The parent snapshot
+stores the child snapshot as a durable operation continuation. Resume the
+parent snapshot, not the child snapshot:
+
+```elixir
+{:hibernate, parent_snapshot} =
+  Jidoka.turn(MyApp.SupportAgent, "Check the evidence.",
+    llm: parent_llm,
+    operation_context: %{
+      subagent_llm: child_llm,
+      subagent_opts: [checkpoint: :before_each_effect]
+    }
+  )
+
+{:ok, result} =
+  Jidoka.resume(parent_snapshot,
+    llm: parent_llm,
+    operation_context: %{subagent_llm: child_llm},
+    nested_resume_opts: [checkpoint: :none]
+  )
+```
+
+Use `nested_resume_opts:` for fresh runtime-only child options. For example,
+put a child approval response in this list. Jidoka does not store model
+functions, credentials, or process handles in the continuation.
+
 ## Handoff Flow
 
 Define the target agent that should own future turns.
@@ -288,7 +314,7 @@ in-memory owner store.
 | Parent expects future routing after subagent | Wrong primitive. | Use `handoff`. |
 | Handoff records owner but next message still hits router | App dispatcher does not read `Jidoka.handoff/1`. | Add routing before default agent selection. |
 | Handoff result lacks conversation id | No `conversation_id`, `conversation`, or `session_id` was present. | Pass one in arguments or context. |
-| Child hibernates during subagent call | Subagent hit HITL or checkpoint behavior. | Keep subagents bounded, or handle `{:subagent_hibernated, ...}` as an operation error. |
+| Parent hibernates while a subagent runs | The child hit HITL or a checkpoint. | Resume the parent snapshot and pass fresh child values with `nested_resume_opts:`. |
 
 ## Related Guides
 

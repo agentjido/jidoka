@@ -269,6 +269,58 @@ defmodule Jidoka.SkillTest do
     assert action == inspect(PolicyLookupAction)
   end
 
+  test "one direct DSL turn resolves its tool sources once" do
+    Process.put({ChangingSkill, :resolution_count}, 0)
+
+    llm = fn _intent, %Effect.Journal{}, _ctx ->
+      {:ok, %{type: :final, content: "One stable source snapshot."}}
+    end
+
+    assert {:ok, %Turn.Result{content: "One stable source snapshot."}} =
+             ChangingSkillAgent.run_turn("Use one source snapshot.", llm: llm)
+
+    assert Process.get({ChangingSkill, :resolution_count}) == 1
+  end
+
+  test "resume rejects a changed DSL operation-source contract" do
+    Process.put({ChangingSkill, :resolution_count}, 0)
+
+    llm = fn _intent, %Effect.Journal{}, _ctx ->
+      {:ok, %{type: :final, content: "This result must not run after drift."}}
+    end
+
+    assert {:hibernate, snapshot} =
+             ChangingSkillAgent.run_turn("Pause before the model effect.",
+               llm: llm,
+               checkpoint: :before_each_effect
+             )
+
+    assert Process.get({ChangingSkill, :resolution_count}) == 1
+
+    assert {:error, {:dsl_operation_source_digest_mismatch, expected, actual}} =
+             Jidoka.Harness.resume(snapshot, llm: llm)
+
+    assert is_binary(expected)
+    assert is_binary(actual)
+    assert expected != actual
+    assert Process.get({ChangingSkill, :resolution_count}) == 2
+  end
+
+  test "a previously compiled DSL spec rejects changed source handlers before a turn" do
+    Process.put({ChangingSkill, :resolution_count}, 0)
+    spec = ChangingSkillAgent.spec()
+
+    llm = fn _intent, %Effect.Journal{}, _ctx ->
+      flunk("source drift must fail before the model capability runs")
+    end
+
+    assert {:error, {:dsl_operation_source_digest_mismatch, expected, actual}} =
+             Jidoka.Turn.Execution.run(spec, "Reject source drift.", llm: llm)
+
+    assert expected != actual
+    assert Process.get({ChangingSkill, :resolution_count}) == 2
+  end
+
   test "a resolved skill value preserves action and prompt order" do
     assert {:ok, resolution} =
              Jidoka.Skill.resolve([SupportPolicySkill, EscalationPolicySkill])

@@ -51,7 +51,7 @@ defmodule Jidoka.Extension.EventTest do
     malformed = fn _event -> :unexpected end
 
     {:ok, dispatcher} =
-      start_supervised({Dispatcher, subscribers: [raiser, recorder, sleeper, malformed], timeout_ms: 5})
+      start_supervised({Dispatcher, subscribers: [raiser, recorder, sleeper, malformed], timeout_ms: 25})
 
     opts = [
       extension_dispatcher: dispatcher,

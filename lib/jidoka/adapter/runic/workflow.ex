@@ -4,14 +4,13 @@ defmodule Jidoka.Adapter.Runic.Workflow do
   require Runic
 
   alias Jidoka.Adapter.Jido.Actions
+  alias Jidoka.Adapter.Runic.Workflow.SnapshotState
   alias Jidoka.Context
   alias Jidoka.Workflow.Resolver
   alias Jidoka.Workflow.Runtime.{StepRunner, Value}
   alias Jidoka.Workflow.Snapshot
   alias Jidoka.Workflow.Spec
   alias Runic.Workflow
-
-  @snapshot_schema_version Snapshot.schema_version()
 
   @spec run(Spec.t(), map() | keyword(), keyword()) ::
           {:ok, term()} | {:hibernate, Snapshot.t()} | {:error, term()}
@@ -53,7 +52,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
           {:ok, term()} | {:hibernate, Snapshot.t()} | {:error, term()}
   def resume(%Snapshot{} = snapshot, opts \\ []) when is_list(opts) do
     with {:ok, spec} <- Resolver.definition(snapshot.workflow),
-         :ok <- validate_snapshot(snapshot, spec),
+         :ok <- SnapshotState.validate(snapshot, spec),
          {:ok, runtime_opts} <- normalize_opts(Keyword.put_new(opts, :context, snapshot.context)),
          :ok <- validate_context_refs(spec, runtime_opts.context) do
       state = %{
@@ -164,7 +163,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       {:ok, state} ->
         case Jidoka.Workflow.Suspension.cursor(state.outcomes) do
           {:ok, %Jidoka.Workflow.Loop.Cursor{}} ->
-            {:hibernate, build_snapshot(spec, state)}
+            {:hibernate, SnapshotState.build(spec, state)}
 
           {:ok, nil} ->
             resolve_final_output(spec, state)
@@ -520,18 +519,6 @@ defmodule Jidoka.Adapter.Runic.Workflow do
     end)
   end
 
-  defp build_snapshot(%Spec{} = spec, state) do
-    %Snapshot{
-      schema_version: Snapshot.schema_version(),
-      workflow: spec.module,
-      workflow_id: spec.id,
-      input: state.input,
-      context: Context.data(state.context),
-      steps: state.steps,
-      outcomes: state.outcomes
-    }
-  end
-
   defp refresh_recovery_state(state, opts) do
     context = Keyword.get(opts, :context, state.context)
     agent_opts = Keyword.get(opts, :agent_opts, state.agent_opts)
@@ -549,46 +536,5 @@ defmodule Jidoka.Adapter.Runic.Workflow do
            max_concurrency: max_concurrency
        }}
     end
-  end
-
-  defp validate_snapshot(
-         %Snapshot{
-           schema_version: version,
-           workflow: workflow,
-           workflow_id: id
-         } = snapshot,
-         %Spec{module: workflow, id: id, steps: steps}
-       )
-       when version == @snapshot_schema_version do
-    with {:ok, %Jidoka.Workflow.Loop.Cursor{step: step, max_iterations: max_iterations}} <-
-           Snapshot.cursor(snapshot) do
-      case Enum.find(steps, &(&1.name == step)) do
-        %{kind: :loop, max_iterations: ^max_iterations} ->
-          :ok
-
-        %{kind: :loop, max_iterations: current} ->
-          {:error, {:workflow_loop_bound_changed, step, max_iterations, current}}
-
-        _step ->
-          {:error, {:workflow_snapshot_loop_missing, step}}
-      end
-    end
-  end
-
-  defp validate_snapshot(%Snapshot{} = snapshot, %Spec{} = spec) do
-    {:error,
-     {:workflow_snapshot_mismatch,
-      %{
-        snapshot: %{
-          schema_version: snapshot.schema_version,
-          workflow: snapshot.workflow,
-          workflow_id: snapshot.workflow_id
-        },
-        current: %{
-          schema_version: Snapshot.schema_version(),
-          workflow: spec.module,
-          workflow_id: spec.id
-        }
-      }}}
   end
 end

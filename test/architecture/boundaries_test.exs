@@ -103,14 +103,10 @@ defmodule Jidoka.Architecture.BoundariesTest do
   end
 
   test "internal production modules do not call the root facade" do
-    allowed_edges = [
-      "lib/jidoka/agent_view.ex"
-    ]
-
     violations =
       Path.wildcard(Path.join(@root, "lib/jidoka/**/*.ex"))
       |> Enum.reject(fn file ->
-        relative(file) in allowed_edges or relative(file) =~ ~r{^lib/jidoka/kino(?:/|\.ex$)}
+        relative(file) =~ ~r{^lib/jidoka/kino(?:/|\.ex$)}
       end)
       |> Enum.flat_map(fn file ->
         file

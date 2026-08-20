@@ -7,9 +7,11 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   effect id.
   """
 
+  alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Error
   alias Jidoka.ModelPolicy
+  alias Jidoka.Operation.Continuation
   alias Jidoka.Policy.Gate
   alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.CapabilityInvoker
@@ -19,7 +21,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   alias Jidoka.Runtime.DurableCheckpoint
   alias Jidoka.Runtime.EffectTrace
   alias Jidoka.Runtime.Limits
-  alias Jidoka.Runtime.OperationGroupCheckpoint
+  alias Jidoka.Runtime.OperationBatchCoordinator
   alias Jidoka.Runtime.OperationInvoker
   alias Jidoka.Runtime.Review
   alias Jidoka.Turn
@@ -27,6 +29,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   @doc "Interprets the next pending effect or reuses its journaled result."
   @spec interpret_pending(Turn.State.t(), Capabilities.t(), keyword()) ::
           {:ok, Effect.Result.t(), Turn.State.t()}
+          | {:hibernate, [Continuation.t()], Turn.State.t()}
           | {:interrupt, Interrupt.t(), Turn.State.t()}
           | {:error, term()}
   def interpret_pending(state, capabilities, opts \\ [])
@@ -48,6 +51,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   @doc "Interprets the pending operation effects as a bounded batch."
   @spec interpret_operation_batch(Turn.State.t(), Capabilities.t(), keyword()) ::
           {:ok, [Effect.Result.t()], Turn.State.t()}
+          | {:hibernate, [Continuation.t()], Turn.State.t()}
           | {:interrupt, Interrupt.t(), Turn.State.t()}
           | {:error, term()}
   def interpret_operation_batch(%Turn.State{} = state, %Capabilities{} = capabilities, opts \\ []) do
@@ -78,7 +82,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
 
       nil ->
         with {:ok, %Turn.State{} = state} <- reserve_operation_intent(state, intent),
-             :ok <- validate_incomplete_effect_replay(state, intent) do
+             :ok <- validate_incomplete_effect_replay(state, intent, opts) do
           journal = Effect.Journal.put_intent(state.journal, intent)
           state = %Turn.State{state | journal: journal}
           state = EffectTrace.append(state, intent, :effect_started, [], opts)
@@ -89,10 +93,14 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   end
 
   defp validate_incomplete_effect_replay(
-         %Turn.State{journal: journal},
-         %Effect.Intent{idempotency: :unsafe_once} = intent
+         %Turn.State{journal: journal} = state,
+         %Effect.Intent{idempotency: :unsafe_once} = intent,
+         opts
        ) do
     cond do
+      resumable_operation_continuation?(state, intent, opts) ->
+        :ok
+
       Review.resumable_approval?(intent) ->
         :ok
 
@@ -111,11 +119,13 @@ defmodule Jidoka.Runtime.EffectInterpreter do
   end
 
   defp validate_incomplete_effect_replay(
-         %Turn.State{journal: journal},
-         %Effect.Intent{idempotency: idempotency} = intent
+         %Turn.State{journal: journal} = state,
+         %Effect.Intent{idempotency: idempotency} = intent,
+         opts
        )
        when idempotency in [:dedupe, :reconcile] do
-    if Effect.Journal.incomplete_intent?(journal, intent) do
+    if Effect.Journal.incomplete_intent?(journal, intent) and
+         not resumable_operation_continuation?(state, intent, opts) do
       {:error,
        Error.normalize({:effect_reconciliation_required, intent},
          operation: EffectTrace.operation(intent),
@@ -128,7 +138,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp validate_incomplete_effect_replay(_state, _intent), do: :ok
+  defp validate_incomplete_effect_replay(_state, _intent, _opts), do: :ok
 
   defp interpret_after_controls(
          %Turn.State{} = state,
@@ -158,10 +168,25 @@ defmodule Jidoka.Runtime.EffectInterpreter do
        ) do
     state = EffectTrace.append(state, intent, :capability_call_started, [], opts)
 
-    with :ok <- DurableCheckpoint.persist(state, intent, :intent, opts),
-         {:ok, result} <- call_capability(state, intent, capabilities, journal, opts),
-         {:ok, state} <- checkpoint_effect_result(state, intent, result, journal, opts) do
-      {:ok, result, state}
+    with :ok <- DurableCheckpoint.persist(state, intent, :intent, opts) do
+      execute_persisted_effect(state, intent, capabilities, journal, opts)
+    end
+  end
+
+  defp execute_persisted_effect(state, intent, capabilities, journal, opts) do
+    case call_capability(state, intent, capabilities, journal, opts) do
+      {:ok, %Effect.Result{} = result} ->
+        finalize_effect_result(state, intent, result, journal, opts)
+
+      {:hibernate, %Continuation{} = continuation} ->
+        {:hibernate, [continuation], state}
+    end
+  end
+
+  defp finalize_effect_result(state, intent, result, journal, opts) do
+    case checkpoint_effect_result(state, intent, result, journal, opts) do
+      {:ok, state} -> {:ok, result, state}
+      {:error, _reason} = error -> error
     end
   end
 
@@ -339,77 +364,13 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Capabilities{} = capabilities,
          opts
        ) do
-    with {:ok, state} <- Limits.reserve_operation_group(state, intents),
-         {:ok, state, runnable_intents, replayed_results} <-
-           preflight_operation_batch(state, intents, capabilities, opts),
-         {:ok, state, batch_results} <-
-           execute_preflighted_operation_batch(state, intents, runnable_intents, capabilities, opts) do
-      ordered_results =
-        Enum.map(intents, fn intent ->
-          Map.fetch!(Map.merge(replayed_results, batch_results), intent.id)
-        end)
-
-      {:ok, ordered_results, state}
-    end
-  end
-
-  defp preflight_operation_batch(%Turn.State{} = state, intents, capabilities, opts)
-       when is_list(intents) do
-    Enum.reduce_while(
+    OperationBatchCoordinator.run(
+      state,
       intents,
-      {:ok, state, [], %{}},
-      &preflight_operation_batch_intent(&1, &2, capabilities, opts)
+      capabilities,
+      opts,
+      &preflight_operation_intent/4
     )
-    |> case do
-      {:ok, state, runnable_intents, replayed_results} ->
-        {:ok, state, Enum.reverse(runnable_intents), replayed_results}
-
-      other ->
-        other
-    end
-  end
-
-  defp preflight_operation_batch_intent(
-         %Effect.Intent{} = intent,
-         {:ok, %Turn.State{} = state, runnable_intents, replayed_results},
-         capabilities,
-         opts
-       ) do
-    case Effect.Journal.result_for(state.journal, intent) do
-      %Effect.Result{} = result ->
-        state = EffectTrace.append(state, intent, :effect_replayed, [], opts)
-        {:cont, {:ok, state, runnable_intents, Map.put(replayed_results, intent.id, result)}}
-
-      nil ->
-        preflight_uncached_operation_intent(
-          state,
-          intent,
-          runnable_intents,
-          replayed_results,
-          capabilities,
-          opts
-        )
-    end
-  end
-
-  defp preflight_uncached_operation_intent(
-         state,
-         intent,
-         runnable_intents,
-         replayed_results,
-         capabilities,
-         opts
-       ) do
-    case preflight_operation_intent(state, intent, capabilities, opts) do
-      {:ok, state, intent} ->
-        {:cont, {:ok, state, [intent | runnable_intents], replayed_results}}
-
-      {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
-        {:halt, {:interrupt, interrupt, state}}
-
-      {:error, reason} ->
-        {:halt, {:error, reason}}
-    end
   end
 
   defp preflight_operation_intent(
@@ -418,7 +379,7 @@ defmodule Jidoka.Runtime.EffectInterpreter do
          %Capabilities{} = capabilities,
          opts
        ) do
-    with :ok <- validate_incomplete_effect_replay(state, intent) do
+    with :ok <- validate_incomplete_effect_replay(state, intent, opts) do
       state = EffectTrace.append(state, intent, :effect_started, [], opts)
 
       case run_effect_controls(state, intent, capabilities, opts) do
@@ -434,103 +395,49 @@ defmodule Jidoka.Runtime.EffectInterpreter do
     end
   end
 
-  defp execute_preflighted_operation_batch(
-         %Turn.State{} = state,
-         _group_intents,
-         [],
-         _capabilities,
-         _opts
-       ) do
-    {:ok, state, %{}}
-  end
-
-  defp execute_preflighted_operation_batch(
-         %Turn.State{} = state,
-         group_intents,
-         runnable_intents,
-         %Capabilities{} = capabilities,
-         opts
-       ) do
-    with {:ok, coordinator} <- OperationGroupCheckpoint.start(state, group_intents, opts) do
-      try do
-        execute_checkpointed_operation_batch(
-          coordinator,
-          state,
-          runnable_intents,
-          capabilities,
-          opts
-        )
-      after
-        OperationGroupCheckpoint.stop(coordinator)
-      end
+  defp resumable_operation_continuation?(state, intent, opts) do
+    with {kind, source} <- operation_continuation_route(state, intent),
+         {:ok, continuations} <-
+           opts
+           |> Keyword.get(:operation_context, %{})
+           |> operation_continuations()
+           |> Continuation.list_from_input() do
+      Continuation.resumes_intent?(continuations, intent, kind, source)
+    else
+      _missing_or_invalid -> false
     end
   end
 
-  defp execute_checkpointed_operation_batch(coordinator, state, intents, capabilities, opts) do
-    batch_opts =
-      opts
-      |> Keyword.put(
-        :operation_group_before_call,
-        &OperationGroupCheckpoint.before_call(coordinator, &1, opts)
-      )
-      |> Keyword.put(
-        :operation_group_after_result,
-        &OperationGroupCheckpoint.after_result(coordinator, &1, &2, opts)
-      )
+  defp operation_continuation_route(%Turn.State{plan: %{spec: %{operations: operations}}}, intent) do
+    name = EffectTrace.operation(intent)
 
-    case execute_operation_batch(state, intents, capabilities, state.journal, batch_opts) do
-      {:ok, results} -> finalize_checkpointed_operation_batch(coordinator, intents, results, opts)
-      {:error, reason} -> {:error, reason}
+    case Enum.find(operations, &(&1.name == name)) do
+      %Operation{} = operation ->
+        case Operation.kind(operation) do
+          kind when kind in [:workflow, :subagent] -> {kind, name}
+          _kind -> nil
+        end
+
+      nil ->
+        nil
     end
   end
 
-  defp finalize_checkpointed_operation_batch(coordinator, intents, results, opts) do
-    state = OperationGroupCheckpoint.state(coordinator)
-    missing = Enum.reject(intents, &Effect.Journal.result_for(state.journal, &1))
-
-    cond do
-      missing == [] ->
-        {:ok, state, results}
-
-      is_function(Keyword.get(opts, :durable_checkpoint), 3) ->
-        {:error, {:operation_batch_checkpoint_callbacks_not_used, Enum.map(missing, & &1.id)}}
-
-      true ->
-        checkpoint_untracked_results(coordinator, missing, results, opts)
+  defp operation_continuations(context) when is_list(context) do
+    if Keyword.keyword?(context) do
+      Keyword.get(context, :operation_continuations, [])
+    else
+      []
     end
   end
 
-  defp checkpoint_untracked_results(coordinator, intents, results, opts) do
-    Enum.reduce_while(intents, :ok, fn intent, :ok ->
-      result = Map.fetch!(results, intent.id)
-
-      with {:ok, _journal} <- OperationGroupCheckpoint.before_call(coordinator, intent, opts),
-           :ok <- OperationGroupCheckpoint.after_result(coordinator, intent, result, opts) do
-        {:cont, :ok}
-      else
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      :ok -> {:ok, OperationGroupCheckpoint.state(coordinator), results}
-      {:error, reason} -> {:error, reason}
-    end
+  defp operation_continuations(%Jidoka.Context{} = context) do
+    Jidoka.Context.get_runtime(context, :operation_continuations, [])
   end
 
-  defp execute_operation_batch(state, intents, capabilities, journal, opts) do
-    case Keyword.fetch(opts, :operation_batch_executor) do
-      {:ok, executor} when is_function(executor, 5) ->
-        executor.(state, intents, capabilities, journal, opts)
-
-      {:ok, executor} ->
-        {:error, {:invalid_operation_batch_executor, executor}}
-
-      :error ->
-        {:error, :missing_operation_batch_executor}
-    end
-  rescue
-    exception -> {:error, {:operation_batch_execution_failed, exception}}
-  catch
-    kind, reason -> {:error, {:operation_batch_execution_failed, {kind, reason}}}
+  defp operation_continuations(context) when is_map(context) do
+    Map.get(context, :operation_continuations, Map.get(context, "operation_continuations", []))
   end
+
+  defp operation_continuations(_context), do: []
 end

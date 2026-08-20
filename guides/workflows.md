@@ -473,9 +473,11 @@ Do not mix forms. `use Jidoka.Workflow, id: ...` cannot also declare
 - Direct `Jidoka.Workflow.run/3` and tool execution both enforce total
   wall-clock timeout.
 - A `loop` step can hibernate the workflow with a serializable continuation.
-- A workflow tool returns a typed `:workflow_hibernated` operation error when
-  its loop suspends. Resume that snapshot through the application workflow
-  boundary; parent agent continuation stays a separate contract.
+- A workflow tool that suspends also hibernates its parent turn. The parent
+  snapshot stores a `Jidoka.Operation.Continuation` and uses a `:wait` cursor.
+  Resume the parent snapshot. Jidoka routes the nested workflow snapshot to
+  the same operation intent. Completed operations in the same parallel group
+  are read from the effect journal and do not run again.
 - An agent step that hibernates is still a workflow error. Human review for an
   agent tool should live at the parent operation boundary.
 

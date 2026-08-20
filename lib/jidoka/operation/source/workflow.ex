@@ -12,6 +12,7 @@ defmodule Jidoka.Operation.Source.Workflow do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Operation.Continuation
   alias Jidoka.Operation.Source
   alias Jidoka.Schema
   alias Jidoka.Workflow.Resolver
@@ -144,11 +145,14 @@ defmodule Jidoka.Operation.Source.Workflow do
   def capability(%__MODULE__{} = source, _opts) do
     {:ok,
      fn
-       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
+       %Effect.Intent{kind: :operation, payload: payload} = intent, %Effect.Journal{}, %Context{} = context ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
-              :ok <- ensure_operation_name(source, request.name),
-              {:ok, output} <- run_workflow(source, request.arguments, context) do
-           {:ok, workflow_result(source, output)}
+              :ok <- ensure_operation_name(source, request.name) do
+           case run_workflow(source, intent, request.arguments, context) do
+             {:ok, output} -> {:ok, workflow_result(source, output)}
+             {:hibernate, %Continuation{} = continuation} -> {:hibernate, continuation}
+             {:error, _reason} = error -> error
+           end
          end
 
        %Effect.Intent{kind: kind}, _journal, %Context{} ->
@@ -156,25 +160,101 @@ defmodule Jidoka.Operation.Source.Workflow do
      end}
   end
 
-  defp run_workflow(%__MODULE__{} = source, arguments, context) do
+  defp run_workflow(%__MODULE__{} = source, %Effect.Intent{} = intent, arguments, context) do
     task_context = child_context(source, context, arguments)
 
-    task =
-      Task.async(fn ->
-        Jidoka.Workflow.run(source.workflow, arguments,
-          context: task_context,
-          timeout: source.timeout,
-          async: source.async,
-          max_concurrency: source.max_concurrency,
-          agent_opts: agent_opts(context)
-        )
-      end)
+    with {:ok, continuations} <- operation_continuations(context) do
+      case Continuation.find(continuations, intent, :workflow, source.name) do
+        {:ok, continuation} ->
+          resume_continuation(source, continuation, task_context, context, intent)
 
-    case Task.yield(task, source.timeout) || Task.shutdown(task, :brutal_kill) do
-      {:ok, {:ok, output}} -> {:ok, output}
-      {:ok, {:hibernate, snapshot}} -> {:error, {:workflow_hibernated, source.name, snapshot}}
-      {:ok, {:error, reason}} -> {:error, {:workflow_failed, source.name, reason}}
-      nil -> {:error, {:workflow_timeout, source.name, source.timeout}}
+        :none ->
+          source
+          |> start_workflow(arguments, task_context, context)
+          |> normalize_workflow_result(source, intent)
+
+        {:error, _reason} = error ->
+          error
+      end
+    end
+  end
+
+  defp resume_continuation(source, continuation, task_context, context, intent) do
+    case validate_continuation(source, continuation) do
+      :ok ->
+        source
+        |> resume_workflow(continuation, task_context, context)
+        |> normalize_workflow_result(source, intent)
+
+      {:error, reason} ->
+        normalize_workflow_result({:error, reason}, source, intent)
+    end
+  end
+
+  defp start_workflow(source, arguments, task_context, context) do
+    Jidoka.Workflow.run(source.workflow, arguments,
+      context: task_context,
+      timeout: source.timeout,
+      async: source.async,
+      max_concurrency: source.max_concurrency,
+      agent_opts: agent_opts(context)
+    )
+  end
+
+  defp resume_workflow(source, continuation, task_context, context) do
+    opts =
+      [
+        context: task_context,
+        timeout: source.timeout,
+        async: source.async,
+        max_concurrency: source.max_concurrency,
+        agent_opts: agent_opts(context)
+      ]
+      |> Keyword.merge(nested_resume_opts(context))
+
+    Jidoka.Workflow.resume(continuation.snapshot, opts)
+  end
+
+  defp normalize_workflow_result({:ok, output}, _source, _intent), do: {:ok, output}
+
+  defp normalize_workflow_result({:hibernate, snapshot}, source, intent) do
+    with {:ok, continuation} <-
+           Continuation.new(
+             intent_id: intent.id,
+             operation: source.name,
+             kind: :workflow,
+             source: source.name,
+             snapshot: snapshot,
+             metadata: %{"workflow" => source.definition.id}
+           ) do
+      {:hibernate, continuation}
+    end
+  end
+
+  defp normalize_workflow_result({:error, reason}, source, _intent),
+    do: {:error, {:workflow_failed, source.name, reason}}
+
+  defp validate_continuation(
+         %__MODULE__{workflow: workflow, definition: %{id: workflow_id}},
+         %Continuation{snapshot: %Jidoka.Workflow.Snapshot{} = snapshot}
+       ) do
+    if snapshot.workflow == workflow and snapshot.workflow_id == workflow_id do
+      :ok
+    else
+      {:error, {:workflow_continuation_mismatch, workflow, workflow_id, snapshot.workflow, snapshot.workflow_id}}
+    end
+  end
+
+  defp operation_continuations(context) do
+    context
+    |> Context.get_runtime(:operation_continuations, [])
+    |> Continuation.list_from_input()
+  end
+
+  defp nested_resume_opts(context) do
+    case Context.get_runtime(context, :nested_resume_opts, []) do
+      opts when is_list(opts) -> opts
+      _opts -> []
     end
   end
 

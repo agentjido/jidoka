@@ -367,6 +367,11 @@ intent was recorded without a result, resume returns a typed execution error
 instead of retrying the operation. Later harness/session storage can use that
 same shape to route the case to a reconciliation queue.
 
+A suspended workflow or subagent operation is a controlled incomplete intent.
+The parent snapshot stores its typed continuation. On resume, Jidoka routes the
+continuation to that exact intent and source. Other completed intents in the
+same operation group keep their journaled results.
+
 ## Durability
 
 Jidoka snapshots semantic state:

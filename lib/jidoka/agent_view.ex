@@ -14,6 +14,7 @@ defmodule Jidoka.AgentView do
   alias Jidoka.Projection
   alias Jidoka.Schema
   alias Jidoka.AgentView.Events
+  alias Jidoka.AgentView.Runner
   alias Jidoka.Event
   alias Jidoka.Turn
 
@@ -275,7 +276,7 @@ defmodule Jidoka.AgentView do
         request_id = request_id_from_opts(opts)
         running = before_turn(view, message, request_id)
         opts = Keyword.put(opts, :request_id, request_id)
-        result = run_agent_turn(view_module, running, message, opts)
+        result = Runner.run_turn(view_module, running, message, opts)
         after_turn(running, result, request_id)
     end
   end
@@ -432,26 +433,6 @@ defmodule Jidoka.AgentView do
     end
   end
 
-  defp run_agent_turn(view_module, %__MODULE__{} = view, message, opts) do
-    input = %{conversation_id: view.conversation_id, runtime_context: view.runtime_context}
-    agent = view_module.agent_module(input)
-
-    opts =
-      opts
-      |> Keyword.put_new(:request_id, request_id())
-      |> Keyword.put_new(:context, view.runtime_context)
-
-    request_input =
-      %{input: message, context: view.runtime_context}
-      |> maybe_put_agent_state(Map.get(view.metadata, :agent_state))
-
-    if loaded_agent_module?(agent) and function_exported?(agent, :run_turn, 2) do
-      apply(agent, :run_turn, [request_input, opts])
-    else
-      Jidoka.turn(agent, request_input, opts)
-    end
-  end
-
   defp maybe_put_agent_projection(metadata, agent, opts) do
     if Keyword.get(opts, :project_agent?, true) do
       Map.put(metadata, :agent, agent_projection(agent))
@@ -502,11 +483,6 @@ defmodule Jidoka.AgentView do
   end
 
   defp input_value(_input, _key), do: nil
-
-  defp maybe_put_agent_state(request_input, nil), do: request_input
-
-  defp maybe_put_agent_state(request_input, agent_state),
-    do: Map.put(request_input, :agent_state, agent_state)
 
   defp active_result?(%__MODULE__{} = view, request_id, result) do
     active_request_id(view) == request_id and result_matches_lifecycle?(view.metadata, result)

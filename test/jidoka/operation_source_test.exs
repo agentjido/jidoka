@@ -83,6 +83,14 @@ defmodule Jidoka.OperationSourceTest do
              Source.compile([first, second])
   end
 
+  test "an empty source set has a stable contract digest" do
+    assert {:ok, first} = Source.compile([])
+    assert {:ok, second} = Source.compile([])
+
+    assert is_binary(first.digest)
+    assert first.digest == second.digest
+  end
+
   test "local source validates handlers" do
     assert {:error, {:invalid_operation_handler, :not_a_function}} =
              Local.new(operations: [%{name: "lookup", handler: :not_a_function}])

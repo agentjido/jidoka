@@ -66,6 +66,11 @@ defmodule Jidoka.Review.Execution do
   defp resume_opts(opts, response) do
     opts
     |> Keyword.drop([:reason, :responded_at_ms, :metadata])
+    |> Keyword.update(
+      :nested_resume_opts,
+      [approval: response],
+      &Keyword.put(&1, :approval, response)
+    )
     |> Keyword.put(:approval, response)
   end
 end

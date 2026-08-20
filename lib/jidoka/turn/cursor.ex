@@ -61,4 +61,13 @@ defmodule Jidoka.Turn.Cursor do
       }
     )
   end
+
+  @doc "Builds a cursor for suspended nested operation work."
+  @spec wait([map()]) :: t()
+  def wait(continuation_descriptors) when is_list(continuation_descriptors) do
+    new!(
+      phase: :wait,
+      metadata: %{"operation_continuations" => continuation_descriptors}
+    )
+  end
 end

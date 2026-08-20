@@ -12,7 +12,10 @@ defmodule Jidoka.Operation.Source.Subagent do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Context
   alias Jidoka.Effect
+  alias Jidoka.Operation.Continuation
   alias Jidoka.Operation.Source
+  alias Jidoka.Review.Response
+  alias Jidoka.Runtime.Review, as: RuntimeReview
   alias Jidoka.Schema
 
   @result_modes [:text, :structured]
@@ -127,11 +130,11 @@ defmodule Jidoka.Operation.Source.Subagent do
   def capability(%__MODULE__{} = source, _opts) do
     {:ok,
      fn
-       %Effect.Intent{kind: :operation, payload: payload}, %Effect.Journal{}, %Context{} = context ->
+       %Effect.Intent{kind: :operation, payload: payload} = intent, %Effect.Journal{}, %Context{} = context ->
          with {:ok, request} <- Effect.OperationRequest.from_input(payload),
               :ok <- ensure_operation_name(source, request.name),
               {:ok, task} <- task_from_arguments(request.arguments) do
-           run_child(source, task, request.arguments, context)
+           run_child(source, intent, task, request.arguments, context)
          end
 
        %Effect.Intent{kind: kind}, _journal, %Context{} ->
@@ -150,7 +153,7 @@ defmodule Jidoka.Operation.Source.Subagent do
     }
   end
 
-  defp run_child(%__MODULE__{} = source, task, arguments, context) do
+  defp run_child(%__MODULE__{} = source, %Effect.Intent{} = intent, task, arguments, context) do
     request = [
       input: task,
       context: child_context(source, context, arguments)
@@ -164,17 +167,123 @@ defmodule Jidoka.Operation.Source.Subagent do
       |> maybe_put(:llm, Context.get_runtime(context, :subagent_llm))
       |> maybe_put(:memory_store, Context.get_runtime(context, :memory_store))
       |> maybe_put(:stream_to, Context.get_runtime(context, :stream_to))
+      |> Keyword.merge(subagent_opts(context))
 
-    case apply(source.agent, :run_turn, [request, opts]) do
+    with {:ok, continuations} <- operation_continuations(context) do
+      result =
+        case Continuation.find(continuations, intent, :subagent, source.name) do
+          {:ok, continuation} ->
+            resume_continuation(source, continuation, opts, context)
+
+          :none ->
+            source.agent.run_turn(request, opts)
+
+          {:error, _reason} = error ->
+            error
+        end
+
+      normalize_child_result(result, source, intent)
+    end
+  end
+
+  defp resume_continuation(source, continuation, opts, context) do
+    with :ok <- validate_continuation(source, continuation) do
+      resume_child(
+        continuation,
+        Keyword.merge(opts, nested_resume_opts(context)),
+        context
+      )
+    end
+  end
+
+  defp normalize_child_result(result, source, intent) do
+    case result do
       {:ok, result} ->
         {:ok, child_result(source, result)}
 
       {:hibernate, snapshot} ->
-        {:error, {:subagent_hibernated, source.name, snapshot.snapshot_id}}
+        with {:ok, continuation} <-
+               Continuation.new(
+                 intent_id: intent.id,
+                 operation: source.name,
+                 kind: :subagent,
+                 source: source.name,
+                 snapshot: snapshot,
+                 metadata: %{"agent" => inspect(source.agent)}
+               ) do
+          {:hibernate, continuation}
+        end
 
       {:error, reason} ->
         {:error, {:subagent_failed, source.name, reason}}
     end
+  end
+
+  defp operation_continuations(context) do
+    context
+    |> Context.get_runtime(:operation_continuations, [])
+    |> Continuation.list_from_input()
+  end
+
+  defp subagent_opts(context) do
+    case Context.get_runtime(context, :subagent_opts, []) do
+      opts when is_list(opts) -> opts
+      _opts -> []
+    end
+  end
+
+  defp nested_resume_opts(context) do
+    case Context.get_runtime(context, :nested_resume_opts, []) do
+      opts when is_list(opts) -> opts
+      _opts -> []
+    end
+  end
+
+  defp resume_child(%Continuation{snapshot: snapshot}, opts, context) do
+    case {snapshot.turn_state.pending_interrupt, RuntimeReview.approval_response(opts)} do
+      {%Jidoka.Review.Interrupt{id: expected}, {:ok, %Response{interrupt_id: actual}}}
+      when expected != actual ->
+        {:hibernate, snapshot}
+
+      _pending_or_response ->
+        resume_nested_turn(context, snapshot, opts)
+    end
+  end
+
+  defp resume_nested_turn(context, snapshot, opts) do
+    case Context.get_runtime(context, :subagent_resume) do
+      resume when is_function(resume, 2) -> resume.(snapshot, opts)
+      _resume -> {:error, :missing_subagent_resume}
+    end
+  end
+
+  defp validate_continuation(
+         %__MODULE__{agent: agent},
+         %Continuation{snapshot: %Jidoka.Snapshot{} = snapshot}
+       ) do
+    dsl_module = Map.get(snapshot.turn_state.plan.spec.metadata, "dsl_module")
+
+    with {:ok, expected_agent_id} <- expected_agent_id(agent) do
+      if snapshot.agent_id == expected_agent_id and
+           (is_nil(dsl_module) or dsl_module == inspect(agent)) do
+        :ok
+      else
+        {:error, {:subagent_continuation_mismatch, agent, expected_agent_id, snapshot.agent_id, dsl_module}}
+      end
+    end
+  end
+
+  defp expected_agent_id(agent) do
+    if function_exported?(agent, :__jidoka_agent_id__, 0) do
+      {:ok, agent.__jidoka_agent_id__()}
+    else
+      case agent.spec() do
+        %Jidoka.Agent.Spec{id: id} -> {:ok, id}
+        spec -> {:error, {:invalid_subagent_spec, agent, spec}}
+      end
+    end
+  rescue
+    exception -> {:error, {:invalid_subagent_spec, agent, exception}}
   end
 
   defp child_result(%__MODULE__{result: :text} = source, result) do

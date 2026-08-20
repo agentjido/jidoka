@@ -11,6 +11,7 @@ defmodule Jidoka.Runtime.TurnRunner do
   alias Jidoka.Cancellation
   alias Jidoka.Effect
   alias Jidoka.Event
+  alias Jidoka.Operation.Continuation
   alias Jidoka.Portable
   alias Jidoka.Review.Interrupt
   alias Jidoka.Runtime.Capabilities
@@ -96,6 +97,21 @@ defmodule Jidoka.Runtime.TurnRunner do
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp resume_from_snapshot(
+         %Turn.State{} = state,
+         %Snapshot{cursor: %Turn.Cursor{phase: :wait}, metadata: metadata},
+         capabilities,
+         opts
+       ) do
+    with {:ok, continuations} <- operation_continuations(metadata) do
+      continue_after_pending_effect(
+        state,
+        capabilities,
+        put_operation_continuations(opts, continuations)
+      )
     end
   end
 
@@ -231,6 +247,9 @@ defmodule Jidoka.Runtime.TurnRunner do
       {:ok, results, %Turn.State{} = state} when is_list(results) ->
         {:ok, results, state}
 
+      {:hibernate, continuations, %Turn.State{} = state} when is_list(continuations) ->
+        hibernate_for_operation_continuations(state, continuations, opts)
+
       {:interrupt, %Interrupt{} = interrupt, %Turn.State{} = state} ->
         hibernate_for_interrupt(state, interrupt, opts)
 
@@ -276,6 +295,14 @@ defmodule Jidoka.Runtime.TurnRunner do
     end
   end
 
+  defp hibernate_for_operation_continuations(state, continuations, opts) do
+    with {:ok, continuations} <- Continuation.list_from_input(continuations) do
+      descriptors = Enum.map(continuations, &Continuation.descriptor/1)
+      metadata = %{"operation_continuations" => continuations}
+      hibernate(state, Turn.Cursor.wait(descriptors), opts, metadata)
+    end
+  end
+
   defp approval_ttl_ms(%Interrupt{} = interrupt, opts) do
     case Review.approval_ttl_ms(opts) do
       {:ok, nil} -> {:ok, approval_policy_ttl_ms(interrupt)}
@@ -292,10 +319,16 @@ defmodule Jidoka.Runtime.TurnRunner do
   defp normalize_policy_ttl_ms(ttl_ms) when is_integer(ttl_ms) and ttl_ms > 0, do: ttl_ms
   defp normalize_policy_ttl_ms(_ttl_ms), do: nil
 
-  defp hibernate(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts) do
+  defp hibernate(%Turn.State{} = state, %Turn.Cursor{} = cursor, opts, metadata \\ %{}) do
     hibernated_state = append_turn_hibernated(state, cursor)
     emit_new_events(state, hibernated_state, opts)
-    {:hibernate, Snapshot.from_turn_state!(hibernated_state, cursor, snapshot_opts(opts))}
+
+    {:hibernate,
+     Snapshot.from_turn_state!(
+       hibernated_state,
+       cursor,
+       snapshot_opts(opts, metadata)
+     )}
   end
 
   defp checkpoint_policy(opts), do: Keyword.get(opts, :checkpoint, :none)
@@ -408,7 +441,36 @@ defmodule Jidoka.Runtime.TurnRunner do
     end
   end
 
-  defp snapshot_opts(opts) do
-    Keyword.take(opts, [:snapshot_id, :id_generator])
+  defp operation_continuations(metadata) when is_map(metadata) do
+    metadata
+    |> Map.get("operation_continuations", Map.get(metadata, :operation_continuations))
+    |> Continuation.list_from_input()
+  end
+
+  defp put_operation_continuations(opts, continuations) do
+    operation_context =
+      opts
+      |> Keyword.get(:operation_context, %{})
+      |> normalize_operation_context()
+      |> Map.put(:operation_continuations, continuations)
+      |> Map.put(:nested_resume_opts, Keyword.get(opts, :nested_resume_opts, []))
+
+    Keyword.put(opts, :operation_context, operation_context)
+  end
+
+  defp normalize_operation_context(context) when is_list(context) do
+    if Keyword.keyword?(context), do: Map.new(context), else: %{}
+  end
+
+  defp normalize_operation_context(%Jidoka.Context{} = context),
+    do: Jidoka.Context.runtime(context)
+
+  defp normalize_operation_context(context) when is_map(context), do: context
+  defp normalize_operation_context(_context), do: %{}
+
+  defp snapshot_opts(opts, metadata) do
+    opts
+    |> Keyword.take([:snapshot_id, :id_generator])
+    |> Keyword.put(:metadata, metadata)
   end
 end

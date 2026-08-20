@@ -2,7 +2,7 @@ defmodule Jidoka.Projection.Turn do
   @moduledoc false
 
   alias Jidoka.Portable
-  alias Jidoka.Projection.{Agent, Effect, Memory, Review}
+  alias Jidoka.Projection.{Agent, Effect, Memory, Metadata, Review}
   alias Jidoka.Turn
 
   @spec project(Turn.Plan.t() | Turn.Request.t() | Turn.State.t() | Turn.Cursor.t() | Turn.Result.t()) :: map()
@@ -12,7 +12,7 @@ defmodule Jidoka.Projection.Turn do
       max_model_turns: plan.max_model_turns,
       timeout_ms: plan.timeout_ms,
       phases: Jidoka.Adapter.Runic.TurnCompiler.phases(),
-      metadata: Portable.project(plan.metadata)
+      metadata: Metadata.turn_plan(plan.metadata)
     }
   end
 

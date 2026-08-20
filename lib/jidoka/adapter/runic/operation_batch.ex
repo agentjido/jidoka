@@ -6,13 +6,14 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
   alias Jidoka.Config
   alias Jidoka.Effect
   alias Jidoka.Error
+  alias Jidoka.Operation.Continuation
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.OperationInvoker
   alias Jidoka.Turn
   alias Runic.Workflow
 
   @spec execute(Turn.State.t(), [Effect.Intent.t()], Capabilities.t(), Effect.Journal.t(), keyword()) ::
-          {:ok, %{String.t() => Effect.Result.t()}} | {:error, term()}
+          {:ok, %{String.t() => Effect.Result.t() | Continuation.t()}} | {:error, term()}
   def execute(%Turn.State{} = state, intents, %Capabilities{} = capabilities, %Effect.Journal{} = journal, opts)
       when is_list(intents) do
     step_names = operation_batch_step_names(intents)
@@ -47,6 +48,9 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
         %Effect.Result{} = result ->
           {:cont, {:ok, Map.put(acc, intent.id, result)}}
 
+        %Continuation{} = continuation ->
+          {:cont, {:ok, Map.put(acc, intent.id, continuation)}}
+
         {:operation_group_checkpoint_failed, reason} ->
           {:halt, {:error, reason}}
 
@@ -74,12 +78,25 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
          %Effect.Journal{} = journal,
          opts
        ) do
-    with {:ok, journal} <- before_operation_call(intent, journal, opts),
-         {:ok, %Effect.Result{} = result} <-
-           call_operation_capability(state, intent, capabilities, journal, opts),
-         :ok <- after_operation_result(intent, result, opts) do
-      result
-    else
+    case before_operation_call(intent, journal, opts) do
+      {:ok, journal} ->
+        execute_operation_batch_step(state, intent, capabilities, journal, opts)
+
+      {:error, reason} ->
+        {:operation_group_checkpoint_failed, reason}
+    end
+  end
+
+  defp execute_operation_batch_step(state, intent, capabilities, journal, opts) do
+    case call_operation_capability(state, intent, capabilities, journal, opts) do
+      {:ok, %Effect.Result{} = result} -> checkpoint_operation_batch_result(intent, result, opts)
+      {:hibernate, %Continuation{} = continuation} -> continuation
+    end
+  end
+
+  defp checkpoint_operation_batch_result(intent, result, opts) do
+    case after_operation_result(intent, result, opts) do
+      :ok -> result
       {:error, reason} -> {:operation_group_checkpoint_failed, reason}
     end
   end

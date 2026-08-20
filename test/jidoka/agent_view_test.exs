@@ -36,6 +36,19 @@ defmodule Jidoka.AgentViewTest do
     end
   end
 
+  defmodule SpecView do
+    use Jidoka.AgentView
+
+    @impl true
+    def agent_module(_input) do
+      Jidoka.Agent.Spec.new!(
+        id: "agent_view_spec_agent",
+        instructions: "Return one view result.",
+        model: %{provider: :test, id: "model"}
+      )
+    end
+  end
+
   defmodule MissingAgentView do
     use Jidoka.AgentView
   end
@@ -99,6 +112,34 @@ defmodule Jidoka.AgentViewTest do
                refs: %{operation: "lookup_order"}
              }
            ] = finished.events
+  end
+
+  test "view runners execute bound DSL agents and data-only specs" do
+    llm = fn _intent, %Effect.Journal{}, _ctx ->
+      {:ok, %{type: :final, content: "View runner result."}}
+    end
+
+    assert {:ok, demo_view} = DemoView.initial(%{conversation_id: "runner_dsl"})
+
+    assert %AgentView{status: :idle, outcome: {:ok, %Turn.Result{}}} =
+             DemoView.run(demo_view, "Run the DSL agent.",
+               llm: llm,
+               request_id: "req_view_dsl"
+             )
+
+    assert {:ok, spec_view} = SpecView.initial(%{conversation_id: "runner_spec"})
+
+    assert %AgentView{
+             status: :idle,
+             visible_messages: [
+               %{role: :user, pending?: false},
+               %{role: :assistant, content: "View runner result."}
+             ]
+           } =
+             SpecView.run(spec_view, "Run the spec.",
+               llm: llm,
+               request_id: "req_view_spec"
+             )
   end
 
   test "default helpers normalize ids and expose lifecycle hooks" do

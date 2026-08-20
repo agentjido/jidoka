@@ -6,11 +6,25 @@ defmodule Jidoka.Projection.Metadata do
   @spec agent(term()) :: term()
   def agent(metadata) when is_map(metadata) do
     metadata
-    |> Map.drop(["dsl_module", :dsl_module])
+    |> Map.drop([
+      "dsl_module",
+      :dsl_module,
+      "dsl_operation_source_digest",
+      :dsl_operation_source_digest
+    ])
     |> Portable.project()
   end
 
   def agent(metadata), do: Portable.project(metadata)
+
+  @spec turn_plan(term()) :: term()
+  def turn_plan(metadata) when is_map(metadata) do
+    metadata
+    |> Map.drop(["dsl_operation_source_digest", :dsl_operation_source_digest])
+    |> Portable.project()
+  end
+
+  def turn_plan(metadata), do: Portable.project(metadata)
 
   @spec operation(term()) :: term()
   def operation(metadata) when is_map(metadata) do

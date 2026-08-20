@@ -4,6 +4,7 @@ defmodule Jidoka.Runtime.OperationInvoker do
   alias Jidoka.Effect
   alias Jidoka.Effect.OperationFailure
   alias Jidoka.Error
+  alias Jidoka.Operation.Continuation
   alias Jidoka.Runtime.Capabilities
   alias Jidoka.Runtime.CapabilityInvoker
   alias Jidoka.Runtime.Context, as: RuntimeContext
@@ -13,7 +14,7 @@ defmodule Jidoka.Runtime.OperationInvoker do
 
   @doc false
   @spec invoke(Turn.State.t(), Effect.Intent.t(), Capabilities.t(), Effect.Journal.t(), keyword()) ::
-          {:ok, Effect.Result.t()}
+          {:ok, Effect.Result.t()} | {:hibernate, Continuation.t()}
   def invoke(
         %Turn.State{} = state,
         %Effect.Intent{kind: :operation} = intent,
@@ -54,6 +55,9 @@ defmodule Jidoka.Runtime.OperationInvoker do
       {:ok, output} ->
         attempts = attempts ++ [%{attempt: attempt, status: :ok}]
         {:ok, Effect.Result.ok(invocation.intent, output, metadata: result_metadata(attempts))}
+
+      {:hibernate, %Continuation{} = continuation} ->
+        {:hibernate, continuation}
 
       {:error, reason} ->
         handle_failure(invocation, attempt, attempts, OperationFailure.classify(reason))
