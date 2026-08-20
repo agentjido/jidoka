@@ -251,6 +251,94 @@ defmodule Jidoka.BrowserTest do
     assert details.cause == :boom
   end
 
+  test "rejects every private address class and malformed public target" do
+    private_urls = [
+      "http://127.2.3.4",
+      "http://169.254.1.2",
+      "http://172.16.1.2",
+      "http://172.31.1.2",
+      "http://0.1.2.3",
+      "http://[::]",
+      "http://[::ffff:127.0.0.1]",
+      "http://[fe80::1]",
+      "http://[ff00::1]"
+    ]
+
+    for url <- private_urls do
+      assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :invalid_url}}} =
+               Runtime.validate_public_url(url)
+    end
+
+    assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :invalid_url}}} =
+             Runtime.validate_public_url("http:///missing-host")
+
+    Application.put_env(:jidoka, :dns_resolver, fn
+      ~c"loopback.test", _family -> {:ok, [{127, 0, 0, 2}]}
+      ~c"link-local.test", _family -> {:ok, [{169, 254, 2, 3}]}
+      ~c"private-172.test", _family -> {:ok, [{172, 20, 2, 3}]}
+      ~c"unspecified.test", _family -> {:ok, [{0, 2, 3, 4}]}
+      ~c"ipv6-zero.test", _family -> {:ok, [{0, 0, 0, 0, 0, 0, 0, 0}]}
+      ~c"ipv6-loopback.test", _family -> {:ok, [{0, 0, 0, 0, 0, 0, 0, 1}]}
+      ~c"ipv6-mapped.test", _family -> {:ok, [{0, 0, 0, 0, 0, 0xFFFF, 0x7F00, 1}]}
+      ~c"ipv6-unique.test", _family -> {:ok, [{0xFC00, 0, 0, 0, 0, 0, 0, 1}]}
+      ~c"ipv6-link.test", _family -> {:ok, [{0xFE80, 0, 0, 0, 0, 0, 0, 1}]}
+      ~c"ipv6-multicast.test", _family -> {:ok, [{0xFF00, 0, 0, 0, 0, 0, 0, 1}]}
+      ~c"public.test", _family -> {:ok, [{93, 184, 216, 34}, {0x2001, 0xDB8, 0, 0, 0, 0, 0, 1}]}
+      ~c"resolver-error.test", _family -> raise "resolver failed"
+    end)
+
+    for host <- [
+          "loopback.test",
+          "link-local.test",
+          "private-172.test",
+          "unspecified.test",
+          "ipv6-zero.test",
+          "ipv6-loopback.test",
+          "ipv6-mapped.test",
+          "ipv6-unique.test",
+          "ipv6-link.test",
+          "ipv6-multicast.test",
+          "resolver-error.test"
+        ] do
+      assert {:error, %Jidoka.Error.ValidationError{details: %{reason: :invalid_url}}} =
+               Runtime.validate_public_url("https://#{host}")
+    end
+
+    assert :ok = Runtime.validate_public_url("https://public.test")
+  end
+
+  test "covers allowlist scope, path, and content boundary forms" do
+    operation =
+      Operation.new!(
+        name: "read_page",
+        metadata: %{
+          allow: [
+            "",
+            "ftp://docs.example.com",
+            "https://docs.example.com",
+            "http://docs.example.com",
+            "https://docs.example.com:444/",
+            "https://docs.example.com/guide%20one"
+          ]
+        }
+      )
+
+    context = Jidoka.Context.from_data!(%{}, runtime: %{jidoka_spec: %{operations: [operation]}})
+
+    assert :ok = Runtime.validate_allowlist("https://docs.example.com/anything", context, "read_page")
+    assert :ok = Runtime.validate_allowlist("http://docs.example.com/anything", context, "read_page")
+    assert :ok = Runtime.validate_allowlist("https://docs.example.com:444/anything", context, "read_page")
+    assert :ok = Runtime.validate_allowlist("https://docs.example.com/guide%20one/page", context, "read_page")
+
+    assert {:error, %Jidoka.Error.ValidationError{}} =
+             Runtime.validate_allowlist("https://docs.example.com:445/anything", context, "read_page")
+
+    assert Runtime.truncate_content(%{"content" => "abcdef", content: 12}, 3) == %{
+             "content" => "abc\n\n[Content truncated by Jidoka.Browser.]",
+             content: 12
+           }
+  end
+
   defp restore_env(key, nil), do: Application.delete_env(:jidoka, key)
   defp restore_env(key, value), do: Application.put_env(:jidoka, key, value)
 end

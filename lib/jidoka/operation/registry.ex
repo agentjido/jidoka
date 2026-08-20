@@ -220,8 +220,8 @@ defmodule Jidoka.Operation.Registry do
 
   defp apply_schema_defaults(value, _schema), do: value
 
-  defp maybe_put_schema_default(value, name, %{"default" => default}),
-    do: Map.put(value, name, default)
+  defp maybe_put_schema_default(value, name, %{"default" => default} = property_schema),
+    do: Map.put(value, name, apply_schema_defaults(default, property_schema))
 
   defp maybe_put_schema_default(value, _name, _property_schema), do: value
 

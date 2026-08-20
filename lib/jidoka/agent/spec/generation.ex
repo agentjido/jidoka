@@ -53,6 +53,7 @@ defmodule Jidoka.Agent.Spec.Generation do
   def from_input(nil), do: new()
   def from_input(%__MODULE__{} = generation), do: new(generation)
   def from_input(input) when is_list(input) or is_map(input), do: new(normalize_input(input))
+  def from_input(input), do: {:error, {:invalid_generation, input}}
 
   @doc "Converts generation settings to options for ReqLLM."
   @spec to_req_llm_opts(t() | keyword() | map() | nil) :: keyword()

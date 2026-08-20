@@ -15,6 +15,7 @@ defmodule Jidoka.Runtime.LimitsTest do
   alias Jidoka.Policy.Decision
   alias Jidoka.Runtime.Limits
   alias Jidoka.Session.Sequence
+  alias Jidoka.Turn
 
   @profile_digest "sha256:" <> String.duplicate("a", 64)
 
@@ -615,6 +616,61 @@ defmodule Jidoka.Runtime.LimitsTest do
                on_event: on_event,
                runtime_limits: %{sequence_timeout_ms: 10}
              )
+  end
+
+  test "limit contracts normalize boundary inputs and produce legacy evidence" do
+    plan = Jidoka.plan!(spec())
+
+    assert {:error, {:invalid_runtime_limits, :bad}} = Limits.resolve(plan, runtime_limits: :bad)
+    assert {:error, {:invalid_runtime_limits, [:bad]}} = Limits.resolve(plan, runtime_limits: [:bad])
+
+    assert {:ok, %Limits.Applied{} = string_limits} =
+             Limits.resolve(plan,
+               capability_timeout_ms: 40,
+               runtime_limits: %{"capability_timeout_ms" => 20, "max_total_cost" => 1.0}
+             )
+
+    assert string_limits.capability_timeout_ms == 20
+    assert string_limits.max_total_cost == 1.0
+    assert {:error, _reason} = Limits.resolve(plan, runtime_limits: %{max_model_turns: :bad})
+    assert Limits.sequence_elapsed_ms([]) == 0
+
+    assert {:ok, %Turn.Result{} = result} = Jidoka.turn(spec(), "evidence", llm: final_llm())
+    request = Turn.Request.new!(input: "evidence", request_id: "limit-evidence")
+    ledger = Limits.Ledger.new!(provider_attempts: 2, recovery_steps: 1)
+
+    cost_result = %Turn.Result{
+      result
+      | usage: %{"total_cost" => 1.5, "ignored" => "not-numeric"},
+        limit_usage: Map.from_struct(ledger)
+    }
+
+    %Sequence.Step{} = step = Sequence.Step.new!(index: 1, request: request, result: cost_result)
+    ledger_step = %Sequence.Step{step | result: %Turn.Result{cost_result | limit_usage: ledger}}
+    applied = %Limits.Applied{string_limits | max_total_cost: 1.0}
+
+    assert {:error, %Limits.Exceeded{kind: :total_cost, observed: 1.5}} =
+             Limits.check_usage([step], applied, 1)
+
+    assert %Limits.Evidence{observed: %{provider_attempts: 2, recovery_steps: 1}} =
+             Limits.evidence(applied, [ledger_step], 1, :normal)
+
+    untyped_step = %Sequence.Step{step | result: %Turn.Result{cost_result | limit_usage: nil}}
+    assert %Limits.Evidence{observed: %{provider_attempts: 0}} = Limits.evidence(applied, [untyped_step], 0, nil)
+
+    reasons = [
+      Limits.Exceeded.new!(kind: :provider_attempts, limit: 1, observed: 1),
+      {:runtime_limit_exceeded, %{kind: :provider_attempts, limit: 1, observed: 1}},
+      {:runtime_limit_exceeded, %{kind: :bad}},
+      {:max_model_turns_exceeded, 2},
+      {:turn_timeout_exceeded, 10, 12},
+      %{details: %{limit: %{kind: :total_tokens, limit: 1, observed: 2}}},
+      %{details: %{limit: %{kind: :bad}}}
+    ]
+
+    for reason <- reasons do
+      assert %Limits.Evidence{} = Limits.evidence(applied, [step], 1, reason)
+    end
   end
 
   defp run_sequence(spec, inputs, opts) do

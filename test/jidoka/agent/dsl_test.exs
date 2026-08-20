@@ -45,6 +45,42 @@ defmodule Jidoka.Agent.DslTest do
     end
   end
 
+  test "reports a DSL error for invalid entity options in every agent section" do
+    declarations = [
+      {:agent, "agent :invalid, unsupported: true", ""},
+      {:action, "agent :invalid", "tools do\n  action String, unsupported: true\nend"},
+      {:ash_resource, "agent :invalid", "tools do\n  ash_resource String, unsupported: true\nend"},
+      {:browser, "agent :invalid", "tools do\n  browser :docs, unsupported: true\nend"},
+      {:mcp_tools, "agent :invalid", "tools do\n  mcp_tools endpoint: :demo, unsupported: true\nend"},
+      {:catalog, "agent :invalid", "tools do\n  catalog String, unsupported: true\nend"},
+      {:skill, "agent :invalid", "tools do\n  skill \"invalid\", unsupported: true\nend"},
+      {:load_path, "agent :invalid", "tools do\n  load_path 123\nend"},
+      {:subagent, "agent :invalid", "tools do\n  subagent String, unsupported: true\nend"},
+      {:handoff, "agent :invalid", "tools do\n  handoff String, unsupported: true\nend"},
+      {:workflow, "agent :invalid", "tools do\n  workflow String, unsupported: true\nend"},
+      {:max_turns, "agent :invalid", "controls do\n  max_turns 0\nend"},
+      {:timeout, "agent :invalid", "controls do\n  timeout 0\nend"},
+      {:input, "agent :invalid", "controls do\n  input \"invalid\"\nend"},
+      {:output, "agent :invalid", "controls do\n  output \"invalid\"\nend"},
+      {:operation, "agent :invalid", "controls do\n  operation \"invalid\"\nend"}
+    ]
+
+    Enum.each(declarations, fn {name, agent, section} ->
+      suffix = System.unique_integer([:positive])
+
+      assert_raise Spark.Error.DslError, fn ->
+        Code.compile_string("""
+        defmodule JidokaTest.Invalid#{Macro.camelize(to_string(name))}#{suffix} do
+          use Jidoka.Agent
+
+          #{agent}
+          #{section}
+        end
+        """)
+      end
+    end)
+  end
+
   test "compiles the minimal agent and tools DSL into an agent spec" do
     suffix = System.unique_integer([:positive])
     agent_module = Module.concat(JidokaTest, "CompiledDslAgent#{suffix}")

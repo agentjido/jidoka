@@ -78,7 +78,7 @@ defmodule Jidoka.Agent.Spec.Operation do
 
   @doc "Builds an operation specification from keyword or map attributes."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs) do
+  def new(attrs) when is_list(attrs) or is_map(attrs) do
     attrs =
       attrs
       |> Schema.normalize_attrs()
@@ -89,6 +89,8 @@ defmodule Jidoka.Agent.Spec.Operation do
       Schema.parse(@schema, attrs)
     end
   end
+
+  def new(attrs), do: {:error, {:invalid_operation, attrs}}
 
   @doc "Builds an operation specification and raises if the attributes are invalid."
   @spec new!(keyword() | map()) :: t()

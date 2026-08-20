@@ -357,6 +357,74 @@ defmodule Jidoka.SessionAtomicContinuationTest do
              )
   end
 
+  test "pure transitions reject stale, active, expired, and mismatched state" do
+    assert {:ok, %Data{} = session} = Session.start(spec(), "transition-boundaries")
+    request = Turn.Request.new!(input: "work", request_id: "transition-request")
+    assert {:ok, request} = Conversation.prepare_request(session.conversation, request, [])
+
+    assert_raise ArgumentError, ~r/require :now_ms/, fn -> Transitions.claim(session, request, []) end
+
+    assert_raise ArgumentError, ~r/non-negative integer/, fn ->
+      Transitions.claim(session, request, now_ms: -1)
+    end
+
+    assert_raise ArgumentError, ~r/positive integer/, fn ->
+      Transitions.claim(session, request, now_ms: 0, lease_ttl_ms: 0)
+    end
+
+    assert {:ok, %Data{} = claimed} =
+             Transitions.claim(session, request,
+               now_ms: 100,
+               lease_ttl_ms: 50,
+               owner_id: "worker",
+               id_generator: fn "lease" -> "transition-lease" end
+             )
+
+    assert {:error, {:session_lease_active, "transition-boundaries", "worker", 150}} =
+             Transitions.recover(claimed, now_ms: 120)
+
+    assert {:error, {:session_not_recoverable, "transition-boundaries", :new}} =
+             Transitions.recover(session, now_ms: 200)
+
+    assert {:error, {:session_not_recoverable, "transition-boundaries", :missing_lease}} =
+             Transitions.recover(%Data{claimed | lease: nil}, now_ms: 200)
+
+    assert {:error, {:session_lease_expired, "transition-boundaries", "transition-lease", 150}} =
+             Transitions.renew(claimed, "transition-lease", now_ms: 150)
+
+    wrong_snapshot =
+      Snapshot.from_turn_state!(
+        Turn.State.new!(
+          spec: session.spec,
+          plan: Turn.Plan.new!(session.spec),
+          request: Turn.Request.new!(input: "other", request_id: "other-request"),
+          agent_state: Agent.State.new!()
+        ),
+        Turn.Cursor.after_prompt(),
+        snapshot_id: "wrong-snapshot"
+      )
+
+    assert {:error, {:checkpoint_session_mismatch, "transition-boundaries", "wrong-snapshot"}} =
+             Transitions.checkpoint(claimed, "transition-lease", wrong_snapshot, now_ms: 120)
+
+    other = %Data{session | session_id: "other-session"}
+
+    assert {:error, {:session_commit_mismatch, "transition-boundaries", "other-session"}} =
+             Transitions.commit(claimed, "transition-lease", other, now_ms: 120)
+
+    bad_conversation = Conversation.new!(continuation_revision: 5)
+    bad_completed = %Data{claimed | status: :finished, conversation: bad_conversation}
+
+    assert {:error, {:invalid_conversation_commit_revision, "transition-boundaries", 0, 5, 1}} =
+             Transitions.commit(claimed, "transition-lease", bad_completed, now_ms: 120)
+
+    stale = %Data{session | revision: 1}
+    different = %Data{session | session_id: "different", revision: 0}
+
+    assert {:error, {:stale_session_revision, "transition-boundaries", "different", 1, 0}} =
+             Transitions.put(stale, different)
+  end
+
   test "source and fork promote active work into isolated conversations" do
     {:ok, pid} = InMemory.start_link()
     store = {InMemory, pid: pid}

@@ -7,6 +7,41 @@ defmodule Jidoka.MemoryTest do
   alias Jidoka.Memory.Store.JidoMemory
   alias Jidoka.Turn
 
+  defmodule FakeJidoMemoryRuntime do
+    @moduledoc false
+
+    def retrieve(target, query, opts) do
+      send(self(), {:jido_memory_retrieve, target, query, opts})
+      {:ok, %{records: Process.get({__MODULE__, :records}, []), total_count: 7}}
+    end
+
+    def remember(target, attrs, opts) do
+      send(self(), {:jido_memory_remember, target, attrs, opts})
+
+      {:ok,
+       %{
+         id: attrs.id,
+         namespace: attrs.namespace,
+         class: attrs.class,
+         kind: attrs.kind,
+         text: attrs.text,
+         content: attrs.content,
+         tags: attrs.tags,
+         metadata: attrs.metadata
+       }}
+    end
+  end
+
+  defmodule FakeJidoMemoryRetrieveResult do
+    @moduledoc false
+
+    def records(result), do: result.records
+  end
+
+  defmodule FakeJidoMemoryStore do
+    @moduledoc false
+  end
+
   test "memory facade delegates to runtime policies" do
     spec =
       Agent.Spec.new!(
@@ -347,5 +382,136 @@ defmodule Jidoka.MemoryTest do
 
     assert {:error, ^missing} = Memory.Store.recall(store, recall)
     assert {:error, ^missing} = Memory.Store.list_entries(store)
+  end
+
+  test "jido_memory adapter writes and recalls through injected runtime modules" do
+    opts = jido_memory_opts()
+
+    entry =
+      Memory.Entry.new!(
+        id: "memory-entry",
+        agent_id: "memory-agent",
+        session_id: "session-1",
+        content: "Ada prefers concise answers.",
+        metadata: %{
+          "class" => :episodic,
+          kind: :preference,
+          tags: [:answer, "concise"],
+          source: "unit-test"
+        }
+      )
+
+    route = Memory.Route.new!(kind: :session, agent_id: "memory-agent", session_id: "session-1")
+    request = Memory.WriteRequest.new!(route: route, entry: entry, idempotency_key: "write-1")
+
+    assert {:ok, write} = JidoMemory.write(request, opts)
+    assert write.entry.content == "Ada prefers concise answers."
+    assert write.metadata["provider"] == "jido_memory"
+
+    assert_receive {:jido_memory_remember, %{id: "memory-agent"}, attrs, runtime_opts}
+    assert attrs.namespace == "agent:memory-agent:session:session-1"
+    assert attrs.class == :episodic
+    assert attrs.kind == :preference
+    assert attrs.tags == ["answer", "concise"]
+    assert attrs.source == "unit-test"
+    assert runtime_opts[:provider] == :basic
+    assert runtime_opts[:provider_opts][:store] == FakeJidoMemoryStore
+
+    Process.put(
+      {FakeJidoMemoryRuntime, :records},
+      [
+        %{
+          id: "recalled-text",
+          namespace: attrs.namespace,
+          class: :semantic,
+          kind: :fact,
+          text: "Text record",
+          content: %{},
+          tags: ["text"],
+          metadata: %{"jidoka_agent_id" => "memory-agent", "jidoka_session_id" => "session-1"}
+        },
+        %{
+          id: "recalled-content",
+          namespace: attrs.namespace,
+          class: :semantic,
+          kind: :fact,
+          text: "",
+          content: %{"content" => "String-key content"},
+          tags: [],
+          metadata: %{}
+        },
+        %{
+          id: "recalled-atom-content",
+          namespace: attrs.namespace,
+          class: :semantic,
+          kind: :fact,
+          text: nil,
+          content: %{content: "Atom-key content"},
+          tags: [],
+          metadata: %{}
+        },
+        %{
+          id: "recalled-inspected",
+          namespace: attrs.namespace,
+          class: :semantic,
+          kind: :fact,
+          text: nil,
+          content: [:raw],
+          tags: [],
+          metadata: %{}
+        }
+      ]
+    )
+
+    recall =
+      Memory.RecallRequest.new!(
+        route: route,
+        query: "concise",
+        limit: 4
+      )
+
+    assert {:ok, result} = JidoMemory.recall(recall, Keyword.put(opts, :filter_text?, true))
+
+    assert Enum.map(result.entries, & &1.content) == [
+             "Text record",
+             "String-key content",
+             "Atom-key content",
+             "[:raw]"
+           ]
+
+    assert result.metadata["total_count"] == 7
+
+    assert_receive {:jido_memory_retrieve, %{id: "memory-agent"}, query, _runtime_opts}
+    assert query.text_contains == "concise"
+    assert query.order == :desc
+  end
+
+  test "jido_memory adapter resolves every list namespace option" do
+    Process.put({FakeJidoMemoryRuntime, :records}, [])
+
+    cases = [
+      {[list_namespace: "explicit:list"], "explicit:list", "jidoka"},
+      {[namespace: "explicit:namespace"], "explicit:namespace", "jidoka"},
+      {[agent_id: "agent-1"], "agent:agent-1", "agent-1"},
+      {[agent_id: "agent-1", session_id: "session-1"], "agent:agent-1:session:session-1", "agent-1"}
+    ]
+
+    Enum.each(cases, fn {list_opts, expected_namespace, expected_target} ->
+      assert {:ok, []} = JidoMemory.list_entries(jido_memory_opts() ++ list_opts)
+
+      assert_receive {:jido_memory_retrieve, %{id: ^expected_target}, query, _runtime_opts}
+      assert query.namespace == expected_namespace
+      assert query.order == :asc
+    end)
+
+    assert {:error, :missing_memory_namespace} = JidoMemory.list_entries(jido_memory_opts())
+  end
+
+  defp jido_memory_opts do
+    [
+      runtime: FakeJidoMemoryRuntime,
+      retrieve_result: FakeJidoMemoryRetrieveResult,
+      default_store: FakeJidoMemoryStore
+    ]
   end
 end

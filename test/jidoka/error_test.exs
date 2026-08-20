@@ -254,4 +254,43 @@ defmodule Jidoka.ErrorTest do
     assert %Error.ExecutionError{details: %{cause: {:throw, :halt}, request_id: "request-2"}} =
              Error.normalize({:throw, :halt}, request_id: "request-2")
   end
+
+  test "sanitizes binary, numeric, key, port, and improper-list boundaries" do
+    port = Port.open({:spawn, "true"}, [])
+
+    details = %{
+      {1, 2} => "tuple key",
+      <<255>> => "binary key",
+      String.duplicate("k", 300) => "long key",
+      port: port,
+      invalid_binary: <<255, 254>>,
+      large_binary: :binary.copy(<<255>>, 5_000),
+      large_string: String.duplicate("x", 5_000),
+      large_integer: Integer.pow(10, 300),
+      improper: [1 | :tail],
+      bitstring: <<1::size(1)>>
+    }
+
+    projected = Error.execution_error("Boundaries", details: details) |> Error.to_map()
+    Port.close(port)
+
+    assert projected.details.port == %{type: "port"}
+    assert projected.details.invalid_binary.type == "binary"
+    refute Map.has_key?(projected.details.invalid_binary, "__jidoka_truncated__")
+    assert projected.details.large_binary["__jidoka_truncated__"] == "binary"
+    assert projected.details.large_string["__jidoka_truncated__"] == "string"
+    assert projected.details.large_integer["__jidoka_truncated__"] == "integer"
+    assert List.last(projected.details.improper).type == "improper_list_tail"
+    assert projected.details.bitstring.type == "term"
+    assert Enum.any?(Map.keys(projected.details), &is_binary/1)
+  end
+
+  test "truncates oversized maps and ignores empty values in error maps" do
+    large_map = Map.new(1..60, &{&1, &1})
+    projected = Error.execution_error("Large map", details: large_map) |> Error.to_map()
+    assert projected.details["__jidoka_truncated__"] == "collection"
+
+    validation = Error.validation_error("No details", details: [])
+    refute Map.has_key?(Error.to_map(validation), :details)
+  end
 end

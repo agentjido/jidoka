@@ -142,6 +142,67 @@ defmodule Jidoka.ContextWindowTest do
     assert prepared.plan.context_policy.output_reserve == 100
   end
 
+  test "context policy validates aliases, defaults, and invalid model capacity" do
+    assert %Policy{} = Policy.new!()
+    assert {:ok, %Policy{}} = Policy.new()
+
+    assert %Policy{input_budget: 50, output_reserve: 10, minimum_recent_turns: 1} =
+             Policy.new!(max_input_tokens: 50, output_reserve_tokens: 10, min_recent_turns: 1)
+
+    assert_raise ArgumentError, ~r/invalid context-window policy/, fn ->
+      Policy.new!(input_budget: 0)
+    end
+
+    assert {:error, _reason} = Policy.new(:invalid)
+
+    spec =
+      Agent.Spec.new!(
+        id: "policy-boundaries",
+        instructions: "Reply.",
+        model: %{provider: :test, id: "model", limits: nil},
+        generation: %{params: %{max_tokens: :invalid}}
+      )
+
+    assert {:ok, %Policy{input_budget: nil, output_reserve: 0}} = Policy.resolve(spec)
+    assert {:error, {:invalid_context_model_candidates, []}} = Policy.resolve(spec, [])
+
+    invalid_config = %Agent.Spec{spec | runtime_defaults: %{context_policy: :invalid}}
+    assert {:error, {:invalid_context_policy, :invalid}} = Policy.resolve(invalid_config)
+
+    assert {:error, {:invalid_context_model_capacity, model_ref, {:output_reserve_exceeds_context, 10, 10}}} =
+             Policy.resolve(
+               %Agent.Spec{spec | runtime_defaults: %{context_policy: %{output_reserve: 10}}},
+               [%{provider: :test, id: "small", limits: %{context: 10}}]
+             )
+
+    assert model_ref =~ "small"
+
+    assert {:ok, %Policy{input_budget: nil}} =
+             Policy.resolve(spec, [%{provider: :test, id: "unknown", limits: :unknown}])
+  end
+
+  test "token estimation and legacy turn grouping handle runtime-shaped values" do
+    policy = Policy.new!(input_budget: 10_000, minimum_recent_turns: 0)
+    port = Port.open({:spawn_executable, System.find_executable("true")}, [])
+    on_exit(fn -> if Port.info(port), do: Port.close(port) end)
+
+    value = %{tuple: {make_ref(), fn -> :ok end}, port: port, struct: URI.parse("https://example.test")}
+    assert ContextWindow.estimate_tokens(value, policy) > 0
+
+    transcript = [
+      Agent.Message.assistant("leading assistant"),
+      Agent.Message.user("legacy user"),
+      Agent.Message.assistant("legacy answer"),
+      Agent.Message.assistant("same legacy turn")
+    ]
+
+    assert {:ok, _prompt, evidence} = ContextWindow.project(base_prompt(), [], transcript, policy, "missing-active")
+    assert evidence.turn_count_before == 2
+
+    assert {:ok, _prompt, empty_evidence} = ContextWindow.project(base_prompt(), [], [], policy, "missing-active")
+    assert empty_evidence.message_count_before == 0
+  end
+
   test "prompt assembly records compaction without changing the complete transcript" do
     spec =
       Agent.Spec.new!(

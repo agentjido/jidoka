@@ -24,6 +24,20 @@ defmodule Jidoka.DataStructsTest.Support.CallerData do
   defstruct [:actor, :tenant]
 end
 
+defmodule Jidoka.DataStructsTest.Support.PredicateResults do
+  @moduledoc false
+
+  use Jidoka.ApprovalPredicate
+
+  def call(%Jidoka.Context{data: %{result: result}}) do
+    case result do
+      :raise -> raise "predicate failed"
+      :throw -> throw(:predicate_failed)
+      result -> result
+    end
+  end
+end
+
 defmodule Jidoka.DataStructsTest do
   use ExUnit.Case, async: true
 
@@ -37,6 +51,7 @@ defmodule Jidoka.DataStructsTest do
   alias Jidoka.Snapshot
   alias Jidoka.Turn
   alias Jidoka.DataStructsTest.Support.{AllowControl, AmountPredicate, CallerData}
+  alias Jidoka.DataStructsTest.Support.PredicateResults
 
   test "agent state accepts nil, maps, and structs as input" do
     assert {:ok, %Agent.State{messages: [], operation_results: [], metadata: %{}}} =
@@ -140,6 +155,53 @@ defmodule Jidoka.DataStructsTest do
 
     assert {:error, {:invalid_approval_predicate, "Elixir.Missing.Predicate"}} =
              Review.Policy.from_input(%{"when" => "Elixir.Missing.Predicate"})
+  end
+
+  test "approval predicates validate modules and normalize every result shape" do
+    assert :ok = Jidoka.ApprovalPredicate.validate_module(nil)
+    assert :ok = Jidoka.ApprovalPredicate.validate_module(PredicateResults)
+
+    assert {:error, {:invalid_approval_predicate_module, String}} =
+             Jidoka.ApprovalPredicate.validate_module(String)
+
+    assert {:error, {:approval_predicate_not_loaded, MissingPredicate, _reason}} =
+             Jidoka.ApprovalPredicate.validate_module(MissingPredicate)
+
+    assert {:error, {:invalid_approval_predicate, "invalid"}} =
+             Jidoka.ApprovalPredicate.validate_module("invalid")
+
+    assert {:ok, true} =
+             Jidoka.ApprovalPredicate.evaluate(nil, Jidoka.Context.from_data!(%{}))
+
+    for {result, expected} <- [
+          {true, {:ok, true}},
+          {{:ok, false}, {:ok, false}},
+          {{:error, :denied}, {:error, :denied}},
+          {:invalid, {:error, {:invalid_approval_predicate_result, PredicateResults, :invalid}}}
+        ] do
+      assert Jidoka.ApprovalPredicate.evaluate(
+               PredicateResults,
+               Jidoka.Context.from_data!(%{result: result})
+             ) == expected
+    end
+
+    assert {:error, {:approval_predicate_failed, PredicateResults, %RuntimeError{}}} =
+             Jidoka.ApprovalPredicate.evaluate(
+               PredicateResults,
+               Jidoka.Context.from_data!(%{result: :raise})
+             )
+
+    assert {:error, {:approval_predicate_failed, PredicateResults, {:throw, :predicate_failed}}} =
+             Jidoka.ApprovalPredicate.evaluate(
+               PredicateResults,
+               Jidoka.Context.from_data!(%{result: :throw})
+             )
+
+    assert {:error, {:invalid_approval_predicate, "invalid"}} =
+             Jidoka.ApprovalPredicate.evaluate(
+               "invalid",
+               Jidoka.Context.from_data!(%{})
+             )
   end
 
   test "Jidoka.Context normalizes runtime context and fetches data keys safely" do
@@ -293,6 +355,88 @@ defmodule Jidoka.DataStructsTest do
                :unsafe_once,
                %{"name" => :delete_record, "idempotency" => "unsafe_once"}
              )
+  end
+
+  test "approval source policy helpers normalize every public input shape" do
+    operation = Operation.new!(name: "delete_record", idempotency: :unsafe_once)
+    policy = Review.Policy.new!(reason: "review")
+
+    assert Review.Approval.apply_to_operation!(operation, false) == operation
+
+    assert %Operation{approval: %Review.Policy{required: true}} =
+             Review.Approval.apply_to_operation!(operation, true)
+
+    assert %Operation{approval: ^policy} = Review.Approval.apply_to_operation!(operation, policy)
+
+    assert [%Operation{approval: %Review.Policy{}}] =
+             Review.Approval.apply_to_operations!([operation], true)
+
+    assert_raise ArgumentError, ~r/invalid approval policy/, fn ->
+      apply(Review.Approval, :apply_to_operation!, [operation, :invalid])
+    end
+
+    assert {:ok, nil} = Review.Approval.policy_for_operation(false, operation)
+    assert {:ok, %Review.Policy{}} = Review.Approval.policy_for_operation(true, operation)
+    assert {:ok, ^policy} = Review.Approval.policy_for_operation(policy, operation)
+
+    assert {:error, {:invalid_approval_policy, %ArgumentError{}}} =
+             Review.Approval.policy_for_operation([:invalid], operation)
+
+    assert {:error, {:invalid_approval_policy, :invalid}} =
+             Review.Approval.policy_for_operation(:invalid, operation)
+
+    assert Review.Approval.source_policy_map(nil) == nil
+    assert Review.Approval.source_policy_map(false) == nil
+    assert %{"required" => true} = Review.Approval.source_policy_map(true)
+
+    assert %{"required" => true, "mode" => "pre_execution", "only" => "unsafe_once"} =
+             Review.Approval.source_policy_map(:unsafe_once)
+
+    assert %{"reason" => "review"} = Review.Approval.source_policy_map(policy)
+    assert Review.Approval.source_policy_map(:invalid) == nil
+
+    assert %{
+             "required" => true,
+             "mode" => "pre_execution",
+             "predicate" => "Elixir.Jidoka.DataStructsTest.Support.PredicateResults",
+             "only" => ["unsafe_once", "delete_record"],
+             "except" => ["safe_lookup"],
+             "metadata" => %{"level" => "high", "enabled" => true}
+           } =
+             Review.Approval.source_policy_map(%{
+               "required" => true,
+               "mode" => :pre_execution,
+               "when" => PredicateResults,
+               "only" => [:unsafe_once, :delete_record],
+               "except" => "safe_lookup",
+               "metadata" => %{level: :high, enabled: true}
+             })
+
+    assert_raise ArgumentError, ~r/invalid_approval_filter/, fn ->
+      Review.Approval.source_policy_map(only: [""])
+    end
+
+    assert {:error, {:invalid_approval_filter, :except, 123}} =
+             Review.Approval.policy_for_operation(%{except: [123]}, operation)
+  end
+
+  test "approval filters accept alternate map operation keys" do
+    policy = %{only: [:delete_record, :unsafe_once], reason: "review"}
+
+    assert {:ok, %Review.Policy{}} =
+             Review.Approval.policy_for_operation(
+               policy,
+               %{operation: :delete_record, idempotency: :idempotent}
+             )
+
+    assert {:ok, %Review.Policy{}} =
+             Review.Approval.policy_for_operation(
+               policy,
+               %{"operation" => "other", "idempotency" => "unsafe_once"}
+             )
+
+    assert {:ok, nil} =
+             Review.Approval.policy_for_operation(policy, %{name: 123, idempotency: 123})
   end
 
   test "operation policies expose replay and control semantics" do
@@ -930,6 +1074,36 @@ defmodule Jidoka.DataStructsTest do
     assert_raise FunctionClauseError, fn ->
       Turn.Result.from_turn_state!(state)
     end
+  end
+
+  test "turn state accepts legacy pending effects and rejects unexpected results" do
+    %Turn.State{} = state = base_state()
+    intent = Effect.Intent.new(:llm, %{request_id: state.request.request_id}, id: "legacy-llm")
+
+    legacy_attrs =
+      state
+      |> Map.from_struct()
+      |> Map.delete(:pending_effects)
+      |> Map.put(:pending_effect, intent)
+      |> Map.put(:spec, state.plan.spec)
+      |> Map.put(:operation_plan, [])
+
+    assert {:ok, %Turn.State{pending_effects: [^intent]} = legacy} = Turn.State.new(legacy_attrs)
+    assert Turn.State.pending_effect?(legacy)
+    refute Turn.State.pending_effect?(state)
+    assert Turn.State.pop_pending_effect(state) == state
+
+    assert {:error, {:unexpected_effect_result, ^state, :invalid}} =
+             Turn.State.apply_effect_result(state, :invalid)
+
+    invalid_output = Effect.Result.ok(intent, :invalid)
+
+    assert {:error, {:invalid_llm_output, :invalid}} =
+             legacy |> Turn.State.apply_effect_result(invalid_output)
+
+    nil_legacy = legacy_attrs |> Map.delete(:pending_effect) |> Map.put("pending_effect", nil)
+    assert {:ok, %Turn.State{pending_effects: []}} = Turn.State.new(nil_legacy)
+    assert {:error, _reason} = Turn.State.new(:invalid)
   end
 
   defp base_state do

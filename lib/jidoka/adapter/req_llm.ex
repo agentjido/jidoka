@@ -117,7 +117,15 @@ defmodule Jidoka.Adapter.ReqLLM do
   end
 
   defp provider_opts(opts) do
-    Keyword.drop(opts, [:model, :stream, :stream_to, :on_event, :tools])
+    Keyword.drop(opts, [
+      :model,
+      :stream,
+      :stream_to,
+      :on_event,
+      :tools,
+      :generation_module,
+      :stream_response_module
+    ])
   end
 
   defp put_tools(opts, []), do: Keyword.delete(opts, :tools)
@@ -133,8 +141,9 @@ defmodule Jidoka.Adapter.ReqLLM do
 
   defp generate_text_response(model, messages, llm_opts, %Effect.Intent{} = intent, opts) do
     state = NormalizedStream.new()
+    generation = Keyword.get(opts, :generation_module, ReqLLM.Generation)
 
-    case ReqLLM.Generation.generate_text(model, messages, llm_opts) do
+    case generation.generate_text(model, messages, llm_opts) do
       {:ok, response} -> finish_response(state, response, model, intent, opts)
       {:error, reason} -> fail_response(state, reason, intent, opts)
     end
@@ -143,11 +152,13 @@ defmodule Jidoka.Adapter.ReqLLM do
   defp generate_streaming_response(model, messages, llm_opts, %Effect.Intent{} = intent, opts) do
     stream_state_key = {__MODULE__, :stream_state, make_ref()}
     Process.put(stream_state_key, NormalizedStream.new())
+    generation = Keyword.get(opts, :generation_module, ReqLLM.Generation)
+    stream_response_module = Keyword.get(opts, :stream_response_module, ReqLLM.StreamResponse)
 
     result =
-      case ReqLLM.Generation.stream_text(model, messages, llm_opts) do
+      case generation.stream_text(model, messages, llm_opts) do
         {:ok, stream_response} ->
-          case ReqLLM.StreamResponse.process_stream(stream_response,
+          case stream_response_module.process_stream(stream_response,
                  on_chunk: &handle_stream_chunk(stream_state_key, intent, opts, &1)
                ) do
             {:ok, response} ->

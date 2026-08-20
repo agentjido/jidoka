@@ -5,6 +5,21 @@ defmodule Jidoka.ModelPolicyTest do
   alias Jidoka.Config
   alias Jidoka.Effect
   alias Jidoka.ModelPolicy
+  alias Jidoka.Runtime.Capabilities
+
+  defmodule ModuleCallbacks do
+    @moduledoc false
+
+    def select(models, _context), do: {:ok, Enum.reverse(models)}
+    def classify(:retry), do: :transient
+    def classify(_reason), do: :permanent
+  end
+
+  defmodule InvalidClassifier do
+    @moduledoc false
+
+    def classify(_reason), do: :unknown
+  end
 
   @primary %{provider: :openai, id: "primary"}
   @fallback %{provider: :anthropic, id: "fallback"}
@@ -253,5 +268,145 @@ defmodule Jidoka.ModelPolicyTest do
              )
 
     assert result.content == "declared route"
+  end
+
+  test "validates direct policy constructors and model declarations" do
+    {:ok, base_model} = Config.normalize_model_spec(@primary)
+    empty = ModelPolicy.new!(models: [])
+
+    assert {:ok, ^empty} = ModelPolicy.normalize(empty)
+    assert {:ok, [^base_model]} = ModelPolicy.declared_models(empty, base_model)
+    assert {:ok, [^base_model]} = ModelPolicy.declared_models(nil, base_model)
+
+    assert {:error, {:invalid_model_policy, :invalid}} = ModelPolicy.new(:invalid)
+    assert {:error, {:invalid_model_policy_models, :invalid}} = ModelPolicy.new(models: :invalid)
+
+    assert {:error, {:invalid_model_policy_callback, :select, "invalid"}} =
+             ModelPolicy.new(models: [@primary], select: "invalid")
+
+    assert {:error, {:invalid_model_policy_sleep, :invalid}} =
+             ModelPolicy.new(models: [@primary], sleep: :invalid)
+
+    assert {:error, {:invalid_model_policy_retry, _reason}} =
+             ModelPolicy.new(models: [@primary], retry: :invalid)
+
+    assert_raise ArgumentError, ~r/invalid model policy/, fn ->
+      ModelPolicy.new!(models: :invalid)
+    end
+  end
+
+  test "classifies all built-in transient error shapes" do
+    assert ModelPolicy.classify(struct(Req.TransportError, reason: :closed)) == :transient
+    assert ModelPolicy.classify({:capability_timeout, :llm, 10}) == :transient
+    assert ModelPolicy.classify({:econnrefused, %{host: "localhost"}}) == :transient
+  end
+
+  test "wraps module callbacks and keeps the winning decision metadata" do
+    llm = fn intent, _journal, _context ->
+      {:ok, Effect.LLMDecision.final(Config.model_ref(intent.payload.model))}
+    end
+
+    capabilities = Capabilities.new!(llm: llm)
+
+    policy =
+      ModelPolicy.new!(
+        models: [@primary, @fallback],
+        select: ModuleCallbacks,
+        classify: ModuleCallbacks
+      )
+
+    assert {:ok, wrapped} = ModelPolicy.wrap(capabilities, policy)
+
+    intent = Effect.Intent.new(:llm, %{prompt: %{}})
+
+    assert {:ok, %Effect.LLMDecision{content: "anthropic:fallback", metadata: metadata}} =
+             wrapped.llm.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
+
+    assert metadata.provider == :anthropic
+    assert [%{winner: true}] = metadata.model_attempts
+
+    assert {:ok, ^capabilities} = ModelPolicy.wrap(capabilities, nil)
+  end
+
+  test "normalizes provider failures and unusual successful capability values" do
+    context = Jidoka.Context.from_data!(%{})
+    intent = Effect.Intent.new(:llm, %{prompt: %{}})
+    journal = Effect.Journal.new!()
+
+    cases = [
+      {fn _intent, _journal, _context -> :invalid end, :invalid_capability_result},
+      {fn _intent, _journal, _context -> raise "provider failed" end, RuntimeError},
+      {fn _intent, _journal, _context -> throw(:provider_failed) end, :throw}
+    ]
+
+    Enum.each(cases, fn {llm, expected_failure} ->
+      capabilities = Capabilities.new!(llm: llm)
+      assert {:ok, wrapped} = ModelPolicy.wrap(capabilities, models: [@primary])
+
+      assert {:error, {:model_policy_failed, [attempt], :models_exhausted}} =
+               wrapped.llm.(intent, journal, context)
+
+      assert inspect(attempt.failure) =~ inspect(expected_failure)
+    end)
+
+    for output <- [%{"metadata" => "invalid", value: 1}, :raw_value] do
+      capabilities = Capabilities.new!(llm: fn _intent, _journal, _context -> {:ok, output} end)
+      assert {:ok, wrapped} = ModelPolicy.wrap(capabilities, models: [@primary])
+      assert {:ok, result} = wrapped.llm.(intent, journal, context)
+
+      if is_map(output) do
+        assert result.metadata.provider == :openai
+      else
+        assert result == output
+      end
+    end
+  end
+
+  test "reports selector, classifier, and backoff failures" do
+    capability = fn _intent, _journal, _context -> {:error, :retry} end
+    capabilities = Capabilities.new!(llm: capability)
+    context = Jidoka.Context.from_data!(%{})
+    intent = Effect.Intent.new(:llm, %{prompt: %{}})
+    journal = Effect.Journal.new!()
+
+    assert {:ok, wrapped} =
+             ModelPolicy.wrap(capabilities,
+               models: [@primary],
+               select: fn _models, _context -> raise "selector failed" end
+             )
+
+    assert {:error, {:model_policy_failed, [], {:model_selector_failed, %RuntimeError{}}}} =
+             wrapped.llm.(intent, journal, context)
+
+    assert {:ok, wrapped} =
+             ModelPolicy.wrap(capabilities,
+               models: [@primary],
+               classify: InvalidClassifier
+             )
+
+    assert {:error, {:model_policy_failed, [_attempt], {:invalid_model_failure_class, :unknown}}} =
+             wrapped.llm.(intent, journal, context)
+
+    assert {:ok, wrapped} =
+             ModelPolicy.wrap(capabilities,
+               models: [@primary],
+               classify: ModuleCallbacks,
+               retry: [max_attempts: 2, backoff: [type: :exponential, min: 2, max: 2]],
+               sleep: fn _delay -> {:error, :sleep_failed} end
+             )
+
+    assert {:error, {:model_policy_failed, [_attempt], {:model_backoff_failed, :sleep_failed}}} =
+             wrapped.llm.(intent, journal, context)
+  end
+
+  test "requires a model when a wrapped empty policy receives no routed model" do
+    capabilities =
+      Capabilities.new!(llm: fn _intent, _journal, _context -> {:ok, :unexpected} end)
+
+    assert {:ok, wrapped} = ModelPolicy.wrap(capabilities, models: [])
+    intent = Effect.Intent.new(:llm, %{prompt: %{}})
+
+    assert {:error, {:model_policy_failed, [], :missing_model_policy_models}} =
+             wrapped.llm.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
   end
 end

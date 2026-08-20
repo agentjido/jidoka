@@ -5,6 +5,10 @@ defmodule Jidoka.Extension.ResolverTest do
 
   @hash "sha256:" <> String.duplicate("b", 64)
 
+  defmodule RegistryModule do
+    def lookup("acme.context"), do: Process.get({__MODULE__, :result}, :error)
+  end
+
   test "resolves ordered built-in and process requests with minimum host grants" do
     first = request("acme.context")
     second = request("acme.tools", instance_id: "acme.tools.tests", mode: :automation)
@@ -73,6 +77,56 @@ defmodule Jidoka.Extension.ResolverTest do
 
     assert {:error, %Jidoka.Extension.Error{code: :extension_binding_changed}} =
              Resolver.resolve(request, %{"acme.context" => changed_permissions}, :interactive, resume_binding: binding)
+  end
+
+  test "resolver accepts injected registry forms and rejects malformed validators" do
+    request = request("acme.context")
+    registration = registration("acme.context")
+
+    Process.put({RegistryModule, :result}, {:ok, registration})
+    assert {:ok, %Binding{}} = Resolver.resolve(request, RegistryModule, :automation)
+
+    Process.put({RegistryModule, :result}, :error)
+
+    assert {:error, %Jidoka.Extension.Error{code: :unknown_extension}} =
+             Resolver.resolve(request, RegistryModule, :automation)
+
+    assert {:error, %Jidoka.Extension.Error{code: :invalid_extension_registry}} =
+             Resolver.resolve(request, String, :automation)
+
+    assert {:error, %Jidoka.Extension.Error{code: :invalid_extension_registry}} =
+             Resolver.resolve(request, :invalid_registry, :automation)
+
+    assert {:error, %Jidoka.Extension.Error{code: :extension_registry_failure}} =
+             Resolver.resolve(request, fn _id -> {:error, :offline} end, :automation)
+
+    assert {:ok, %Binding{}} = Resolver.resolve(request, fn _id -> registration end, :automation)
+
+    validators = [
+      {fn _config -> {:ok, :normalized} end, nil},
+      {fn _config -> :unexpected end, :extension_config_invalid},
+      {fn _config -> raise "bad config" end, :extension_config_invalid},
+      {:invalid, :invalid_extension_config_validator}
+    ]
+
+    for {validator, expected_error} <- validators do
+      entry = %{registration: registration, validate_config: validator}
+
+      case expected_error do
+        nil ->
+          assert {:ok, %Binding{}} = Resolver.resolve(request, %{"acme.context" => entry}, :automation)
+
+        code ->
+          assert {:error, %Jidoka.Extension.Error{code: ^code}} =
+                   Resolver.resolve(request, %{"acme.context" => entry}, :automation)
+      end
+    end
+
+    assert {:error, %Jidoka.Extension.Error{code: :malformed_extension_registration}} =
+             Resolver.resolve(request, %{"acme.context" => :bad}, :automation)
+
+    assert {:error, %Jidoka.Extension.Error{code: :unknown_extension}} =
+             Resolver.resolve_all([request, request("acme.missing")], %{"acme.context" => registration}, :automation)
   end
 
   defp request(id, attrs \\ []) do

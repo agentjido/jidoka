@@ -4,6 +4,7 @@ defmodule Jidoka.OperationSourceTest do
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Effect
   alias Jidoka.Operation.Source
+  alias Jidoka.Operation.Source.Defined
   alias Jidoka.Operation.Source.Local
 
   defmodule ChangingSource do
@@ -25,6 +26,41 @@ defmodule Jidoka.OperationSourceTest do
       route = fn _intent, _journal, _context -> {:ok, %{version: version}} end
       Compiled.new([operation], %{name => route}, [%{"version" => version}])
     end
+  end
+
+  defmodule InvalidCompiledSource do
+    defstruct []
+    def compile(%__MODULE__{}, _opts), do: {:ok, :invalid}
+  end
+
+  defmodule ErrorCompiledSource do
+    defstruct []
+    def compile(%__MODULE__{}, _opts), do: {:error, :compile_failed}
+  end
+
+  defmodule LegacySource do
+    defstruct []
+
+    def operations(%__MODULE__{}, _opts), do: {:ok, [Operation.new!(name: "legacy")]}
+    def capability(%__MODULE__{}, _opts), do: {:ok, fn _intent, _journal, _context -> {:ok, :legacy} end}
+    def metadata(%__MODULE__{}, _opts), do: {:ok, [%{"source" => "legacy"}]}
+  end
+
+  defmodule LegacyNoMetadataSource do
+    defstruct []
+
+    def operations(%__MODULE__{}, _opts), do: {:ok, [Operation.new!(name: "legacy_no_metadata")]}
+    def capability(%__MODULE__{}, _opts), do: {:ok, fn _intent, _journal, _context -> {:ok, :legacy} end}
+  end
+
+  defmodule InvalidLegacySource do
+    defstruct []
+  end
+
+  defmodule ErrorLegacySource do
+    defstruct []
+    def operations(%__MODULE__{}, _opts), do: {:error, :operations_failed}
+    def capability(%__MODULE__{}, _opts), do: {:error, :not_called}
   end
 
   test "local sources compile operation specs and runtime capabilities" do
@@ -125,5 +161,57 @@ defmodule Jidoka.OperationSourceTest do
                %{"advertised" => route, "extra" => route},
                []
              )
+  end
+
+  test "defined sources select declared operations and preserve metadata" do
+    lookup = Operation.new!(name: "lookup")
+    missing = Operation.new!(name: "missing")
+
+    source =
+      Local.new!(
+        operations: [
+          %{name: "lookup", handler: fn _args, _context -> %{found: true} end}
+        ]
+      )
+
+    defined = Defined.new!(source, [lookup], [%{"owner" => "test"}])
+
+    assert {:ok, [^lookup]} = Source.operations(defined)
+    assert {:ok, [%{"owner" => "test"}]} = Source.metadata(defined)
+    assert {:ok, capability} = Source.capability(defined)
+    assert is_function(capability, 3)
+
+    assert {:ok, %{operations: [^lookup], metadata: [%{"owner" => "test"}]}} =
+             Source.compile(defined)
+
+    assert {:error, {:missing_operation_source_route, "missing"}} =
+             source
+             |> Defined.new!([missing])
+             |> Source.compile()
+  end
+
+  test "source loading validates compiled and legacy callback contracts" do
+    operation = Operation.new!(name: "direct")
+    capability = fn _intent, _journal, _context -> {:ok, :direct} end
+
+    assert {:ok, compiled} = Source.compiled([operation], capability)
+    assert {:ok, ^compiled} = Source.load(compiled)
+
+    assert {:error, {:invalid_compiled_operation_source, InvalidCompiledSource, :invalid}} =
+             Source.load(%InvalidCompiledSource{})
+
+    assert {:error, :compile_failed} = Source.load(%ErrorCompiledSource{})
+
+    assert {:ok, legacy} = Source.load(%LegacySource{})
+    assert Enum.map(legacy.operations, & &1.name) == ["legacy"]
+    assert legacy.metadata == [%{"source" => "legacy"}]
+
+    assert {:ok, no_metadata} = Source.load(%LegacyNoMetadataSource{})
+    assert no_metadata.metadata == []
+
+    assert {:error, {:invalid_operation_source, InvalidLegacySource}} =
+             Source.load(%InvalidLegacySource{})
+
+    assert {:error, :operations_failed} = Source.load(%ErrorLegacySource{})
   end
 end

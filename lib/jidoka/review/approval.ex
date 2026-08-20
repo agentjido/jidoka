@@ -196,6 +196,7 @@ defmodule Jidoka.Review.Approval do
 
   defp get_any(map, keys), do: Enum.find_value(keys, &Map.get(map, &1))
 
+  defp portable_value(value) when is_boolean(value), do: value
   defp portable_value(value) when is_atom(value) and not is_nil(value), do: Atom.to_string(value)
   defp portable_value(values) when is_list(values), do: Enum.map(values, &portable_value/1)
   defp portable_value(%{} = map), do: Map.new(map, fn {key, value} -> {to_string(key), portable_value(value)} end)

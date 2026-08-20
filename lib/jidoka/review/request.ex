@@ -48,8 +48,10 @@ defmodule Jidoka.Review.Request do
   @doc "Projects a runtime interrupt into a public review request."
   @spec from_interrupt(Interrupt.t()) :: {:ok, t()} | {:error, term()}
   def from_interrupt(%Interrupt{} = interrupt) do
+    review_id = if is_binary(interrupt.id), do: "review:" <> interrupt.id, else: nil
+
     new(
-      id: "review:" <> interrupt.id,
+      id: review_id,
       interrupt_id: interrupt.id,
       agent_id: interrupt.agent_id,
       request_id: interrupt.request_id,

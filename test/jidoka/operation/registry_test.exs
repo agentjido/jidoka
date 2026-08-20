@@ -79,6 +79,98 @@ defmodule Jidoka.Operation.RegistryTest do
     assert contract.parameters_schema["additionalProperties"] == false
   end
 
+  test "rejects invalid registry and operation inputs" do
+    assert {:error, {:invalid_operation_registry, :invalid, []}} = Registry.new(:invalid, [])
+    assert {:error, {:invalid_registry_operation, 0, _reason}} = Registry.new([:invalid])
+
+    assert_raise ArgumentError, ~r/invalid operation registry/, fn ->
+      Registry.new!([:invalid])
+    end
+  end
+
+  test "marks only matching declared extension contracts" do
+    %Operation{} = operation = operation("lookup")
+    registry = Registry.new!([operation])
+
+    assert {:ok, marked} = Registry.mark_extensions(registry, [operation])
+    assert Registry.extension?(marked, "lookup")
+
+    changed = %Operation{operation | description: "Changed"}
+
+    assert {:error, {:operation_source_contract_mismatch, "lookup"}} =
+             Registry.mark_extensions(registry, [changed])
+
+    assert {:error, {:unknown_operation, "missing"}} =
+             Registry.mark_extensions(registry, [Operation.new!(name: "missing")])
+  end
+
+  test "rejects malformed schemas and JSON argument values" do
+    invalid_schema = Operation.new!(name: "invalid", metadata: %{parameters_schema: "bad"})
+
+    assert {:error, {:invalid_operation_parameter_schema, "invalid", "bad"}} =
+             Registry.new([invalid_schema])
+
+    invalid_json_schema =
+      Operation.new!(name: "invalid_json", metadata: %{parameters_schema: %{1 => self()}})
+
+    assert {:error, {:invalid_operation_parameter_schema, "invalid_json", %ArgumentError{}}} =
+             Registry.new([invalid_json_schema])
+
+    registry = Registry.new!([Operation.new!(name: "plain")])
+
+    assert {:error, {:invalid_operation_arguments, 123}} =
+             Registry.validate_arguments(registry, "plain", 123)
+
+    assert {:error, {:invalid_operation_arguments, {:invalid_json_key, 1}}} =
+             Registry.validate_arguments(registry, "plain", %{1 => "bad"})
+
+    assert {:error, {:invalid_operation_arguments, {:invalid_json_value, _pid}}} =
+             Registry.validate_arguments(registry, "plain", %{pid: self()})
+
+    assert {:error, {:invalid_operation_arguments, {:duplicate_json_key, "same"}}} =
+             Registry.validate_arguments(registry, "plain", %{"same" => 2, same: 1})
+
+    assert {:error, {:invalid_operation_arguments, {:invalid_json_value, _pid}}} =
+             Registry.validate_arguments(registry, "plain", %{values: [1, self()]})
+  end
+
+  test "applies nested object and array schema defaults" do
+    operation =
+      Operation.new!(
+        name: "defaults",
+        metadata: %{
+          parameters_schema: %{
+            "type" => "object",
+            "properties" => %{
+              "settings" => %{
+                "type" => "object",
+                "default" => %{},
+                "properties" => %{"enabled" => %{"type" => "boolean", "default" => true}}
+              },
+              "items" => %{
+                "type" => "array",
+                "items" => %{
+                  "type" => "object",
+                  "properties" => %{"count" => %{"type" => "integer", "default" => 1}}
+                }
+              }
+            }
+          }
+        }
+      )
+
+    registry = Registry.new!([operation])
+
+    assert {:ok,
+            %{
+              "settings" => %{"enabled" => true},
+              "items" => [%{"count" => 1}, %{"count" => 2}]
+            }} =
+             Registry.validate_arguments(registry, "defaults", %{
+               items: [%{}, %{count: 2}]
+             })
+  end
+
   defp operation(name) do
     Operation.new!(
       name: name,

@@ -21,13 +21,70 @@ defmodule Jidoka.ImportTest.Support.EchoControl do
   def call(_operation), do: :cont
 end
 
+defmodule Jidoka.ImportTest.Support.ExportSpecModule do
+  @moduledoc false
+
+  def spec do
+    Jidoka.Agent.Spec.new!(
+      id: "export_spec_module",
+      instructions: "Export this module.",
+      model: %{provider: :test, id: "model"}
+    )
+  end
+end
+
 defmodule Jidoka.ImportTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Agent
   alias Jidoka.Agent.Spec.Operation
   alias Jidoka.Import.AgentDocument
-  alias Jidoka.ImportTest.Support.{EchoAction, EchoControl}
+  alias Jidoka.Import.Normalize
+  alias Jidoka.ImportTest.Support.{EchoAction, EchoControl, ExportSpecModule}
+
+  test "import normalization covers scalar, list, and metadata boundaries" do
+    assert Normalize.stringify_keys(%{1 => %{ok: true}, outer: [%{inner: :value}]}) == %{
+             "outer" => [%{"inner" => :value}],
+             1 => %{"ok" => true}
+           }
+
+    assert Normalize.tool_entries(%{actions: [:one]}, :actions, :action) == [:one]
+    assert Normalize.tool_entries(%{action: :one}, :actions, :action) == [:one]
+    assert Normalize.first_value(%{}, [:missing]) == []
+    assert Normalize.reverse_result({:ok, [1, 2]}) == {:ok, [2, 1]}
+    assert Normalize.reverse_result({:error, :bad}) == {:error, :bad}
+
+    assert Normalize.name(:valid_name) == {:ok, "valid_name"}
+    assert Normalize.name(" valid_name ") == {:ok, "valid_name"}
+    assert Normalize.name("Bad Name") == {:error, {:invalid_lower_snake_name, "Bad Name"}}
+    assert Normalize.name(123) == {:error, {:invalid_name, 123}}
+
+    assert Normalize.name_list(nil, :names) == {:ok, []}
+    assert Normalize.name_list(:one, :names) == {:ok, ["one"]}
+
+    assert Normalize.name_list([:one, "Bad Name"], :names) ==
+             {:error, {:names, {:invalid_lower_snake_name, "Bad Name"}}}
+
+    assert Normalize.string_list(nil, :values) == {:ok, []}
+    assert Normalize.string_list(:one, :values) == {:ok, ["one"]}
+    assert Normalize.string(:value) == {:ok, "value"}
+    assert Normalize.string(" value ") == {:ok, "value"}
+    assert Normalize.string(" ") == {:error, {:invalid_empty_string, " "}}
+    assert Normalize.string(123) == {:error, {:invalid_string, 123}}
+
+    assert Normalize.idempotency(:pure) == {:ok, :pure}
+    assert Normalize.idempotency(" UNSAFE_ONCE ") == {:ok, :unsafe_once}
+    assert Normalize.idempotency("invalid") == {:error, {:invalid_idempotency, "invalid"}}
+    assert Normalize.idempotency(123) == {:error, {:invalid_idempotency, 123}}
+
+    assert Normalize.metadata(%{safe: true}) == {:ok, %{safe: true}}
+    assert Normalize.metadata(:invalid) == {:error, {:invalid_metadata, :invalid}}
+    assert Normalize.metadata_value(:safe) == "safe"
+    assert Normalize.metadata_value({:tuple, 1}) == "{:tuple, 1}"
+    assert Normalize.metadata_value(1) == 1
+    assert Normalize.reject_nil_values(%{a: 1, b: nil}) == %{a: 1}
+  end
+
   alias Jidoka.Review
 
   test "round-trips ordered inert extension requests" do
@@ -562,5 +619,166 @@ defmodule Jidoka.ImportTest do
              )
 
     assert %Agent.Spec.Result{metadata: %{"schema_ref" => "answer_result"}} = result
+  end
+
+  test "import raising APIs and invalid top-level data use stable errors" do
+    attrs = %{id: "raising_import", model: %{provider: :test, id: "model"}}
+
+    assert %Agent.Spec{id: "raising_import"} = Jidoka.Import.load!(attrs)
+    json = Jason.encode!(attrs)
+    assert %Agent.Spec{id: "raising_import"} = Jidoka.Import.import!(json)
+
+    assert {:error, %Jidoka.Error.ValidationError{field: :document}} = Jidoka.Import.load(:invalid)
+
+    assert_raise Jidoka.Error.ValidationError, fn -> Jidoka.Import.load!(:invalid) end
+    assert_raise Jason.DecodeError, fn -> Jidoka.Import.import!("{") end
+    assert {:error, %Jidoka.Error.ValidationError{}} = Jidoka.Import.load(%{unknown: true})
+  end
+
+  test "import rejects invalid context, result, and operation references" do
+    base = %{agent: %{id: "invalid_refs", model: %{provider: :test, id: "model"}}}
+
+    for agent <- [
+          %{id: "invalid_refs", model: %{provider: :test, id: "model"}, context: %{}},
+          %{id: "invalid_refs", model: %{provider: :test, id: "model"}, context: 123},
+          %{id: "invalid_refs", model: %{provider: :test, id: "model"}, result: %{}},
+          %{id: "invalid_refs", model: %{provider: :test, id: "model"}, result: 123}
+        ] do
+      assert {:error, %Jidoka.Error.ValidationError{}} = Jidoka.Import.load(%{base | agent: agent})
+    end
+
+    assert {:error, %Jidoka.Error.ValidationError{}} =
+             Jidoka.Import.load(Map.put(base, :operations, [123]))
+
+    schema = Zoi.object(%{answer: Zoi.string()})
+
+    assert {:ok, %Agent.Spec{result: %Agent.Spec.Result{metadata: %{"schema_ref" => "answer"}}}} =
+             Jidoka.Import.load(
+               %{base | agent: Map.put(base.agent, :result, :answer)},
+               registries: %{result_schemas: [answer: schema]}
+             )
+  end
+
+  test "import tool expansion rejects every invalid source reference form" do
+    base = %{agent: %{id: "invalid_tools", model: %{provider: :test, id: "model"}}}
+
+    invalid_tools = [
+      %{actions: [%{}]},
+      %{actions: [123]},
+      %{actions: [String]},
+      %{ash_resources: [nil]},
+      %{ash_resources: [123]},
+      %{browsers: [123]},
+      %{browsers: [%{name: "docs", mode: :invalid}]},
+      %{mcp_tools: [123]},
+      %{catalogs: [nil]},
+      %{catalogs: [123]}
+    ]
+
+    for tools <- invalid_tools do
+      assert {:error, %Jidoka.Error.ValidationError{}} =
+               Jidoka.Import.load(Map.put(base, :tools, tools))
+    end
+
+    assert {:error, %Jidoka.Error.ValidationError{}} =
+             Jidoka.Import.load(Map.put(base, :tools, %{actions: ["bad"]}),
+               actions: %{"bad" => String}
+             )
+  end
+
+  test "import controls reject invalid entries and module references" do
+    base = %{agent: %{id: "invalid_controls", model: %{provider: :test, id: "model"}}}
+
+    for controls <- [
+          %{inputs: [123]},
+          %{operations: [123]},
+          %{outputs: [123]},
+          %{input: %{control: nil}},
+          %{operation: %{control: 123}},
+          %{output: %{control: String}}
+        ] do
+      assert {:error, %Jidoka.Error.ValidationError{}} =
+               Jidoka.Import.load(Map.put(base, :controls, controls))
+    end
+  end
+
+  test "import registries accept aliases, nested maps, lists, and atom-string keys" do
+    alias Jidoka.Import.Registry
+
+    registries = [
+      actions: %{echo: EchoAction},
+      ash_resources: [{"resource", String}],
+      controls: %{"echo" => EchoControl},
+      catalogs: [catalog: String],
+      context_schemas: %{context: Zoi.map()},
+      result_schemas: [{"result", Zoi.map()}]
+    ]
+
+    assert {:ok, EchoAction} = Registry.fetch(:actions, "echo", action_registry: %{echo: EchoAction})
+    assert {:ok, String} = Registry.fetch(:ash_resources, :resource, registries: registries)
+    assert {:ok, EchoControl} = Registry.fetch(:controls, :echo, registries: Map.new(registries))
+    assert {:ok, String} = Registry.fetch(:catalogs, "catalog", catalog_registry: [catalog: String])
+    assert {:ok, _schema} = Registry.fetch(:context_schemas, "context", registries: registries)
+    assert {:ok, _schema} = Registry.fetch(:result_schemas, :result, registries: registries)
+    assert {:error, {:unknown_registry_ref, :actions, :missing}} = Registry.fetch(:actions, :missing, actions: :invalid)
+
+    assert {:error, {:unknown_registry_ref, :actions, :missing}} =
+             Registry.fetch(:actions, :missing, registries: :invalid)
+  end
+
+  test "export accepts all public inputs, formats, and portable metadata values" do
+    spec =
+      Agent.Spec.new!(
+        id: "export_boundaries",
+        instructions: "Export boundaries.",
+        model: %{provider: :test, id: "model"},
+        runtime_defaults: %{
+          keyword: [one: 1],
+          list: [:one, {:two, 2}],
+          tuple: {:value, 1},
+          struct: ~D[2026-08-20]
+        },
+        metadata: %{dsl_module: __MODULE__, keep: :yes}
+      )
+
+    plan = Jidoka.Turn.Plan.new!(spec)
+    assert {:ok, _json} = Jidoka.Export.export(spec)
+    assert {:ok, compact_json} = Jidoka.Export.export(plan, format: "json", pretty: false)
+    refute compact_json =~ "\n"
+    assert {:ok, yaml} = Jidoka.Export.export(ExportSpecModule, format: "yaml")
+    assert yaml =~ "export_spec_module"
+    assert {:ok, %{"agent" => %{"id" => "export_boundaries"}}} = Jidoka.Export.document(plan)
+
+    assert {:error, {:unsupported_export_format, :toml}} = Jidoka.Export.export(spec, format: :toml)
+    assert {:error, {:invalid_export_agent, String}} = Jidoka.Export.export(String)
+  end
+
+  test "export uses schema refs from options and result metadata" do
+    context_schema = Zoi.object(%{tenant: Zoi.string()})
+    result_schema = Zoi.object(%{answer: Zoi.string()})
+
+    result =
+      Agent.Spec.Result.new!(
+        schema: result_schema,
+        max_repairs: 2,
+        metadata: %{schema_ref: :answer, extra: [mode: :strict]}
+      )
+
+    spec =
+      Agent.Spec.new!(
+        id: "schema_export_boundaries",
+        instructions: "Use schemas.",
+        model: %{provider: :test, id: "model"},
+        context_schema: context_schema,
+        result: result
+      )
+
+    assert {:error, {:unexportable_context_schema, :missing_context_schema_ref}} =
+             Jidoka.Export.document(spec)
+
+    assert {:ok, document} = Jidoka.Export.document(spec, context_schema_ref: :tenant)
+    assert document["agent"]["context"] == %{"ref" => "tenant"}
+    assert document["agent"]["result"]["ref"] == "answer"
+    assert document["agent"]["result"]["metadata"] == %{"extra" => %{"mode" => "strict"}}
   end
 end

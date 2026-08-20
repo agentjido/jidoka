@@ -140,6 +140,71 @@ defmodule Jidoka.Adapter.ReqLLM.NormalizedStreamTest do
     assert Enum.count(error_records, &NormalizedStream.terminal?/1) == 1
   end
 
+  test "terminal streams ignore later chunks and completion" do
+    response = response("done", "")
+    decision = LLMDecision.final("done")
+    {state, records} = NormalizedStream.complete(NormalizedStream.new(), response, decision)
+
+    assert Enum.any?(records, &NormalizedStream.terminal?/1)
+    refute NormalizedStream.terminal?(%{type: :text_delta})
+    assert {^state, []} = NormalizedStream.push(state, StreamChunk.text("late"))
+    assert {^state, []} = NormalizedStream.complete(state, response, decision)
+    assert {initial, []} = NormalizedStream.push(NormalizedStream.new(), StreamChunk.text(""))
+    assert initial.raw_size == 0
+  end
+
+  test "recognizes every durable cancellation reason" do
+    reasons = [
+      :cancelled,
+      {:cancelled, :user_request},
+      %{details: %{cause: :cancelled}}
+    ]
+
+    Enum.each(reasons, fn reason ->
+      {_state, records} = NormalizedStream.fail(NormalizedStream.new(), reason)
+      assert records == [%{type: :cancelled, finish_reason: :cancelled}]
+    end)
+  end
+
+  test "decodes every JSON string escape and four-byte UTF-8 content" do
+    content = "quote=\" slash=/ backslash=\\ backspace=\b formfeed=\f return=\r tab=\t emoji=😀"
+    wire = Jason.encode!(%{type: "final", content: content})
+    {_state, records} = push_chunks(for <<byte <- wire>>, do: <<byte>>)
+
+    assert text_from_records(records) == content
+  end
+
+  test "stops visible scanning for malformed escapes and unicode" do
+    malformed = [
+      ~S({"type":"final","content":"safe\qhidden"}),
+      ~S({"type":"final","content":"safe\uD800hidden"}),
+      ~S({"type":"final","content":"safe\uZZZZhidden"})
+    ]
+
+    Enum.each(malformed, fn wire ->
+      {state, records} = push_chunks(for <<byte <- wire>>, do: <<byte>>)
+      assert text_from_records(records) == "safe"
+      assert state.scanner.phase == :done
+    end)
+  end
+
+  test "reports pending and partial UTF-8 scanner suffixes" do
+    assert %{undecoded_suffix_bytes: 0} = NormalizedStream.scanner_stats(NormalizedStream.new())
+
+    wire = ~s({"type":"final","content":"😀"})
+    emoji_offset = :binary.match(wire, "😀") |> elem(0)
+    partial = binary_part(wire, 0, emoji_offset + 2)
+    {state, _records} = push_chunks(for <<byte <- partial>>, do: <<byte>>)
+
+    assert %{undecoded_suffix_bytes: 2} = NormalizedStream.scanner_stats(state)
+  end
+
+  test "a single leading backtick that is not a fence stays plain text" do
+    {state, records} = NormalizedStream.push(NormalizedStream.new(), StreamChunk.text("`plain"))
+    assert NormalizedStream.raw_text(state) == "`plain"
+    assert records == [%{type: :text_delta, delta: "`plain"}]
+  end
+
   defp response(text, thinking, opts \\ []) do
     parts = [ContentPart.text(text), ContentPart.thinking(thinking)]
 

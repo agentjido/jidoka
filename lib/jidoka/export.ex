@@ -114,7 +114,10 @@ defmodule Jidoka.Export do
          %{
            "ref" => to_string(ref),
            "max_repairs" => result.max_repairs,
-           "metadata" => portable_value(Map.delete(result.metadata, "schema_ref"))
+           "metadata" =>
+             result.metadata
+             |> Map.drop(["schema_ref", :schema_ref])
+             |> portable_value()
          }
          |> reject_empty_values()}
     end

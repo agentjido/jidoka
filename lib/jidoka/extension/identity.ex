@@ -25,7 +25,7 @@ defmodule Jidoka.Extension.Identity do
 
   @doc "Builds and validates a pinned identity."
   @spec new(keyword() | map()) :: {:ok, t()} | {:error, term()}
-  def new(attrs) do
+  def new(attrs) when is_list(attrs) or is_map(attrs) do
     attrs = Jidoka.Schema.normalize_attrs(attrs)
 
     identity = %__MODULE__{
@@ -51,6 +51,8 @@ defmodule Jidoka.Extension.Identity do
       reason -> {:error, {:invalid_extension_identity, reason}}
     end
   end
+
+  def new(attrs), do: {:error, {:invalid_extension_identity, attrs}}
 
   @doc "Builds an identity or raises."
   @spec new!(keyword() | map()) :: t()

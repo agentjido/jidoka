@@ -36,6 +36,8 @@ defmodule Jidoka.Controls.MaxInputLength do
 
   defp max_length(_metadata), do: {:error, :missing_max_input_length}
 
+  defp normalize_max(nil), do: {:error, :missing_max_input_length}
+
   defp normalize_max(value) when is_integer(value) and value > 0, do: {:ok, value}
 
   defp normalize_max(value) when is_binary(value) do

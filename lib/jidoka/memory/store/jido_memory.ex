@@ -22,7 +22,6 @@ defmodule Jidoka.Memory.Store.JidoMemory do
   @jido_runtime :"Elixir.Jido.Memory.Runtime"
   @jido_retrieve_result :"Elixir.Jido.Memory.RetrieveResult"
   @jido_default_store :"Elixir.Jido.Memory.Store.ETS"
-  @required_modules [@jido_runtime, @jido_retrieve_result, @jido_default_store]
 
   @impl true
   def recall(%RecallRequest{} = request, opts) do
@@ -37,11 +36,11 @@ defmodule Jidoka.Memory.Store.JidoMemory do
       }
       |> maybe_put_text_filter(request.query, opts)
 
-    with :ok <- ensure_jido_memory(),
-         {:ok, result} <- retrieve(target(route.agent_id), query, runtime_opts(opts)) do
+    with :ok <- ensure_jido_memory(opts),
+         {:ok, result} <- retrieve(runtime(opts), target(route.agent_id), query, runtime_opts(opts)) do
       entries =
         result
-        |> records()
+        |> records(retrieve_result(opts))
         |> Enum.map(&record_to_entry(&1, route.agent_id, route.session_id))
 
       RecallResult.new(
@@ -75,8 +74,8 @@ defmodule Jidoka.Memory.Store.JidoMemory do
         |> maybe_put_metadata("jidoka_session_id", entry.session_id)
     }
 
-    with :ok <- ensure_jido_memory(),
-         {:ok, record} <- remember(target(entry.agent_id), attrs, runtime_opts(opts)),
+    with :ok <- ensure_jido_memory(opts),
+         {:ok, record} <- remember(runtime(opts), target(entry.agent_id), attrs, runtime_opts(opts)),
          entry <- record_to_entry(record, entry.agent_id, entry.session_id) do
       WriteResult.new(
         request: request,
@@ -88,17 +87,18 @@ defmodule Jidoka.Memory.Store.JidoMemory do
 
   @impl true
   def list_entries(opts) do
-    with :ok <- ensure_jido_memory(),
+    with :ok <- ensure_jido_memory(opts),
          {:ok, namespace} <- list_namespace(opts),
          {:ok, result} <-
            retrieve(
+             runtime(opts),
              target(Keyword.get(opts, :agent_id, "jidoka")),
              %{namespace: namespace, limit: Keyword.get(opts, :limit, 100), order: :asc},
              runtime_opts(opts)
            ) do
       entries =
         result
-        |> records()
+        |> records(retrieve_result(opts))
         |> Enum.map(&record_to_entry(&1, nil, nil))
 
       {:ok, entries}
@@ -152,7 +152,7 @@ defmodule Jidoka.Memory.Store.JidoMemory do
     provider_opts =
       opts
       |> Keyword.get(:provider_opts, [])
-      |> Keyword.put_new(:store, Keyword.get(opts, :store, @jido_default_store))
+      |> Keyword.put_new(:store, Keyword.get(opts, :store, default_store(opts)))
 
     [
       provider: Keyword.get(opts, :provider, @default_provider),
@@ -170,16 +170,22 @@ defmodule Jidoka.Memory.Store.JidoMemory do
     end
   end
 
-  defp ensure_jido_memory do
-    case Enum.find(@required_modules, &(not Code.ensure_loaded?(&1))) do
+  defp ensure_jido_memory(opts) do
+    modules = [runtime(opts), retrieve_result(opts), default_store(opts)]
+
+    case Enum.find(modules, &(not Code.ensure_loaded?(&1))) do
       nil -> :ok
       module -> {:error, {:missing_optional_dependency, :jido_memory, module}}
     end
   end
 
-  defp retrieve(target, query, opts), do: apply(@jido_runtime, :retrieve, [target, query, opts])
-  defp remember(target, attrs, opts), do: apply(@jido_runtime, :remember, [target, attrs, opts])
-  defp records(result), do: apply(@jido_retrieve_result, :records, [result])
+  defp runtime(opts), do: Keyword.get(opts, :runtime, @jido_runtime)
+  defp retrieve_result(opts), do: Keyword.get(opts, :retrieve_result, @jido_retrieve_result)
+  defp default_store(opts), do: Keyword.get(opts, :default_store, @jido_default_store)
+
+  defp retrieve(runtime, target, query, opts), do: apply(runtime, :retrieve, [target, query, opts])
+  defp remember(runtime, target, attrs, opts), do: apply(runtime, :remember, [target, attrs, opts])
+  defp records(result, retrieve_result), do: apply(retrieve_result, :records, [result])
 
   defp record_to_entry(record, fallback_agent_id, fallback_session_id) do
     metadata = Map.get(record, :metadata, %{})

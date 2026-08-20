@@ -42,6 +42,7 @@ defmodule Jidoka.MCPTest do
     end
 
     def list_tools(:bad_list_response, _opts), do: :bad_response
+    def list_tools(:raised_list_response, _opts), do: raise("list failed")
 
     def list_tools(:counted_mcp, _opts) do
       count = Process.get({__MODULE__, :discovery_count}, 0) + 1
@@ -81,8 +82,40 @@ defmodule Jidoka.MCPTest do
     end
 
     def call_tool(:bad_call_response, "broken", _args, _opts), do: :bad_response
+    def call_tool(:error_call_response, "broken", _args, _opts), do: {:error, :remote_failed}
+    def call_tool(:raised_call_response, "broken", _args, _opts), do: raise("call failed")
 
     def register_endpoint(%Jido.MCP.Endpoint{} = endpoint), do: {:ok, endpoint}
+  end
+
+  defmodule AlreadyRegisteredClient do
+    @moduledoc false
+    def list_tools(_endpoint, _opts), do: {:ok, [%{name: "tool"}]}
+    def call_tool(_endpoint, _name, _arguments, _opts), do: {:ok, :called}
+    def register_endpoint(_endpoint), do: {:error, {:endpoint_already_registered, :demo}}
+  end
+
+  defmodule FailedRegistrationClient do
+    @moduledoc false
+    def list_tools(_endpoint, _opts), do: {:ok, []}
+    def register_endpoint(_endpoint), do: {:error, :registration_failed}
+  end
+
+  defmodule InvalidRegistrationClient do
+    @moduledoc false
+    def list_tools(_endpoint, _opts), do: {:ok, []}
+    def register_endpoint(_endpoint), do: :invalid
+  end
+
+  defmodule RaisedRegistrationClient do
+    @moduledoc false
+    def list_tools(_endpoint, _opts), do: {:ok, []}
+    def register_endpoint(_endpoint), do: raise("registration failed")
+  end
+
+  defmodule NoRegistrationClient do
+    @moduledoc false
+    def list_tools(_endpoint, _opts), do: {:ok, []}
   end
 
   defmodule StaticMCPAgent do
@@ -329,5 +362,111 @@ defmodule Jidoka.MCPTest do
     assert_raise ArgumentError, ~r/invalid MCP source/, fn ->
       MCP.new!(endpoint: "")
     end
+  end
+
+  test "covers direct source callbacks and capability routing boundaries" do
+    assert MCP.schema()
+
+    source =
+      MCP.new!(
+        endpoint: :demo,
+        prefix: "mcp_",
+        tools: [%{name: "!!!", description: nil, input_schema: nil}],
+        capabilities: nil,
+        timeouts: nil,
+        metadata: nil,
+        client_info: nil
+      )
+
+    assert {:ok, [%Operation{name: "mcp_tool"}]} = MCP.operations(source, [])
+    assert {:ok, capability} = MCP.capability(source, [])
+
+    operation_intent = Effect.Intent.new(:operation, %{name: "missing", arguments: %{}})
+    context = Jidoka.Context.from_data!(%{})
+
+    assert {:error, {:missing_operation_handler, "missing"}} =
+             capability.(operation_intent, Effect.Journal.new!(), context)
+
+    llm_intent = Effect.Intent.new(:llm, %{})
+
+    assert {:error, {:unsupported_effect_kind, :llm}} =
+             capability.(llm_intent, Effect.Journal.new!(), context)
+
+    assert {:ok, []} = MCP.operations(%{source | tools: []}, :invalid_options)
+  end
+
+  test "normalizes MCP client failures and call response errors" do
+    raised_list = MCP.new!(endpoint: :raised_list_response, client: FakeMCPClient, required: true)
+
+    assert {:error, {:mcp_tool_discovery_failed, :raised_list_response, %RuntimeError{}}} =
+             MCP.operations(raised_list, discover_mcp?: true)
+
+    for endpoint <- [:error_call_response, :raised_call_response] do
+      source = MCP.new!(endpoint: endpoint, client: FakeMCPClient, tools: [%{name: "broken"}])
+      assert {:ok, capability} = MCP.capability(source, [])
+      intent = Effect.Intent.new(:operation, %{name: "mcp_#{endpoint}_broken", arguments: %{}})
+
+      case endpoint do
+        :error_call_response ->
+          assert {:error, :remote_failed} =
+                   capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
+
+        :raised_call_response ->
+          assert {:error, %RuntimeError{message: "call failed"}} =
+                   capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
+      end
+    end
+
+    missing_client = MCP.new!(endpoint: :demo, client: String, tools: [%{name: "tool"}])
+    assert {:ok, capability} = MCP.capability(missing_client, [])
+    intent = Effect.Intent.new(:operation, %{name: "mcp_demo_tool", arguments: %{}})
+
+    assert {:error, {:invalid_mcp_client, String}} =
+             capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
+  end
+
+  test "normalizes endpoint registration results" do
+    transport = {:stdio, command: "echo"}
+
+    already =
+      MCP.new!(
+        endpoint: :already,
+        client: AlreadyRegisteredClient,
+        transport: transport,
+        tools: [%{name: "tool"}]
+      )
+
+    assert {:ok, capability} = MCP.capability(already, [])
+    intent = Effect.Intent.new(:operation, %{name: "mcp_already_tool", arguments: %{}})
+    assert {:ok, %{result: :called}} = capability.(intent, Effect.Journal.new!(), Jidoka.Context.from_data!(%{}))
+
+    for {client, expected} <- [
+          {FailedRegistrationClient, {:mcp_endpoint_registration_failed, :demo, :registration_failed}},
+          {InvalidRegistrationClient, {:invalid_mcp_endpoint_registration_response, :invalid}},
+          {NoRegistrationClient, {:invalid_mcp_client, NoRegistrationClient}}
+        ] do
+      source = MCP.new!(endpoint: :demo, client: client, transport: transport, required: true)
+
+      assert {:error, {:mcp_tool_discovery_failed, :demo, ^expected}} =
+               MCP.operations(source, discover_mcp?: true)
+    end
+
+    source = MCP.new!(endpoint: :demo, client: RaisedRegistrationClient, transport: transport, required: true)
+
+    assert {:error, {:mcp_tool_discovery_failed, :demo, %RuntimeError{}}} =
+             MCP.operations(source, discover_mcp?: true)
+
+    string_endpoint =
+      MCP.new!(endpoint: "runtime-name", client: AlreadyRegisteredClient, transport: transport, required: true)
+
+    assert {:error, {:mcp_tool_discovery_failed, "runtime-name", {:invalid_mcp_runtime_endpoint, "runtime-name"}}} =
+             MCP.operations(string_endpoint, discover_mcp?: true)
+  end
+
+  test "rejects every scalar MCP configuration boundary" do
+    assert {:error, {:invalid_mcp_endpoint, 123}} = MCP.new(endpoint: 123)
+    assert {:error, {:invalid_mcp_prefix, :bad}} = MCP.new(endpoint: :demo, prefix: :bad)
+    assert {:error, {:invalid_mcp_client_info, :bad}} = MCP.new(endpoint: :demo, client_info: :bad)
+    assert {:error, {:invalid_mcp_idempotency, []}} = MCP.new(endpoint: :demo, idempotency: [])
   end
 end

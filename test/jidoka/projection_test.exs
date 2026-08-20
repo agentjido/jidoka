@@ -200,4 +200,113 @@ defmodule Jidoka.ProjectionTest do
              }
            } = Jidoka.project(snapshot)
   end
+
+  test "dispatches every standalone public data contract to a stable projection" do
+    modules = [
+      Jidoka.Agent.State,
+      Jidoka.Agent.Message,
+      Jidoka.Handoff,
+      Jidoka.Turn.Cursor,
+      Jidoka.Effect.Intent,
+      Jidoka.Effect.OperationGroup,
+      Jidoka.Effect.OperationRequest,
+      Jidoka.Effect.OperationResult,
+      Jidoka.Effect.Result,
+      Jidoka.ExecutionEnvironment.PolicyRequest,
+      Jidoka.ExecutionEnvironment.SecurityProfile,
+      Jidoka.ExecutionEnvironment.Binding,
+      Jidoka.ExecutionEnvironment.Checkpoint,
+      Jidoka.ExecutionEnvironment.EnforcementEvidence,
+      Jidoka.ExecutionEnvironment.AdapterCapabilities,
+      Jidoka.ExecutionEnvironment.Selection,
+      Jidoka.ExecutionEnvironment.Error,
+      Jidoka.Memory.Entry,
+      Jidoka.Memory.Route,
+      Jidoka.Memory.RecallRequest,
+      Jidoka.Memory.RecallResult,
+      Jidoka.Memory.WriteRequest,
+      Jidoka.Memory.WriteResult,
+      Jidoka.Session.Data,
+      Jidoka.Session.Replay,
+      Jidoka.Session.Sequence.Terminal,
+      Jidoka.Review.Interrupt,
+      Jidoka.Review.Request,
+      Jidoka.Review.Response,
+      Jidoka.Workflow.Spec,
+      Jidoka.Workflow.Step,
+      Jidoka.Debug.RequestSummary,
+      Jidoka.Debug.ReplayDiagnostics,
+      Jidoka.Trace.Policy,
+      Jidoka.Eval.Run,
+      Jidoka.Event
+    ]
+
+    Enum.each(modules, fn module ->
+      assert module |> struct() |> Jidoka.project() |> is_map()
+    end)
+  end
+
+  test "projects agent state, messages, and handoffs through the agent projection" do
+    message = Agent.Message.assistant("Ready")
+    state = %Agent.State{messages: [message], metadata: %{owner: "test"}}
+
+    handoff =
+      struct(Jidoka.Handoff,
+        id: "handoff-1",
+        conversation_id: "conversation-1",
+        from_agent: :source,
+        to_agent: Agent,
+        to_agent_id: "target",
+        context: %{tenant: "acme"},
+        metadata: %{reason: "specialist"}
+      )
+
+    assert %{messages: [%{content: "Ready"}], metadata: %{owner: "test"}} = Jidoka.project(state)
+    assert %{content: "Ready"} = Jidoka.project(message)
+
+    assert %{
+             id: "handoff-1",
+             to_agent: "Jidoka.Agent",
+             context: %{tenant: "acme"},
+             metadata: %{reason: "specialist"}
+           } = Jidoka.project(handoff)
+  end
+
+  test "projects standalone agent-spec, decision, state, and sequence contracts" do
+    spec_modules = [
+      Agent.Spec.Generation,
+      Agent.Spec.Result,
+      Agent.Spec.Memory,
+      Agent.Spec.Operation,
+      Agent.Spec.Controls
+    ]
+
+    for module <- spec_modules do
+      assert module |> struct() |> Jidoka.project() |> is_map()
+    end
+
+    for value <- [
+          Agent.Spec.Controls.Input.new!(control: SupportControl),
+          Agent.Spec.Controls.Output.new!(control: SupportControl),
+          Agent.Spec.Controls.Operation.new!(control: SupportControl)
+        ] do
+      assert value |> Jidoka.project() |> is_map()
+    end
+
+    %Turn.State{} =
+      state =
+      Agent.Spec.new!(id: "projection-state", instructions: "Project.", model: %{provider: :test, id: "model"})
+      |> Turn.Plan.new!()
+      |> then(fn plan ->
+        request = Turn.Request.new!(input: "project")
+        Turn.State.new!(plan: plan, request: request, agent_state: request.agent_state)
+      end)
+
+    assert %{status: :running} = Jidoka.project(state)
+    assert %{type: :final} = Jidoka.project(Effect.LLMDecision.final("done"))
+
+    result = Turn.Result.from_turn_state!(%Turn.State{state | status: :finished, result: "done"})
+    step = Jidoka.Session.Sequence.Step.new!(index: 1, request: state.request, result: result)
+    assert %{index: 1} = Jidoka.project(step)
+  end
 end

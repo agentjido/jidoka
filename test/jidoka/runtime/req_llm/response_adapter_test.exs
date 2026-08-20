@@ -142,6 +142,103 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapterTest do
              ResponseAdapter.decision(response([call]), nil, "", prompt: prompt(["lookup"]))
   end
 
+  test "normalizes map-shaped native calls and direct argument maps" do
+    calls = [
+      %{
+        id: "map-call-1",
+        function: %{name: "lookup", arguments: %{"id" => "A-1"}},
+        metadata: %{provider: :fixture}
+      }
+    ]
+
+    assert {:ok, decision} =
+             ResponseAdapter.decision(response_with_calls(calls), nil, "")
+
+    assert [%{name: "lookup", arguments: %{"id" => "A-1"}} = request] = decision.operations
+    assert request.provider_call_id == "map-call-1"
+    assert request.provider_metadata.provider == :fixture
+  end
+
+  test "reports every malformed map-shaped native call field" do
+    cases = [
+      {%{id: "call-1", function: %{name: nil, arguments: %{}}}, {:invalid_native_tool_name, nil}},
+      {%{id: "call-1", name: "lookup", arguments: "[]"}, {:invalid_native_tool_arguments, "lookup", []}},
+      {%{id: "call-1", name: "lookup", arguments: 123}, {:invalid_native_tool_arguments, "lookup", 123}},
+      {%{id: nil, name: "lookup", arguments: %{}}, {:invalid_native_tool_call_id, nil}},
+      {%{id: "", name: "lookup", arguments: %{}}, {:invalid_native_tool_call_id, ""}},
+      {%{id: 123, name: "lookup", arguments: %{}}, {:invalid_native_tool_call_id, 123}},
+      {:invalid, {:invalid_native_tool_call, :invalid}}
+    ]
+
+    Enum.each(cases, fn {call, reason} ->
+      assert {:error, ^reason} =
+               ResponseAdapter.decision(response_with_calls([call]), nil, "")
+    end)
+  end
+
+  test "validates explicit registry and prompt options" do
+    call = ToolCall.new("call-1", "lookup", "{}")
+
+    assert {:error, {:invalid_operation_registry, :invalid}} =
+             ResponseAdapter.decision(response([call]), nil, "", registry: :invalid)
+
+    assert {:error, {:invalid_prompt_payload, "invalid"}} =
+             ResponseAdapter.decision(response([call]), nil, "", prompt: "invalid")
+  end
+
+  test "converts provider output files by media type and rejects bad parts" do
+    good_parts = [
+      ReqLLM.Message.ContentPart.image_url("https://example.test/image.png"),
+      ReqLLM.Message.ContentPart.file("image", "image.png", "image/png"),
+      ReqLLM.Message.ContentPart.file("video", "video.mp4", "video/mp4"),
+      ReqLLM.Message.ContentPart.file("document", "document.bin", nil)
+    ]
+
+    good = %LLMResponse{
+      response([], ~s({"type":"final","content":"parts"}), :stop)
+      | message:
+          LLMContext.assistant([
+            ReqLLM.Message.ContentPart.text(~s({"type":"final","content":"parts"}))
+            | good_parts
+          ])
+    }
+
+    assert {:ok, decision} = ResponseAdapter.decision(good)
+    assert Enum.map(decision.parts, & &1.type) == [:text, :image, :image, :video, :document]
+
+    bad_type = %LLMResponse{
+      good
+      | message:
+          LLMContext.assistant([
+            ReqLLM.Message.ContentPart.text(~s({"type":"final","content":"parts"})),
+            %ReqLLM.Message.ContentPart{type: :unknown}
+          ])
+    }
+
+    assert {:error, {:unsupported_provider_content_part, :unknown}} =
+             ResponseAdapter.decision(bad_type)
+
+    bad_file = %LLMResponse{
+      good
+      | message:
+          LLMContext.assistant([
+            ReqLLM.Message.ContentPart.text(~s({"type":"final","content":"parts"})),
+            %ReqLLM.Message.ContentPart{type: :file, media_type: "application/pdf"}
+          ])
+    }
+
+    assert {:error, {:invalid_provider_file_part, _part}} =
+             ResponseAdapter.decision(bad_file)
+  end
+
+  test "accepts an explicit registry and a nil text classification" do
+    assert {:ok, registry} = ToolProjection.registry_from_prompt(prompt(["lookup"]))
+    call = ToolCall.new("call-1", "lookup", %{} |> Jason.encode!())
+
+    assert {:ok, %{operations: [%{name: "lookup"}]}} =
+             ResponseAdapter.decision(response([call]), nil, nil, registry: registry)
+  end
+
   defp response(calls, text \\ "", finish_reason \\ :tool_calls) do
     %LLMResponse{
       id: "response-1",
@@ -149,6 +246,16 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapterTest do
       context: LLMContext.new([]),
       message: LLMContext.assistant(text, tool_calls: calls),
       finish_reason: finish_reason
+    }
+  end
+
+  defp response_with_calls(calls) do
+    %LLMResponse{
+      id: "response-map-calls",
+      model: "test:model",
+      context: LLMContext.new([]),
+      message: %ReqLLM.Message{role: :assistant, content: [], tool_calls: calls},
+      finish_reason: :tool_calls
     }
   end
 

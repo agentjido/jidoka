@@ -123,4 +123,24 @@ defmodule Jidoka.TraceTest do
 
     assert %{secret: "hide"} = Trace.redact(%{secret: "hide"}, sample_rate: 2.0)
   end
+
+  test "trace convenience arities accept policy structs and every option key" do
+    event = Event.build(:turn_finished, [], request_id: "trace-convenience")
+    assert :turn_finished in Trace.events()
+    assert [%{event: :turn_finished}] = Trace.timeline([event])
+    assert %{secret: "[REDACTED]"} = Trace.redact(%{secret: "hide"}, Policy.new!(redact_keys: [:secret]))
+    assert %{secret: "[REDACTED]"} = Trace.redact(%{secret: "hide"}, redact_keys: [:secret])
+
+    for opts <- [
+          [trace_policy: %{enabled: false}],
+          %{policy: %{enabled: false}},
+          %{"policy" => %{enabled: false}},
+          %{trace_policy: %{enabled: false}}
+        ] do
+      assert Trace.timeline([event], opts) == []
+    end
+
+    sampled = Trace.timeline([%{event: :sampled, request_id: "fixed", seq: 1}], sample_rate: 0.5)
+    assert sampled in [[], [%{event: :sampled, request_id: "fixed", seq: 1, projection: :trace}]]
+  end
 end

@@ -3,6 +3,25 @@ defmodule Jidoka.Agent.DslSectionsTest do
 
   alias Jidoka.Agent.Dsl.Sections
 
+  @entity_modules [
+    Jidoka.Agent.Dsl.Agent,
+    Jidoka.Agent.Dsl.Tool,
+    Jidoka.Agent.Dsl.AshResource,
+    Jidoka.Agent.Dsl.Browser,
+    Jidoka.Agent.Dsl.MCPTools,
+    Jidoka.Agent.Dsl.Catalog,
+    Jidoka.Agent.Dsl.SkillRef,
+    Jidoka.Agent.Dsl.SkillPath,
+    Jidoka.Agent.Dsl.Subagent,
+    Jidoka.Agent.Dsl.Handoff,
+    Jidoka.Agent.Dsl.Workflow,
+    Jidoka.Agent.Dsl.OperationControl,
+    Jidoka.Agent.Dsl.InputControl,
+    Jidoka.Agent.Dsl.OutputControl,
+    Jidoka.Agent.Dsl.MaxTurnsControl,
+    Jidoka.Agent.Dsl.TimeoutControl
+  ]
+
   test "agent section declares the expected Spark entity shape" do
     section = Sections.Agent.section()
     [entity] = section.entities
@@ -88,5 +107,12 @@ defmodule Jidoka.Agent.DslSectionsTest do
     assert entities.operation.args == [:control]
     assert get_in(entities.operation.schema, [:control, :type]) == :atom
     assert get_in(entities.operation.schema, [:when, :as]) == :match
+  end
+
+  test "all agent DSL entities expose usable data schemas" do
+    Enum.each(@entity_modules, fn module ->
+      assert {:ok, value} = Zoi.parse(module.schema(), %{})
+      assert value.__struct__ == module
+    end)
   end
 end

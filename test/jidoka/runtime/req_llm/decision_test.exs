@@ -162,6 +162,50 @@ defmodule Jidoka.Adapter.ReqLLM.DecisionTest do
     assert_operation(decision, "lookup", %{})
   end
 
+  test "normalizes every batched operation alias" do
+    for key <- [:tools, :function_calls, :actions] do
+      object = %{key => [%{name: "lookup", arguments: %{id: "A-1"}}]}
+
+      assert {:ok, %{type: :operations, operations: [%{name: "lookup"}]}} =
+               Decision.parse_object(object)
+    end
+
+    assert {:error, {:invalid_operation_request, :invalid}} =
+             Decision.parse_object(%{type: "operations", operations: [:invalid]})
+  end
+
+  test "normalizes nested operation name and argument aliases" do
+    cases = [
+      %{tool: %{operation: "lookup", params: %{id: 1}}},
+      %{function_call: %{tool: "lookup", parameters: %{id: 1}}},
+      %{function: %{tool_name: "lookup", args: %{id: 1}}}
+    ]
+
+    Enum.each(cases, fn object ->
+      assert {:ok, decision} = Decision.parse_object(object)
+      assert_operation(decision, "lookup", %{id: 1})
+    end)
+
+    assert {:ok, %{type: :operations, operations: [%{name: "lookup", arguments: %{id: 1}}]}} =
+             Decision.parse_object(%{
+               tool_calls: [%{function_name: "lookup", arguments: %{id: 1}}]
+             })
+  end
+
+  test "encodes an untyped object when no summary is present" do
+    assert {:ok, %{type: :final, content: content, result: %{answer: 42}}} =
+             Decision.parse_object(%{answer: 42})
+
+    assert Jason.decode!(content) == %{"answer" => 42}
+
+    assert {:error, {:invalid_llm_decision_type, :final}} =
+             Decision.parse_object(%{type: :final, content: "invalid atom type"})
+  end
+
+  test "does not recurse when malformed text contains the full candidate object" do
+    assert {:ok, %{type: :final, content: "{invalid}"}} = Decision.parse_text("{invalid}")
+  end
+
   defp assert_operation(decision, name, arguments) do
     assert decision.type == :operation
     assert [operation] = decision.operations

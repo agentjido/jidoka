@@ -2,8 +2,13 @@ defmodule Jidoka.Workflow.LuaTest do
   use ExUnit.Case, async: false
 
   alias Jido.Action.Catalog
+  alias Jidoka.Adapter.Runic.LuaPlan
   alias Jidoka.Workflow.Lua
+  alias Jidoka.Workflow.Lua.CallTrace
+  alias Jidoka.Workflow.Lua.Plan.Ref
+  alias Jidoka.Workflow.Lua.Plan.Spec
   alias Jidoka.Workflow.Lua.Plan.Spec.Helpers
+  alias Jidoka.Workflow.Lua.Policy
 
   defmodule SearchCustomers do
     @moduledoc false
@@ -122,6 +127,18 @@ defmodule Jidoka.Workflow.LuaTest do
     end
   end
 
+  defmodule AlwaysFails do
+    @moduledoc false
+
+    use Jidoka.Action,
+      name: "workflow_lua_always_fails",
+      description: "Returns a deterministic action error.",
+      schema: Zoi.object(%{})
+
+    @impl true
+    def run(_params, _context), do: {:error, :deterministic_failure}
+  end
+
   test "requires a catalog or entries" do
     assert {:error, :missing_lua_workflow_catalog} = Lua.execute("return {}")
   end
@@ -182,6 +199,76 @@ defmodule Jidoka.Workflow.LuaTest do
     assert Helpers.clamp_max_concurrency("7") == 7
     assert Helpers.clamp_max_concurrency("bad") == 8
     assert Helpers.clamp_max_concurrency(:bad) == 8
+  end
+
+  test "Lua refs resolve atom, string, variable, list, and dotted paths" do
+    atom_values = %{
+      customer_id: "customer",
+      id: "id",
+      name: "name",
+      company: "company",
+      count: 1,
+      total_due_cents: 2,
+      customers: [],
+      invoices: [],
+      note: "note",
+      output: "output",
+      steps: "steps"
+    }
+
+    state = %{
+      steps: %{
+        "atom_values" => atom_values,
+        "nested" => %{"items" => [%{"value" => 1}, %{"value" => 2}]}
+      }
+    }
+
+    for {key, expected} <- atom_values do
+      assert {:ok, ^expected} = Ref.resolve(%{from: :atom_values, path: Atom.to_string(key)}, state)
+    end
+
+    assert {:ok, 2} = Ref.resolve(%{"from" => "nested", "path" => ["items", "2", "value"]}, state)
+    assert {:ok, 1} = Ref.resolve(%{var: :item, path: [:value]}, state, %{"item" => %{"value" => 1}})
+
+    assert {:ok, %{"value" => 1}} =
+             Ref.resolve(%{var: "item", path: nil}, state, %{"item" => %{"value" => 1}})
+
+    assert {:ok, %{resolved: [1, 2]}} =
+             Ref.resolve(
+               %{resolved: [%{from: "nested", path: ["items", 1, "value"]}, 2]},
+               state
+             )
+
+    assert Ref.collect(%{
+             first: %{from: "one"},
+             nested: [%{from: :two}, %{from: "one"}],
+             plain: 1
+           }) == ["one", "two"]
+  end
+
+  test "Lua refs return precise errors for missing and invalid paths" do
+    state = %{steps: %{"one" => %{"items" => [1]}}}
+
+    cases = [
+      {%{from: "one", var: "item"}, %{}, {:ambiguous_lua_workflow_ref, %{from: "one", var: "item"}}},
+      {%{from: "missing"}, %{}, {:missing_lua_workflow_ref, "missing"}},
+      {%{var: "missing"}, %{}, {:missing_lua_workflow_var, "missing"}},
+      {%{from: "one", path: "missing"}, %{}, {:missing_lua_workflow_path, "one", "missing"}},
+      {%{from: "one", path: ["items", "bad"]}, %{}, {:missing_lua_workflow_path, "one", "bad"}},
+      {%{from: "one", path: ["items", 0]}, %{}, {:missing_lua_workflow_path, "one", 0}},
+      {%{from: "one", path: ["items", 2]}, %{}, :error},
+      {%{from: "one", path: ["items", 1, "bad"]}, %{}, {:invalid_lua_workflow_path_target, "one", "bad", 1}}
+    ]
+
+    Enum.each(cases, fn {ref, vars, expected} ->
+      assert {:error, ^expected} = Ref.resolve(ref, state, vars)
+    end)
+
+    assert {:error, {:missing_lua_workflow_ref, "missing"}} =
+             Ref.resolve([%{from: "missing"}, 1], state)
+
+    assert {:error, {:missing_lua_workflow_ref, "missing"}} =
+             Ref.resolve(%{nested: %{from: "missing"}}, state)
   end
 
   test "executes a Lua-authored workflow against catalog entries" do
@@ -327,6 +414,232 @@ defmodule Jidoka.Workflow.LuaTest do
     assert result["result"]["output"]["note"] == %{"reason" => "condition_false", "status" => "skipped"}
   end
 
+  test "supports all reduce modes and gate comparisons" do
+    script = """
+    return jidoka.workflow({
+      id = "reduce_and_gate_modes",
+      steps = {
+        {id = "collect", reduce = {over = {1, 2, 3}, mode = "collect"}},
+        {id = "count", reduce = {over = {1, 2, 3}, mode = "count"}},
+        {id = "first", reduce = {over = {1, 2, 3}, mode = "first"}},
+        {id = "exists", gate = {op = "exists", left = 1}},
+        {id = "empty", gate = {op = "empty", left = ""}},
+        {id = "not_empty", gate = {op = "not_empty", left = {1}}},
+        {id = "eq", gate = {op = "eq", left = 1, right = 1}},
+        {id = "neq", gate = {op = "neq", left = 1, right = 2}},
+        {id = "gte", gate = {op = "gte", left = 2, right = 2}},
+        {id = "lt", gate = {op = "lt", left = 1, right = 2}},
+        {id = "lte", gate = {op = "lte", left = 2, right = 2}},
+        {id = "contains_text", gate = {op = "contains", left = "jidoka", right = "ido"}},
+        {id = "contains_list", gate = {op = "contains", left = {1, 2}, right = 2}}
+      },
+      output = {
+        collect = {from = "collect"},
+        count = {from = "count"},
+        first = {from = "first"},
+        exists = {from = "exists", path = {"passed"}},
+        empty = {from = "empty", path = {"passed"}},
+        not_empty = {from = "not_empty", path = {"passed"}},
+        eq = {from = "eq", path = {"passed"}},
+        neq = {from = "neq", path = {"passed"}},
+        gte = {from = "gte", path = {"passed"}},
+        lt = {from = "lt", path = {"passed"}},
+        lte = {from = "lte", path = {"passed"}},
+        contains_text = {from = "contains_text", path = {"passed"}},
+        contains_list = {from = "contains_list", path = {"passed"}}
+      }
+    })
+    """
+
+    assert {:ok, result} = Lua.execute(script, catalog: catalog())
+    output = result["result"]["output"]
+    assert output["collect"] == %{"mode" => "collect", "items" => [1, 2, 3], "count" => 3}
+    assert output["count"] == %{"mode" => "count", "value" => 3, "count" => 3}
+    assert output["first"] == %{"mode" => "first", "value" => 1, "count" => 3}
+
+    for key <- ~w(exists empty not_empty eq neq gte lt lte contains_text contains_list) do
+      assert output[key]
+    end
+  end
+
+  test "reports invalid resolved collections, sums, and map arguments" do
+    scripts = [
+      """
+      return jidoka.workflow({
+        steps = {{id = "bad_reduce", reduce = {over = "not-a-list", mode = "count"}}},
+        output = "bad_reduce"
+      })
+      """,
+      """
+      return jidoka.workflow({
+        steps = {{id = "bad_sum", reduce = {over = {1, "bad"}, mode = "sum"}}},
+        output = "bad_sum"
+      })
+      """,
+      """
+      return jidoka.workflow({
+        steps = {{
+          id = "bad_map",
+          map = {over = {{id = 1}}, tool = "billing.invoice.list", arguments = "bad"}
+        }},
+        output = "bad_map"
+      })
+      """
+    ]
+
+    Enum.each(scripts, fn script ->
+      assert {:error, result} = Lua.execute(script, catalog: catalog())
+      assert result["status"] == "failed"
+    end)
+  end
+
+  test "the Runic plan rejects invalid states, steps, and gate operations" do
+    assert {:ok, policy} = Policy.build("return {}", catalog: catalog())
+    assert {:ok, trace} = CallTrace.start_link()
+    context = Jidoka.Context.from_data!(%{})
+
+    assert {:error, {:invalid_lua_workflow, :invalid}} =
+             LuaPlan.run(:invalid, trace, policy, context)
+
+    invalid_state = LuaPlan.run_step(:invalid, %{id: "ignored"}, trace, policy, context)
+    assert invalid_state.error == {:invalid_lua_workflow_state, :invalid}
+
+    unsupported =
+      LuaPlan.run_step(
+        %{steps: %{}, error: nil},
+        %{id: "unsupported", kind: :unsupported, condition: nil},
+        trace,
+        policy,
+        context
+      )
+
+    assert unsupported.error ==
+             {:lua_workflow_step_failed, "unsupported",
+              {:unsupported_lua_workflow_step, %{id: "unsupported", kind: :unsupported, condition: nil}}}
+
+    invalid_gate =
+      LuaPlan.run_step(
+        %{steps: %{}, error: nil},
+        %{
+          id: "gate",
+          kind: :gate,
+          condition: nil,
+          gate: %{op: "invalid", left: 1, right: 2}
+        },
+        trace,
+        policy,
+        context
+      )
+
+    assert invalid_gate.error ==
+             {:lua_workflow_step_failed, "gate", {:invalid_lua_workflow_gate, "invalid", 1, 2}}
+  end
+
+  test "Lua plan validation reports each malformed public field" do
+    assert {:ok, policy} = Policy.build("return {}", catalog: catalog())
+    assert Spec.schema()
+
+    cases = [
+      {:bad, {:invalid_lua_workflow, :bad}},
+      {%{}, {:invalid_lua_workflow_steps, nil}},
+      {%{"steps" => [:bad]}, {:invalid_lua_workflow_step, :bad}},
+      {%{"steps" => [%{"id" => "one", "map" => %{}, "tool" => "crm.customer.search"}]},
+       {:ambiguous_lua_workflow_step, "map", ["tool"]}},
+      {%{"steps" => [%{"id" => "one", "map" => :bad}]}, {:invalid_lua_workflow_map_step, :bad}},
+      {%{"steps" => [%{"id" => "one", "reduce" => :bad}]}, {:invalid_lua_workflow_reduce_step, :bad}},
+      {%{"steps" => [%{"id" => "one", "gate" => :bad}]}, {:invalid_lua_workflow_gate_step, :bad}},
+      {%{"steps" => [%{"id" => nil, "tool" => "crm.customer.search"}]}, {:invalid_lua_workflow_step_id, nil}},
+      {%{"steps" => [%{"id" => "one", "tool" => nil}]}, {:invalid_lua_workflow_step_tool, nil}},
+      {%{"steps" => [%{"id" => "one", "tool" => "not.allowed"}]}, {:lua_tool_not_allowed, "not.allowed"}},
+      {%{"steps" => [%{"id" => "one", "tool" => "crm.customer.search", "arguments" => :bad}]},
+       {:invalid_lua_workflow_step_arguments, :bad}},
+      {%{"steps" => [%{"id" => "one", "map" => %{"tool" => "crm.customer.search"}}]},
+       {:missing_lua_workflow_field, "over"}},
+      {%{"steps" => [%{"id" => "one", "map" => %{"over" => [], "as" => nil, "tool" => "crm.customer.search"}}]},
+       {:invalid_lua_workflow_map_as, nil}},
+      {%{"steps" => [%{"id" => "one", "map" => %{"over" => [], "tool" => nil}}]},
+       {:invalid_lua_workflow_map_tool, nil}},
+      {%{"steps" => [%{"id" => "one", "map" => %{"over" => [], "tool" => "not.allowed"}}]},
+       {:lua_tool_not_allowed, "not.allowed"}},
+      {%{"steps" => [%{"id" => "one", "tool" => "crm.customer.search"}], "output" => %{"from" => "missing"}},
+       {:missing_lua_workflow_output_refs, ["missing"]}}
+    ]
+
+    for {raw, reason} <- cases do
+      assert {:error, ^reason} = Spec.new(raw, policy)
+    end
+
+    assert {:ok, atom_fields} =
+             Spec.new(
+               %{
+                 steps: [
+                   %{id: :one, tool: [:crm, :customer, :search], arguments: nil},
+                   %{
+                     id: :two,
+                     map: %{over: [], as: :row, tool: [:billing, :invoice, :list], arguments: nil},
+                     after: :one
+                   }
+                 ]
+               },
+               policy
+             )
+
+    assert atom_fields.output == %{"from" => "two"}
+    assert Enum.map(atom_fields.steps, & &1.id) == ["one", "two"]
+    assert Enum.at(atom_fields.steps, 1).after == ["one"]
+  end
+
+  test "Lua policy validates all catalog and bounded option inputs" do
+    assert Policy.schema()
+    entries = Catalog.list(catalog())
+
+    assert {:ok, configured} =
+             Policy.build("return {}",
+               entries: entries,
+               require_read_only?: false,
+               allowed_tools: :"admin.mutate",
+               timeout: :bad,
+               max_calls: :bad,
+               max_parallel_calls: :bad,
+               max_call_depth: :bad,
+               max_script_bytes: :bad
+             )
+
+    assert configured.allowed_tools == ["admin.mutate"]
+    assert configured.require_read_only? == false
+
+    assert {:ok, defaults} = Policy.build("return {}", entries: entries, allowed_tools: [])
+    assert "crm.customer.search" in defaults.allowed_tools
+
+    assert {:error, {:invalid_lua_workflow_entries, [:bad]}} =
+             Policy.build("return {}", entries: [:bad])
+
+    assert {:error, {:invalid_lua_workflow_catalog, :bad}} =
+             Policy.build("return {}", catalog: :bad)
+
+    assert {:error, :empty_lua_script} = Policy.build("  ", entries: entries)
+
+    assert {:error, {:lua_script_too_large, 257, 256}} =
+             Policy.build(String.duplicate("x", 257), entries: entries, max_script_bytes: 256)
+
+    assert {:error, {:unknown_lua_tool, "unknown"}} =
+             Policy.build("return {}", entries: entries, allowed_tools: "unknown")
+  end
+
+  test "action retry failures are traced for every bounded attempt" do
+    script = """
+    return jidoka.workflow({
+      steps = {{id = "fail", tool = "test.always_fails", arguments = {}, retries = 1}},
+      output = "fail"
+    })
+    """
+
+    assert {:error, result} = Lua.execute(script, catalog: catalog())
+    assert result["status"] == "failed"
+    assert result["call_count"] == 2
+    assert Enum.all?(result["calls"], &(&1["status"] == "error"))
+  end
+
   test "rejects mutating tools by default" do
     assert {:error, {:lua_tool_not_read_only, "admin.mutate"}} =
              Lua.execute("return {}", catalog: catalog(), allowed_tools: ["admin.mutate"])
@@ -375,6 +688,12 @@ defmodule Jidoka.Workflow.LuaTest do
     |> Catalog.register!(ReadActionContext,
       id: "context.read",
       description: "Read action context",
+      visibility: :hidden,
+      read_only?: true
+    )
+    |> Catalog.register!(AlwaysFails,
+      id: "test.always_fails",
+      description: "Always fails",
       visibility: :hidden,
       read_only?: true
     )

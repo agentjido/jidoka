@@ -254,6 +254,32 @@ defmodule Jidoka.SkillTest do
              Jidoka.Skill.prompt(["missing-skill"])
   end
 
+  test "the DSL loads skill paths relative to its source file" do
+    suffix = System.unique_integer([:positive])
+    path = Path.join(System.tmp_dir!(), "jidoka-skill-path-#{suffix}")
+    File.mkdir_p!(path)
+
+    on_exit(fn -> File.rm_rf!(path) end)
+
+    Code.compile_string("""
+    defmodule JidokaTest.LoadPathAgent#{suffix} do
+      use Jidoka.Agent
+
+      agent :load_path_agent_#{suffix}
+
+      tools do
+        load_path #{inspect(path)}
+        skill #{inspect(SupportPolicySkill)}
+      end
+    end
+    """)
+
+    agent = Module.concat(JidokaTest, "LoadPathAgent#{suffix}")
+
+    assert [%{"source" => "skill_path", "expanded_path" => ^path}] =
+             Enum.filter(agent.spec().metadata["tool_sources"], &(&1["source"] == "skill_path"))
+  end
+
   test "one tool compilation derives all skill views from one resolution" do
     Process.put({ChangingSkill, :resolution_count}, 0)
 

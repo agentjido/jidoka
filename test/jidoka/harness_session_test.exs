@@ -362,6 +362,233 @@ defmodule Jidoka.HarnessSessionTest do
            } = second.lineage
   end
 
+  test "session execution exposes complete default-arity facade behavior" do
+    assert {:ok, %Session{} = started} = Execution.start_session(spec())
+
+    running = Session.put_request(started, Turn.Request.new!(input: "active"))
+
+    assert {:error, {:session_already_running, _session_id}} =
+             Execution.run_session(running, "cannot run")
+
+    assert {:error, {:session_already_running, _session_id}} =
+             Execution.run_session_internal(running, "cannot run")
+
+    assert {:error, :empty_session_sequence} = Execution.run_sequence(started, [])
+
+    hibernated = %Session{started | status: :hibernated}
+    assert {:error, {:missing_session_snapshot, _session_id}} = Execution.resume_session(hibernated)
+
+    assert {:error, {:missing_session_snapshot, _session_id}} =
+             Execution.resume_session_internal(hibernated)
+
+    assert {:error, :missing_harness_store} = Execution.recover_session("missing")
+    assert {:error, {:missing_session_snapshot, _session_id}} = Execution.fork_session(started)
+    assert {:ok, []} = Execution.pending_reviews(started)
+
+    snapshot = Snapshot.from_turn_state!(base_state(), Turn.Cursor.after_prompt())
+    assert {:ok, %Jidoka.Session.Replay{snapshots: [_]}} = Execution.replay(snapshot)
+
+    assert {:error, :missing_memory_store} = Execution.write_memory(spec(), "remember")
+    assert {:error, :missing_memory_store} = Execution.write_memory(started, "remember")
+
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    assert {:ok, ^started} = Store.put_session(store, started)
+    assert {:ok, ^started} = Execution.store_get_session(store, started.session_id)
+    assert {:ok, [^started]} = Execution.store_list_sessions(store)
+    assert {:ok, []} = Execution.store_list_recoverable(store)
+    assert {:ok, []} = Execution.pending_reviews(store)
+  end
+
+  test "session data rejects unsafe forks and selects strict recovery work" do
+    request = Turn.Request.new!(input: "recover", request_id: "turn-recover")
+    other = Turn.Request.new!(input: "other", request_id: "turn-other")
+    lease = Lease.acquire("turn-recover", 0, 100, id_generator: fn "lease" -> "lease-recover" end) |> elem(1)
+    session = Session.start(spec(), session_id: "session-recovery") |> elem(1)
+
+    assert {:error, {:session_not_recoverable, "session-recovery", :missing_lease}} =
+             Session.recovery_target(session)
+
+    restartable = session |> Session.put_request(request) |> Session.put_lease(lease)
+    assert {:ok, {:restart, ^request}} = Session.recovery_target(restartable)
+
+    missing = Session.put_lease(session, lease)
+
+    assert {:error, {:recovery_request_not_found, "session-recovery", "turn-recover"}} =
+             Session.recovery_target(missing)
+
+    duplicate = %Session{restartable | requests: [request, request]}
+
+    assert {:error, {:recovery_request_identity_conflict, "session-recovery", "turn-recover", 2}} =
+             Session.recovery_target(duplicate)
+
+    mismatched = %Session{restartable | requests: [request, other]}
+
+    assert {:error, {:recovery_request_mismatch, "session-recovery", "turn-recover", "turn-other"}} =
+             Session.recovery_target(mismatched)
+
+    unknown_snapshot =
+      Turn.Request.new!(input: "unknown", request_id: "turn-unknown")
+      |> base_state()
+      |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "snapshot-unknown")
+
+    with_unknown = %Session{restartable | snapshots: [unknown_snapshot]}
+
+    assert {:error,
+            {:recovery_snapshot_request_mismatch, "session-recovery", "snapshot-unknown", "turn-unknown",
+             "turn-recover"}} = Session.recovery_target(with_unknown)
+
+    matching_snapshot =
+      request
+      |> base_state()
+      |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "snapshot-match")
+
+    other_snapshot =
+      other
+      |> base_state()
+      |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "snapshot-other")
+
+    out_of_order = %Session{
+      restartable
+      | requests: [other, request],
+        snapshots: [matching_snapshot, other_snapshot]
+    }
+
+    assert {:error,
+            {:recovery_snapshot_order_mismatch, "session-recovery", "turn-recover", "snapshot-match", "snapshot-other"}} =
+             Session.recovery_target(out_of_order)
+  end
+
+  test "session data normalizes constructors, environment, extensions, and fork identity" do
+    generator = fn "sess" -> "session-generated" end
+    assert {:ok, %Session{session_id: "session-generated"} = generated} = Session.start(spec(), id_generator: generator)
+    assert {:ok, %Session{} = normalized} = Session.from_input(generated)
+    assert normalized.session_id == generated.session_id
+    assert Session.put_environment(normalized, nil).environment == nil
+
+    assert_raise ArgumentError, ~r/invalid durable session/, fn -> Session.new!(%{}) end
+
+    assert {:error, {:invalid_extension_state, _reason}} =
+             Session.put_extension_state(normalized, %{"unsafe" => self()})
+
+    request = Turn.Request.new!(input: "fork", request_id: "turn-fork-contract")
+
+    snapshot =
+      request
+      |> base_state()
+      |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "snapshot-fork-contract")
+
+    source = normalized |> Session.put_request(request) |> Session.put_snapshot(snapshot)
+
+    lineage =
+      Lineage.new!(
+        root_session_id: source.session_id,
+        parent_session_id: source.session_id,
+        source_snapshot_id: snapshot.snapshot_id,
+        forked_at_ms: 1,
+        depth: 1
+      )
+
+    wrong_agent = %Snapshot{snapshot | agent_id: "different-agent"}
+
+    assert {:error, {:snapshot_agent_mismatch, "harness_session_agent", "different-agent"}} =
+             Session.fork(source, wrong_agent, lineage, session_id: "fork-target")
+
+    assert {:error, {:fork_session_id_matches_source, "session-generated"}} =
+             Session.fork(source, snapshot, lineage, session_id: "session-generated")
+
+    result = Turn.Result.from_turn_state!(%{base_state(request) | status: :finished, result: "done"})
+
+    assert %Session{status: :finished, conversation: %Jidoka.Session.Conversation{}} =
+             Session.put_result(%{source | conversation: nil}, result)
+
+    assert %Session{status: :finished, conversation: %Jidoka.Session.Conversation{}} =
+             Session.put_result(%{source | requests: []}, result)
+  end
+
+  test "the public session facade covers default error and data paths" do
+    assert {:ok, %Session{} = session} =
+             Jidoka.Session.start(spec(), id_generator: fn "sess" -> "session-facade" end)
+
+    running = Session.put_request(session, Turn.Request.new!(input: "active", request_id: "facade-active"))
+    hibernated = %Session{session | status: :hibernated}
+
+    assert {:error, {:session_already_running, "session-facade"}} = Jidoka.Session.run(running, "blocked")
+    assert {:error, :empty_session_sequence} = Jidoka.Session.run_sequence(session, [])
+    assert {:error, :empty_session_sequence} = Jidoka.Session.run_sequence_async(session, [])
+    assert {:error, {:session_already_running, "session-facade"}} = Jidoka.Session.chat(running, "blocked")
+    assert {:error, :invalid_async_request} = Jidoka.Session.await(:invalid)
+    assert {:error, :invalid_async_request} = Jidoka.Session.cancel(:invalid)
+    assert {:error, {:missing_session_snapshot, "session-facade"}} = Jidoka.Session.resume(hibernated)
+    assert {:error, {:missing_session_snapshot, "session-facade"}} = Jidoka.Session.fork(session)
+    assert {:error, :missing_harness_store} = Jidoka.Session.recover("session-facade")
+    assert {:ok, []} = Jidoka.Session.pending_reviews(session)
+    assert {:ok, %Jidoka.Session.Replay{session_id: "session-facade"}} = Jidoka.Session.replay(session)
+    assert {:error, :missing_memory_store} = Jidoka.Session.write_memory(session, "remember")
+
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    assert {:ok, ^session} = Store.put_session(store, session)
+    assert {:ok, ^session} = Jidoka.Session.get(store, session.session_id)
+    assert {:ok, [^session]} = Jidoka.Session.list(store)
+    assert {:ok, []} = Jidoka.Session.recoverable(store)
+
+    assert {:ok, async_request} = Jidoka.Session.chat_async(running, "blocked")
+    assert {:error, {:session_already_running, "session-facade"}} = Jidoka.Session.await(async_request)
+  end
+
+  test "session store wrappers expose default durable and pure transition paths" do
+    {:ok, pid} = InMemory.start_link()
+    store = {InMemory, pid: pid}
+    session = Session.start(spec(), session_id: "store-wrappers") |> elem(1)
+    request = Turn.Request.new!(input: "store", request_id: "store-request")
+
+    assert {:error, {:invalid_session_store_module, MissingStore, _reason}} = Store.durable_mode(MissingStore)
+    assert {:ok, ^session} = Store.put_transition(nil, session)
+
+    assert {:ok, claimed} =
+             Store.claim_transition(session, request,
+               clock: fn -> 10 end,
+               lease_ttl_ms: 20,
+               id_generator: fn "lease" -> "store-lease" end
+             )
+
+    assert {:error, {:session_not_resumable, "store-wrappers", :running}} =
+             Store.resume_transition(claimed, clock: fn -> 11 end)
+
+    assert {:error, {:session_lease_active, "store-wrappers", _owner, 30}} =
+             Store.recover_transition(claimed, clock: fn -> 11 end)
+
+    assert {:ok, renewed} = Store.renew_transition(claimed, "store-lease", clock: fn -> 12 end)
+    assert renewed.revision == claimed.revision + 1
+
+    snapshot =
+      request
+      |> base_state()
+      |> Snapshot.from_turn_state!(Turn.Cursor.after_prompt(), snapshot_id: "store-snapshot")
+
+    assert {:ok, checkpointed} =
+             Store.checkpoint_transition(claimed, "store-lease", snapshot, clock: fn -> 12 end)
+
+    assert {:ok, identity} = Store.checkpoint_identity(checkpointed, snapshot)
+    assert identity.snapshot_id == "store-snapshot"
+
+    assert {:error, {:checkpoint_identity_mismatch, "store-wrappers", 0, nil, "store-request", "store-snapshot"}} =
+             Store.checkpoint_identity(session, snapshot)
+
+    assert {:error, {:session_not_found, "missing"}} = Store.recover_session(store, "missing")
+    assert {:error, {:session_not_found, "missing"}} = Store.checkpoint_session(store, "missing", "lease", snapshot)
+    assert {:error, {:session_not_found, "missing"}} = Store.commit_session(store, "missing", "lease", session)
+    assert {:error, {:session_not_found, "missing"}} = Store.renew_session(store, "missing", "lease")
+    assert {:ok, []} = Store.list_recoverable(store, clock: fn -> 20 end)
+
+    {:ok, fallback_pid} = FallbackStore.start_link()
+    fallback = {FallbackStore, pid: fallback_pid}
+
+    assert {:error, {:durable_store_capability_missing, FallbackStore, :recover_session}} =
+             Store.recover_session(fallback, "missing")
+  end
+
   defp spec do
     Agent.Spec.new!(
       id: "harness_session_agent",

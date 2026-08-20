@@ -29,9 +29,13 @@ defmodule Jidoka.MixProject do
           # Modules compiled only to support repository tests.
           ~r/^Jidoka\.(?:IntegrationSupport|TestSupport|ParityCase)(?:\.|$)/,
           # Complete reference applications are not part of library coverage.
-          ~r/^JidokaExamples(\.|$)/
+          ~r/^JidokaExamples(\.|$)/,
+          # Spark emits macro helper modules from dependency source. The typed
+          # DSL entities remain covered through their package-owned modules.
+          ~r/^Jidoka\.Agent\.Dsl\.(?:Jidoka\.Agent|Tools\.|Controls\.)/,
+          ~r/^Jidoka\.Workflow\.Dsl\.Steps\./
         ],
-        summary: [threshold: 75]
+        summary: [threshold: 90]
       ],
       deps: deps()
     ]

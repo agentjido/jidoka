@@ -252,6 +252,58 @@ defmodule Jidoka.WorkflowDslTest do
     end
   end
 
+  test "all workflow DSL entities expose usable data schemas" do
+    modules = [
+      Jidoka.Workflow.Dsl.ActionStep,
+      Jidoka.Workflow.Dsl.FunctionStep,
+      Jidoka.Workflow.Dsl.AgentStep,
+      Jidoka.Workflow.Dsl.GateStep,
+      Jidoka.Workflow.Dsl.MapStep,
+      Jidoka.Workflow.Dsl.ReduceStep,
+      Jidoka.Workflow.Dsl.LoopStep
+    ]
+
+    Enum.each(modules, fn module ->
+      assert {:ok, value} = Zoi.parse(module.schema(), %{})
+      assert value.__struct__ == module
+    end)
+  end
+
+  test "reports a DSL error for invalid options on every workflow step entity" do
+    declarations = [
+      {:action, "action :invalid, #{inspect(AddAmount)}, unsupported: true"},
+      {:function, "function :invalid, {#{inspect(Fns)}, :normalize, 2}, unsupported: true"},
+      {:agent, "agent :invalid, #{inspect(EchoAgent)}, prompt: \"hello\", unsupported: true"},
+      {:gate, "gate :invalid"},
+      {:map_step, "map_step :invalid, function: {#{inspect(Fns)}, :normalize, 2}"},
+      {:reduce_step, "reduce_step :invalid, over: []"},
+      {:loop_step, "loop_step :invalid, initial: %{}, using: {#{inspect(Fns)}, :normalize, 2}"}
+    ]
+
+    Enum.each(declarations, fn {name, declaration} ->
+      suffix = System.unique_integer([:positive])
+
+      assert_raise Spark.Error.DslError, fn ->
+        Code.compile_string("""
+        defmodule JidokaTest.InvalidWorkflow#{Macro.camelize(to_string(name))}#{suffix} do
+          use Jidoka.Workflow
+
+          workflow do
+            id :invalid_workflow_#{suffix}
+            input Zoi.object(%{})
+          end
+
+          steps do
+            #{declaration}
+          end
+
+          output value(nil)
+        end
+        """)
+      end
+    end)
+  end
+
   test "workflow target validation reports invalid action, function, and agent targets" do
     assert :ok = Targets.validate_action!(__MODULE__, %{name: :valid, module: AddAmount})
     assert :ok = Targets.validate_function!(__MODULE__, %{name: :valid, mfa: {Fns, :normalize, 2}})

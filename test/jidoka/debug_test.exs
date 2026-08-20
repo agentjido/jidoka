@@ -278,6 +278,61 @@ defmodule Jidoka.DebugTest do
              Jidoka.Kino.debug_request(result)
   end
 
+  test "debug request fallbacks select latest data and portable replay values" do
+    assert {:ok, %Session{} = empty} = Harness.start_session(Agent.spec(), session_id: "debug-empty")
+
+    assert {:ok, %RequestSummary{request_id: nil, input: nil, context_keys: []}} =
+             Debug.request(empty)
+
+    %Turn.Request{} = valid_request = Turn.Request.new!(input: "latest", request_id: "debug-latest")
+    request = %Turn.Request{valid_request | context: :legacy_context}
+    request_only = Session.put_request(empty, request)
+
+    assert {:ok, %RequestSummary{request_id: "debug-latest", context_keys: []}} =
+             Debug.request(request_only)
+
+    state =
+      Turn.State.new!(
+        plan: Turn.Plan.new!(Agent.spec()),
+        request: valid_request,
+        agent_state: valid_request.agent_state,
+        prompt: nil
+      )
+
+    snapshot = Snapshot.from_turn_state!(state, Turn.Cursor.after_prompt(), snapshot_id: "debug-fallback-snapshot")
+    with_snapshot = Session.put_snapshot(request_only, snapshot)
+
+    assert {:ok, %RequestSummary{request_id: "debug-latest", prompt: %{}}} =
+             Debug.request(with_snapshot, request_id: "debug-latest")
+
+    operation_result = Effect.OperationResult.new!(operation: "debug_lookup", output: %{ok: true})
+    %Jidoka.Agent.State{} = agent_state = state.agent_state
+
+    operation_state = %Turn.State{
+      state
+      | prompt: %{operations: [:invalid_operation]},
+        agent_state: %Jidoka.Agent.State{agent_state | operation_results: [operation_result]}
+    }
+
+    operation_snapshot =
+      Snapshot.from_turn_state!(operation_state, Turn.Cursor.after_prompt(), snapshot_id: "debug-operation-snapshot")
+
+    assert {:ok, %RequestSummary{operation_names: ["debug_lookup"]}} = Debug.request(operation_snapshot)
+
+    assert {:ok, replay} = Harness.replay(with_snapshot)
+
+    assert {:ok, %RequestSummary{content: "string content", value: 7}} =
+             Debug.request(%{replay | result: %{"content" => "string content", "value" => 7}})
+
+    assert {:ok, %RequestSummary{content: "atom content"}} =
+             Debug.request(%{replay | result: %{content: "atom content"}})
+
+    assert {:ok, %Turn.Result{} = result} = Agent.run_turn("Check D-100.", llm: &tool_loop_llm/3)
+
+    assert {:ok, %RequestSummary{model: nil, memory: nil, operation_names: []}} =
+             Debug.request(%Turn.Result{result | metadata: %{debug: :invalid}, agent_state: %Jidoka.Agent.State{}})
+  end
+
   defp tool_loop_llm(_intent, %Effect.Journal{} = journal, _ctx) do
     llm_calls =
       journal.results

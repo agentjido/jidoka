@@ -68,4 +68,26 @@ defmodule Jidoka.Effect.OperationFailureTest do
     assert failure.details == %{"reason" => "non-portable failure details omitted"}
     refute inspect(OperationFailure.to_observation(failure)) =~ "secret"
   end
+
+  test "classifies provider-neutral transport, policy, review, and reconciliation shapes" do
+    assert OperationFailure.schema()
+    assert %OperationFailure{kind: :recoverable} = OperationFailure.new(:recoverable, :bad_input)
+
+    cases = [
+      {%{status: 408}, :transport},
+      {%{status: 503}, :transport},
+      {%{reason: :econnrefused}, :transport},
+      {{:error, :enetdown}, :transport},
+      {{:closed, :socket}, :transport},
+      {{:invalid_capability_result, :bad}, :runtime},
+      {{:control_failed, :control, :input, :bad}, :policy},
+      {{:control_blocked, :control, :input, :bad}, :policy},
+      {{:approval_expired, "approval", 2, 1}, :review},
+      {{:unsafe_once_incomplete_effect, :intent}, :reconciliation}
+    ]
+
+    for {reason, kind} <- cases do
+      assert %OperationFailure{kind: ^kind} = OperationFailure.classify(reason)
+    end
+  end
 end

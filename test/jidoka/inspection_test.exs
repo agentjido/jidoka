@@ -8,12 +8,19 @@ defmodule Jidoka.InspectionTest.Support.Agent do
   end
 end
 
+defmodule Jidoka.InspectionTest.Support.Workflow do
+  @moduledoc false
+  use Jidoka.Workflow, id: :inspection_workflow, parameters_schema: %{"type" => "object"}
+  def run(_input, _context), do: {:ok, %{done: true}}
+end
+
 defmodule Jidoka.InspectionTest do
   use ExUnit.Case, async: true
 
   alias Jidoka.Inspection.Preflight
   alias Jidoka.Effect
   alias Jidoka.InspectionTest.Support.Agent
+  alias Jidoka.InspectionTest.Support.Workflow
   alias Jidoka.Harness
   alias Jidoka.Session.Data, as: Session
   alias Jidoka.Review
@@ -238,5 +245,94 @@ defmodule Jidoka.InspectionTest do
 
     assert %{output: %{"token" => "[REDACTED]", "answer" => "ok"}} =
              Jidoka.inspect(result, full?: true)
+  end
+
+  test "inspection covers direct workflow, plan, debug, memory, eval, and fallback views" do
+    plan = Turn.Plan.new!(Agent.spec())
+    assert %{kind: :plan, spec: %{id: "inspection_agent"}} = Jidoka.Inspection.inspect(plan)
+    assert %{kind: :workflow, workflow: %{id: "inspection_workflow"}} = Jidoka.Inspection.inspect(Workflow)
+    assert Jidoka.Inspection.inspect(:plain_value) == :plain_value
+
+    summary = Jidoka.Debug.RequestSummary.new!(request_id: "request-1")
+    diagnostics = Jidoka.Debug.ReplayDiagnostics.new!(status: :complete)
+    assert %{kind: :request_debug, request_id: "request-1"} = Jidoka.Inspection.inspect(summary)
+    assert %{kind: :replay_diagnostics, status: :complete} = Jidoka.Inspection.inspect(diagnostics)
+
+    recall = struct(Jidoka.Memory.RecallResult, request: nil, entries: [], metadata: %{})
+    write = struct(Jidoka.Memory.WriteResult, request: nil, entry: nil, status: :ok, metadata: %{})
+    assert %{kind: :memory_recall} = Jidoka.Inspection.inspect(recall)
+    assert %{kind: :memory_write} = Jidoka.Inspection.inspect(write)
+
+    run =
+      Jidoka.Eval.Run.new!(
+        case_id: "case-1",
+        status: :failed,
+        assertions: [%{name: :answer, status: :failed}]
+      )
+
+    assert %{kind: :eval_run, failed_assertions: [%{name: :answer}]} = Jidoka.Inspection.inspect(run)
+  end
+
+  test "inspection shows invalid plans and non-map intent payloads safely" do
+    %Jidoka.Agent.Spec{} = spec = Agent.spec()
+    invalid_spec = %Jidoka.Agent.Spec{spec | runtime_defaults: %{phases: []}}
+    assert %{kind: :agent, error: %{category: _category}} = Jidoka.Inspection.inspect(invalid_spec)
+
+    intent =
+      struct(Effect.Intent,
+        id: "invalid-payload",
+        kind: :llm,
+        payload: :invalid,
+        idempotency_key: "invalid-payload",
+        idempotency: :idempotent,
+        metadata: %{}
+      )
+
+    assert %{kind: :effect_intent, payload_keys: []} = Jidoka.Inspection.inspect(intent)
+  end
+
+  test "preflight accepts resolved inputs and rejects invalid resolved operations" do
+    plan = Turn.Plan.new!(Agent.spec())
+    request = Turn.Request.new!(input: "Inspect", context: %{tenant_id: "tenant-1"})
+
+    assert {:ok, %Preflight{}} =
+             Jidoka.Inspection.preflight(plan, request,
+               resolved_operations: [],
+               resolved_instructions: "Resolved instructions."
+             )
+
+    assert {:ok, %Preflight{agent: %{operations: [%{name: "lookup"}]}}} =
+             Jidoka.Inspection.preflight(Agent.spec(), "Inspect",
+               context: %{tenant_id: "tenant-1"},
+               resolved_operations: [%{name: "lookup"}],
+               instructions: "Direct instructions."
+             )
+
+    assert {:error, %Jidoka.Error.ExecutionError{}} =
+             Jidoka.Inspection.preflight(Agent, "Inspect",
+               context: %{tenant_id: "tenant-1"},
+               resolved_operations: :invalid
+             )
+
+    assert {:error, %Jidoka.Error.ExecutionError{}} = Jidoka.Inspection.preflight(String, "Inspect")
+  end
+
+  test "preflight accepts explicit resolved memory and disabled memory" do
+    %Jidoka.Agent.Spec{} =
+      enabled =
+      Jidoka.Agent.Spec.new!(
+        id: "inspection-resolved-memory",
+        instructions: "Use memory.",
+        model: %{provider: :test, id: "model"},
+        memory: %{enabled: true}
+      )
+
+    route = Jidoka.Memory.Route.new!(kind: :agent, agent_id: enabled.id)
+    recall_request = Jidoka.Memory.RecallRequest.new!(route: route, query: "Inspect")
+    memory = Jidoka.Memory.RecallResult.new!(request: recall_request, entries: [])
+    assert {:ok, %Preflight{}} = Jidoka.Inspection.preflight(enabled, "Inspect", resolved_memory: memory)
+
+    disabled = %Jidoka.Agent.Spec{enabled | memory: %{enabled.memory | enabled: false}}
+    assert {:ok, %Preflight{}} = Jidoka.Inspection.preflight(disabled, "Inspect")
   end
 end

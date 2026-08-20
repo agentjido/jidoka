@@ -251,7 +251,13 @@ defmodule Jidoka.Runtime.Limits do
   end
 
   defp resolve_attrs(plan, attrs, opts) do
-    attrs = Schema.normalize_attrs(attrs)
+    attrs =
+      if is_list(attrs) and not Keyword.keyword?(attrs) do
+        attrs
+      else
+        Schema.normalize_attrs(attrs)
+      end
+
     normalized = if is_map(attrs), do: Map.new(attrs, fn {key, value} -> {normalize_key(key), value} end), else: attrs
 
     with true <- is_map(normalized),

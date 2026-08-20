@@ -177,6 +177,27 @@ defmodule Jidoka.Operation.Source.CatalogTest do
     assert Normalize.stringify_keys(%{mode: :safe}) == %{"mode" => :safe}
     assert Normalize.format_reason(:bad) == ":bad"
     assert Normalize.reject_nil_values(%{a: 1, b: nil}) == %{a: 1}
+
+    assert {:error, {:invalid_catalog_module, nil}} = Normalize.catalog_module(nil)
+
+    assert {:error, {:invalid_catalog_module, MissingCatalogModule, _reason}} =
+             Normalize.catalog_module(MissingCatalogModule)
+
+    assert {:ok, "catalog_"} = Normalize.prefix("  ")
+    assert {:error, {:invalid_catalog_prefix, 10}} = Normalize.prefix(10)
+
+    assert {:error, {:invalid_catalog_positive_integer, :max_calls, :bad}} =
+             Normalize.positive_integer(:bad, :max_calls)
+
+    assert Normalize.context(%{tenant: "northwind"}) == %{tenant: "northwind"}
+    assert Normalize.positive_integer_or_default("5", 8) == 5
+    assert Normalize.positive_integer_or_default(:bad, 8) == 8
+    assert Normalize.format_reason("bad") == "bad"
+
+    %Jido.Action.Catalog.Entry{} = entry = TestCatalog.catalog() |> Jido.Action.Catalog.list() |> hd()
+    atom_lua = %Jido.Action.Catalog.Entry{entry | metadata: %{lua: %{limit: 2}}}
+    assert Normalize.lua_metadata(atom_lua, :limit) == 2
+    assert Normalize.lua_metadata(%Jido.Action.Catalog.Entry{entry | metadata: %{}}, :limit) == nil
   end
 
   test "queries and describes catalog metadata without executing hidden actions" do

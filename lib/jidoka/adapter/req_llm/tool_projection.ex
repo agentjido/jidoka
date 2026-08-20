@@ -63,7 +63,7 @@ defmodule Jidoka.Adapter.ReqLLM.ToolProjection do
       readable =
         name
         |> String.replace(~r/[^a-zA-Z0-9_-]+/u, "_")
-        |> String.trim("_-")
+        |> String.replace(~r/\A[_-]+|[_-]+\z/u, "")
         |> String.slice(0, 38)
         |> case do
           "" -> "operation"

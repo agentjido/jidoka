@@ -87,6 +87,54 @@ defmodule Jidoka.Extension.ProtocolTest do
     assert {:error, :protocol_closed} = Protocol.request(closed, "late", "health", %{})
   end
 
+  test "protocol rejects invalid public shapes and correlation messages" do
+    assert Protocol.version() == 1
+    fresh = Protocol.new(extension_binding())
+    initialized = initialized_session()
+
+    assert {:error, :protocol_already_initialized} = Protocol.initialize(initialized, "again", :automation)
+    assert {:error, {:protocol_notification_forbidden, "health"}} = Protocol.notification(initialized, "health", %{})
+    assert {:error, :protocol_not_initialized} = Protocol.notification(fresh, "request.cancel", %{"id" => "one"})
+    assert {:ok, _frame} = Protocol.error_response(1, -1, "bad")
+
+    assert {:error, :protocol_frame_too_large} =
+             Protocol.encode(%{"value" => String.duplicate("x", 1_048_576)})
+
+    assert {:error, :invalid_protocol_message} = Protocol.decode("[]\n")
+    assert {:error, :invalid_protocol_line} = Protocol.decode(:not_a_line)
+
+    assert {:error, :protocol_already_initialized} =
+             Protocol.request(initialized, "init", "initialize", %{})
+
+    assert {:error, {:unknown_protocol_method, "unknown"}} =
+             Protocol.request(initialized, "unknown", "unknown", %{})
+
+    assert {:error, {:invalid_protocol_params, "health"}} =
+             Protocol.request(initialized, "bad-params", "health", :bad)
+
+    assert {:error, {:invalid_protocol_id, nil}} =
+             Protocol.request(initialized, nil, "health", %{})
+
+    assert {:ok, _frame, pending} = Protocol.request(initialized, 1, "health", %{})
+    assert {:error, {:unknown_protocol_request, "missing"}} = Protocol.timeout(pending, "missing")
+
+    assert {:error, {:invalid_protocol_line, :invalid_protocol_message_shape}} =
+             Protocol.decode(~s({"jsonrpc":"2.0","id":"orphan"}) <> "\n")
+
+    assert {:error, {:invalid_protocol_line, :invalid_protocol_message_shape}} =
+             Protocol.receive_line(
+               initialized,
+               Protocol.response("orphan", %{})
+               |> elem(1)
+               |> then(fn line ->
+                 String.replace(line, ~s("result":{}), ~s("other":{}))
+               end)
+             )
+
+    notification = Protocol.encode(%{"jsonrpc" => "2.0", "method" => "unknown", "params" => %{}}) |> elem(1)
+    assert {:error, {:unsolicited_protocol_method, "unknown"}} = Protocol.receive_line(initialized, notification)
+  end
+
   defp initialized_session do
     session = Protocol.new(extension_binding())
 
