@@ -19,6 +19,8 @@ examples in order:
 5. **Durable Refund** - add asynchronous, observable, and durable runtime behavior.
 6. **Workflow Composition** - add a complete graph, agent nodes, loops, background runs,
    and schedules.
+7. **Durable Incident Recovery Commander** - combine parallel subagents,
+   nested reviews, a suspended workflow, durable recovery, fallback, and replay.
 
 The agent, action, control, instruction, and YAML files are application
 patterns. The scenario, optional scripted model, command runner, test, and
@@ -42,6 +44,7 @@ mix run examples/support_agent/example.exs
 mix run examples/warranty_claim/example.exs
 mix run examples/durable_refund/example.exs
 mix run examples/workflow_composition/example.exs
+mix run examples/incident_recovery_commander/example.exs
 ```
 
 ## Test Examples
@@ -53,6 +56,7 @@ Use standard ExUnit tags for focused runs:
 mix test --only example:support_agent
 mix test --only tool_calling
 mix test examples/durable_refund/test/execution_and_continuation_test.exs --trace
+mix test --only example:incident_recovery_commander
 ```
 
 The YAML manifest lists the aggregate features for an example. Tags on each
@@ -171,6 +175,7 @@ examples/<name>/
 | Warranty Claim | Advanced | Data authoring, typed results, media, fallback, and repair |
 | Durable Refund | Expert | Async work, traces, usage, process hosting, recovery, and forks |
 | Workflow Composition | Expert | Typed graphs, agent nodes, branches, loops, background work, and schedules |
+| Durable Incident Recovery Commander | Stress | Parallel subagents, nested approvals, suspended workflows, DETS restart, fallback, and replay |
 
 Use Getting Started for the smallest complete agent. Use the Support Agent for
 a controlled tool flow. Use Governed Tools for bounded capability composition
@@ -179,4 +184,5 @@ policy, structured results, and multimodal content. Use the Durable Refund
 Agent for asynchronous execution, cancellation, traces, usage, process hosting,
 durable recovery, and safe session forks. Use Workflow Composition for
 deterministic business graphs, bounded agent nodes, runtime-created work,
-reconnectable jobs, and cron triggers.
+reconnectable jobs, and cron triggers. Use the Durable Incident Recovery
+Commander to test the combined durable orchestration boundary.

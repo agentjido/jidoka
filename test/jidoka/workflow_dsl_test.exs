@@ -96,6 +96,8 @@ defmodule Jidoka.WorkflowDslTest do
       if Jidoka.Context.get(context, :pause), do: {:suspend, state}, else: {:halt, state}
     end
 
+    def finalize_suspended_loop(%{loop: loop}, _context), do: {:ok, %{value: loop.value}}
+
     def wait_for_release(%{tag: tag}, context) do
       test_pid = Jidoka.Context.get(context, :test_pid)
       send(test_pid, {:workflow_step_started, tag, self()})
@@ -396,6 +398,29 @@ defmodule Jidoka.WorkflowDslTest do
     end
 
     output from(:pause)
+  end
+
+  defmodule SuspendingThenFinalizeWorkflow do
+    @moduledoc false
+
+    use Jidoka.Workflow
+
+    workflow do
+      id(:suspending_then_finalize_workflow)
+      input Zoi.object(%{value: Zoi.integer()})
+    end
+
+    steps do
+      loop :pause,
+        initial: %{value: input(:value)},
+        using: {Fns, :suspend_loop, 2},
+        input: %{state: loop_state()},
+        max_iterations: 2
+
+      function :finalize, {Fns, :finalize_suspended_loop, 2}, input: %{loop: from(:pause)}
+    end
+
+    output from(:finalize)
   end
 
   defmodule ParallelWorkflow do
@@ -1013,6 +1038,14 @@ defmodule Jidoka.WorkflowDslTest do
 
   test "action workflows resolve from refs across ordered steps" do
     assert {:ok, %{"value" => 4}} = Workflow.run(ActionWorkflow, %{value: 1})
+  end
+
+  test "a resumed loop replaces its stale suspension before downstream steps run" do
+    assert {:hibernate, snapshot} =
+             Workflow.run(SuspendingThenFinalizeWorkflow, %{value: 7}, context: %{pause: true})
+
+    assert {:ok, %{value: %{value: 7}}} =
+             Workflow.resume(snapshot, context: %{pause: false})
   end
 
   test "agent workflows run bounded agent steps and return text output" do

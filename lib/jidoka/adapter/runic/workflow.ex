@@ -237,12 +237,26 @@ defmodule Jidoka.Adapter.Runic.Workflow do
     merged = %{
       acc
       | steps: Map.merge(acc.steps, state.steps),
-        outcomes: Map.merge(Map.get(acc, :outcomes, %{}), Map.get(state, :outcomes, %{})),
+        outcomes:
+          Map.merge(
+            Map.get(acc, :outcomes, %{}),
+            Map.get(state, :outcomes, %{}),
+            &merge_step_outcome/3
+          ),
         error: acc.error || state.error
     }
 
     validate_suspension(merged)
   end
+
+  defp merge_step_outcome(_step, left, right) do
+    if outcome_rank(left) >= outcome_rank(right), do: left, else: right
+  end
+
+  defp outcome_rank(%{status: :error}), do: 4
+  defp outcome_rank(%{status: status}) when status in [:ok, :skipped], do: 3
+  defp outcome_rank(%{status: :suspended}), do: 2
+  defp outcome_rank(_outcome), do: 1
 
   defp validate_suspension(%{error: error} = state) when not is_nil(error), do: state
 

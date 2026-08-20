@@ -1,0 +1,106 @@
+# Durable Incident Recovery Commander
+
+This Livebook runs the largest deterministic Jidoka example. It uses local
+test capabilities and does not need a provider key or a network request.
+
+```elixir
+package_root = Path.expand("../..", __DIR__)
+
+Mix.install(
+  [
+    {:kino, "~> 0.14"},
+    {:jidoka, path: package_root}
+  ],
+  consolidate_protocols: false,
+  lockfile: Path.join(package_root, "mix.lock")
+)
+
+Code.require_file(Path.expand("../loader.exs", __DIR__))
+JidokaExamples.Loader.load!(__DIR__)
+
+alias JidokaExamples.IncidentRecoveryCommander.{Agent, Scenario}
+
+Jidoka.Kino.setup_notebook(model: "test:incident-commander-scripted", check_provider?: false)
+```
+
+## Inspect The Command Surface
+
+The parent exposes one pure action, three bounded subagents, and one
+reconcile-class workflow.
+
+```elixir
+view = Jidoka.inspect(Agent)
+
+Enum.map(view.spec.operations, fn operation ->
+  %{name: operation.name, idempotency: operation.idempotency, source: operation.metadata["source"]}
+end)
+```
+
+## Run The Durable Command
+
+This call hibernates three nested operations, restarts its DETS store, applies
+two approvals, and returns a typed result.
+
+```elixir
+{:ok, command} = Scenario.command(session_id: Jidoka.Id.generate!("incident_livebook"))
+
+unless command.counts == %{
+         forensic_collections: 1,
+         service_isolations: 1,
+         status_updates: 1,
+         topology_loads: 1
+       } and command.value.status == :resolved do
+  raise "the durable incident command did not preserve exactly-once evidence"
+end
+
+%{
+  approvals: command.approval_order,
+  continuations: command.initial.continuation_descriptors,
+  replay_events: length(command.replay.timeline),
+  result: command.value,
+  session_revision: command.completed_session.revision
+}
+```
+
+## Inspect Fallback And Safety Evidence
+
+Both parent calls fail on the primary model and finish on the fallback. The
+trace sink does not receive the injected example secret.
+
+```elixir
+%{
+  model_attempts: command.model_attempts,
+  secret_leaked?: command.trace.leaks_secret?,
+  trace_entries: command.trace.entry_count,
+  workflow_retry_attempts:
+    command.result.agent_state.operation_results
+    |> Enum.find(&(&1.operation == "run_recovery_plan"))
+    |> then(& &1.output.output.reservation_attempts)
+}
+```
+
+## Stream A Final Brief
+
+```elixir
+{:ok, stream} = Scenario.stream_brief(stream_request_id: Jidoka.Id.generate!("incident_stream"))
+
+%{
+  thinking: stream.thinking,
+  content: stream.text,
+  terminal_events: stream.terminal_event_count
+}
+```
+
+## Cancel Active Work
+
+```elixir
+{:ok, cancellation} =
+  Scenario.cancellation_drill(cancel_request_id: Jidoka.Id.generate!("incident_cancel"))
+
+%{
+  reason: cancellation.cancellation.reason,
+  forced?: cancellation.cancellation.forced?,
+  capability_alive?: cancellation.capability_alive?,
+  terminal_events: cancellation.terminal_event_count
+}
+```

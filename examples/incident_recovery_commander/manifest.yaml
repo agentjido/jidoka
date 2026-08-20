@@ -1,0 +1,23 @@
+name: incident_recovery_commander
+title: Durable Incident Recovery Commander
+summary: A deterministic incident commander that coordinates durable, reviewed, and recoverable work.
+agent: JidokaExamples.IncidentRecoveryCommander.Agent
+features:
+  - bounded_step_retry
+  - cancellation
+  - data_only_replay
+  - disk_backed_session
+  - durable_operation_continuations
+  - effect_reconciliation
+  - event_streaming
+  - model_fallback
+  - nested_human_review
+  - nested_parallel_subagents
+  - session_memory
+  - snapshot_serialization
+  - structured_results
+  - trace_redaction
+  - unsafe_once_operations
+tests:
+  - test/incident_recovery_commander_test.exs
+livebook: incident_recovery_commander.livemd
