@@ -192,6 +192,39 @@ defmodule Jidoka.Adapter.ReqLLM.DecisionTest do
              })
   end
 
+  test "normalizes ReqLLM 1.21 operation wrapper variants" do
+    assert {:ok, %{type: :operations, operations: operations}} =
+             Decision.parse_object(%{
+               type: "operation",
+               operations: [
+                 %{name: "first", arguments: %{id: 1}},
+                 %{name: "second", arguments: %{id: 2}}
+               ]
+             })
+
+    assert Enum.map(operations, & &1.name) == ["first", "second"]
+
+    assert {:ok, %{type: :operations, operations: [%{name: "lookup"}]}} =
+             Decision.parse_object(%{operations: [%{name: "lookup", arguments: %{id: "A-1"}}]})
+
+    assert {:ok, %{type: :operations, operations: [%{name: "lookup"}]}} =
+             Decision.parse_object(%{
+               type: "tool_call",
+               tool_calls: [%{function_name: "lookup", arguments: %{id: "A-1"}}]
+             })
+
+    assert {:error, {:empty_operations, nil}} =
+             Decision.parse_object(%{type: "operations"})
+
+    assert {:ok, decision} =
+             Decision.parse_object(%{
+               type: "provider_operation",
+               tool_calls: [%{function_name: "lookup", arguments: %{id: "A-1"}}]
+             })
+
+    assert_operation(decision, "lookup", %{id: "A-1"})
+  end
+
   test "encodes an untyped object when no summary is present" do
     assert {:ok, %{type: :final, content: content, result: %{answer: 42}}} =
              Decision.parse_object(%{answer: 42})
