@@ -20,6 +20,15 @@ one at a time. The first approval also lets the workflow finish. The unmatched
 child stays paused. The final resume reuses all completed journal results, so
 no completed operation runs twice.
 
+## Features
+
+- Five parallel operations in one durable parent turn.
+- Three bounded subagents with independent review states.
+- A recovery workflow with retry, fan-out, and a durable loop cursor.
+- DETS persistence across a store process restart.
+- Exact child-intent approval and idempotent operation replay.
+- Typed output, safe trace export, streaming, and cooperative cancellation.
+
 ## What It Proves
 
 - Parallel actions, subagents, and one workflow use one operation batch.
@@ -80,6 +89,13 @@ directory and removes that file after each command run.
       -> parent model fallback
       -> typed resolved result
 
+## Expected Result
+
+The command prints evidence that the first parent turn pauses three nested
+operations. It then restarts the DETS store, applies each child approval, and
+finishes with a typed resolved result. The action counters confirm that no
+completed external operation runs more than once.
+
 ## Safety Boundary
 
 This is a reference architecture, not a production incident system. Real
@@ -87,6 +103,12 @@ production actions must use trusted adapters, external idempotency keys,
 durable multi-node storage, operator identity, authorization, and audited
 credential management. Do not derive agent, workflow, or action modules from
 incident input.
+
+## Next Guide
+
+Read [Agent Orchestration](../../guides/agent-orchestration.md) for nested agent
+operations and [Sessions And Stores](../../guides/sessions-and-stores.md) for
+durable pause and resume behavior.
 
 ## Related Guides
 
