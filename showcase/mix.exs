@@ -25,7 +25,7 @@ defmodule JidokaShowcase.MixProject do
       {:bandit, "~> 1.6"},
       {:dotenvy, "~> 1.1"},
       # tzdata 1.1 still selects the vulnerable Hackney 1.x line.
-      {:hackney, "~> 4.6.0", override: true},
+      {:hackney, "~> 4.7.4", override: true},
       {:jason, "~> 1.4"},
       {:jido_action, github: "agentjido/jido_action", branch: "main", override: true},
       {:jido_memory, "~> 1.0"},
