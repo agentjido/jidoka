@@ -58,7 +58,7 @@ end
 defmodule Jidoka.Adapter.ReqLLMTest do
   use ExUnit.Case, async: true
 
-  @supported_req_llm "~> 1.20.0"
+  @supported_req_llm "~> 1.21.0"
 
   alias Jidoka.Adapter.ReqLLM
   alias Jidoka.Adapter.ReqLLM.ResponseAdapter

@@ -256,7 +256,7 @@ defmodule Jidoka.ErrorTest do
   end
 
   test "sanitizes binary, numeric, key, port, and improper-list boundaries" do
-    port = Port.open({:spawn, "true"}, [])
+    port = Port.open({:spawn, "cat"}, [])
 
     details = %{
       {1, 2} => "tuple key",

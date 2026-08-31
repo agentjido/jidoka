@@ -142,6 +142,37 @@ defmodule Jidoka.Adapter.ReqLLM.PromptAdapterTest do
            ]
   end
 
+  test "normalizes ReqLLM 1.21 prompt continuation variants" do
+    assert {:error, {:invalid_prompt_payload, %Protocol.UndefinedError{}}} =
+             Adapter.messages(%{messages: [], opaque: self()})
+
+    prompt = %{
+      messages: [
+        %{
+          role: :assistant,
+          content: "plain assistant text",
+          tool_calls: [%{provider_call_id: "", provider_name: "lookup", arguments: %{}}]
+        },
+        %{
+          role: :assistant,
+          content: "",
+          tool_calls: [
+            %{provider_call_id: "call-1", provider_name: "lookup", arguments: %{id: "A-1"}}
+          ]
+        },
+        %{role: :user, content: [ContentPart.audio({:data, "audio-data"})]}
+      ]
+    }
+
+    assert {:ok, [_runtime, _contract, assistant, continuation, user]} =
+             Adapter.messages(prompt)
+
+    assert text(assistant) == "plain assistant text"
+    assert [%ReqLLM.ToolCall{id: "call-1"}] = continuation.tool_calls
+    assert continuation.reasoning_details == nil
+    assert [%ReqLLM.Message.ContentPart{type: :file, filename: "audio"}] = user.content
+  end
+
   test "falls back to durable user observations for non-native tool history" do
     prompt = %{
       messages: [

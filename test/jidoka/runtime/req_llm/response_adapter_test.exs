@@ -231,6 +231,47 @@ defmodule Jidoka.Adapter.ReqLLM.ResponseAdapterTest do
              ResponseAdapter.decision(bad_file)
   end
 
+  test "normalizes ReqLLM 1.21 response message variants" do
+    json = ~s({"type":"final","content":"ok"})
+
+    response = %LLMResponse{
+      id: "response-compatibility",
+      model: "test:model",
+      context: LLMContext.new([]),
+      message: nil,
+      finish_reason: :stop
+    }
+
+    assert {:ok, decision} = ResponseAdapter.decision(response, nil, json)
+    assert decision.content == "ok"
+    assert decision.parts == []
+    assert decision.metadata == %{finish_reason: :stop, response_model: "test:model"}
+
+    message =
+      json
+      |> LLMContext.assistant()
+      |> Map.put(:metadata, %{"request_id" => "request-compatibility"})
+      |> Map.put(:reasoning_details, [%{provider: :openai, signature: "signature-1"}])
+
+    assert {:ok, decision} = ResponseAdapter.decision(%{response | message: message})
+    assert decision.metadata.message_metadata == %{"request_id" => "request-compatibility"}
+    assert decision.metadata.reasoning_details == [%{provider: :openai, signature: "signature-1"}]
+
+    call = ToolCall.new("call-media", "lookup", "{}")
+
+    media_response = %LLMResponse{
+      response([call])
+      | message:
+          LLMContext.assistant(
+            [ReqLLM.Message.ContentPart.image_url("https://example.test/result.png")],
+            tool_calls: [call]
+          )
+    }
+
+    assert {:ok, %{type: :operation, parts: [%Jidoka.ContentPart{type: :image}]}} =
+             ResponseAdapter.decision(media_response, nil, "", prompt: prompt(["lookup"]))
+  end
+
   test "accepts an explicit registry and a nil text classification" do
     assert {:ok, registry} = ToolProjection.registry_from_prompt(prompt(["lookup"]))
     call = ToolCall.new("call-1", "lookup", %{} |> Jason.encode!())
