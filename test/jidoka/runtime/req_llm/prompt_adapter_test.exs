@@ -191,4 +191,43 @@ defmodule Jidoka.Adapter.ReqLLM.PromptAdapterTest do
   end
 
   defp text(message), do: Enum.map_join(message.content, & &1.text)
+
+  alias Jidoka.Adapter.ReqLLM.PromptAdapter
+
+  defp system_texts(prompt) do
+    {:ok, messages} = PromptAdapter.build(prompt)
+
+    messages
+    |> Enum.filter(&(&1.role == :system))
+    |> Enum.map(fn message -> Enum.map_join(message.content, "", & &1.text) end)
+  end
+
+  defp contract_prompt(extra) do
+    Map.merge(%{messages: [%{role: :user, content: "hello"}]}, extra)
+  end
+
+  # WHY THIS TEST EXISTS: the encoded contract rides in a system message that
+  # precedes every other message, so any key that changes per step makes the
+  # request's leading bytes differ each step and defeats provider prompt caching
+  # for the entire prefix behind it. `loop_index` was the only such key.
+  test "the encoded contract is byte-identical across steps of a turn" do
+    assert system_texts(contract_prompt(%{loop_index: 0})) ==
+             system_texts(contract_prompt(%{loop_index: 7}))
+  end
+
+  test "a string-keyed loop_index is excluded too" do
+    assert system_texts(contract_prompt(%{"loop_index" => 0})) ==
+             system_texts(contract_prompt(%{"loop_index" => 3}))
+  end
+
+  # WHY THIS TEST EXISTS: excluding one key must not silence the rest of the
+  # contract, which the model does act on.
+  test "the remaining contract keys still reach the model" do
+    [_runtime, contract] =
+      system_texts(contract_prompt(%{loop_index: 2, result: %{shape: "report"}}))
+
+    assert contract =~ "result"
+    assert contract =~ "report"
+    refute contract =~ "loop_index"
+  end
 end
