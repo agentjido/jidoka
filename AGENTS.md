@@ -3,7 +3,9 @@
 ## Intent
 
 This directory contains the official Jidoka package. The public module
-namespace is `Jidoka`. The public architecture is documented in `guides/`.
+namespace is `Jidoka`. Released architecture is documented in `guides/`.
+Approved target architecture is planned in `docs/architecture/` until the
+related contracts are released.
 
 ## Working Rules
 
