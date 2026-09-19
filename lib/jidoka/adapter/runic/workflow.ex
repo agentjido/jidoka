@@ -40,7 +40,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
          workflow_id: spec.id,
          workflow_spec: spec,
          action_runner: {Actions, :invoke_action, 3},
-         agent_opts: runtime_opts.agent_opts,
+         agent_opts: [],
          max_concurrency: runtime_opts.max_concurrency,
          error: nil
        }, runtime_opts}
@@ -63,7 +63,7 @@ defmodule Jidoka.Adapter.Runic.Workflow do
         workflow_id: spec.id,
         workflow_spec: spec,
         action_runner: {Actions, :invoke_action, 3},
-        agent_opts: runtime_opts.agent_opts,
+        agent_opts: [],
         max_concurrency: runtime_opts.max_concurrency,
         error: nil
       }
@@ -80,7 +80,12 @@ defmodule Jidoka.Adapter.Runic.Workflow do
       workflow_step =
         Runic.step(
           fn state ->
-            Jidoka.Adapter.Runic.Workflow.run_workflow_step(state, ^spec, ^step)
+            Jidoka.Adapter.Runic.Workflow.run_workflow_step(
+              state,
+              ^spec,
+              ^step,
+              context(:agent_opts)
+            )
           end,
           name: step_name
         )
@@ -147,9 +152,13 @@ defmodule Jidoka.Adapter.Runic.Workflow do
   end
 
   @doc false
-  @spec run_workflow_step(term(), Spec.t(), Jidoka.Workflow.Step.t()) :: map()
-  def run_workflow_step(state, %Spec{} = spec, step) do
-    StepRunner.run_step(spec, step, merge_workflow_states(state))
+  @spec run_workflow_step(term(), Spec.t(), Jidoka.Workflow.Step.t(), keyword()) :: map()
+  def run_workflow_step(state, %Spec{} = spec, step, agent_opts) do
+    state = state |> merge_workflow_states() |> Map.put(:agent_opts, agent_opts)
+
+    spec
+    |> StepRunner.run_step(step, state)
+    |> Map.put(:agent_opts, [])
   end
 
   defp final_output(%Workflow{} = workflow, %Spec{} = spec, initial_state) do
@@ -364,10 +373,16 @@ defmodule Jidoka.Adapter.Runic.Workflow do
     end
   end
 
-  defp runic_opts(%{timeout: timeout, async: async, max_concurrency: max_concurrency}) do
+  defp runic_opts(%{
+         timeout: timeout,
+         async: async,
+         max_concurrency: max_concurrency,
+         agent_opts: agent_opts
+       }) do
     [deadline_ms: timeout]
     |> Keyword.put(:async, async)
     |> Keyword.put(:timeout, timeout)
+    |> Keyword.put(:run_context, %{_global: %{agent_opts: agent_opts}})
     |> maybe_put_max_concurrency(max_concurrency)
   end
 

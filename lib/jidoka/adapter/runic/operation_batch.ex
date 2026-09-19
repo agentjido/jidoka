@@ -25,12 +25,28 @@ defmodule Jidoka.Adapter.Runic.OperationBatch do
         workflow_step =
           Runic.step(
             fn _state ->
-              call_operation_batch_step(^state, ^intent, ^capabilities, ^journal, ^opts)
+              call_operation_batch_step(
+                context(:state),
+                context(:intent),
+                context(:capabilities),
+                context(:journal),
+                context(:opts)
+              )
             end,
             name: step_name
           )
 
-        Workflow.add(workflow, workflow_step)
+        workflow
+        |> Workflow.add(workflow_step)
+        |> Workflow.put_run_context(%{
+          step_name => %{
+            state: state,
+            intent: intent,
+            capabilities: capabilities,
+            journal: journal,
+            opts: opts
+          }
+        })
       end)
 
     workflow =
