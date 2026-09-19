@@ -33,6 +33,10 @@ defmodule Jidoka.JidoAgentServerTest.Support.TimeAgent do
   end
 end
 
+defmodule Jidoka.JidoAgentServerTest.Support.CustomJido do
+  use Jido, otp_app: :jidoka
+end
+
 defmodule Jidoka.JidoAgentServerTest do
   use ExUnit.Case, async: true
 
@@ -40,6 +44,7 @@ defmodule Jidoka.JidoAgentServerTest do
 
   import Jidoka.TestSupport, only: [count_results: 2]
   alias Jidoka.JidoAgentServerTest.Support.TimeAgent
+  alias Jidoka.JidoAgentServerTest.Support.CustomJido
   alias Jidoka.Turn
 
   test "runs a Jidoka DSL agent through Jido.AgentServer" do
@@ -98,5 +103,28 @@ defmodule Jidoka.JidoAgentServerTest do
                  {:ok, %{type: :final, content: "Supervised child responded."}}
                end
              )
+  end
+
+  test "routes all id-based operations through a per-call Jido runtime" do
+    start_supervised!(CustomJido)
+    id = "jidoka_custom_runtime_#{System.unique_integer([:positive])}"
+
+    assert {:ok, pid} = TimeAgent.start(id: id, jido: CustomJido)
+    assert Jidoka.whereis(id) == nil
+    assert Jidoka.whereis(id, jido: CustomJido) == pid
+
+    assert {:ok, "Custom runtime responded."} =
+             Jidoka.chat(id, "Confirm custom routing.",
+               jido: CustomJido,
+               llm: fn _intent, _journal, _ctx ->
+                 {:ok, %{type: :final, content: "Custom runtime responded."}}
+               end
+             )
+
+    assert {:ok, %{status: :completed}} =
+             Jidoka.await_agent(id, jido: CustomJido, timeout: 100)
+
+    assert :ok = Jidoka.stop_agent(id, jido: CustomJido)
+    assert Jidoka.whereis(id, jido: CustomJido) == nil
   end
 end

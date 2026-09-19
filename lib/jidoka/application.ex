@@ -5,6 +5,8 @@ defmodule Jidoka.Application do
 
   use Application
 
+  alias Jidoka.Config
+
   @impl true
   def start(_type, _args) do
     children =
@@ -17,10 +19,14 @@ defmodule Jidoka.Application do
         {Task.Supervisor, name: Jidoka.Runtime.TaskSupervisor}
       ] ++
         handoff_owner_store_children() ++
-        [Jidoka.Jido]
+        jido_children()
 
     opts = [strategy: :one_for_one, name: Jidoka.Supervisor]
     Supervisor.start_link(children, opts)
+  end
+
+  defp jido_children do
+    if Config.start_jido?(), do: [Config.jido_runtime()], else: []
   end
 
   defp handoff_owner_store_children do

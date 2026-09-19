@@ -82,6 +82,24 @@ defmodule Jidoka.ConfigTest do
     assert Jidoka.Config.default_max_parallel_operations() == 8
   end
 
+  test "reads Jido process-hosting defaults from application config" do
+    previous_jido = Application.get_env(:jidoka, :jido)
+    previous_start_jido = Application.get_env(:jidoka, :start_jido)
+
+    on_exit(fn ->
+      restore_env(:jido, previous_jido)
+      restore_env(:start_jido, previous_start_jido)
+    end)
+
+    Application.put_env(:jidoka, :jido, MyApp.Jido)
+    Application.put_env(:jidoka, :start_jido, false)
+
+    assert Jidoka.Config.jido_runtime() == MyApp.Jido
+    refute Jidoka.Config.start_jido?()
+
+    assert Jidoka.Agent.ServerOptions.child_opts(__MODULE__, [])[:jido] == MyApp.Jido
+  end
+
   test "model_ref accepts model input and normalized structs" do
     model = Jidoka.Config.normalize_model_spec!(%{provider: :test, id: "ref-model"})
 

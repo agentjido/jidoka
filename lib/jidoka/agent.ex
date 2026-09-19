@@ -101,9 +101,12 @@ defmodule Jidoka.Agent do
               {:ok, String.t()} | {:hibernate, Jidoka.Snapshot.t()} | {:error, term()}
       def chat(input, opts \\ []), do: Jidoka.Agent.chat(__MODULE__, input, opts)
 
-      @doc "Starts this agent under the default `Jidoka.Jido` process tree."
+      @doc "Starts this agent under the configured Jido runtime."
       @spec start(keyword()) :: DynamicSupervisor.on_start_child()
-      def start(opts \\ []), do: Jidoka.Jido.start_agent(__MODULE__, opts)
+      def start(opts \\ []) do
+        {jido, opts} = Keyword.pop(opts, :jido, Jidoka.Config.jido_runtime())
+        jido.start_agent(__MODULE__, opts)
+      end
 
       @doc "Returns a `Jido.AgentServer` child spec for supervising this agent."
       @spec child_spec(keyword()) :: Supervisor.child_spec()

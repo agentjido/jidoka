@@ -15,7 +15,7 @@ defmodule Jidoka.Adapter.Jido.AgentServer do
 
     runtime_opts =
       opts
-      |> Keyword.drop([:context, :metadata, :request_id, :timeout])
+      |> Keyword.drop([:context, :jido, :metadata, :request_id, :timeout])
       |> Keyword.merge(Keyword.get(opts, :runtime_opts, []))
 
     signal =
@@ -27,7 +27,7 @@ defmodule Jidoka.Adapter.Jido.AgentServer do
       )
 
     result =
-      with {:ok, server} <- resolve_server_ref(server),
+      with {:ok, server} <- resolve_server_ref(server, opts),
            {:ok, agent} <- Jido.AgentServer.call(server, signal, timeout) do
         run_result_from_jido_agent(agent)
       end
@@ -53,8 +53,8 @@ defmodule Jidoka.Adapter.Jido.AgentServer do
   @spec await(Jido.AgentServer.server(), keyword()) :: {:ok, map()} | {:error, term()}
   def await(server, opts) do
     result =
-      with {:ok, server} <- resolve_server_ref(server) do
-        Jido.AgentServer.await_completion(server, opts)
+      with {:ok, server} <- resolve_server_ref(server, opts) do
+        Jido.AgentServer.await_completion(server, Keyword.delete(opts, :jido))
       end
 
     case result do
@@ -76,12 +76,14 @@ defmodule Jidoka.Adapter.Jido.AgentServer do
     end
   end
 
-  defp resolve_server_ref(server) when is_binary(server) do
-    case Jidoka.Jido.whereis(server) do
+  defp resolve_server_ref(server, opts) when is_binary(server) do
+    jido = Keyword.get(opts, :jido, Jidoka.Config.jido_runtime())
+
+    case jido.whereis(server) do
       nil -> {:error, :not_found}
       pid -> {:ok, pid}
     end
   end
 
-  defp resolve_server_ref(server), do: {:ok, server}
+  defp resolve_server_ref(server, _opts), do: {:ok, server}
 end

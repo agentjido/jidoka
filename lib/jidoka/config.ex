@@ -10,9 +10,26 @@ defmodule Jidoka.Config do
   @default_max_model_turns 8
   @default_turn_timeout_ms 30_000
   @default_max_parallel_operations 8
+  @default_jido_runtime Jidoka.Jido
 
   @type model_spec :: ReqLLM.model_input()
   @type model :: LLMDB.Model.t()
+
+  @doc """
+  Returns the Jido runtime used for process-hosted agents.
+  """
+  @spec jido_runtime() :: module()
+  def jido_runtime do
+    Application.get_env(:jidoka, :jido, @default_jido_runtime)
+  end
+
+  @doc """
+  Returns whether Jidoka starts the configured Jido runtime in its application tree.
+  """
+  @spec start_jido?() :: boolean()
+  def start_jido? do
+    Application.get_env(:jidoka, :start_jido, true) == true
+  end
 
   @doc """
   Returns the configured default model as normalized LLMDB data.

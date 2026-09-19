@@ -30,6 +30,8 @@ import Config
 
 config :jidoka,
   default_model: "openai:gpt-4o-mini",
+  jido: MyApp.Jido,
+  start_jido: false,
   default_max_model_turns: 8,
   default_turn_timeout_ms: 30_000,
   default_generation: %{
@@ -83,9 +85,9 @@ through to these values.
 ╰───────────────────────────╯
 ```
 
-Three concepts cover the config story:
+Four concepts cover the config story:
 
-1. **Four `:jidoka` keys.** `default_model`, `default_generation`,
+1. **Runtime default keys.** `default_model`, `default_generation`,
    `default_max_model_turns`, and `default_turn_timeout_ms`. Each one has a
    built-in fallback inside `Jidoka.Config`, so the application config block
    is optional for development.
@@ -95,6 +97,8 @@ Three concepts cover the config story:
 3. **ReqLLM dotenv loading.** Jidoka does not implement dotenv loading. ReqLLM
    loads `.env` by default. Set `config :req_llm, load_dotenv: false` when the
    host application or deployment platform owns credentials.
+4. **Jido process hosting.** `jido` selects the runtime for hosted agents.
+   Set `start_jido: false` when the host application supervises that runtime.
 
 ### Security / Trust Boundaries
 
