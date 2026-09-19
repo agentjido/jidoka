@@ -1,6 +1,7 @@
 defmodule Jidoka.Adapter.Runic.Identity do
   @moduledoc false
 
+  @doc false
   @spec project(term()) :: term()
   def project(value) do
     value
