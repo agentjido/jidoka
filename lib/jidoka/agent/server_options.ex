@@ -5,14 +5,14 @@ defmodule Jidoka.Agent.ServerOptions do
   def child_opts(agent_module, opts) when is_atom(agent_module) and is_list(opts) do
     opts
     |> Keyword.put_new(:agent, agent_module)
-    |> Keyword.put_new(:jido, Jidoka.Jido)
+    |> Keyword.put_new(:jido, Jidoka.Config.jido_runtime())
     |> Keyword.put_new(:id, default_agent_id(agent_module))
   end
 
   def child_opts(agent_module, opts) when is_atom(agent_module) and is_map(opts) do
     opts
     |> Map.put_new(:agent, agent_module)
-    |> Map.put_new(:jido, Jidoka.Jido)
+    |> Map.put_new(:jido, Jidoka.Config.jido_runtime())
     |> Map.put_new(:id, default_agent_id(agent_module))
   end
 

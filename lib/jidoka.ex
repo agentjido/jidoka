@@ -104,21 +104,25 @@ defmodule Jidoka do
   def export(agent_or_spec, opts \\ []), do: Jidoka.Export.export(agent_or_spec, opts)
 
   @doc """
-  Starts a Jidoka DSL agent under the default `Jidoka.Jido` process tree.
+  Starts a Jidoka DSL agent under the configured Jido runtime.
 
   The started process is a `Jido.AgentServer`; incoming Jidoka turn signals are
   routed to turn execution and the result is written back to Jido agent state.
   """
   @spec start_agent(module() | Jido.Agent.t(), keyword()) :: DynamicSupervisor.on_start_child()
   def start_agent(agent, opts \\ []) when is_atom(agent) or is_struct(agent) do
-    Jidoka.Jido.start_agent(agent, opts)
+    {jido, opts} = Keyword.pop(opts, :jido, Jidoka.Config.jido_runtime())
+    jido.start_agent(agent, opts)
   end
 
   @doc """
   Stops a process-hosted Jidoka agent by pid or registered Jido agent id.
   """
   @spec stop_agent(pid() | String.t(), keyword()) :: :ok | {:error, :not_found}
-  def stop_agent(pid_or_id, opts \\ []), do: Jidoka.Jido.stop_agent(pid_or_id, opts)
+  def stop_agent(pid_or_id, opts \\ []) do
+    {jido, opts} = Keyword.pop(opts, :jido, Jidoka.Config.jido_runtime())
+    jido.stop_agent(pid_or_id, opts)
+  end
 
   @doc """
   Looks up a running Jidoka agent process by registered Jido agent id.
@@ -128,7 +132,9 @@ defmodule Jidoka do
   """
   @spec whereis(String.t(), keyword()) :: pid() | nil
   def whereis(id, opts \\ []) do
-    case Jidoka.Jido.whereis(id, opts) do
+    {jido, opts} = Keyword.pop(opts, :jido, Jidoka.Config.jido_runtime())
+
+    case jido.whereis(id, opts) do
       pid when is_pid(pid) -> if Process.alive?(pid), do: pid
       nil -> nil
     end

@@ -40,7 +40,9 @@ Application config:
 import Config
 
 config :jidoka,
-  default_model: "openai:gpt-4o-mini"
+  default_model: "openai:gpt-4o-mini",
+  jido: MyApp.Jido,
+  start_jido: false
 ```
 
 Supervision tree:
@@ -53,8 +55,8 @@ defmodule MyApp.Application do
   @impl true
   def start(_type, _args) do
     children = [
-      Jidoka.Jido,
-      {MyApp.TimeAgent, jido: Jidoka.Jido}
+      MyApp.Jido,
+      MyApp.TimeAgent
     ]
 
     Supervisor.start_link(children, strategy: :rest_for_one, name: MyApp.Supervisor)
@@ -149,9 +151,10 @@ Three pieces define this boundary:
 
 1. **[`Jidoka.Jido`](`Jidoka.Jido`)** is a `use Jido, otp_app: :jidoka`
    supervisor. It owns the registry, dynamic supervisor, task supervisor, and
-   runtime store. Applications may host their own instance instead.
+   runtime store. `config :jidoka, jido: MyApp.Jido` selects a host-owned
+   instance instead. Set `start_jido: false` when the host supervises it.
 2. **The DSL module's `child_spec/1`** wraps `Jido.AgentServer.child_spec/1`
-   with `jido: Jidoka.Jido` and a default id derived from the agent module.
+   with the configured Jido runtime and a default id derived from the agent module.
    The compiled signal route `{"jidoka.turn.run", Jidoka.Adapter.Jido.RunTurn}`
    is attached at compile time.
 3. **[`Jidoka.Adapter.Jido.AgentServerState`](`Jidoka.Adapter.Jido.AgentServerState`)**
@@ -163,13 +166,17 @@ Three pieces define this boundary:
 
 ### Step 1: Start An Agent Under The Default Runtime
 
-The DSL module exposes `start/1`, which calls `Jidoka.start_agent/2`, which
-delegates to `Jidoka.Jido.start_agent/2`:
+The DSL module exposes `start/1`, which calls `Jidoka.start_agent/2`. The
+facade delegates to the configured runtime:
 
 ```elixir
 {:ok, pid} = MyApp.TimeAgent.start(id: "time-agent-1")
 ^pid = Jidoka.whereis("time-agent-1")
 ```
+
+Pass `jido: Another.Jido` to `start/1`, `Jidoka.start_agent/2`,
+`Jidoka.stop_agent/2`, `Jidoka.whereis/2`, `Jidoka.turn/3`,
+`Jidoka.chat/3`, or `Jidoka.await_agent/2` for a per-call override.
 
 If `id:` is omitted, the agent module supplies one derived from its DSL agent
 id (`:time_agent` becomes `"time_agent"`).
