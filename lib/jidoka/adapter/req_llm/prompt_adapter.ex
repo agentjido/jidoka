@@ -16,6 +16,18 @@ defmodule Jidoka.Adapter.ReqLLM.PromptAdapter do
         prompt
         |> Map.delete(:messages)
         |> Map.delete("messages")
+        # `loop_index` is runtime bookkeeping, not an instruction to the model,
+        # and it is the one key here that changes on every step of a turn. Because
+        # this contract is encoded into a system message that precedes every other
+        # message, leaving it in makes the request's leading bytes differ each
+        # step, which defeats provider prompt caching for the whole prefix behind
+        # it - the agent instructions and the user message included. The runtime
+        # keeps its own copy: `Spine.Steps.plan_model_effect/1` puts `loop_index`
+        # in the effect payload and names it in the idempotency key, and
+        # `Turn.Result`'s debug metadata still reads it off the prompt map, so
+        # dropping it here costs no behaviour.
+        |> Map.delete(:loop_index)
+        |> Map.delete("loop_index")
         |> Jason.encode!()
 
       messages =
