@@ -41,13 +41,22 @@ defmodule Jidoka.Operation.Source.MCP.Transport do
 
   @spec endpoint(struct()) :: {:ok, term()} | {:error, term()}
   def endpoint(source) do
-    Jido.MCP.Endpoint.new(source.endpoint, %{
-      transport: source.transport,
-      client_info: source.client_info,
-      protocol_version: source.protocol_version,
-      capabilities: source.capabilities,
-      timeouts: source.timeouts
-    })
+    endpoint_module = Jido.MCP.Endpoint
+
+    if Code.ensure_loaded?(endpoint_module) and function_exported?(endpoint_module, :new, 2) do
+      apply(endpoint_module, :new, [
+        source.endpoint,
+        %{
+          transport: source.transport,
+          client_info: source.client_info,
+          protocol_version: source.protocol_version,
+          capabilities: source.capabilities,
+          timeouts: source.timeouts
+        }
+      ])
+    else
+      {:error, {:missing_mcp_dependency, :jido_mcp}}
+    end
   end
 
   def call_opts(source) do

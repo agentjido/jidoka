@@ -58,7 +58,6 @@ defmodule Jidoka.MixProject do
       {:jido_action, "~> 2.3"},
       {:jido_ai, "~> 2.2"},
       {:jido_browser, "~> 2.1"},
-      {:jido_mcp, "~> 1.0"},
 
       # Runtime support
       {:crontab, "~> 1.2"},

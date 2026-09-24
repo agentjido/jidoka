@@ -331,6 +331,13 @@ defmodule Jidoka.MCPTest do
              Source.operations(required, discover_mcp?: true)
   end
 
+  test "default MCP client reports its missing application dependency" do
+    source = MCP.new!(endpoint: :demo, required: true)
+
+    assert {:error, {:mcp_tool_discovery_failed, :demo, {:missing_mcp_dependency, :jido_mcp}}} =
+             Source.operations(source, discover_mcp?: true)
+  end
+
   test "MCP source validates malformed configuration" do
     assert {:error, {:invalid_mcp_endpoint, ""}} = MCP.new(endpoint: "")
     assert {:error, {:invalid_mcp_prefix, ""}} = MCP.new(endpoint: :demo, prefix: "")
