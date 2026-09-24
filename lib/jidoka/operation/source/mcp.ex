@@ -1,6 +1,6 @@
 defmodule Jidoka.Operation.Source.MCP do
   @moduledoc """
-  Operation source backed by `jido_mcp`.
+  Operation source backed by an application-provided MCP client.
 
   MCP tools are normalized into ordinary Jidoka operations. At runtime the
   operation source routes the local operation name back to the remote MCP tool
@@ -228,7 +228,7 @@ defmodule Jidoka.Operation.Source.MCP do
       |> apply(:list_tools, [source.endpoint, opts])
       |> Tools.normalize_list_tools_response()
     else
-      {:error, {:invalid_mcp_client, client}}
+      {:error, client_error(client)}
     end
   rescue
     exception -> {:error, exception}
@@ -241,7 +241,7 @@ defmodule Jidoka.Operation.Source.MCP do
         |> apply(:call_tool, [source.endpoint, remote_name, arguments, opts])
         |> normalize_call_tool_response(source, remote_name)
       else
-        {:error, {:invalid_mcp_client, client}}
+        {:error, client_error(client)}
       end
     end
   rescue
@@ -261,7 +261,7 @@ defmodule Jidoka.Operation.Source.MCP do
         other -> {:error, {:invalid_mcp_endpoint_registration_response, other}}
       end
     else
-      false -> {:error, {:invalid_mcp_client, client}}
+      false -> {:error, client_error(client)}
       {:error, reason} -> {:error, reason}
     end
   rescue
@@ -276,6 +276,16 @@ defmodule Jidoka.Operation.Source.MCP do
   defp ensure_client_function?(client, function, arity) when is_atom(client) do
     Code.ensure_loaded?(client) and function_exported?(client, function, arity)
   end
+
+  defp client_error(Jido.MCP) do
+    if Code.ensure_loaded?(Jido.MCP) do
+      {:invalid_mcp_client, Jido.MCP}
+    else
+      {:missing_mcp_dependency, :jido_mcp}
+    end
+  end
+
+  defp client_error(client), do: {:invalid_mcp_client, client}
 
   defp normalize_call_tool_response({:ok, %{data: data}}, source, remote_name) do
     {:ok,

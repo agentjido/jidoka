@@ -2,7 +2,7 @@
 
 This guide explains how to expose Model Context Protocol (MCP) servers as
 agent operations through the `mcp_tools` DSL entity. Jidoka discovers tools
-from a configured `Jido.MCP` endpoint, compiles them into ordinary
+from a configured [Jido.MCP](https://hexdocs.pm/jido_mcp/Jido.MCP.html) endpoint, compiles them into ordinary
 `Jidoka.Agent.Spec.Operation` entries, and routes each operation call back to
 the remote MCP tool name. By the end you will be able to register an
 endpoint, list and filter tools, run a deterministic test against an injected
@@ -23,7 +23,10 @@ MCP client, and reason about the trust boundary around external servers.
 ## Prerequisites
 
 - A working Jidoka DSL agent. See [Getting Started](getting-started.md).
-- `:jido_mcp` resolved through `mix deps.get`.
+- An MCP client supplied by the host application. Jidoka does not install
+  `jido_mcp`. The examples below use [Jido.MCP](https://hexdocs.pm/jido_mcp/Jido.MCP.html), so a host that runs them must
+  add `jido_mcp` directly. Hex has retired that package. Prefer ExMCP or Jido
+  Connect for new integrations, with an injected client adapter.
 - A registered MCP endpoint. Endpoints are runtime values; register them
   before any agent calls a tool:
 
@@ -131,7 +134,7 @@ Three concepts cover this integration:
   endpoint: :demo_mcp` exposes every tool the server advertises, including
   newly added ones after a server upgrade. Pin the list when you need
   reviewable change control.
-- Credentials for the MCP transport live in `Jido.MCP.Endpoint`, not in the
+- Credentials for the MCP transport live in [Jido.MCP.Endpoint](https://hexdocs.pm/jido_mcp/Jido.MCP.Endpoint.html), not in the
   agent spec or in operation metadata. They are never serialized into
   snapshots or imports.
 - The runtime never calls `String.to_atom/1` on remote tool names. The slug
@@ -316,7 +319,8 @@ the source or the `mcp_client:` context key, whichever is more convenient.
 | --- | --- | --- |
 | `{:error, {:mcp_tool_discovery_failed, endpoint, reason}}` | `required: true` and discovery failed. | Register the endpoint at boot, or set `required: false` while iterating. |
 | `{:error, {:missing_operation_handler, name}}` from a turn | The model called a tool name that did not exist in the routed source. | Confirm the operation name with `Jidoka.inspect/1`; tighten the prompt or pin `tools:`. |
-| `{:error, {:invalid_mcp_client, client}}` | The supplied client module did not export `list_tools/2` and `call_tool/4`. | Implement the two functions on the double, or fall back to the default `Jido.MCP`. |
+| `{:error, {:invalid_mcp_client, client}}` | The supplied client module did not export `list_tools/2` and `call_tool/4`. | Implement the two functions on the client module. |
+| `{:error, {:missing_mcp_dependency, :jido_mcp}}` | The default `Jido.MCP` client or endpoint module is absent. | Add the legacy client to the host application, or inject an ExMCP or Jido Connect adapter. |
 | `{:error, {:invalid_mcp_tool, tool}}` at compile time | A static `tools:` entry was malformed. | Ensure each entry is a map with at least `name:`. |
 | Operation name unexpectedly differs from the remote tool | The prefix plus slug rewrite produced a different name. | Inspect `metadata.remote_tool` to see the original name and adjust the prefix or `name:` overrides. |
 
@@ -331,8 +335,8 @@ Key modules touched in this guide:
 - Tool DSL section - DSL
   schema for the `mcp_tools` entity (`endpoint`, `prefix`, `tools`,
   `required`, `timeout`, `description`, `idempotency`, `metadata`).
-- [`Jido.MCP`](`Jido.MCP`) - public MCP client API.
-- [`Jido.MCP.Endpoint`](`Jido.MCP.Endpoint`) - endpoint registration.
+- [Jido.MCP](https://hexdocs.pm/jido_mcp/Jido.MCP.html) - legacy MCP client API.
+- [Jido.MCP.Endpoint](https://hexdocs.pm/jido_mcp/Jido.MCP.Endpoint.html) - legacy endpoint registration.
 
 ## Related Guides
 
